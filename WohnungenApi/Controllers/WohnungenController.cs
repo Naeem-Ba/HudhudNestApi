@@ -17,6 +17,17 @@ namespace WohnungenApi.Controllers
             _context = context;
         }
 
+        [HttpPost]
+        public async Task<IActionResult> CreateWohnung([FromBody] Wohnung wohnung)
+        {
+            if (wohnung == null)
+                return BadRequest("Ungültige Daten");
+
+            _context.Wohnungen.Add(wohnung);
+            await _context.SaveChangesAsync();
+            return Ok(wohnung);
+        }
+
         [HttpGet]
         public async Task<IEnumerable<Wohnung>> Get()
         {
@@ -32,24 +43,3 @@ namespace WohnungenApi.Controllers
         }
     }
 }
-//        private static readonly List<Wohnung> Wohnungen = new()
-//        {
-//            new Wohnung { Id = 1, Titel = "Moderne Wohnung in Berlin", Beschreibung = "3 Zimmer, Balkon", Preis = 1200 },
-//            new Wohnung { Id = 2, Titel = "Gemütliche Wohnung in Hamburg", Beschreibung = "2 Zimmer, zentral gelegen", Preis = 900 },
-//            new Wohnung { Id = 3, Titel = "Schöne Wohnung im Zentrum in Berlin", Beschreibung = "3 Zimmer", Preis = 1250 },
-//            new Wohnung { Id = 4, Titel = "Gemütliches Appartement in Hamburg", Beschreibung =  "2 Zimmer", Preis = 800 },
-//            new Wohnung { Id = 5, Titel = "Luxuswohnung am See in München", Beschreibung = "4 Zimmer", Preis = 1500 }
-//        };
-
-//        [HttpGet]
-//        public IEnumerable<Wohnung> Get() => Wohnungen;
-
-//        [HttpGet("{id}")]
-//        public ActionResult<Wohnung> GetById(int id)
-//        {
-//            var wohnung = Wohnungen.FirstOrDefault(w => w.Id == id);
-//            if (wohnung == null) return NotFound();
-//            return wohnung;
-//        }
-//    }
-//}

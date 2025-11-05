@@ -12,15 +12,15 @@ using WohnungenApi.Data;
 namespace WohnungenApi.Migrations
 {
     [DbContext(typeof(WohnungenContext))]
-    [Migration("20251102151704_MakeOwnerOptional")]
-    partial class MakeOwnerOptional
+    [Migration("20251104181300_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.9")
+                .HasAnnotation("ProductVersion", "9.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);

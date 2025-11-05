@@ -1,0 +1,55 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using WohnungenApi.Data;
+using WohnungenApi.Models;
+using Microsoft.EntityFrameworkCore;
+
+namespace WohnungenApi.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class BenutzerController : ControllerBase
+    {
+        private readonly WohnungenContext _context;
+
+        public BenutzerController(WohnungenContext context)
+        {
+            _context = context;
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CreateUser([FromBody] Benutzer user)
+        {
+            if (user == null || string.IsNullOrEmpty(user.Email) || string.IsNullOrEmpty(user.PasswordHash))
+                return BadRequest("Ungültige Daten");
+
+            var exist = await _context.Benutzer.AnyAsync(u => u.Email == user.Email);
+            if (exist)
+                return BadRequest("Benutzer existiert bereits");
+            try
+            {
+                _context.Benutzer.Add(user);
+                await _context.SaveChangesAsync();
+                return Ok(user);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("❌ Fehler beim Speichern: " + ex.Message);
+                return StatusCode(500, ex.Message);
+            }
+        }
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] Benutzer loginData)
+        {
+            if (loginData == null || string.IsNullOrEmpty(loginData.Email) || string.IsNullOrEmpty(loginData.PasswordHash))
+                return BadRequest("Ungültige Daten");
+
+            var user = await _context.Benutzer
+                .FirstOrDefaultAsync(u => u.Email == loginData.Email && u.PasswordHash == loginData.PasswordHash);
+
+            if (user == null)
+                return Unauthorized("Falsche E-Mail oder Passwort");
+
+            return Ok(user);
+        }
+    }
+}
