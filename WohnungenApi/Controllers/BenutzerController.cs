@@ -19,6 +19,8 @@ namespace WohnungenApi.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateUser([FromBody] Benutzer user)
         {
+            Console.WriteLine($"📨 Empfangene Daten: Email={user?.Email}, Name={user?.Name}");
+
             if (user == null || string.IsNullOrEmpty(user.Email) || string.IsNullOrEmpty(user.PasswordHash))
                 return BadRequest("Ungültige Daten");
 
@@ -30,6 +32,12 @@ namespace WohnungenApi.Controllers
                 _context.Benutzer.Add(user);
                 await _context.SaveChangesAsync();
                 return Ok(user);
+            }
+            catch (DbUpdateException dbEx)
+            {
+                // ✅ هذا مهم لاكتشاف مشاكل قاعدة البيانات
+                Console.WriteLine($"❌ Datenbankfehler: {dbEx.InnerException?.Message}");
+                return StatusCode(500, $"Datenbankfehler: {dbEx.InnerException?.Message}");
             }
             catch (Exception ex)
             {

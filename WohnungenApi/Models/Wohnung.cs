@@ -31,8 +31,8 @@ namespace WohnungenApi.Models
         public int Geschoss { get; set; }
         public DateTime? FreiAb { get; set; }
 
-        public bool Balkon { get; set; }
-        public bool Aufzug { get; set; }
+        public bool? Balkon { get; set; }
+        public bool? Aufzug { get; set; }
         public bool Stellplatz { get; set; }
 
         public string Heizung { get; set; } = string.Empty;
