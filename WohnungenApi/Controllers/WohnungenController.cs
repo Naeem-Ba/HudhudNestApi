@@ -20,12 +20,16 @@ namespace WohnungenApi.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateWohnung([FromBody] Wohnung wohnung)
         {
-            if (wohnung == null)
-                return BadRequest("Ungültige Daten");
-
-            _context.Wohnungen.Add(wohnung);
-            await _context.SaveChangesAsync();
-            return Ok(wohnung);
+            try
+            {
+                _context.Wohnungen.Add(wohnung);
+                await _context.SaveChangesAsync();
+                return Ok(wohnung);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.ToString()); // يعطيك نص الاستثناء بالكامل
+            }
         }
 
         [HttpGet]

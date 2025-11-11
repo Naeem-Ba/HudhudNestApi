@@ -16,13 +16,10 @@ namespace WohnungenApi.Controllers
             _context = context;
         }
 
-        [HttpPost]
+        [HttpPost("register")]
         public async Task<IActionResult> CreateUser([FromBody] Benutzer user)
         {
             Console.WriteLine($"📨 Empfangene Daten: Email={user?.Email}, Name={user?.Name}");
-
-            if (user == null || string.IsNullOrEmpty(user.Email) || string.IsNullOrEmpty(user.PasswordHash))
-                return BadRequest("Ungültige Daten");
 
             var exist = await _context.Benutzer.AnyAsync(u => u.Email == user.Email);
             if (exist)

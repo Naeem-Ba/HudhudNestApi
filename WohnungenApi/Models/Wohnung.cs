@@ -6,19 +6,19 @@ namespace WohnungenApi.Models
 {
     public class Wohnung
     {
-        public int Id { get; set; }
+        public int? Id { get; set; }
         public string Titel { get; set; } = string.Empty;
         public string Beschreibung { get; set; } = string.Empty;
 
         public string Adresse { get; set; } = string.Empty;
-        public string Stadt { get; set; } = string.Empty;
-        public string PLZ { get; set; } = string.Empty;
+        public string? Stadt { get; set; } = string.Empty;
+        public string? PLZ { get; set; } = string.Empty;
 
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
 
-        public bool ZumMieten { get; set; }
-        public bool ZumKaufen { get; set; }
+        public bool? ZumMieten { get; set; }
+        public bool? ZumKaufen { get; set; }
 
         public decimal? Kaltmiete { get; set; }
         public decimal? Warmmiete { get; set; }
@@ -26,21 +26,21 @@ namespace WohnungenApi.Models
         public decimal? Nebenkosten { get; set; }
         public decimal? Kaution { get; set; }
 
-        public int Zimmer { get; set; }
-        public double Flaeche { get; set; }
-        public int Geschoss { get; set; }
+        public int? Zimmer { get; set; }
+        public double? Flaeche { get; set; }
+        public int? Geschoss { get; set; }
         public DateTime? FreiAb { get; set; }
 
         public bool? Balkon { get; set; }
         public bool? Aufzug { get; set; }
-        public bool Stellplatz { get; set; }
+        public bool? Stellplatz { get; set; }
 
-        public string Heizung { get; set; } = string.Empty;
+        public string? Heizung { get; set; } = string.Empty;
 
         // Enums
-        public EnergieausweisTyp Energieausweis { get; set; }
-        public WohnungsZustand Zustand { get; set; }
-        public WohnungsStatus Status { get; set; }
+        public EnergieausweisTyp? Energieausweis { get; set; }
+        public WohnungsZustand? Zustand { get; set; }
+        public WohnungsStatus? Status { get; set; }
 
         public int? OwnerId { get; set; }
         public Benutzer? Owner { get; set; }
