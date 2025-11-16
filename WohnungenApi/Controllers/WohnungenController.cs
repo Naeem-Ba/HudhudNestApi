@@ -33,15 +33,20 @@ namespace WohnungenApi.Controllers
         }
 
         [HttpGet]
-        public async Task<IEnumerable<Wohnung>> Get()
+        public async Task<ActionResult<IEnumerable<Wohnung>>> Get()
         {
-            return await _context.Wohnungen.ToListAsync();
+            var wohnungen = await _context.Wohnungen
+                .Include(w => w.Bilder) 
+                .ToListAsync();
+            return Ok(wohnungen);
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<Wohnung>> GetById(int id)
         {
-            var wohnung = await _context.Wohnungen.FindAsync(id);
+            var wohnung = await _context.Wohnungen
+                .Include(w => w.Bilder)
+                .FirstOrDefaultAsync(w => w.Id == id);
             if (wohnung == null) return NotFound();
             return wohnung;
         }
