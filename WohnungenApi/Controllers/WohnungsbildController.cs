@@ -28,7 +28,7 @@ namespace WohnungenApi.Controllers
             if (wohnung == null)
                 return NotFound("Wohnung nicht gefunden.");
 
-            var uploadsPath = Path.Combine(_env.WebRootPath, "uploads");
+            var uploadsPath = Path.Combine(_env.WebRootPath, "bilder");
             if (!Directory.Exists(uploadsPath))
                 Directory.CreateDirectory(uploadsPath);
 
@@ -40,7 +40,7 @@ namespace WohnungenApi.Controllers
                 await file.CopyToAsync(stream);
             }
 
-            var url = $"{Request.Scheme}://{Request.Host}/uploads/{fileName}";
+            var url = $"{Request.Scheme}://{Request.Host}/bilder/{fileName}";
 
             var bild = new Wohnungsbild
             {
