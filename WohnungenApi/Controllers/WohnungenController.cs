@@ -1,10 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using WohnungenApi.Data;
-using WohnungenApi.Models;
 using Microsoft.EntityFrameworkCore;
+using WohnungenApi.Data;
 using WohnungenApi.Dtos;
-
-
+using WohnungenApi.Models;
 
 namespace WohnungenApi.Controllers
 {
@@ -13,11 +11,14 @@ namespace WohnungenApi.Controllers
     public class WohnungenController : ControllerBase
     {
         private readonly WohnungenContext _context;
+        private readonly IWebHostEnvironment _env;
 
-        public WohnungenController(WohnungenContext context)
+        public WohnungenController(WohnungenContext context, IWebHostEnvironment env)
         {
             _context = context;
+            _env = env;
         }
+
         [HttpPost]
         public async Task<IActionResult> CreateWohnung([FromForm] WohnungCreateDto dto)
         {
@@ -26,11 +27,27 @@ namespace WohnungenApi.Controllers
                 Titel = dto.Titel,
                 Beschreibung = dto.Beschreibung,
                 Adresse = dto.Adresse,
+                Stadt = dto.Stadt,
+                PLZ = dto.PLZ,
                 ZumMieten = dto.ZumMieten,
+                ZumKaufen = dto.ZumKaufen,
                 Kaltmiete = dto.Kaltmiete,
+                Warmmiete = dto.Warmmiete,
+                Kaufpreis = dto.Kaufpreis,
+                Nebenkosten = dto.Nebenkosten,
                 Kaution = dto.Kaution,
                 Zimmer = dto.Zimmer,
                 Flaeche = dto.Flaeche,
+                Geschoss = dto.Geschoss,
+                FreiAb = dto.FreiAb,
+                Balkon = dto.Balkon,
+                Aufzug = dto.Aufzug,
+                Stellplatz = dto.Stellplatz,
+                Heizung = dto.Heizung,
+                //Energieausweis = dto.Energieausweis,
+                //Zustand = dto.Zustand,
+                //Status = dto.Status,
+                OwnerId = dto.OwnerId,
                 Bilder = new List<Wohnungsbild>()
             };
 
@@ -39,10 +56,12 @@ namespace WohnungenApi.Controllers
                 foreach (var file in dto.Bilder)
                 {
                     var fileName = Guid.NewGuid() + Path.GetExtension(file.FileName);
-                    var filePath = Path.Combine("wwwroot/bilder", fileName);
+                    var path = Path.Combine(_env.WebRootPath, "bilder");
 
-                    if (!Directory.Exists(Path.Combine("wwwroot", "bilder")))
-                        Directory.CreateDirectory(Path.Combine("wwwroot", "bilder"));
+                    if (!Directory.Exists(path))
+                        Directory.CreateDirectory(path);
+
+                    var filePath = Path.Combine(path, fileName);
 
                     using var stream = new FileStream(filePath, FileMode.Create);
                     await file.CopyToAsync(stream);
@@ -60,12 +79,11 @@ namespace WohnungenApi.Controllers
 
             return Ok(wohnung);
         }
-
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Wohnung>>> Get()
         {
             var wohnungen = await _context.Wohnungen
-                .Include(w => w.Bilder) 
+                .Include(w => w.Bilder)
                 .ToListAsync();
             return Ok(wohnungen);
         }
