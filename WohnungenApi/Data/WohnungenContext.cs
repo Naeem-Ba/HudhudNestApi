@@ -9,6 +9,7 @@ namespace WohnungenApi.Data
         public WohnungenContext(DbContextOptions<WohnungenContext> options)
             : base(options) { }
 
+        public DbSet<ContactMessage> ContactMessages { get; set; }
         public DbSet<Wohnung> Wohnungen { get; set; }
         public DbSet<Wohnungsbild> Wohnungsbilder { get; set; }
         public DbSet<Amenity> Amenities { get; set; }
