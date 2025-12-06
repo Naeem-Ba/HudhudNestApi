@@ -56,5 +56,26 @@ namespace WohnungenApi.Controllers
 
             return Ok(user);
         }
+
+        [HttpPut("{id}/role")]
+        public async Task<IActionResult> UpdateRole(int id, [FromBody] string newRole)
+        {
+            var user = await _context.Benutzer.FindAsync(id);
+            if (user == null)
+                return NotFound("User not found.");
+
+            if (string.IsNullOrWhiteSpace(newRole))
+                return BadRequest("Invalid role.");
+
+            // قبول فقط الأدوار المسموح بها
+            if (newRole != "Admin" && newRole != "user")
+                return BadRequest("Role must be either 'Admin' or 'user'.");
+
+            user.Role = newRole;
+            await _context.SaveChangesAsync();
+
+            return Ok(user);
+        }
+
     }
 }
