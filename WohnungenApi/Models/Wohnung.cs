@@ -2,6 +2,7 @@
 using WohnungenApi.Models.Enums;
 using System;
 using System.Collections.Generic;
+using System.Collections;
 namespace WohnungenApi.Models
 {
     public class Wohnung
@@ -11,7 +12,6 @@ namespace WohnungenApi.Models
         public string Beschreibung { get; set; } = string.Empty;
 
         public string Adresse { get; set; } = string.Empty;
-        public string? Stadt { get; set; } = string.Empty;
         public string? PLZ { get; set; } = string.Empty;
 
         public double? Latitude { get; set; }
@@ -38,6 +38,7 @@ namespace WohnungenApi.Models
         public string? Heizung { get; set; } = string.Empty;
 
         // Enums
+        public Stadt? Stadt { get; set; }
         public EnergieausweisTyp? Energieausweis { get; set; }
         public WohnungsZustand? Zustand { get; set; }
         public WohnungsStatus? Status { get; set; }

@@ -44,9 +44,9 @@ namespace WohnungenApi.Controllers
                 Aufzug = dto.Aufzug,
                 Stellplatz = dto.Stellplatz,
                 Heizung = dto.Heizung,
-                //Energieausweis = dto.Energieausweis,
-                //Zustand = dto.Zustand,
-                //Status = dto.Status,
+                Energieausweis = dto.Energieausweis,
+                Zustand = dto.Zustand,
+                Status = dto.Status,
                 OwnerId = dto.OwnerId,
                 Bilder = new List<Wohnungsbild>()
             };

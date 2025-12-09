@@ -1,4 +1,6 @@
 ﻿
+using WohnungenApi.Models.Enums;
+
 namespace WohnungenApi.Dtos
 {
     public class WohnungCreateDto
@@ -6,7 +8,7 @@ namespace WohnungenApi.Dtos
         public string Titel { get; set; } = "";
         public string Beschreibung { get; set; } = "";
         public string Adresse { get; set; } = "";
-        public string? Stadt { get; set; }
+        public Stadt? Stadt { get; set; }
         public string? PLZ { get; set; }
 
         public bool? ZumMieten { get; set; }
@@ -29,9 +31,9 @@ namespace WohnungenApi.Dtos
         public bool? Stellplatz { get; set; }
 
         public string? Heizung { get; set; }
-        //public string? Energieausweis { get; set; }
-        //public string? Zustand { get; set; }
-        //public string? Status { get; set; }
+        public EnergieausweisTyp? Energieausweis { get; set; }
+        public WohnungsZustand? Zustand { get; set; }
+        public WohnungsStatus? Status { get; set; }
 
         public int? OwnerId { get; set; }
 
