@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WohnungenApi.Data;
 
@@ -11,9 +12,11 @@ using WohnungenApi.Data;
 namespace WohnungenApi.Migrations
 {
     [DbContext(typeof(WohnungenContext))]
-    partial class WohnungenContextModelSnapshot : ModelSnapshot
+    [Migration("20251211073659_FixStadt")]
+    partial class FixStadt
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

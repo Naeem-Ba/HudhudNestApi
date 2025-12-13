@@ -4,7 +4,7 @@ namespace WohnungenApi.Models
 {
     public class Benutzer
     {
-        public int Id { get; set; }
+        public int? Id { get; set; }
         public string? DisplayName { get; set; } = string.Empty;
         public bool? IsAgent { get; set; }
         public string? Name { get; set; }

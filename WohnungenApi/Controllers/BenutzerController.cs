@@ -2,6 +2,10 @@
 using WohnungenApi.Data;
 using WohnungenApi.Models;
 using Microsoft.EntityFrameworkCore;
+using WohnungenApi.Dtos;
+using WohnungenApi.Services;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace WohnungenApi.Controllers
 {
@@ -16,47 +20,76 @@ namespace WohnungenApi.Controllers
             _context = context;
         }
 
+        // ----------------------------
+        // REGISTER
+        // ----------------------------
         [HttpPost("register")]
-        public async Task<IActionResult> CreateUser([FromBody] Benutzer user)
+        public async Task<IActionResult> CreateUser([FromBody] BenutzerDto dto)
         {
-            Console.WriteLine($"📨 Empfangene Daten: Email={user?.Email}, Name={user?.Name}");
-
-            var exist = await _context.Benutzer.AnyAsync(u => u.Email == user.Email);
-            if (exist)
+            // تحقق من وجود المستخدم
+            var exists = await _context.Benutzer.AnyAsync(u => u.Email == dto.Email);
+            if (exists)
                 return BadRequest("Benutzer existiert bereits");
+
+            // إنشاء كائن Benutzer الحقيقية
+            var benutzer = new Benutzer
+            {
+                DisplayName = dto.DisplayName,
+                IsAgent = dto.IsAgent,
+                Name = dto.Name,
+                Vorname = dto.Vorname,
+                Email = dto.Email,
+                Phone = dto.Phone,
+                PasswordHash = dto.PasswordHash,
+                CreatedAt = DateTime.Now,
+                Role = "user"
+            };
+
             try
             {
-                _context.Benutzer.Add(user);
+                _context.Benutzer.Add(benutzer);
                 await _context.SaveChangesAsync();
-                return Ok(user);
+                return Ok(benutzer);
             }
             catch (DbUpdateException dbEx)
             {
-                // ✅ هذا مهم لاكتشاف مشاكل قاعدة البيانات
-                Console.WriteLine($"❌ Datenbankfehler: {dbEx.InnerException?.Message}");
                 return StatusCode(500, $"Datenbankfehler: {dbEx.InnerException?.Message}");
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine("❌ Fehler beim Speichern: " + ex.Message);
-                return StatusCode(500, ex.Message);
-            }
         }
+
+        // ----------------------------
+        // LOGIN
+        // ----------------------------
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] Benutzer loginData)
+        public async Task<IActionResult> Login([FromBody] BenutzerDto dto, [FromServices] JwtService jwt)
         {
-            if (loginData == null || string.IsNullOrEmpty(loginData.Email) || string.IsNullOrEmpty(loginData.PasswordHash))
+            if (dto == null || string.IsNullOrEmpty(dto.Email) || string.IsNullOrEmpty(dto.PasswordHash))
                 return BadRequest("Ungültige Daten");
 
             var user = await _context.Benutzer
-                .FirstOrDefaultAsync(u => u.Email == loginData.Email && u.PasswordHash == loginData.PasswordHash);
+                .FirstOrDefaultAsync(u => u.Email == dto.Email && u.PasswordHash == dto.PasswordHash);
 
             if (user == null)
                 return Unauthorized("Falsche E-Mail oder Passwort");
 
-            return Ok(user);
+            var token = jwt.GenerateToken(user);
+
+            return Ok(new
+            {
+                token,
+                user = new
+                {
+                    user.Id,
+                    user.Email,
+                    user.Role,
+                    user.DisplayName
+                }
+            });
         }
 
+        // ----------------------------
+        // UPDATE ROLE
+        // ----------------------------
         [HttpPut("{id}/role")]
         public async Task<IActionResult> UpdateRole(int id, [FromBody] string newRole)
         {
@@ -67,7 +100,6 @@ namespace WohnungenApi.Controllers
             if (string.IsNullOrWhiteSpace(newRole))
                 return BadRequest("Invalid role.");
 
-            // قبول فقط الأدوار المسموح بها
             if (newRole != "Admin" && newRole != "user")
                 return BadRequest("Role must be either 'Admin' or 'user'.");
 
@@ -77,5 +109,15 @@ namespace WohnungenApi.Controllers
             return Ok(user);
         }
 
+        [Authorize]
+        [HttpGet("me")]
+        public IActionResult Me()
+        {
+            return Ok(new
+            {
+                email = User.FindFirst(ClaimTypes.Email)?.Value,
+                role = User.FindFirst(ClaimTypes.Role)?.Value
+            });
+        }
     }
 }
