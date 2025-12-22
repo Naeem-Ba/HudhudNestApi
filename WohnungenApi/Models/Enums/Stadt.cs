@@ -2,20 +2,20 @@
 {
     public enum Stadt
     {
-        Damaskus = 0,
-        Aleppo = 1,
-        Homs = 2,
-        Latakia = 3,
-        Hama = 4,
-        Deirezzor = 5,
-        Raqqa = 6,
-        Idlib = 7,
-        Hassaka = 8,
-        Qamischli = 9,
-        Daraa = 10,
-        assuwaida = 11,
-        AlQahtaniyya = 12,
-        Tartus = 13,
+        DAMASKUS = 0,
+        ALEPPO = 1,
+        HOMS = 2,
+        LATTAKIA = 3,
+        HAMA = 4,
+        DEIREZZOR = 5,
+        RAQQA = 6,
+        IDLIB = 7,
+        HASAKAH = 8,
+        QAMISHLI = 9,
+        DARAA = 10,
+        SWEIDA = 11,
+        QUNEITRA = 12,
+        TARTUS = 13,
 
     }
 }

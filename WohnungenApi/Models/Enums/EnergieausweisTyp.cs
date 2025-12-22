@@ -2,8 +2,8 @@
 {
     public enum EnergieausweisTyp
     {
-        NichtVorhanden = 0,
-        Bedarfsausweis = 1,
-        Verbrauchsausweis = 2
+        NOT_AVAILABLE = 0,
+        BY_DEMAND = 1,
+        BY_CONSUMPTION = 2
     }
 }

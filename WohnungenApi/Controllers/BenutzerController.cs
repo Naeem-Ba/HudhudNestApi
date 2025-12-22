@@ -3,7 +3,6 @@ using WohnungenApi.Data;
 using WohnungenApi.Models;
 using Microsoft.EntityFrameworkCore;
 using WohnungenApi.Dtos;
-using WohnungenApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 
@@ -90,6 +89,7 @@ namespace WohnungenApi.Controllers
         // ----------------------------
         // UPDATE ROLE
         // ----------------------------
+        [Authorize]
         [HttpPut("{id}/role")]
         public async Task<IActionResult> UpdateRole(int id, [FromBody] string newRole)
         {

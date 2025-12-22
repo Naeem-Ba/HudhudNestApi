@@ -2,10 +2,10 @@
 {
     public enum WohnungsStatus
     {
-        Aktiv = 0,
-        Reserviert = 1,
-        Verkauft = 2,
-        Vermietet = 3,
-        Archiviert = 4
+        AVAILABLE = 0,
+        RESERVED = 1,
+        SOLD = 2,
+        RENTED = 3,
+        ARCHIVED = 4
     }
 }

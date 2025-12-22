@@ -2,10 +2,10 @@
 {
     public enum WohnungsZustand
     {
-        Unbekannt = 0,
-        Neu = 1,
-        Renoviert = 2,
-        Gepflegt = 3,
-        Sanierungsbeduerftig = 4
+        UNKNOWN = 0,
+        NEW = 1,
+        RENOVATED = 2,
+        GOOD_CONDITION = 3,
+        NEEDS_RENOVATION = 4
     }
 }

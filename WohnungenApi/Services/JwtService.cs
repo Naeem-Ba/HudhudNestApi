@@ -1,44 +1,47 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using WohnungenApi.Models;
 
-namespace WohnungenApi.Services
+public class JwtService
 {
-    public class JwtService
+    private readonly JwtOptions _options;
+
+    public JwtService(IOptions<JwtOptions> options)
     {
-        private readonly IConfiguration _config;
+        _options = options.Value;
+    }
 
-        public JwtService(IConfiguration config)
+    public string GenerateToken(Benutzer user)
+    {
+        var claims = new List<Claim>
         {
-            _config = config;
-        }
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Email, user.Email),
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.Role, user.Role ?? "user")
+        };
 
-        public string GenerateToken(Benutzer user)
-        {
-            var claims = new[]
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim("email", user.Email),
-                new Claim("role", user.Role ?? "user")
-            };
+        var key = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(_options.Key)
+        );
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var creds = new SigningCredentials(
+            key,
+            SecurityAlgorithms.HmacSha256
+        );
 
-            var expires = DateTime.Now.AddHours(int.Parse(_config["Jwt:ExpiresInHours"]));
+        var token = new JwtSecurityToken(
+            issuer: _options.Issuer,
+            audience: _options.Audience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddHours(_options.ExpiresInHours),
+            signingCredentials: creds
+        );
 
-            var token = new JwtSecurityToken(
-                issuer: _config["Jwt:Issuer"],
-                audience: _config["Jwt:Audience"],
-                claims: claims,
-                expires: expires,
-                signingCredentials: creds
-            );
-
-            return new JwtSecurityTokenHandler().WriteToken(token);
-        }
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }

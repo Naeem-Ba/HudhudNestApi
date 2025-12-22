@@ -13,6 +13,7 @@ namespace WohnungenApi.Models
         public string? Phone { get; set; }
         public string PasswordHash { get; set; }
         public string? Role { get; set; } = "user";
+        public string? ImageUrl { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public int? Anzahle_Wohnungen { get; set; } = 0;
         public ICollection<Wohnung> Wohnungen { get; set; } = new List<Wohnung>();
