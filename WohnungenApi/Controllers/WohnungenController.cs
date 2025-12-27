@@ -29,6 +29,8 @@ namespace WohnungenApi.Controllers
                 Adresse = dto.Adresse,
                 Stadt = dto.Stadt,
                 PLZ = dto.PLZ,
+                Latitude = dto.Latitude,
+                Longitude = dto.Longitude,
                 ZumMieten = dto.ZumMieten,
                 ZumKaufen = dto.ZumKaufen,
                 Kaltmiete = dto.Kaltmiete,

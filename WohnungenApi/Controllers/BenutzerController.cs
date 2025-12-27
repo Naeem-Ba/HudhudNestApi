@@ -119,5 +119,26 @@ namespace WohnungenApi.Controllers
                 role = User.FindFirst(ClaimTypes.Role)?.Value
             });
         }
+
+        // ----------------------------
+        // UPDATE ROLE
+        // ----------------------------
+        //[Authorize]
+        //[HttpPost("change-password")]
+        //public async Task<IActionResult> ChangePassword([FromBody] BenutzerDto dto)
+        //{
+        //    var userId = GetCurrentUserId();
+        //    var user = await _context.Benutzer.FindAsync(userId);
+
+        //    // التحقق من كلمة المرور القديمة (تأكد من استخدام التشفير إذا كنت تشفرها)
+        //    if (user.PasswordHash != dto.CurrentPassword)
+        //        return BadRequest("كلمة المرور الحالية غير صحيحة");
+
+        //    user.PasswordHash = dto.NewPassword; // يفضل تشفيرها هنا
+        //    await _context.SaveChangesAsync();
+
+        //    return Ok();
+        //}
+
     }
 }

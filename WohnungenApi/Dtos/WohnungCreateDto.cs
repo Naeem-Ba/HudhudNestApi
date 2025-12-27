@@ -10,6 +10,8 @@ namespace WohnungenApi.Dtos
         public string Adresse { get; set; } = "";
         public Stadt? Stadt { get; set; }
         public string? PLZ { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
 
         public bool? ZumMieten { get; set; }
         public bool? ZumKaufen { get; set; }

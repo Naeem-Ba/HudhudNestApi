@@ -56,24 +56,47 @@ public class ProfileController : ControllerBase
     }
 
     [HttpPut]
-    public async Task<IActionResult> Profile([FromBody] ProfileDto dto)
+    public async Task<IActionResult> UpdateProfile([FromBody] ProfileDto dto)
     {
-        try
+        var userId = GetCurrentUserId();
+        var user = await _context.Benutzer.FindAsync(userId);
+        if (user == null) return NotFound();
+
+        //حماية إضافية: التأكد من وجود رقم الهاتف إذا كان الحساب وكيلاً
+        if (dto.IsAgent == true && (string.IsNullOrWhiteSpace(dto.Phone) || string.IsNullOrWhiteSpace(dto.TaxNumber)))
         {
-            var userId = GetCurrentUserId();
-            var user = await _context.Benutzer.FindAsync(userId);
-            if (user == null) return NotFound();
-
-            user.Vorname = dto.Vorname;
-            user.Name = dto.Name;
-            user.DisplayName = dto.DisplayName;
-            user.Phone = dto.Phone;
-            user.IsAgent = dto.IsAgent;
-
-            await _context.SaveChangesAsync();
-            return Ok(user);
+            return BadRequest("رقم الهاتف والرقم الضريبي مطلوبان لحسابات الوكلاء.");
         }
-        catch (Exception) { return Unauthorized(); }
+
+        user.Vorname = dto.Vorname;
+        user.Name = dto.Name;
+        user.DisplayName = dto.DisplayName;
+        user.Phone = dto.Phone;
+        user.IsAgent = dto.IsAgent;
+        user.TaxNumber = dto.TaxNumber; // حفظ الرقم الضريبي
+
+        await _context.SaveChangesAsync();
+        return Ok(user);
+    }
+
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
+    {
+        var userId = GetCurrentUserId();
+        var user = await _context.Benutzer.FindAsync(userId);
+        if (user == null) return NotFound();
+
+        // ملاحظة أمنية: يفضل استخدام PasswordHasher لفك التشفير والمقارنة
+        // هنا نقارن مباشرة (إذا كنت تخزنها كنص عادي حالياً)
+        if (user.PasswordHash != dto.CurrentPassword)
+        {
+            return BadRequest("كلمة المرور الحالية غير صحيحة.");
+        }
+
+        user.PasswordHash = dto.NewPassword;
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "تم تغيير كلمة المرور بنجاح" });
     }
 
     [HttpPost("avatar")]
