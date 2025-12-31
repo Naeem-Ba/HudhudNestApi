@@ -10,40 +10,38 @@ using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Culture
+// 1. الإعدادات الثقافية (Culture)
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
-
-// DbContext
+// 2. قاعدة البيانات (Database)
 builder.Services.AddDbContext<WohnungenContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// CORS
+// 3. إعدادات الـ CORS (مهمة جداً للموبايل)
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAngular",
-        policy => policy.WithOrigins("https://localhost:4200")
-                        .AllowAnyHeader()
-                        .AllowAnyMethod()
-                        .AllowCredentials());
+    options.AddPolicy("AllowAngular", policy =>
+    {
+        policy.SetIsOriginAllowed(_ => true)   // يسمح بالاتصال من الموبايل أو أي مكان
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
 });
 
-// Controllers + Swagger
+// 4. إعدادات الـ Controllers والـ JSON
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
-        // اجعل الـ JSON يستخدم نفس أسماء الخصائص كما هي في الـ C# (بدون lowercase)
-        options.JsonSerializerOptions.PropertyNamingPolicy = null;
-        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.PropertyNamingPolicy = null; // يحافظ على أسماء الحقول كما هي
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
     });
 
-// JWT Options
-builder.Services.Configure<JwtOptions>(
-    builder.Configuration.GetSection("Jwt")
-);
+// 5. إعدادات الـ JWT
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 
-// Authentication
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -53,8 +51,8 @@ builder.Services.AddAuthentication(options =>
 {
     var jwt = builder.Configuration.GetSection("Jwt");
 
-    options.RequireHttpsMetadata = true;   // Production-ready
-    options.SaveToken = false;
+    options.RequireHttpsMetadata = false; // معطل لأن الاستضافة قد تكون http فقط
+    options.SaveToken = true;
 
     options.TokenValidationParameters = new TokenValidationParameters
     {
@@ -62,33 +60,23 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-
         ValidIssuer = jwt["Issuer"],
         ValidAudience = jwt["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(jwt["Key"]!)
-        ),
-
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt["Key"]!)),
         ClockSkew = TimeSpan.FromSeconds(30)
     };
 
-    // 🔍 تشخيص واضح (اختياري لكنه مهم)
     options.Events = new JwtBearerEvents
     {
         OnAuthenticationFailed = ctx =>
         {
             Console.WriteLine("JWT AUTH FAILED: " + ctx.Exception.Message);
             return Task.CompletedTask;
-        },
-        OnTokenValidated = ctx =>
-        {
-            Console.WriteLine("JWT OK: " +
-                ctx.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            return Task.CompletedTask;
         }
     };
 });
 
+// 6. الخدمات الأخرى
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddEndpointsApiExplorer();
@@ -96,7 +84,8 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Middleware
+// --- 7. ترتيب الـ Middleware (الترتيب هنا حاسم جداً) ---
+
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
@@ -104,13 +93,16 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseCors("AllowAngular");  // أولاً الـ CORS
-app.UseHttpsRedirection();
+// الترتيب الصحيح للـ Middleware لتجنب مشاكل CORS و Auth
 app.UseStaticFiles();
 
-app.UseAuthentication();  // ثانياً الـ Authentication (من أنت؟)
-app.UseAuthorization();  // ثالثاً الـ Authorization (ماذا يحق لك؟)
+app.UseRouting(); // يجب أن يسبق CORS
 
-app.MapControllers();  // أخيراً المابينج
+app.UseCors("AllowAngular"); // يجب أن يكون بعد Routing وقبل Auth
+
+app.UseAuthentication(); // من أنت؟
+app.UseAuthorization();  // ماذا يحق لك؟
+
+app.MapControllers();
 
 app.Run();
