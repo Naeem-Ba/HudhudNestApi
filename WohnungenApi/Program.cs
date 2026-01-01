@@ -116,6 +116,7 @@ app.UseExceptionHandler(errorApp =>
         await context.Response.WriteAsync(result);
     });
 });
+Console.WriteLine($"Globalization Invariant: {System.Globalization.CultureInfo.InvariantCulture.Name}");
 
 app.UseRouting(); // يجب أن يسبق CORS
 
