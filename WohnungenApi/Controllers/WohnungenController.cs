@@ -85,7 +85,7 @@ namespace WohnungenApi.Controllers
         public async Task<ActionResult<IEnumerable<Wohnung>>> Get()
         {
             var wohnungen = await _context.Wohnungen
-                //.Include(w => w.Bilder)
+                .Include(w => w.Bilder)
                 .ToListAsync();
             return Ok(wohnungen);
         }
