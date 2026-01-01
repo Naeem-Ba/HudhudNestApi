@@ -16,19 +16,19 @@ CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
 // 2. قاعدة البيانات (Database)
 builder.Services.AddDbContext<WohnungenContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-// 3. إعدادات الـ CORS (مهمة جداً للموبايل)
-builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAngular", policy =>
-    {
-        policy.SetIsOriginAllowed(_ => true)   // يسمح بالاتصال من الموبايل أو أي مكان
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
-    });
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions =>
+        {
+            // هذا يساعد EF Core على التعامل مع الاستعلامات الكبيرة
+            sqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+        });
+
+    // منع EF من محاولة التحقق من الـ culture على الـ threads
+    options.EnableThreadSafetyChecks(false);
 });
+
 
 // 4. إعدادات الـ Controllers والـ JSON
 builder.Services.AddControllers()
