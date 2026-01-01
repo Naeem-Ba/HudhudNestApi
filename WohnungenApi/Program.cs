@@ -95,6 +95,27 @@ if (app.Environment.IsDevelopment())
 
 // الترتيب الصحيح للـ Middleware لتجنب مشاكل CORS و Auth
 app.UseStaticFiles();
+// مؤقتًا لعرض Exceptions على Production
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var feature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerPathFeature>();
+        var ex = feature?.Error;
+
+        context.Response.ContentType = "application/json";
+
+        // Json output كامل للخطأ
+        var result = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            message = ex?.Message,
+            stackTrace = ex?.StackTrace,
+            innerException = ex?.InnerException?.Message
+        });
+
+        await context.Response.WriteAsync(result);
+    });
+});
 
 app.UseRouting(); // يجب أن يسبق CORS
 
