@@ -10,6 +10,9 @@ using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
+
+var root = builder.Services.BuildServiceProvider();
+AppContext.SetSwitch("System.Globalization.Invariant", false);
 // 1. الإعدادات الثقافية (Culture)
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
