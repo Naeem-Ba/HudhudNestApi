@@ -10,39 +10,55 @@ using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
-
-var root = builder.Services.BuildServiceProvider();
+// ============================
+// 1️⃣ إعدادات ثقافية (Culture)
+// ============================
 AppContext.SetSwitch("System.Globalization.Invariant", false);
-// 1. الإعدادات الثقافية (Culture)
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
-// 2. قاعدة البيانات (Database)
+// ============================
+// 2️⃣ قاعدة البيانات (Database)
+// ============================
 builder.Services.AddDbContext<WohnungenContext>(options =>
 {
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
         sqlOptions =>
         {
-            // هذا يساعد EF Core على التعامل مع الاستعلامات الكبيرة
             sqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
         });
 
-    // منع EF من محاولة التحقق من الـ culture على الـ threads
     options.EnableThreadSafetyChecks(false);
 });
 
+// ============================
+// 3️⃣ إعدادات CORS (هام جدًا)
+// ============================
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAngular", policy =>
+    {
+        policy.WithOrigins("https://realestateworld.world") // الدومين بالضبط
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
 
-// 4. إعدادات الـ Controllers والـ JSON
+// ============================
+// 4️⃣ إعدادات Controllers و JSON
+// ============================
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
-        options.JsonSerializerOptions.PropertyNamingPolicy = null; // يحافظ على أسماء الحقول كما هي
+        options.JsonSerializerOptions.PropertyNamingPolicy = null;
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
     });
 
-// 5. إعدادات الـ JWT
+// ============================
+// 5️⃣ إعدادات JWT
+// ============================
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 
 builder.Services.AddAuthentication(options =>
@@ -54,7 +70,7 @@ builder.Services.AddAuthentication(options =>
 {
     var jwt = builder.Configuration.GetSection("Jwt");
 
-    options.RequireHttpsMetadata = false; // معطل لأن الاستضافة قد تكون http فقط
+    options.RequireHttpsMetadata = true; // Render يدعم HTTPS
     options.SaveToken = true;
 
     options.TokenValidationParameters = new TokenValidationParameters
@@ -79,15 +95,22 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// 6. الخدمات الأخرى
+// ============================
+// 6️⃣ خدمات أخرى
+// ============================
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// ============================
+// 7️⃣ بناء التطبيق
+// ============================
 var app = builder.Build();
 
-// --- 7. ترتيب الـ Middleware (الترتيب هنا حاسم جداً) ---
+// ============================
+// 8️⃣ Middleware بالترتيب الصحيح
+// ============================
 
 if (app.Environment.IsDevelopment())
 {
@@ -96,22 +119,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// الترتيب الصحيح للـ Middleware لتجنب مشاكل CORS و Auth
 app.UseStaticFiles();
 
-app.UseRouting(); // يجب أن يسبق CORS
-
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAngular", policy =>
-    {
-        policy.WithOrigins("https://realestateworld.world")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
-    });
-});
-
-app.UseCors("AllowAngular"); // يجب أن يكون بعد Routing وقبل Auth
+app.UseRouting();             // ⚡ يجب أن يسبق CORS
+app.UseCors("AllowAngular");  // ⚡ يجب أن يكون بعد Routing وقبل Auth
 
 // مؤقتًا لعرض Exceptions على Production
 app.UseExceptionHandler(errorApp =>
@@ -123,7 +134,6 @@ app.UseExceptionHandler(errorApp =>
 
         context.Response.ContentType = "application/json";
 
-        // Json output كامل للخطأ
         var result = System.Text.Json.JsonSerializer.Serialize(new
         {
             message = ex?.Message,
@@ -134,10 +144,8 @@ app.UseExceptionHandler(errorApp =>
         await context.Response.WriteAsync(result);
     });
 });
-Console.WriteLine($"Globalization Invariant: {System.Globalization.CultureInfo.InvariantCulture.Name}");
 
-
-
+Console.WriteLine($"Globalization Invariant: {CultureInfo.InvariantCulture.Name}");
 
 app.UseAuthentication(); // من أنت؟
 app.UseAuthorization();  // ماذا يحق لك؟
