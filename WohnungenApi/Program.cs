@@ -39,7 +39,11 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngular", policy =>
     {
-        policy.WithOrigins("https://realestateworld.world") // الدومين بالضبط
+        policy.WithOrigins(
+             "https://realestateworld.world",
+            "https://www.realestateworld.world",
+            "https://bizorealestateworld.netlify.app"
+            ) // الدومين بالضبط
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
