@@ -101,6 +101,16 @@ app.UseStaticFiles();
 
 app.UseRouting(); // يجب أن يسبق CORS
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAngular", policy =>
+    {
+        policy.WithOrigins("https://realestateworld.world")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 app.UseCors("AllowAngular"); // يجب أن يكون بعد Routing وقبل Auth
 
 // مؤقتًا لعرض Exceptions على Production
