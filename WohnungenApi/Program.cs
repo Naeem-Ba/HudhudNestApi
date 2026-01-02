@@ -98,6 +98,11 @@ if (app.Environment.IsDevelopment())
 
 // الترتيب الصحيح للـ Middleware لتجنب مشاكل CORS و Auth
 app.UseStaticFiles();
+
+app.UseRouting(); // يجب أن يسبق CORS
+
+app.UseCors("AllowAngular"); // يجب أن يكون بعد Routing وقبل Auth
+
 // مؤقتًا لعرض Exceptions على Production
 app.UseExceptionHandler(errorApp =>
 {
@@ -121,9 +126,8 @@ app.UseExceptionHandler(errorApp =>
 });
 Console.WriteLine($"Globalization Invariant: {System.Globalization.CultureInfo.InvariantCulture.Name}");
 
-app.UseRouting(); // يجب أن يسبق CORS
 
-app.UseCors("AllowAngular"); // يجب أن يكون بعد Routing وقبل Auth
+
 
 app.UseAuthentication(); // من أنت؟
 app.UseAuthorization();  // ماذا يحق لك؟
