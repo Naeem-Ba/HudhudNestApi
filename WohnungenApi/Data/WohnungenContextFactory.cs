@@ -1,7 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
-using System.IO;
 
 namespace WohnungenApi.Data
 {
@@ -9,13 +8,19 @@ namespace WohnungenApi.Data
     {
         public WohnungenContext CreateDbContext(string[] args)
         {
-            var configuration = new ConfigurationBuilder()
+            // إعداد قراءة ملف appsettings.json لكي يعرف البرنامج نص الاتصال أثناء الـ Migration
+            IConfigurationRoot configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
                 .AddJsonFile("appsettings.json")
                 .Build();
 
             var optionsBuilder = new DbContextOptionsBuilder<WohnungenContext>();
-            optionsBuilder.UseSqlServer(configuration.GetConnectionString("DefaultConnection"));
+
+            // جلب نص الاتصال من الملف
+            var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+            // تأكد من استخدام UseNpgsql بدلاً من UseSqlServer
+            optionsBuilder.UseNpgsql(connectionString);
 
             return new WohnungenContext(optionsBuilder.Options);
         }
