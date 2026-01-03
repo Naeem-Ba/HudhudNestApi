@@ -23,6 +23,21 @@ namespace WohnungenApi.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // أضف هذا السطر لتوحيد حالة الأحرف للصغير في PostgreSQL
+            modelBuilder.HasDefaultSchema("public");
+
+            foreach (var entity in modelBuilder.Model.GetEntityTypes())
+            {
+                // تحويل أسماء الجداول للأحرف الصغيرة
+                entity.SetTableName(entity.GetTableName()?.ToLower());
+
+                // تحويل أسماء الأعمدة للأحرف الصغيرة
+                foreach (var property in entity.GetProperties())
+                {
+                    var columnName = property.GetColumnBaseName();
+                    property.SetColumnName(columnName.ToLower());
+                }
+            }
             base.OnModelCreating(modelBuilder);
 
             // Favorite: Composite Key
@@ -33,7 +48,7 @@ namespace WohnungenApi.Data
             modelBuilder.Entity<Wohnung>()
                 .HasMany(w => w.Amenities)
                 .WithMany(a => a.Wohnungen)
-                .UsingEntity(j => j.ToTable("WohnungsAmenities"));
+                .UsingEntity(j => j.ToTable("wohnungsamenities"));
 
             // Beziehungen
             modelBuilder.Entity<Wohnung>()
