@@ -34,9 +34,19 @@ CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 // 2. قاعدة البيانات (تحويل إلى PostgreSQL)
 builder.Services.AddDbContext<WohnungenContext>(options =>
 {
-    // نستخدم UseNpgsql بدلاً من UseSqlServer
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
-    npgsqlOptions => npgsqlOptions.EnableRetryOnFailure()); // إعادة المحاولة في حال تأخر السيرفر
+// نستخدم UseNpgsql بدلاً من UseSqlServer
+var connString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+// إذا كان الرابط من Render يبدأ بـ postgres://، سنقوم بتحويله لتنسيق تفهمه ADO.NET
+if (connString != null && connString.StartsWith("postgres://"))
+{
+    var databaseUri = new Uri(connString);
+    var userInfo = databaseUri.UserInfo.Split(':');
+    connString = $"Host={databaseUri.Host};Port={databaseUri.Port};Database={databaseUri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true;";
+}
+
+options.UseNpgsql(connString);
+//npgsqlOptions => npgsqlOptions.EnableRetryOnFailure()); // إعادة المحاولة في حال تأخر السيرفر
 });
 
 // ============================
