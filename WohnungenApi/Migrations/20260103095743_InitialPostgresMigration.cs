@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace WohnungenApi.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class InitialPostgresMigration : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -30,20 +30,40 @@ namespace WohnungenApi.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    DisplayName = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    IsAgent = table.Column<bool>(type: "bit", nullable: false),
+                    DisplayName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    IsAgent = table.Column<bool>(type: "bit", nullable: true),
                     Name = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Vorname = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Email = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Phone = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    PasswordHash = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    Role = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    PasswordHash = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    TaxNumber = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Role = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ImageUrl = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    Anzahle_Wohnungen = table.Column<int>(type: "int", nullable: false)
+                    Anzahle_Wohnungen = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Benutzer", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ContactMessages",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    IsRead = table.Column<bool>(type: "bit", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Email = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Subject = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Message = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    SentAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ContactMessages", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -55,28 +75,28 @@ namespace WohnungenApi.Migrations
                     Titel = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Beschreibung = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Adresse = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Stadt = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    PLZ = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    PLZ = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Latitude = table.Column<double>(type: "float", nullable: true),
                     Longitude = table.Column<double>(type: "float", nullable: true),
-                    ZumMieten = table.Column<bool>(type: "bit", nullable: false),
-                    ZumKaufen = table.Column<bool>(type: "bit", nullable: false),
+                    ZumMieten = table.Column<bool>(type: "bit", nullable: true),
+                    ZumKaufen = table.Column<bool>(type: "bit", nullable: true),
                     Kaltmiete = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
                     Warmmiete = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
                     Kaufpreis = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
                     Nebenkosten = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
                     Kaution = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
-                    Zimmer = table.Column<int>(type: "int", nullable: false),
-                    Flaeche = table.Column<double>(type: "float", nullable: false),
-                    Geschoss = table.Column<int>(type: "int", nullable: false),
+                    Zimmer = table.Column<int>(type: "int", nullable: true),
+                    Flaeche = table.Column<double>(type: "float", nullable: true),
+                    Geschoss = table.Column<int>(type: "int", nullable: true),
                     FreiAb = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    Balkon = table.Column<bool>(type: "bit", nullable: false),
-                    Aufzug = table.Column<bool>(type: "bit", nullable: false),
-                    Stellplatz = table.Column<bool>(type: "bit", nullable: false),
-                    Heizung = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Energieausweis = table.Column<int>(type: "int", nullable: false),
-                    Zustand = table.Column<int>(type: "int", nullable: false),
-                    Status = table.Column<int>(type: "int", nullable: false),
+                    Balkon = table.Column<bool>(type: "bit", nullable: true),
+                    Aufzug = table.Column<bool>(type: "bit", nullable: true),
+                    Stellplatz = table.Column<bool>(type: "bit", nullable: true),
+                    Heizung = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Stadt = table.Column<int>(type: "int", nullable: true),
+                    Energieausweis = table.Column<int>(type: "int", nullable: true),
+                    Zustand = table.Column<int>(type: "int", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: true),
                     OwnerId = table.Column<int>(type: "int", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
@@ -264,6 +284,9 @@ namespace WohnungenApi.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "ContactMessages");
+
             migrationBuilder.DropTable(
                 name: "Favorites");
 

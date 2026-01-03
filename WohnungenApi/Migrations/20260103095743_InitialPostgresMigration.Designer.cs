@@ -12,8 +12,8 @@ using WohnungenApi.Data;
 namespace WohnungenApi.Migrations
 {
     [DbContext(typeof(WohnungenContext))]
-    [Migration("20251223131422_AddTaxNumberToBenutzer")]
-    partial class AddTaxNumberToBenutzer
+    [Migration("20260103095743_InitialPostgresMigration")]
+    partial class InitialPostgresMigration
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

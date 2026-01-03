@@ -20,16 +20,22 @@ CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 // ============================
 // 2️⃣ قاعدة البيانات (Database)
 // ============================
+//builder.Services.AddDbContext<WohnungenContext>(options =>
+//{
+//    options.UseSqlServer(
+//        builder.Configuration.GetConnectionString("DefaultConnection"),
+//        sqlOptions =>
+//        {
+//            sqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+//        });
+
+//    options.EnableThreadSafetyChecks(false);
+//});
+// 2. قاعدة البيانات (تحويل إلى PostgreSQL)
 builder.Services.AddDbContext<WohnungenContext>(options =>
 {
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        sqlOptions =>
-        {
-            sqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
-        });
-
-    options.EnableThreadSafetyChecks(false);
+    // نستخدم UseNpgsql بدلاً من UseSqlServer
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 
 // ============================
