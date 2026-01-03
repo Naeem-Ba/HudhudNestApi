@@ -162,9 +162,24 @@ app.UseAuthorization();  // ماذا يحق لك؟
 
 app.MapControllers();
 // قبل app.Run() أضف هذا لإنشاء الجداول تلقائياً في Render
-using (var scope = app.Services.CreateScope())
+try
 {
-    var db = scope.ServiceProvider.GetRequiredService<WohnungenContext>();
-    db.Database.Migrate();
+    using (var scope = app.Services.CreateScope())
+    {
+        var services = scope.ServiceProvider;
+        var context = services.GetRequiredService<WohnungenContext>();
+
+        // انتظر قليلاً لضمان استقرار الاتصال في البيئة السحابية
+        Console.WriteLine("Checking for pending migrations...");
+        context.Database.Migrate();
+        Console.WriteLine("Migrations applied successfully!");
+    }
 }
+catch (Exception ex)
+{
+    Console.WriteLine($"An error occurred while migrating the database: {ex.Message}");
+    // لا تجعل التطبيق ينهار إذا فشل الـ Migration مؤقتاً
+}
+
+// تشغيل التطبيق
 app.Run();
