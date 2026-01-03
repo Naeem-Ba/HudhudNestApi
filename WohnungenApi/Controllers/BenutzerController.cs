@@ -22,7 +22,7 @@ namespace WohnungenApi.Controllers
         // ----------------------------
         // REGISTER
         // ----------------------------
-        [HttpPost("Register")]
+        [HttpPost("register")]
         public async Task<IActionResult> CreateUser([FromBody] BenutzerDto dto)
         {
             // تحقق من وجود المستخدم

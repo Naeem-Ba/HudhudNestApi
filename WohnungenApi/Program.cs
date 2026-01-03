@@ -13,7 +13,7 @@ var builder = WebApplication.CreateBuilder(args);
 // ============================
 // 1️⃣ إعدادات ثقافية (Culture)
 // ============================
-AppContext.SetSwitch("System.Globalization.Invariant", false);
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
@@ -35,7 +35,8 @@ CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 builder.Services.AddDbContext<WohnungenContext>(options =>
 {
     // نستخدم UseNpgsql بدلاً من UseSqlServer
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
+    npgsqlOptions => npgsqlOptions.EnableRetryOnFailure()); // إعادة المحاولة في حال تأخر السيرفر
 });
 
 // ============================
@@ -122,12 +123,15 @@ var app = builder.Build();
 // 8️⃣ Middleware بالترتيب الصحيح
 // ============================
 
-if (app.Environment.IsDevelopment())
-{
+//if (app.Environment.IsDevelopment())
+//{
     app.UseDeveloperExceptionPage();
     app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    app.UseSwaggerUI(c => {
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Wohnungen API V1");
+    c.RoutePrefix = "swagger";
+    });
+//}
 
 app.UseStaticFiles();
 

@@ -7,7 +7,11 @@ namespace WohnungenApi.Data
     public class WohnungenContext : DbContext
     {
         public WohnungenContext(DbContextOptions<WohnungenContext> options)
-            : base(options) { }
+            : base(options)
+        {
+            // حل مشكلة التواريخ في PostgreSQL
+            AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+        }
 
         public DbSet<ContactMessage> ContactMessages { get; set; }
         public DbSet<Wohnung> Wohnungen { get; set; }
