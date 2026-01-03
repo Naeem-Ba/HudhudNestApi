@@ -161,5 +161,10 @@ app.UseAuthentication(); // من أنت؟
 app.UseAuthorization();  // ماذا يحق لك؟
 
 app.MapControllers();
-
+// قبل app.Run() أضف هذا لإنشاء الجداول تلقائياً في Render
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<WohnungenContext>();
+    db.Database.Migrate();
+}
 app.Run();
