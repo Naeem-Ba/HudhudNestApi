@@ -191,7 +191,7 @@ try
 
         // سطر إضافي مؤقت لحذف القاعدة القديمة
         // انتبه: سيؤدي هذا لحذف كل البيانات المسجلة حالياً!
-        context.Database.EnsureDeleted();
+        //context.Database.EnsureDeleted();
         // يقوم بإنشاء الجداول إذا لم تكن موجودة
         context.Database.EnsureCreated();
         Console.WriteLine("Database and Tables created successfully!");
