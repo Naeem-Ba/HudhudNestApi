@@ -5,7 +5,7 @@ namespace WohnungenApi.Dtos
     public class BenutzerDto
     {
 
-            public string DisplayName { get; set; } = string.Empty;
+            public string? DisplayName { get; set; } = string.Empty;
             public bool? IsAgent { get; set; }
             public string? Name { get; set; }
             public string? Vorname { get; set; }
