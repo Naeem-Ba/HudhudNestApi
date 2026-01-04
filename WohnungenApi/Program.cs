@@ -31,32 +31,27 @@ CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
 //    options.EnableThreadSafetyChecks(false);
 //});
-// 2. قاعدة البيانات (نسخة محسنة ومضمونة لـ Render)
+// 2. قاعدة البيانات (النسخة النهائية المضمونة)
 builder.Services.AddDbContext<WohnungenContext>(options =>
 {
-    var connString = builder.Configuration.GetConnectionString("DefaultConnection");
+    var connUrl = builder.Configuration.GetConnectionString("DefaultConnection");
 
-    // 1. تنظيف النص من أي فراغات مخفية
-    connString = connString?.Trim();
+    // تنظيف النص
+    connUrl = connUrl?.Trim();
 
-    // 2. التحقق إذا كان الرابط قادماً من Render (صيغة URI)
-    if (connString != null && (connString.StartsWith("postgres://") || connString.StartsWith("postgresql://")))
+    if (!string.IsNullOrEmpty(connUrl) && (connUrl.StartsWith("postgres://") || connUrl.StartsWith("postgresql://")))
     {
-        // استخدام الطريقة المضمونة لتحويل الرابط
-        var databaseUri = new Uri(connString);
-        var userInfo = databaseUri.UserInfo.Split(':');
+        // تحويل الرابط لصيغة Npgsql
+        var uri = new Uri(connUrl);
+        var db = uri.AbsolutePath.TrimStart('/');
+        var user = uri.UserInfo.Split(':')[0];
+        var passwd = uri.UserInfo.Split(':')[1];
+        var port = uri.Port > 0 ? uri.Port : 5432;
 
-        var host = databaseUri.Host;
-        var port = databaseUri.Port;
-        var database = databaseUri.AbsolutePath.TrimStart('/');
-        var username = userInfo[0];
-        var password = userInfo[1];
-
-        // بناء نص الاتصال المتوافق مع Npgsql و C#
-        connString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true;";
+        connUrl = $"Host={uri.Host};Port={port};Database={db};Username={user};Password={passwd};SSL Mode=Require;Trust Server Certificate=true;";
     }
 
-    options.UseNpgsql(connString);
+    options.UseNpgsql(connUrl);
 });
 
 // ============================
