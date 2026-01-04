@@ -184,10 +184,9 @@ try
         var services = scope.ServiceProvider;
         var context = services.GetRequiredService<WohnungenContext>();
 
-        // انتظر قليلاً لضمان استقرار الاتصال في البيئة السحابية
-        Console.WriteLine("Checking for pending migrations...");
-        context.Database.Migrate();
-        Console.WriteLine("Migrations applied successfully!");
+        // يقوم بإنشاء الجداول إذا لم تكن موجودة
+        context.Database.EnsureCreated();
+        Console.WriteLine("Database and Tables created successfully!");
     }
 }
 catch (Exception ex)
