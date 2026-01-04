@@ -12,7 +12,7 @@ namespace WohnungenApi.Models
         public string Email { get; set; } = string.Empty;
         public string? Phone { get; set; }
         public string PasswordHash { get; set; }
-        public string TaxNumber { get; set; }
+        public string? TaxNumber { get; set; }
         public string? Role { get; set; } = "user";
         public string? ImageUrl { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
