@@ -37,6 +37,8 @@ builder.Services.AddDbContext<WohnungenContext>(options =>
 // نستخدم UseNpgsql بدلاً من UseSqlServer
 var connString = builder.Configuration.GetConnectionString("DefaultConnection");
 
+    // تنظيف النص من أي فراغات في البداية أو النهاية
+    connString = connString?.Trim();
 // إذا كان الرابط من Render يبدأ بـ postgres://، سنقوم بتحويله لتنسيق تفهمه ADO.NET
 if (connString != null && connString.StartsWith("postgres://"))
 {
