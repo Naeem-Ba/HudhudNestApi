@@ -31,24 +31,32 @@ CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
 //    options.EnableThreadSafetyChecks(false);
 //});
-// 2. قاعدة البيانات (تحويل إلى PostgreSQL)
+// 2. قاعدة البيانات (نسخة محسنة ومضمونة لـ Render)
 builder.Services.AddDbContext<WohnungenContext>(options =>
 {
-// نستخدم UseNpgsql بدلاً من UseSqlServer
-var connString = builder.Configuration.GetConnectionString("DefaultConnection");
+    var connString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-    // تنظيف النص من أي فراغات في البداية أو النهاية
+    // 1. تنظيف النص من أي فراغات مخفية
     connString = connString?.Trim();
-// إذا كان الرابط من Render يبدأ بـ postgres://، سنقوم بتحويله لتنسيق تفهمه ADO.NET
-if (connString != null && connString.StartsWith("postgres://"))
-{
-    var databaseUri = new Uri(connString);
-    var userInfo = databaseUri.UserInfo.Split(':');
-    connString = $"Host={databaseUri.Host};Port={databaseUri.Port};Database={databaseUri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true;";
-}
 
-options.UseNpgsql(connString);
-//npgsqlOptions => npgsqlOptions.EnableRetryOnFailure()); // إعادة المحاولة في حال تأخر السيرفر
+    // 2. التحقق إذا كان الرابط قادماً من Render (صيغة URI)
+    if (connString != null && (connString.StartsWith("postgres://") || connString.StartsWith("postgresql://")))
+    {
+        // استخدام الطريقة المضمونة لتحويل الرابط
+        var databaseUri = new Uri(connString);
+        var userInfo = databaseUri.UserInfo.Split(':');
+
+        var host = databaseUri.Host;
+        var port = databaseUri.Port;
+        var database = databaseUri.AbsolutePath.TrimStart('/');
+        var username = userInfo[0];
+        var password = userInfo[1];
+
+        // بناء نص الاتصال المتوافق مع Npgsql و C#
+        connString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true;";
+    }
+
+    options.UseNpgsql(connString);
 });
 
 // ============================
