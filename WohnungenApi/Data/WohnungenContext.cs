@@ -23,8 +23,9 @@ namespace WohnungenApi.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            base.OnModelCreating(modelBuilder);
             // أضف هذا السطر لتوحيد حالة الأحرف للصغير في PostgreSQL
-            modelBuilder.HasDefaultSchema("public");
+            //modelBuilder.HasDefaultSchema("public");
 
             foreach (var entity in modelBuilder.Model.GetEntityTypes())
             {
@@ -38,7 +39,6 @@ namespace WohnungenApi.Data
                     property.SetColumnName(columnName.ToLower());
                 }
             }
-            base.OnModelCreating(modelBuilder);
 
             // Favorite: Composite Key
             modelBuilder.Entity<Favorite>()
