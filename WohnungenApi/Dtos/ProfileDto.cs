@@ -7,6 +7,6 @@
         public string? DisplayName { get; set; }
         public string? Phone { get; set; }
         public bool? IsAgent { get; set; }
-        public string TaxNumber { get; set; }
+        public string? TaxNumber { get; set; }
     }
 }
