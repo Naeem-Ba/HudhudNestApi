@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using WohnungenApi.Data;
 using WohnungenApi.Models;
+using WohnungenApi.Services; // إضافة namespace الخاص بالخدمة
 
 namespace WohnungenApi.Controllers
 {
@@ -9,12 +10,12 @@ namespace WohnungenApi.Controllers
     public class WohnungsbildController : ControllerBase
     {
         private readonly WohnungenContext _context;
-        private readonly IWebHostEnvironment _env;
+        private readonly IPhotoService _photoService; // استبدال IWebHostEnvironment بالخدمة الجديدة
 
-        public WohnungsbildController(WohnungenContext context, IWebHostEnvironment env)
+        public WohnungsbildController(WohnungenContext context, IPhotoService photoService)
         {
             _context = context;
-            _env = env;
+            _photoService = photoService;
         }
 
         [HttpPost("{wohnungId}")]
@@ -28,24 +29,19 @@ namespace WohnungenApi.Controllers
             if (wohnung == null)
                 return NotFound("Wohnung nicht gefunden.");
 
-            var uploadsPath = Path.Combine(_env.WebRootPath, "bilder");
-            if (!Directory.Exists(uploadsPath))
-                Directory.CreateDirectory(uploadsPath);
+            // رفع الصورة إلى Cloudinary بدلاً من FileStream المحلي
+            var result = await _photoService.AddPhotoAsync(file);
 
-            var fileName = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
-            var filePath = Path.Combine(uploadsPath, fileName);
+            if (result.Error != null)
+                return BadRequest(result.Error.Message);
 
-            using (var stream = new FileStream(filePath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            var url = $"{Request.Scheme}://{Request.Host}/bilder/{fileName}";
+            // الحصول على الرابط المؤمن (https) من Cloudinary
+            var url = result.SecureUrl.AbsoluteUri;
 
             var bild = new Wohnungsbild
             {
                 WohnungId = wohnungId,
-                Url = url,
+                Url = url, // الرابط السحابي الآن للأبد
                 IsMain = false
             };
 
