@@ -36,7 +36,7 @@ namespace WohnungenApi.Controllers
                 return BadRequest(result.Error.Message);
 
             // الحصول على الرابط المؤمن (https) من Cloudinary
-            var url = result.SecureUrl.AbsoluteUri;
+            var url = result.SecureUrl?.AbsoluteUri?? "";
 
             var bild = new Wohnungsbild
             {
