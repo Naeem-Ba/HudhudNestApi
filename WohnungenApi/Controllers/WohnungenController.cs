@@ -12,13 +12,11 @@ namespace WohnungenApi.Controllers
     public class WohnungenController : ControllerBase
     {
         private readonly WohnungenContext _context;
-        //private readonly IWebHostEnvironment _env;
         private readonly IPhotoService _photoService;
 
-        public WohnungenController(WohnungenContext context, IPhotoService photoService) //context, IWebHostEnvironment env
+        public WohnungenController(WohnungenContext context, IPhotoService photoService)
         {
             _context = context;
-            //_env = env;
             _photoService = photoService;
         }
 
@@ -56,18 +54,18 @@ namespace WohnungenApi.Controllers
                 Bilder = new List<Wohnungsbild>()
             };
 
-            if (dto.Bilder != null && dto.Bilder.Count > 0)
+            if (dto.Bilder != null && dto.Bilder.Any())
             {
                 foreach (var file in dto.Bilder)
                 {
-                    // رفع كل صورة إلى Cloudinary
                     var result = await _photoService.AddPhotoAsync(file);
 
-                    if (result.Error == null)
+                    // التحقق من نجاح الرفع قبل الإضافة للقاعدة
+                    if (result.Error == null && result.SecureUrl != null)
                     {
                         wohnung.Bilder.Add(new Wohnungsbild
                         {
-                            Url = result.SecureUrl.AbsoluteUri, // حفظ الرابط السحابي
+                            Url = result.SecureUrl.AbsoluteUri,
                             IsMain = false
                         });
                     }
@@ -79,41 +77,11 @@ namespace WohnungenApi.Controllers
 
             return Ok(wohnung);
         }
-        //    if (dto.Bilder != null)
-        //    {
-        //        foreach (var file in dto.Bilder)
-        //        {
-        //            var fileName = Guid.NewGuid() + Path.GetExtension(file.FileName);
-        //            var path = Path.Combine(_env.WebRootPath, "bilder");
 
-        //            if (!Directory.Exists(path))
-        //                Directory.CreateDirectory(path);
-
-        //            var filePath = Path.Combine(path, fileName);
-
-        //            using var stream = new FileStream(filePath, FileMode.Create);
-        //            await file.CopyToAsync(stream);
-
-        //            wohnung.Bilder.Add(new Wohnungsbild
-        //            {
-        //                Url = $"{Request.Scheme}://{Request.Host}/bilder/{fileName}",
-        //                IsMain = false
-        //            });
-        //        }
-        //    }
-
-        //    _context.Wohnungen.Add(wohnung);
-        //    await _context.SaveChangesAsync();
-
-        //    return Ok(wohnung);
-        //}
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Wohnung>>> Get()
         {
-            var wohnungen = await _context.Wohnungen
-                .Include(w => w.Bilder)
-                .ToListAsync();
-            return Ok(wohnungen);
+            return await _context.Wohnungen.Include(w => w.Bilder).ToListAsync();
         }
 
         [HttpGet("{id}")]
@@ -122,6 +90,7 @@ namespace WohnungenApi.Controllers
             var wohnung = await _context.Wohnungen
                 .Include(w => w.Bilder)
                 .FirstOrDefaultAsync(w => w.Id == id);
+
             if (wohnung == null) return NotFound();
             return wohnung;
         }

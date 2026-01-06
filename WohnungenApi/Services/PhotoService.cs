@@ -30,8 +30,9 @@ namespace WohnungenApi.Services
                 var uploadParams = new ImageUploadParams
                 {
                     File = new FileDescription(file.FileName, stream),
+                    // تم ضبط التحجيم لضمان عدم استهلاك مساحة Cloudinary بسرعة
                     Transformation = new Transformation().Height(800).Width(1200).Crop("limit"),
-                    Folder = "wohnungen-bilder" // سيقوم بإنشاء مجلد بهذا الاسم داخل Cloudinary
+                    Folder = "wohnungen-bilder"
                 };
                 uploadResult = await _cloudinary.UploadAsync(uploadParams);
             }
