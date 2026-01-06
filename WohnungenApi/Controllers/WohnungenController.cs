@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using WohnungenApi.Data;
 using WohnungenApi.Dtos;
 using WohnungenApi.Models;
+using WohnungenApi.Services;
 
 namespace WohnungenApi.Controllers
 {
@@ -11,12 +12,14 @@ namespace WohnungenApi.Controllers
     public class WohnungenController : ControllerBase
     {
         private readonly WohnungenContext _context;
-        private readonly IWebHostEnvironment _env;
+        //private readonly IWebHostEnvironment _env;
+        private readonly IPhotoService _photoService;
 
-        public WohnungenController(WohnungenContext context, IWebHostEnvironment env)
+        public WohnungenController(WohnungenContext context, IPhotoService photoService) //context, IWebHostEnvironment env
         {
             _context = context;
-            _env = env;
+            //_env = env;
+            _photoService = photoService;
         }
 
         [HttpPost]
@@ -53,26 +56,21 @@ namespace WohnungenApi.Controllers
                 Bilder = new List<Wohnungsbild>()
             };
 
-            if (dto.Bilder != null)
+            if (dto.Bilder != null && dto.Bilder.Count > 0)
             {
                 foreach (var file in dto.Bilder)
                 {
-                    var fileName = Guid.NewGuid() + Path.GetExtension(file.FileName);
-                    var path = Path.Combine(_env.WebRootPath, "bilder");
+                    // رفع كل صورة إلى Cloudinary
+                    var result = await _photoService.AddPhotoAsync(file);
 
-                    if (!Directory.Exists(path))
-                        Directory.CreateDirectory(path);
-
-                    var filePath = Path.Combine(path, fileName);
-
-                    using var stream = new FileStream(filePath, FileMode.Create);
-                    await file.CopyToAsync(stream);
-
-                    wohnung.Bilder.Add(new Wohnungsbild
+                    if (result.Error == null)
                     {
-                        Url = $"{Request.Scheme}://{Request.Host}/bilder/{fileName}",
-                        IsMain = false
-                    });
+                        wohnung.Bilder.Add(new Wohnungsbild
+                        {
+                            Url = result.SecureUrl.AbsoluteUri, // حفظ الرابط السحابي
+                            IsMain = false
+                        });
+                    }
                 }
             }
 
@@ -81,6 +79,34 @@ namespace WohnungenApi.Controllers
 
             return Ok(wohnung);
         }
+        //    if (dto.Bilder != null)
+        //    {
+        //        foreach (var file in dto.Bilder)
+        //        {
+        //            var fileName = Guid.NewGuid() + Path.GetExtension(file.FileName);
+        //            var path = Path.Combine(_env.WebRootPath, "bilder");
+
+        //            if (!Directory.Exists(path))
+        //                Directory.CreateDirectory(path);
+
+        //            var filePath = Path.Combine(path, fileName);
+
+        //            using var stream = new FileStream(filePath, FileMode.Create);
+        //            await file.CopyToAsync(stream);
+
+        //            wohnung.Bilder.Add(new Wohnungsbild
+        //            {
+        //                Url = $"{Request.Scheme}://{Request.Host}/bilder/{fileName}",
+        //                IsMain = false
+        //            });
+        //        }
+        //    }
+
+        //    _context.Wohnungen.Add(wohnung);
+        //    await _context.SaveChangesAsync();
+
+        //    return Ok(wohnung);
+        //}
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Wohnung>>> Get()
         {

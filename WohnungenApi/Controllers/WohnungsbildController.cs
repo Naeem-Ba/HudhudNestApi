@@ -49,6 +49,7 @@ namespace WohnungenApi.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(bild);
+
         }
 
         [HttpGet("{wohnungId}")]
