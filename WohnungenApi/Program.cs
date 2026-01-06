@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using WohnungenApi.Models;
 using System.Security.Claims;
+using WohnungenApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -116,6 +117,7 @@ builder.Services.AddAuthentication(options =>
         }
     };
 });
+
 builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 builder.Services.AddScoped<IPhotoService, PhotoService>();
 // ============================
