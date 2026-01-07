@@ -4,6 +4,7 @@ using WohnungenApi.Data;
 using WohnungenApi.Dtos;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using WohnungenApi.Services;
 
 [Authorize]
 [ApiController]
@@ -11,12 +12,12 @@ using Microsoft.EntityFrameworkCore;
 public class ProfileController : ControllerBase
 {
     private readonly WohnungenContext _context;
-    private readonly IWebHostEnvironment _env;
+    private readonly IPhotoService _photoService; // حقن خدمة الصور
 
-    public ProfileController(WohnungenContext context, IWebHostEnvironment env)
+    public ProfileController(WohnungenContext context, IPhotoService photoService)
     {
         _context = context;
-        _env = env;
+        _photoService = photoService;
     }
 
     // دالة مساعدة لجلب ID المستخدم بأمان
@@ -100,32 +101,34 @@ public class ProfileController : ControllerBase
     }
 
     [HttpPost("avatar")]
-    public async Task<IActionResult> UploadAvatar([FromForm] IFormFile file)
+   
+    public async Task<IActionResult> UploadAvatar([FromForm] AvatarUploadDto dto)
     {
-        if (file == null || file.Length == 0) return BadRequest("File is empty");
+        // 1. التأكد من وجود ملف
+        if (dto.File == null || dto.File.Length == 0)
+            return BadRequest("File is empty");
 
         try
         {
+            // 2. الحصول على معرف المستخدم الحالي (من التوكن)
             var userId = GetCurrentUserId();
             var user = await _context.Benutzer.FindAsync(userId);
-            if (user == null) return NotFound();
+            if (user == null) return NotFound("User not found");
 
-            var uploadsPath = Path.Combine(_env.WebRootPath, "profile_fotos");
-            if (!Directory.Exists(uploadsPath)) Directory.CreateDirectory(uploadsPath);
+            // 3. رفع الصورة إلى Cloudinary بدلاً من السيرفر المحلي
+            var result = await _photoService.AddPhotoAsync(dto.File);
 
-            var fileName = $"user_{userId}.jpg";
-            var filePath = Path.Combine(uploadsPath, fileName);
+            if (result.Error != null)
+                return BadRequest(result.Error.Message);
 
-            using (var stream = new FileStream(filePath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
+            // 4. تحديث رابط الصورة في قاعدة البيانات بالرابط الذي أعطاه Cloudinary
+            user.ImageUrl = result.SecureUrl.AbsoluteUri;
 
-            user.ImageUrl = $"/profile_fotos/{fileName}";
             await _context.SaveChangesAsync();
 
             return Ok(new { imageUrl = user.ImageUrl });
         }
         catch (Exception) { return Unauthorized(); }
     }
+
 }
