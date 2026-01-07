@@ -66,26 +66,39 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// 5. Middleware Pipeline
-app.UseSwagger();
-app.UseSwaggerUI(c => {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Wohnungen API V1");
-    c.RoutePrefix = string.Empty; // يجعل Swagger الصفحة الرئيسية
-});
+// 5. Middleware Pipeline (الترتيب هنا هو المفتاح لحل CORS)
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+else
+{
+    // في الإنتاج، اجعل Swagger متاحاً أيضاً لتجربة الـ API
+    app.UseSwagger();
+    app.UseSwaggerUI(c => {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Wohnungen API V1");
+        c.RoutePrefix = string.Empty;
+    });
+}
 
-app.UseExceptionHandler("/error"); // معالجة الأخطاء
 app.UseStaticFiles();
 app.UseRouting();
+
+// 🛑 هام جداً: CORS يجب أن يكون بعد Routing وقبل Authentication
 app.UseCors("AllowAngular");
+
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
 
-// 6. إنشاء الجداول تلقائياً
+// 6. إنشاء الجداول (تعديل هام جداً)
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<WohnungenContext>();
-    db.Database.EnsureDeleted();
+    // ⚠️  EnsureDeleted يمسح البيانات في كل مرة يعمل فيها السيرفر
+    // db.Database.EnsureDeleted(); 
     db.Database.EnsureCreated();
 }
 
