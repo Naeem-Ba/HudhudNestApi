@@ -57,7 +57,7 @@ namespace WohnungenApi.Controllers
             return Ok(bilder);
         }
 
-        [HttpGet("{wohnungId}")]
+        [HttpGet]
         public IActionResult GetBilder(int wohnungId)
         {
             var bilder = _context.Wohnungsbilder.Where(b => b.WohnungId == wohnungId).ToList();
