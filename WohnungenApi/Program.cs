@@ -121,11 +121,33 @@ builder.Services.AddSwaggerGen();
 // ============================
 var app = builder.Build();
 
+//============================= مؤقتًا لعرض Exceptions على Production
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var feature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerPathFeature>();
+        var ex = feature?.Error;
+
+        context.Response.ContentType = "application/json";
+        // إضافة Headers الـ CORS يدوياً هنا لضمان وصول رسالة الخطأ للمتصفح
+        context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+
+        var result = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            message = ex?.Message,
+            stackTrace = ex?.StackTrace,
+            innerException = ex?.InnerException?.Message
+        });
+
+        await context.Response.WriteAsync(result);
+    });
+});
+//=========================================================================================
 
 // ============================
 // 8️ Middleware بالترتيب الصحيح
 // ============================
-// 5. Middleware Pipeline (الترتيب هنا هو المفتاح لحل CORS)
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -138,7 +160,6 @@ else
     app.UseSwagger();
     app.UseSwaggerUI(c => {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "Wohnungen API V1");
-        c.RoutePrefix = "swagger";
         c.RoutePrefix = string.Empty;
     });
 }
@@ -150,29 +171,6 @@ app.UseRouting();
 app.UseCors("AllowAngular");
 
 
-//============================= مؤقتًا لعرض Exceptions على Production
-app.UseExceptionHandler(errorApp =>
-{
-    errorApp.Run(async context =>
-    {
-        var feature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerPathFeature>();
-        var ex = feature?.Error;
-
-        context.Response.ContentType = "application/json";
-
-        var result = System.Text.Json.JsonSerializer.Serialize(new
-        {
-            message = ex?.Message,
-            stackTrace = ex?.StackTrace,
-            innerException = ex?.InnerException?.Message
-        });
-
-        await context.Response.WriteAsync(result);
-    });
-});
-
-Console.WriteLine($"Globalization Invariant: {CultureInfo.InvariantCulture.Name}");
-//=========================================================================================
 
 app.UseAuthentication();  // من أنت؟
 app.UseAuthorization();  // ماذا يحق لك؟
@@ -190,7 +188,7 @@ try
 
         // سطر إضافي مؤقت لحذف القاعدة القديمة
         // انتبه: سيؤدي هذا لحذف كل البيانات المسجلة حالياً!
-        context.Database.EnsureDeleted();
+        //context.Database.EnsureDeleted();
         // يقوم بإنشاء الجداول إذا لم تكن موجودة
         context.Database.EnsureCreated();
         Console.WriteLine("Database and Tables created successfully!");

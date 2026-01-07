@@ -22,7 +22,9 @@ namespace WohnungenApi.Controllers
         [RequestSizeLimit(10_000_000)] // 10 MB
         public async Task<IActionResult> UploadBild(int wohnungId, IFormFile file)
         {
-            if (file == null || file.Length == 0)
+            try
+            {
+                if (file == null || file.Length == 0)
                 return BadRequest("Keine Datei hochgeladen.");
 
             var wohnung = await _context.Wohnungen.FindAsync(wohnungId);
@@ -51,6 +53,13 @@ namespace WohnungenApi.Controllers
             return Ok(bild);
 
         }
+             catch (Exception ex)
+             {
+                      // سيخبرك هنا إذا كان الخطأ من قاعدة البيانات (مثلاً حقل ناقص)
+                           return StatusCode(500, $"Database Error: {ex.Message} -> {ex.InnerException?.Message}");
+               }
+
+            }
 
         [HttpGet("{wohnungId}")]
         public IActionResult GetBilder(int wohnungId)
