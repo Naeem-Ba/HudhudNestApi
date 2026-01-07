@@ -26,23 +26,24 @@ namespace WohnungenApi.Services
 
         public async Task<ImageUploadResult> AddPhotoAsync(IFormFile file)
         {
-            var uploadResult = new ImageUploadResult();
+            if (file == null || file.Length == 0)
+                return new ImageUploadResult();
 
-            if (file != null && file.Length > 0)
+            await using var stream = file.OpenReadStream();
+
+            var uploadParams = new ImageUploadParams
             {
-                using var stream = file.OpenReadStream();
-                var uploadParams = new ImageUploadParams
-                {
-                    File = new FileDescription(file.FileName, stream),
-                    // تحسين حجم الصورة لسرعة التحميل
-                    Transformation = new Transformation().Height(800).Width(1200).Crop("limit"),
-                    Folder = "wohnungen-bilder"
-                };
-                uploadResult = await _cloudinary.UploadAsync(uploadParams);
-            }
+                File = new FileDescription(file.FileName, stream),
+                Transformation = new Transformation()
+                    .Height(800)
+                    .Width(1200)
+                    .Crop("limit"),
+                Folder = "wohnungen-bilder"
+            };
 
-            return uploadResult;
+            return await _cloudinary.UploadAsync(uploadParams);
         }
+
 
         public async Task<DeletionResult> DeletePhotoAsync(string publicId)
         {

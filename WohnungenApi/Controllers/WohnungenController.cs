@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using CloudinaryDotNet.Actions;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WohnungenApi.Data;
 using WohnungenApi.Dtos;
@@ -14,15 +15,23 @@ namespace WohnungenApi.Controllers
         private readonly WohnungenContext _context;
         private readonly IPhotoService _photoService;
 
-        public WohnungenController(WohnungenContext context, IPhotoService photoService)
+        public WohnungenController(
+            WohnungenContext context,
+            IPhotoService photoService)
         {
             _context = context;
             _photoService = photoService;
         }
 
+
+        // ============================================
+        // CREATE WOHNUNG + IMAGES
+        // ============================================
         [HttpPost]
-        public async Task<IActionResult> CreateWohnung([FromForm] WohnungCreateDto dto)
+        public async Task<IActionResult> CreateWohnung(
+            [FromForm] WohnungCreateDto dto)
         {
+            // 1️ بناء كيان الشقة
             var wohnung = new Wohnung
             {
                 Titel = dto.Titel,
@@ -54,10 +63,12 @@ namespace WohnungenApi.Controllers
                 Bilder = new List<Wohnungsbild>()
             };
 
-            if (dto.Bilder != null && dto.Bilder.Any())
+            // 2️ رفع الصور إن وُجدت
+            if (dto.Bilder != null && dto.Bilder.Count > 0)
             {
                 foreach (var file in dto.Bilder)
                 {
+                    if (file.Length == 0) continue;
                     var result = await _photoService.AddPhotoAsync(file);
 
                     // التحقق من نجاح الرفع قبل الإضافة للقاعدة
@@ -73,23 +84,33 @@ namespace WohnungenApi.Controllers
                     {
                         // سجل الخطأ هنا لتعرف لماذا فشلت الصورة
                         Console.WriteLine($"Photo Upload Failed: {result.Error?.Message}");
+                        return BadRequest($"Cloudinary Error: {result.Error.Message}");
                     }
                 }
             }
 
+            // 3️ حفظ نهائي
             _context.Wohnungen.Add(wohnung);
             await _context.SaveChangesAsync(); // الحفظ النهائي للشقة مع صورها
 
             return Ok(wohnung);
         }
 
+        // ============================================
+        // GET ALL
+        // ============================================
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Wohnung>>> Get()
         {
-            return await _context.Wohnungen.Include(w => w.Bilder).ToListAsync();
+            return await _context.Wohnungen
+                .Include(w => w.Bilder)
+                .ToListAsync();
         }
 
-        [HttpGet("{id}")]
+        // ============================================
+        // GET BY ID
+        // ============================================
+        [HttpGet("{id:int}")]
         public async Task<ActionResult<Wohnung>> GetById(int id)
         {
             var wohnung = await _context.Wohnungen

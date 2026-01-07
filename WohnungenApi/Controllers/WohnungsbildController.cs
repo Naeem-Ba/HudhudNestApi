@@ -3,63 +3,59 @@ using WohnungenApi.Data;
 using WohnungenApi.Models;
 using WohnungenApi.Services; // إضافة namespace الخاص بالخدمة
 
+/////////////////////إضافة صور لاحقًا///////////////////
+
 namespace WohnungenApi.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/wohnungen/{wohnungId:int}/bilder")]
     public class WohnungsbildController : ControllerBase
     {
         private readonly WohnungenContext _context;
         private readonly IPhotoService _photoService; // استبدال IWebHostEnvironment بالخدمة الجديدة
 
-        public WohnungsbildController(WohnungenContext context, IPhotoService photoService)
+        public WohnungsbildController(
+            WohnungenContext context,
+            IPhotoService photoService)
         {
             _context = context;
             _photoService = photoService;
         }
 
-        [HttpPost("{wohnungId}")]
+        [HttpPost]
         [RequestSizeLimit(10_000_000)] // 10 MB
-        public async Task<IActionResult> UploadBild(int wohnungId, IFormFile file)
+        public async Task<IActionResult> UploadBilder(
+            int wohnungId,
+            [FromForm] IFormFileCollection files)
         {
-            try
-            {
-                if (file == null || file.Length == 0)
-                return BadRequest("Keine Datei hochgeladen.");
-
             var wohnung = await _context.Wohnungen.FindAsync(wohnungId);
             if (wohnung == null)
-                return NotFound("Wohnung nicht gefunden.");
+                return NotFound("Wohnung nicht gefunden");
 
-            // رفع الصورة إلى Cloudinary بدلاً من FileStream المحلي
-            var result = await _photoService.AddPhotoAsync(file);
+            var bilder = new List<Wohnungsbild>();
 
-            if (result.Error != null)
-                return BadRequest(result.Error.Message);
-
-            // الحصول على الرابط المؤمن (https) من Cloudinary
-            var url = result.SecureUrl?.AbsoluteUri?? "";
-
-            var bild = new Wohnungsbild
+            foreach (var file in files)
             {
-                WohnungId = wohnungId,
-                Url = url, // الرابط السحابي الآن للأبد
-                IsMain = false
-            };
+                if (file.Length == 0) continue;
 
-            _context.Wohnungsbilder.Add(bild);
+                var result = await _photoService.AddPhotoAsync(file);
+
+                if (result.Error != null)
+                    return BadRequest(result.Error.Message);
+
+                bilder.Add(new Wohnungsbild
+                {
+                    WohnungId = wohnungId,
+                    Url = result.SecureUrl.AbsoluteUri,
+                    IsMain = false
+                });
+            }
+
+            _context.Wohnungsbilder.AddRange(bilder);
             await _context.SaveChangesAsync();
 
-            return Ok(bild);
-
+            return Ok(bilder);
         }
-             catch (Exception ex)
-             {
-                      // سيخبرك هنا إذا كان الخطأ من قاعدة البيانات (مثلاً حقل ناقص)
-                           return StatusCode(500, $"Database Error: {ex.Message} -> {ex.InnerException?.Message}");
-               }
-
-            }
 
         [HttpGet("{wohnungId}")]
         public IActionResult GetBilder(int wohnungId)
