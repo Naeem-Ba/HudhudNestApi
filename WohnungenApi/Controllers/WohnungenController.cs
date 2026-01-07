@@ -66,14 +66,19 @@ namespace WohnungenApi.Controllers
                         wohnung.Bilder.Add(new Wohnungsbild
                         {
                             Url = result.SecureUrl.AbsoluteUri,
-                            IsMain = false
+                            IsMain = (wohnung.Bilder.Count == 0) // أول صورة تصبح الأساسية تلقائياً
                         });
+                    }
+                    else
+                    {
+                        // سجل الخطأ هنا لتعرف لماذا فشلت الصورة
+                        Console.WriteLine($"Photo Upload Failed: {result.Error?.Message}");
                     }
                 }
             }
 
             _context.Wohnungen.Add(wohnung);
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(); // الحفظ النهائي للشقة مع صورها
 
             return Ok(wohnung);
         }

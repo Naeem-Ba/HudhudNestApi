@@ -105,7 +105,7 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
+
 builder.Services.AddScoped<IPhotoService, PhotoService>();
 
 // ============================
