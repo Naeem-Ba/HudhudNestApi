@@ -156,13 +156,13 @@ app.UseExceptionHandler(errorApp =>
 // ============================
 //حذف تلقائي للاعلان 
 // ============================
-using (var scope = app.Services.CreateScope())
-{
-    var ctx = scope.ServiceProvider.GetRequiredService<WohnungenContext>();
-    var expired = ctx.Wohnungen.Where(w => w.ExpiresAt < DateTime.UtcNow);
-    ctx.Wohnungen.RemoveRange(expired);
-    ctx.SaveChanges();
-}
+//using (var scope = app.Services.CreateScope())
+//{
+//    var ctx = scope.ServiceProvider.GetRequiredService<WohnungenContext>();
+//    var expired = ctx.Wohnungen.Where(w => w.ExpiresAt < DateTime.UtcNow);
+//    ctx.Wohnungen.RemoveRange(expired);
+//    ctx.SaveChanges();
+//}
 
 // ============================
 // 8️ Middleware بالترتيب الصحيح
