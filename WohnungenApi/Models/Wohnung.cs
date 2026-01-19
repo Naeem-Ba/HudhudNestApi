@@ -49,6 +49,7 @@ namespace WohnungenApi.Models
 
 
         public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public DateTime ExpiresAt { get; set; }
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
 
         public ICollection<Wohnungsbild> Bilder { get; set; } = new List<Wohnungsbild>();

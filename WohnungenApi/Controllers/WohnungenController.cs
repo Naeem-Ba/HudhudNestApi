@@ -1,6 +1,8 @@
 ﻿using CloudinaryDotNet.Actions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using WohnungenApi.Data;
 using WohnungenApi.Dtos;
 using WohnungenApi.Models;
@@ -92,6 +94,7 @@ namespace WohnungenApi.Controllers
             // 3️ حفظ نهائي
             _context.Wohnungen.Add(wohnung);
             await _context.SaveChangesAsync(); // الحفظ النهائي للشقة مع صورها
+            //ExpiresAt = DateTime.UtcNow.AddMonths(3);
 
             return Ok(wohnung);
         }
@@ -105,6 +108,25 @@ namespace WohnungenApi.Controllers
             return await _context.Wohnungen
                 .Include(w => w.Bilder)
                 .ToListAsync();
+        }
+        // ============================================
+        // GET mine
+        // ============================================
+        [HttpGet("mine")]
+        [Authorize]
+        public async Task<IActionResult> GetMyWohnungen()
+        {
+            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+            var now = DateTime.UtcNow;
+
+            var wohnungen = await _context.Wohnungen
+                .Where(w => w.OwnerId == userId && w.ExpiresAt > now)
+                .Include(w => w.Bilder)
+                .OrderByDescending(w => w.CreatedAt)
+                .ToListAsync();
+
+            return Ok(wohnungen);
         }
 
         // ============================================
@@ -120,5 +142,56 @@ namespace WohnungenApi.Controllers
             if (wohnung == null) return NotFound();
             return wohnung;
         }
+        [HttpPut("{id:int}")]
+        public async Task<IActionResult> UpdateWohnung(
+    int id,
+    [FromForm] WohnungUpdateDto dto)
+        {
+            var wohnung = await _context.Wohnungen
+                .Include(w => w.Bilder)
+                .FirstOrDefaultAsync(w => w.Id == id);
+
+            if (wohnung == null) return NotFound();
+
+            wohnung.Titel = dto.Titel;
+            wohnung.Beschreibung = dto.Beschreibung;
+            wohnung.ZumMieten = dto.ZumMieten;
+            wohnung.ZumKaufen = dto.ZumKaufen;
+            wohnung.Kaltmiete = dto.Kaltmiete;
+            wohnung.Warmmiete = dto.Warmmiete;
+            wohnung.Kaufpreis = dto.Kaufpreis;
+            wohnung.Nebenkosten = dto.Nebenkosten;
+            wohnung.Kaution = dto.Kaution;
+            wohnung.Zimmer = dto.Zimmer;
+            wohnung.Flaeche = dto.Flaeche;
+            wohnung.Geschoss = dto.Geschoss;
+            wohnung.FreiAb = dto.FreiAb;
+            wohnung.Balkon = dto.Balkon;
+            wohnung.Aufzug = dto.Aufzug;
+            wohnung.Stellplatz = dto.Stellplatz;
+            wohnung.Heizung = dto.Heizung;
+            wohnung.Energieausweis = dto.Energieausweis;
+            wohnung.Zustand = dto.Zustand;
+            wohnung.Status = dto.Status;
+
+            if (dto.Bilder != null)
+            {
+                foreach (var file in dto.Bilder)
+                {
+                    var result = await _photoService.AddPhotoAsync(file);
+                    if (result.Error != null) continue;
+
+                    wohnung.Bilder.Add(new Wohnungsbild
+                    {
+                        Url = result.SecureUrl.AbsoluteUri,
+                        IsMain = false
+                    });
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            return Ok(wohnung);
+        }
+
     }
 }

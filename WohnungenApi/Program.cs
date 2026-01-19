@@ -25,10 +25,15 @@ CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 // 2. قاعدة بيانات PostgreSQL مع دعم التحويل من رابط Render
 builder.Services.AddDbContext<WohnungenContext>(options =>
 {
+    var env = builder.Environment.EnvironmentName;
     var connUrl = builder.Configuration.GetConnectionString("DefaultConnection");
     // تنظيف النص
     connUrl = connUrl?.Trim();
 
+    if (string.IsNullOrWhiteSpace(connUrl))
+        throw new Exception("Connection string not found!");
+
+    // Production (Render)
     if (!string.IsNullOrEmpty(connUrl) && (connUrl.StartsWith("postgres://") || connUrl.StartsWith("postgresql://")))
     {
         var uri = new Uri(connUrl);
@@ -39,6 +44,8 @@ builder.Services.AddDbContext<WohnungenContext>(options =>
         connUrl = $"Host={uri.Host};Port={port};Database={db};Username={user};Password={passwd};SSL Mode=Require;Trust Server Certificate=true;";
     }
     options.UseNpgsql(connUrl);
+    Console.WriteLine($"ENV = {builder.Environment.EnvironmentName}");
+    Console.WriteLine($"DB = {connUrl}");
 });
 
 
@@ -105,9 +112,11 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-
-builder.Services.AddScoped<IPhotoService, PhotoService>();
-
+//تعطيل PhotoService محليًا
+if (!string.IsNullOrEmpty(builder.Configuration["CLOUDINARY_URL"]))
+{
+    builder.Services.AddScoped<IPhotoService, PhotoService>();// PhotoService فقط هذا السطر لتفعيل عالنت
+}
 // ============================
 // 6️ خدمات أخرى
 // ============================
@@ -144,6 +153,16 @@ app.UseExceptionHandler(errorApp =>
     });
 });
 //=========================================================================================
+// ============================
+//حذف تلقائي للاعلان 
+// ============================
+using (var scope = app.Services.CreateScope())
+{
+    var ctx = scope.ServiceProvider.GetRequiredService<WohnungenContext>();
+    var expired = ctx.Wohnungen.Where(w => w.ExpiresAt < DateTime.UtcNow);
+    ctx.Wohnungen.RemoveRange(expired);
+    ctx.SaveChanges();
+}
 
 // ============================
 // 8️ Middleware بالترتيب الصحيح
