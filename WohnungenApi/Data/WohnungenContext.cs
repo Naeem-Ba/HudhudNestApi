@@ -70,6 +70,11 @@ namespace WohnungenApi.Data
                 .HasForeignKey(m => m.UserId)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            modelBuilder.Entity<Wohnung>()
+                .Property(w => w.ExpiresAt)
+                 .HasDefaultValueSql("NOW() + INTERVAL '3 months'");
+
+
             modelBuilder.Entity<Wohnung>(entity =>
             {
                 entity.Property(e => e.Kaltmiete).HasPrecision(18, 2);

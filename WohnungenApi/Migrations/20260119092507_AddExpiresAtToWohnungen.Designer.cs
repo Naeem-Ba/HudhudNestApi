@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using WohnungenApi.Data;
@@ -11,9 +12,11 @@ using WohnungenApi.Data;
 namespace WohnungenApi.Migrations
 {
     [DbContext(typeof(WohnungenContext))]
-    partial class WohnungenContextModelSnapshot : ModelSnapshot
+    [Migration("20260119092507_AddExpiresAtToWohnungen")]
+    partial class AddExpiresAtToWohnungen
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
