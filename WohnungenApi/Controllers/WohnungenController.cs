@@ -61,7 +61,6 @@ namespace WohnungenApi.Controllers
                 Energieausweis = dto.Energieausweis,
                 Zustand = dto.Zustand,
                 Status = dto.Status,
-                OwnerId = dto.OwnerId,
                 Bilder = new List<Wohnungsbild>()
             };
 
@@ -121,7 +120,7 @@ namespace WohnungenApi.Controllers
             var now = DateTime.UtcNow;
 
             var wohnungen = await _context.Wohnungen
-                .Where(w => w.OwnerId == userId && w.ExpiresAt > now)
+                .Where(w => w.OwnerId == userId)
                 .Include(w => w.Bilder)
                 .OrderByDescending(w => w.CreatedAt)
                 .ToListAsync();
