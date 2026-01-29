@@ -33,6 +33,10 @@ namespace WohnungenApi.Controllers
         public async Task<IActionResult> CreateWohnung(
             [FromForm] WohnungCreateDto dto)
         {
+            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value); //استخرج OwnerId من التوكن
+
+            Console.WriteLine($"JWT userId = {userId}");// هل userId من التوكن يطابق ما في DB؟ للتاكد 
+
             // 1️ بناء كيان الشقة
             var wohnung = new Wohnung
             {
@@ -61,6 +65,8 @@ namespace WohnungenApi.Controllers
                 Energieausweis = dto.Energieausweis,
                 Zustand = dto.Zustand,
                 Status = dto.Status,
+                OwnerId = userId,
+                ExpiresAt = DateTime.UtcNow.AddMonths(3),
                 Bilder = new List<Wohnungsbild>()
             };
 

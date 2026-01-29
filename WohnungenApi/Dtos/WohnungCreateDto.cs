@@ -37,8 +37,6 @@ namespace WohnungenApi.Dtos
         public WohnungsZustand? Zustand { get; set; }
         public WohnungsStatus? Status { get; set; }
 
-        public int? OwnerId { get; set; }
-
         public List<IFormFile>? Bilder { get; set; }
     }
 }
