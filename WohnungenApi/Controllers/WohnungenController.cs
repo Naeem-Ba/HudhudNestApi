@@ -30,10 +30,16 @@ namespace WohnungenApi.Controllers
         // CREATE WOHNUNG + IMAGES
         // ============================================
         [HttpPost]
+        [Authorize]
         public async Task<IActionResult> CreateWohnung(
             [FromForm] WohnungCreateDto dto)
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value); //استخرج OwnerId من التوكن
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+
+            if (userIdClaim == null)
+                return Unauthorized("UserId not found in token");
+
+            var userId = int.Parse(userIdClaim.Value); //استخرج OwnerId من التوكن
 
             Console.WriteLine($"JWT userId = {userId}");// هل userId من التوكن يطابق ما في DB؟ للتاكد 
 
@@ -121,7 +127,12 @@ namespace WohnungenApi.Controllers
         [Authorize]
         public async Task<IActionResult> GetMyWohnungen()
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+
+            if (userIdClaim == null)
+                return Unauthorized("UserId not found in token");
+
+            var userId = int.Parse(userIdClaim.Value);
 
             var now = DateTime.UtcNow;
 
