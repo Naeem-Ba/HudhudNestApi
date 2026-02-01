@@ -11,7 +11,7 @@ namespace WohnungenApi.Models
         public string? Vorname { get; set; }
         public string Email { get; set; } = string.Empty;
         public string? Phone { get; set; }
-        public string PasswordHash { get; set; }
+        public string PasswordHash { get; set; } = string.Empty;
         public string? TaxNumber { get; set; }
         public string? Role { get; set; } = "user";
         public string? ImageUrl { get; set; }

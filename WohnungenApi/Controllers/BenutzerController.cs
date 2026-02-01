@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using WohnungenApi.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Identity;
 
 namespace WohnungenApi.Controllers
 {
@@ -20,76 +21,9 @@ namespace WohnungenApi.Controllers
         }
 
         // ----------------------------
-        // REGISTER
-        // ----------------------------
-        [HttpPost("register")]
-        public async Task<IActionResult> CreateUser([FromBody] BenutzerDto dto)
-        {
-            // تحقق من وجود المستخدم
-            var exists = await _context.Benutzer.AnyAsync(u => u.Email == dto.Email);
-            if (exists)
-                return BadRequest("Benutzer existiert bereits");
-
-            // إنشاء كائن Benutzer الحقيقية
-            var benutzer = new Benutzer
-            {
-                DisplayName = dto.DisplayName,
-                IsAgent = dto.IsAgent,
-                Name = dto.Name,
-                Vorname = dto.Vorname,
-                Email = dto.Email,
-                Phone = dto.Phone,
-                PasswordHash = dto.PasswordHash,
-                CreatedAt = DateTime.Now,
-                Role = "user"
-            };
-
-            try
-            {
-                _context.Benutzer.Add(benutzer);
-                await _context.SaveChangesAsync();
-                return Ok(benutzer);
-            }
-            catch (DbUpdateException dbEx)
-            {
-                return StatusCode(500, $"Datenbankfehler: {dbEx.InnerException?.Message}");
-            }
-        }
-
-        // ----------------------------
-        // LOGIN
-        // ----------------------------
-        [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] BenutzerDto dto, [FromServices] JwtService jwt)
-        {
-            if (dto == null || string.IsNullOrEmpty(dto.Email) || string.IsNullOrEmpty(dto.PasswordHash))
-                return BadRequest("Ungültige Daten");
-
-            var user = await _context.Benutzer
-                .FirstOrDefaultAsync(u => u.Email == dto.Email && u.PasswordHash == dto.PasswordHash);
-
-            if (user == null)
-                return Unauthorized("Falsche E-Mail oder Passwort");
-
-            var token = jwt.GenerateToken(user);
-
-            return Ok(new
-            {
-                token,
-                user = new
-                {
-                    user.Id,
-                    user.Email,
-                    user.Role,
-                    user.DisplayName
-                }
-            });
-        }
-
-        // ----------------------------
         // UPDATE ROLE
         // ----------------------------
-        [Authorize]
+        [Authorize(Roles = "Admin")]
         [HttpPut("{id}/role")]
         public async Task<IActionResult> UpdateRole(int id, [FromBody] string newRole)
         {
@@ -121,7 +55,7 @@ namespace WohnungenApi.Controllers
         }
 
         // ----------------------------
-        // UPDATE ROLE
+        // change-password
         // ----------------------------
         //[Authorize]
         //[HttpPost("change-password")]
