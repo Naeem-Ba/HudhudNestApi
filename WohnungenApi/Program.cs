@@ -45,7 +45,7 @@ builder.Services.AddDbContext<WohnungenContext>(options =>
     }
     options.UseNpgsql(connUrl);
     Console.WriteLine($"ENV = {builder.Environment.EnvironmentName}");
-    Console.WriteLine($"DB = {connUrl}");
+    Console.WriteLine($"DB Host = {new Uri(connUrl).Host}"); ;
 });
 
 
@@ -54,7 +54,10 @@ builder.Services.AddDbContext<WohnungenContext>(options =>
 // ============================
 // 3. إضافة الخدمات والـ Cors
 builder.Services.AddCors(options => {
-    options.AddPolicy("AllowAngular", policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+    options.AddPolicy("AllowAngular", policy =>
+    policy.AllowAnyOrigin() // ❌ يجب التغير قبل النشر
+    .AllowAnyHeader()
+    .AllowAnyMethod());
 });
 
 
@@ -141,7 +144,8 @@ app.UseExceptionHandler(errorApp =>
         context.Response.ContentType = "application/json";
         // إضافة Headers الـ CORS يدوياً هنا لضمان وصول رسالة الخطأ للمتصفح
         context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-
+    if (app.Environment.IsDevelopment())
+    {
         var result = System.Text.Json.JsonSerializer.Serialize(new
         {
             message = ex?.Message,
@@ -150,6 +154,16 @@ app.UseExceptionHandler(errorApp =>
         });
 
         await context.Response.WriteAsync(result);
+        }
+        else
+        {
+            // في Production، أرسل رسالة عامة فقط
+            var result = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                message = "حدث خطأ غير متوقع. يرجى المحاولة لاحقاً."
+            });
+            await context.Response.WriteAsync(result);
+        }
     });
 });
 //=========================================================================================

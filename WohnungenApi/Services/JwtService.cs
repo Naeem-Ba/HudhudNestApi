@@ -16,12 +16,15 @@ public class JwtService
 
     public string GenerateToken(Benutzer user)
     {
+        if (user.Id == null)
+            throw new ArgumentException("User ID cannot be null");
+
         var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Sub, user.Id.Value.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.NameIdentifier, user.Id.Value.ToString()),
             new Claim(ClaimTypes.Role, user.Role ?? "user")
         };
 

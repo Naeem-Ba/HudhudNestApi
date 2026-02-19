@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using WohnungenApi.Data;
 using WohnungenApi.Models;
 using WohnungenApi.Dtos;
+using Microsoft.AspNetCore.Authorization;
 
 
 namespace WohnungenApi.Controllers
@@ -41,6 +42,7 @@ namespace WohnungenApi.Controllers
         }
 
         [HttpGet]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetAll()
         {
             var messages = await _context.ContactMessages
@@ -51,6 +53,7 @@ namespace WohnungenApi.Controllers
         }
 
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetById(int id)
         {
             var msg = await _context.ContactMessages.FindAsync(id);
@@ -59,6 +62,7 @@ namespace WohnungenApi.Controllers
         }
 
         [HttpPut("{id}/read")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> MarkAsRead(int id)
         {
             var msg = await _context.ContactMessages.FindAsync(id);
@@ -71,6 +75,7 @@ namespace WohnungenApi.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(int id)
         {
             var msg = await _context.ContactMessages.FindAsync(id);

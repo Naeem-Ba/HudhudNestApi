@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using WohnungenApi.Data;
 using WohnungenApi.Models;
 using WohnungenApi.Services; // إضافة namespace الخاص بالخدمة
@@ -23,6 +25,7 @@ namespace WohnungenApi.Controllers
         }
 
         [HttpPost]
+        [Authorize]
         [RequestSizeLimit(10_000_000)] // 10 MB
         public async Task<IActionResult> UploadBilder(
             int wohnungId,
@@ -31,6 +34,11 @@ namespace WohnungenApi.Controllers
             var wohnung = await _context.Wohnungen.FindAsync(wohnungId);
             if (wohnung == null)
                 return NotFound("Wohnung nicht gefunden");
+
+            //تحقق من الملكية ✅ 
+            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+            if (wohnung.OwnerId != userId)
+                return Forbid("You don't own this Wohnung");
 
             var bilder = new List<Wohnungsbild>();
 

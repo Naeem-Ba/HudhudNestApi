@@ -5,6 +5,8 @@ using WohnungenApi.Dtos;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using WohnungenApi.Services;
+using Microsoft.AspNetCore.Identity;
+using WohnungenApi.Models;
 
 [Authorize]
 [ApiController]
@@ -87,14 +89,25 @@ public class ProfileController : ControllerBase
         var user = await _context.Benutzer.FindAsync(userId);
         if (user == null) return NotFound();
 
-        // ملاحظة أمنية: يفضل استخدام PasswordHasher لفك التشفير والمقارنة
-        // هنا نقارن مباشرة (إذا كنت تخزنها كنص عادي حالياً)
-        if (user.PasswordHash != dto.CurrentPassword)
+        //// ملاحظة أمنية: يفضل استخدام PasswordHasher لفك التشفير والمقارنة
+        //// هنا نقارن مباشرة (إذا كنت تخزنها كنص عادي حالياً)
+        //if (user.PasswordHash != dto.CurrentPassword)
+        //{
+        //    return BadRequest("كلمة المرور الحالية غير صحيحة.");
+        //}
+
+        //user.PasswordHash = dto.NewPassword;
+        //await _context.SaveChangesAsync();
+
+        var hasher = new PasswordHasher<Benutzer>();
+        var verificationResult = hasher.VerifyHashedPassword(user, user.PasswordHash, dto.CurrentPassword);
+
+        if (verificationResult == PasswordVerificationResult.Failed)
         {
             return BadRequest("كلمة المرور الحالية غير صحيحة.");
         }
 
-        user.PasswordHash = dto.NewPassword;
+        user.PasswordHash = hasher.HashPassword(user, dto.NewPassword);
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "تم تغيير كلمة المرور بنجاح" });
@@ -107,6 +120,19 @@ public class ProfileController : ControllerBase
         // 1. التأكد من وجود ملف
         if (dto.File == null || dto.File.Length == 0)
             return BadRequest("File is empty");
+
+        //فحص نوع الملف ✅ 
+        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+        var extension = Path.GetExtension(dto.File.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(extension))
+            return BadRequest ("(webp ,png ,jpg (نوع الملف غير مسموح. يرجى رفع صورة فقط");
+
+
+        //(MB5) فحص حجم الملف ✅
+
+             var maxFileSize = 5 * 1024 * 1024;
+        if (dto.File.Length > maxFileSize)
+            return BadRequest ("MBحجم الملف كبير جدً. الحد اأقصى 5");
 
         try
         {
