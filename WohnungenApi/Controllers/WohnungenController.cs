@@ -1,11 +1,7 @@
-﻿using CloudinaryDotNet.Actions;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-using WohnungenApi.Data;
 using WohnungenApi.Dtos;
-using WohnungenApi.Models;
 using WohnungenApi.Services;
 
 namespace WohnungenApi.Controllers
@@ -14,200 +10,97 @@ namespace WohnungenApi.Controllers
     [Route("api/[controller]")]
     public class WohnungenController : ControllerBase
     {
-        private readonly WohnungenContext _context;
-        private readonly IPhotoService _photoService;
+        private readonly IWohnungService _wohnungService;
 
-        public WohnungenController(
-            WohnungenContext context,
-            IPhotoService photoService)
+        public WohnungenController(IWohnungService wohnungService)
         {
-            _context = context;
-            _photoService = photoService;
+            _wohnungService = wohnungService;
         }
 
-
-        // ============================================
-        // CREATE WOHNUNG + IMAGES
-        // ============================================
         [HttpPost]
         [Authorize]
-        public async Task<IActionResult> CreateWohnung(
-            [FromForm] WohnungCreateDto dto)
+        public async Task<IActionResult> CreateWohnung([FromForm] WohnungCreateDto dto)
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(userIdClaim, out var userId))
+                return Unauthorized();
 
-            if (userIdClaim == null)
-                return Unauthorized("UserId not found in token");
-
-            var userId = int.Parse(userIdClaim.Value); //استخرج OwnerId من التوكن
-
-            Console.WriteLine($"JWT userId = {userId}");// هل userId من التوكن يطابق ما في DB؟ للتاكد 
-
-            // 1️ بناء كيان الشقة
-            var wohnung = new Wohnung
-            {
-                Titel = dto.Titel,
-                Beschreibung = dto.Beschreibung,
-                Adresse = dto.Adresse,
-                Stadt = dto.Stadt,
-                PLZ = dto.PLZ,
-                Latitude = dto.Latitude,
-                Longitude = dto.Longitude,
-                ZumMieten = dto.ZumMieten,
-                ZumKaufen = dto.ZumKaufen,
-                Kaltmiete = dto.Kaltmiete,
-                Warmmiete = dto.Warmmiete,
-                Kaufpreis = dto.Kaufpreis,
-                Nebenkosten = dto.Nebenkosten,
-                Kaution = dto.Kaution,
-                Zimmer = dto.Zimmer,
-                Flaeche = dto.Flaeche,
-                Geschoss = dto.Geschoss,
-                FreiAb = dto.FreiAb,
-                Balkon = dto.Balkon,
-                Aufzug = dto.Aufzug,
-                Stellplatz = dto.Stellplatz,
-                Heizung = dto.Heizung,
-                Energieausweis = dto.Energieausweis,
-                Zustand = dto.Zustand,
-                Status = dto.Status,
-                OwnerId = userId,
-                ExpiresAt = DateTime.UtcNow.AddMonths(3),
-                Bilder = new List<Wohnungsbild>()
-            };
-
-            // 2️ رفع الصور إن وُجدت
-            if (dto.Bilder != null && dto.Bilder.Count > 0)
-            {
-                foreach (var file in dto.Bilder)
-                {
-                    if (file.Length == 0) continue;
-                    var result = await _photoService.AddPhotoAsync(file);
-
-                    // التحقق من نجاح الرفع قبل الإضافة للقاعدة
-                    if (result.Error == null && result.SecureUrl != null)
-                    {
-                        wohnung.Bilder.Add(new Wohnungsbild
-                        {
-                            Url = result.SecureUrl.AbsoluteUri,
-                            IsMain = (wohnung.Bilder.Count == 0) // أول صورة تصبح الأساسية تلقائياً
-                        });
-                    }
-                    else
-                    {
-                        // سجل الخطأ هنا لتعرف لماذا فشلت الصورة
-                        Console.WriteLine($"Photo Upload Failed: {result.Error?.Message}");
-                        return BadRequest($"Cloudinary Error: {result.Error.Message}");
-                    }
-                }
-            }
-
-            // 3️ حفظ نهائي
-            _context.Wohnungen.Add(wohnung);
-            await _context.SaveChangesAsync(); // الحفظ النهائي للشقة مع صورها
-            //ExpiresAt = DateTime.UtcNow.AddMonths(3);
-
+            var wohnung = await _wohnungService.CreateWohnungAsync(dto, userId);
             return Ok(wohnung);
         }
 
-        // ============================================
-        // GET ALL
-        // ============================================
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Wohnung>>> Get()
+        public async Task<IActionResult> Get()
         {
-            return await _context.Wohnungen
-                .Include(w => w.Bilder)
-                .ToListAsync();
+            return Ok(await _wohnungService.GetAllAsync());
         }
-        // ============================================
-        // GET mine
-        // ============================================
+
         [HttpGet("mine")]
         [Authorize]
-        public async Task<IActionResult> GetMyWohnungen()
+        public async Task<IActionResult> GetMine()
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(userIdClaim, out var userId))
+                return Unauthorized();
 
-            if (userIdClaim == null)
-                return Unauthorized("UserId not found in token");
-
-            var userId = int.Parse(userIdClaim.Value);
-
-            var now = DateTime.UtcNow;
-
-            var wohnungen = await _context.Wohnungen
-                .Where(w => w.OwnerId == userId)
-                .Include(w => w.Bilder)
-                .OrderByDescending(w => w.CreatedAt)
-                .ToListAsync();
-
-            return Ok(wohnungen);
+            return Ok(await _wohnungService.GetMineAsync(userId));
         }
 
-        // ============================================
-        // GET BY ID
-        // ============================================
         [HttpGet("{id:int}")]
-        public async Task<ActionResult<Wohnung>> GetById(int id)
+        public async Task<IActionResult> GetById(int id)
         {
-            var wohnung = await _context.Wohnungen
-                .Include(w => w.Bilder)
-                .FirstOrDefaultAsync(w => w.Id == id);
-
-            if (wohnung == null) return NotFound();
-            return wohnung;
-        }
-        [HttpPut("{id:int}")]
-        public async Task<IActionResult> UpdateWohnung(
-    int id,
-    [FromForm] WohnungUpdateDto dto)
-        {
-            var wohnung = await _context.Wohnungen
-                .Include(w => w.Bilder)
-                .FirstOrDefaultAsync(w => w.Id == id);
-
+            var wohnung = await _wohnungService.GetByIdAsync(id);
             if (wohnung == null) return NotFound();
 
-            wohnung.Titel = dto.Titel;
-            wohnung.Beschreibung = dto.Beschreibung;
-            wohnung.ZumMieten = dto.ZumMieten;
-            wohnung.ZumKaufen = dto.ZumKaufen;
-            wohnung.Kaltmiete = dto.Kaltmiete;
-            wohnung.Warmmiete = dto.Warmmiete;
-            wohnung.Kaufpreis = dto.Kaufpreis;
-            wohnung.Nebenkosten = dto.Nebenkosten;
-            wohnung.Kaution = dto.Kaution;
-            wohnung.Zimmer = dto.Zimmer;
-            wohnung.Flaeche = dto.Flaeche;
-            wohnung.Geschoss = dto.Geschoss;
-            wohnung.FreiAb = dto.FreiAb;
-            wohnung.Balkon = dto.Balkon;
-            wohnung.Aufzug = dto.Aufzug;
-            wohnung.Stellplatz = dto.Stellplatz;
-            wohnung.Heizung = dto.Heizung;
-            wohnung.Energieausweis = dto.Energieausweis;
-            wohnung.Zustand = dto.Zustand;
-            wohnung.Status = dto.Status;
-
-            if (dto.Bilder != null)
-            {
-                foreach (var file in dto.Bilder)
-                {
-                    var result = await _photoService.AddPhotoAsync(file);
-                    if (result.Error != null) continue;
-
-                    wohnung.Bilder.Add(new Wohnungsbild
-                    {
-                        Url = result.SecureUrl.AbsoluteUri,
-                        IsMain = false
-                    });
-                }
-            }
-
-            await _context.SaveChangesAsync();
             return Ok(wohnung);
         }
 
+        [HttpPut("{id:int}")]
+        [Authorize]
+        public async Task<IActionResult> Update(int id, [FromForm] WohnungUpdateDto dto)
+        {
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(userIdClaim, out var userId))
+                return Unauthorized();
+
+            try
+            {
+                var wohnung = await _wohnungService
+                    .UpdateWohnungAsync(id, dto, userId);
+
+                if (wohnung == null)
+                    return NotFound();
+
+                return Ok(wohnung);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
+        [HttpDelete("{id:int}")]
+        [Authorize]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(userIdClaim, out var userId))
+                return Unauthorized();
+
+            try
+            {
+                var deleted = await _wohnungService
+                    .DeleteWohnungAsync(id, userId);
+
+                if (!deleted)
+                    return NotFound();
+
+                return Ok("Wohnung deleted successfully");
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
     }
 }

@@ -4,22 +4,25 @@ using Microsoft.Extensions.Configuration;
 
 namespace WohnungenApi.Data
 {
-    public class WohnungenContextFactory : IDesignTimeDbContextFactory<WohnungenContext>
+    public class WohnungenContextFactory
+        : IDesignTimeDbContextFactory<WohnungenContext>
     {
         public WohnungenContext CreateDbContext(string[] args)
         {
-            // إعداد قراءة ملف appsettings.json لكي يعرف البرنامج نص الاتصال أثناء الـ Migration
-            IConfigurationRoot configuration = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json")
+            var basePath = Directory.GetCurrentDirectory();
+
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(basePath)
+                .AddJsonFile("appsettings.json", optional: false)
+                .AddJsonFile("appsettings.Development.json", optional: true)
                 .Build();
 
-            var optionsBuilder = new DbContextOptionsBuilder<WohnungenContext>();
+            var connectionString =
+                configuration.GetConnectionString("DefaultConnection");
 
-            // جلب نص الاتصال من الملف
-            var connectionString = configuration.GetConnectionString("DefaultConnection");
+            var optionsBuilder =
+                new DbContextOptionsBuilder<WohnungenContext>();
 
-            // تأكد من استخدام UseNpgsql بدلاً من UseSqlServer
             optionsBuilder.UseNpgsql(connectionString);
 
             return new WohnungenContext(optionsBuilder.Options);

@@ -1,0 +1,96 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using FluentValidation;
+using WohnungenApi.Application.Listings.Commands.CreateProperty;
+using WohnungenApi.Domain.Enums;
+
+namespace WohnungenApi.Application.Listings.Validators;
+
+public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePropertyCommand>
+{
+    // ISO 3166-1 alpha-2 codes (extend as needed)
+    private static readonly HashSet<string> ValidCountryCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "DE", "SY", "US", "GB", "FR", "AE", "SA", "TR", "EG", "JO", "LB"
+        // Add more as you expand
+    };
+
+    // ISO 4217 currency codes
+    private static readonly HashSet<string> ValidCurrencyCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "EUR", "USD", "GBP", "SYP", "TRY", "AED", "SAR", "EGP", "JOD", "LBP"
+    };
+
+    public CreatePropertyCommandValidator()
+    {
+        RuleFor(x => x.OwnerId)
+            .NotEmpty().WithMessage("OwnerId is required.");
+
+        RuleFor(x => x.Title)
+            .NotEmpty()
+            .MaximumLength(200);
+
+        RuleFor(x => x.Description)
+            .NotEmpty()
+            .MaximumLength(5000);
+
+        RuleFor(x => x.City)
+            .NotEmpty()
+            .MaximumLength(150);
+
+        RuleFor(x => x.CountryCode)
+            .NotEmpty()
+            .Length(2)
+            .Must(c => ValidCountryCodes.Contains(c))
+            .WithMessage("Invalid ISO 3166-1 country code.");
+
+        RuleFor(x => x.CurrencyCode)
+            .NotEmpty()
+            .Length(3)
+            .Must(c => ValidCurrencyCodes.Contains(c))
+            .WithMessage("Invalid ISO 4217 currency code.");
+
+        // Pricing: at least one price must be set
+        RuleFor(x => x)
+            .Must(x => x.ColdRent > 0 || x.WarmRent > 0 || x.PurchasePrice > 0)
+            .WithMessage("At least one price (ColdRent, WarmRent, or PurchasePrice) must be set.")
+            .When(x => x.ListingType != ListingType.ForRentAndSale);
+
+        // ForRent: must have rent price
+        RuleFor(x => x.ColdRent)
+            .GreaterThan(0)
+            .When(x => x.ListingType == ListingType.ForRent)
+            .WithMessage("Cold rent is required for rental listings.");
+
+        // ForSale: must have purchase price
+        RuleFor(x => x.PurchasePrice)
+            .GreaterThan(0)
+            .When(x => x.ListingType == ListingType.ForSale)
+            .WithMessage("Purchase price is required for sale listings.");
+
+        // Coordinates: both or neither
+        RuleFor(x => x.Latitude)
+            .InclusiveBetween(-90, 90)
+            .When(x => x.Latitude.HasValue);
+
+        RuleFor(x => x.Longitude)
+            .InclusiveBetween(-180, 180)
+            .When(x => x.Longitude.HasValue);
+
+        RuleFor(x => x)
+            .Must(x => x.Latitude.HasValue == x.Longitude.HasValue)
+            .WithMessage("Both Latitude and Longitude must be provided together, or neither.");
+
+        RuleFor(x => x.Rooms)
+            .InclusiveBetween(1, 50)
+            .When(x => x.Rooms.HasValue);
+
+        RuleFor(x => x.Area)
+            .GreaterThan(10)
+            .When(x => x.Area.HasValue)
+            .WithMessage("Area must be greater than 10 m².");
+    }
+}

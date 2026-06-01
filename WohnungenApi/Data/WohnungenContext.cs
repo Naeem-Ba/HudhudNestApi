@@ -1,15 +1,16 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using WohnungenApi.Models;
-using WohnungenApi.Models.Enums;
 
 namespace WohnungenApi.Data
 {
-    public class WohnungenContext : DbContext
+    public class WohnungenContext
+        : IdentityDbContext<Benutzer, IdentityRole<int>, int>
     {
         public WohnungenContext(DbContextOptions<WohnungenContext> options)
             : base(options)
         {
-            // حل مشكلة التواريخ في PostgreSQL
             AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
         }
 
@@ -18,45 +19,31 @@ namespace WohnungenApi.Data
         public DbSet<Wohnungsbild> Wohnungsbilder { get; set; }
         public DbSet<Amenity> Amenities { get; set; }
         public DbSet<Messages> Messages { get; set; }
-        public DbSet<Benutzer> Benutzer { get; set; }
         public DbSet<Favorite> Favorites { get; set; }
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-            // أضف هذا السطر لتوحيد حالة الأحرف للصغير في PostgreSQL
-            //modelBuilder.HasDefaultSchema("public");
 
             foreach (var entity in modelBuilder.Model.GetEntityTypes())
             {
-                // تحويل أسماء الجداول للأحرف الصغيرة
                 entity.SetTableName(entity.GetTableName()?.ToLower());
 
-                // تحويل أسماء الأعمدة للأحرف الصغيرة
                 foreach (var property in entity.GetProperties())
                 {
-                    var columnName = property.GetColumnBaseName();
-                    property.SetColumnName(columnName.ToLower());
+                    property.SetColumnName(property.GetColumnBaseName().ToLower());
                 }
             }
 
-            // Favorite: Composite Key
             modelBuilder.Entity<Favorite>()
                 .HasKey(f => new { f.UserId, f.WohnungId });
 
-            // Wohnung - Amenity Many-to-Many
-            modelBuilder.Entity<Wohnung>()
-                .HasMany(w => w.Amenities)
-                .WithMany(a => a.Wohnungen)
-                .UsingEntity(j => j.ToTable("wohnungsamenities"));
-
-            // Beziehungen
             modelBuilder.Entity<Wohnung>()
                 .HasMany(w => w.Bilder)
                 .WithOne(b => b.Wohnung)
                 .HasForeignKey(b => b.WohnungId)
                 .OnDelete(DeleteBehavior.Cascade);
-
 
             modelBuilder.Entity<Wohnung>()
                 .HasMany(w => w.Messages)
@@ -72,18 +59,29 @@ namespace WohnungenApi.Data
 
             modelBuilder.Entity<Wohnung>()
                 .Property(w => w.ExpiresAt)
-                 .HasDefaultValueSql("NOW() + INTERVAL '3 months'");
+                .HasDefaultValueSql("NOW() + INTERVAL '3 months'");
 
+            modelBuilder.Entity<Wohnung>()
+    .HasIndex(w => w.OwnerId)
+    .HasDatabaseName("IX_Wohnung_OwnerId");
 
-            modelBuilder.Entity<Wohnung>(entity =>
-            {
-                entity.Property(e => e.Kaltmiete).HasPrecision(18, 2);
-                entity.Property(e => e.Kaufpreis).HasPrecision(18, 2);
-                entity.Property(e => e.Kaution).HasPrecision(18, 2);
-                entity.Property(e => e.Nebenkosten).HasPrecision(18, 2);
-                entity.Property(e => e.Warmmiete).HasPrecision(18, 2);
-            });
+            modelBuilder.Entity<Wohnung>()
+                .HasIndex(w => w.Stadt)
+                .HasDatabaseName("IX_Wohnung_Stadt");
+
+            modelBuilder.Entity<Wohnung>()
+                .HasIndex(w => w.Status)
+                .HasDatabaseName("IX_Wohnung_Status");
+
+            modelBuilder.Entity<Wohnung>()
+                .HasIndex(w => w.ExpiresAt)
+                .HasDatabaseName("IX_Wohnung_ExpiresAt");
+
+            // RefreshToken Indexes
+            modelBuilder.Entity<RefreshToken>()
+                .HasIndex(rt => rt.Token)
+                .IsUnique()
+                .HasDatabaseName("IX_RefreshToken_Token");
         }
-
     }
 }

@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using WohnungenApi.Data;
 using WohnungenApi.Models;
@@ -31,14 +32,21 @@ namespace WohnungenApi.Controllers
             int wohnungId,
             [FromForm] IFormFileCollection files)
         {
-            var wohnung = await _context.Wohnungen.FindAsync(wohnungId);
+            if (files == null || files.Count == 0)
+                return BadRequest("No files uploaded");
+
+            var wohnung = await _context.Wohnungen
+                .FirstOrDefaultAsync(w => w.Id == wohnungId);
             if (wohnung == null)
-                return NotFound("Wohnung nicht gefunden");
+                return NotFound("Apartment not found");
 
             //تحقق من الملكية ✅ 
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(userIdClaim, out var userId))
+                return Unauthorized();
+
             if (wohnung.OwnerId != userId)
-                return Forbid("You don't own this Wohnung");
+                return Forbid("You do not own this Apartment");
 
             var bilder = new List<Wohnungsbild>();
 
@@ -55,6 +63,7 @@ namespace WohnungenApi.Controllers
                 {
                     WohnungId = wohnungId,
                     Url = result.SecureUrl.AbsoluteUri,
+                    PublicId = result.PublicId,
                     IsMain = false
                 });
             }
@@ -66,9 +75,12 @@ namespace WohnungenApi.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetBilder(int wohnungId)
+        public async Task<IActionResult> GetBilder(int wohnungId)
         {
-            var bilder = _context.Wohnungsbilder.Where(b => b.WohnungId == wohnungId).ToList();
+            var bilder = await _context.Wohnungsbilder
+                .Where(b => b.WohnungId == wohnungId)
+                .ToListAsync();
+
             return Ok(bilder);
         }
     }

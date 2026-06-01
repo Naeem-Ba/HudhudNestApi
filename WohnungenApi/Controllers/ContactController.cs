@@ -5,6 +5,7 @@ using WohnungenApi.Data;
 using WohnungenApi.Models;
 using WohnungenApi.Dtos;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 
 
 namespace WohnungenApi.Controllers

@@ -1,160 +1,163 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using WohnungenApi.Data;
-using WohnungenApi.Dtos;
-using System.Security.Claims;
-using Microsoft.EntityFrameworkCore;
-using WohnungenApi.Services;
 using Microsoft.AspNetCore.Identity;
+using WohnungenApi.Dtos;
+using WohnungenApi.Services;
 using WohnungenApi.Models;
+using System.Security.Claims;
 
-[Authorize]
-[ApiController]
-[Route("api/[controller]")]
-public class ProfileController : ControllerBase
+namespace WohnungenApi.Controllers
 {
-    private readonly WohnungenContext _context;
-    private readonly IPhotoService _photoService; // حقن خدمة الصور
-
-    public ProfileController(WohnungenContext context, IPhotoService photoService)
+    [Authorize]
+    [ApiController]
+    [Route("api/[controller]")]
+    public class ProfileController : ControllerBase
     {
-        _context = context;
-        _photoService = photoService;
-    }
+        private readonly UserManager<Benutzer> _userManager;
+        private readonly IPhotoService _photoService;
 
-    // دالة مساعدة لجلب ID المستخدم بأمان
-    private int GetCurrentUserId()
-    {
-        // 1. استخراج كل الـ Claims المتاحة في التوكن حالياً
-        var allClaims = User.Claims.Select(c => $"{c.Type}: {c.Value}").ToList();
-        var claimsString = string.Join(" | ", allClaims);
-
-        // 2. محاولة البحث عن المعرف بأكثر من صيغة
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier) // الصيغة القياسية (http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier)
-                    ?? User.FindFirst("Id")                   // الصيغة التي أعتقدها
-                    ?? User.FindFirst("id")                   // الصيغة الصغيرة
-                    ?? User.FindFirst("sub");                 // الصيغة العالمية
-
-        if (claim == null)
+        public ProfileController(
+            UserManager<Benutzer> userManager,
+            IPhotoService photoService)
         {
-            // إذا فشل، سنعيد رسالة تحتوي على كل محتويات التوكن لنفهم ماذا أرسل الـ JWT
-            throw new Exception($"ID not found. Available claims are: {claimsString}");
+            _userManager = userManager;
+            _photoService = photoService;
         }
 
-        return int.Parse(claim.Value);
-    }
-
-    [HttpGet("me")]
-    public async Task<IActionResult> GetMe()
-    {
-        try
+        private async Task<Benutzer?> GetCurrentUserAsync()
         {
-            var userId = GetCurrentUserId();
-            var user = await _context.Benutzer.FindAsync(userId);
+            return await _userManager.GetUserAsync(User);
+        }
 
-            if (user == null) return NotFound();
+        // ============================
+        // جلب المستخدم الحالي
+        // ============================
+        [HttpGet("me")]
+        public async Task<IActionResult> GetCurrentUser()
+        {
+            var user = await GetCurrentUserAsync();
+            var roles = await _userManager.GetRolesAsync(user);
+            if (user == null) return Unauthorized();
+
+            return Ok(new
+            {
+                user.Id,
+                user.Email,
+                user.DisplayName,
+                user.Vorname,
+                user.Name,
+                Phone = user.PhoneNumber,
+                user.IsAgent,
+                user.TaxNumber,
+                user.ImageUrl,
+                Roles = roles,
+                Role = roles.FirstOrDefault()
+            });
+        }
+
+        // ============================
+        // تحديث البيانات
+        // ============================
+        [HttpPut]
+        public async Task<IActionResult> UpdateProfile([FromBody] ProfileDto dto)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
+
+            if (dto.IsAgent == true &&
+                (string.IsNullOrWhiteSpace(dto.Phone) ||
+                 string.IsNullOrWhiteSpace(dto.TaxNumber)))
+            {
+                return BadRequest("PhoneNumber and TaxNumber are required for agents.");
+            }
+
+            user.Vorname = dto.Vorname;
+            user.Name = dto.Name;
+            user.DisplayName = dto.DisplayName;
+            user.PhoneNumber = dto.Phone;
+            user.IsAgent = dto.IsAgent;
+            user.TaxNumber = dto.TaxNumber;
+
+            var result = await _userManager.UpdateAsync(user);
+
+            if (!result.Succeeded)
+                return BadRequest(result.Errors);
+
             return Ok(user);
         }
-        catch (Exception ex) { return BadRequest(ex.Message); }
-    }
 
-    [HttpPut]
-    public async Task<IActionResult> UpdateProfile([FromBody] ProfileDto dto)
-    {
-        var userId = GetCurrentUserId();
-        var user = await _context.Benutzer.FindAsync(userId);
-        if (user == null) return NotFound();
-
-        //حماية إضافية: التأكد من وجود رقم الهاتف إذا كان الحساب وكيلاً
-        if (dto.IsAgent == true && (string.IsNullOrWhiteSpace(dto.Phone) || string.IsNullOrWhiteSpace(dto.TaxNumber)))
+        // ============================
+        // تغيير كلمة المرور (الطريقة الصحيحة)
+        // ============================
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword(ChangePasswordDto dto)
         {
-            return BadRequest("رقم الهاتف والرقم الضريبي مطلوبان لحسابات الوكلاء.");
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
+
+            var result = await _userManager.ChangePasswordAsync(
+                user,
+                dto.CurrentPassword,
+                dto.NewPassword);
+
+            if (!result.Succeeded)
+                return BadRequest(result.Errors);
+
+            return Ok(new { message = "Password changed successfully" });
         }
 
-        user.Vorname = dto.Vorname;
-        user.Name = dto.Name;
-        user.DisplayName = dto.DisplayName;
-        user.Phone = dto.Phone;
-        user.IsAgent = dto.IsAgent;
-        user.TaxNumber = dto.TaxNumber; // حفظ الرقم الضريبي
-
-        await _context.SaveChangesAsync();
-        return Ok(user);
-    }
-
-    [HttpPost("change-password")]
-    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
-    {
-        var userId = GetCurrentUserId();
-        var user = await _context.Benutzer.FindAsync(userId);
-        if (user == null) return NotFound();
-
-        //// ملاحظة أمنية: يفضل استخدام PasswordHasher لفك التشفير والمقارنة
-        //// هنا نقارن مباشرة (إذا كنت تخزنها كنص عادي حالياً)
-        //if (user.PasswordHash != dto.CurrentPassword)
-        //{
-        //    return BadRequest("كلمة المرور الحالية غير صحيحة.");
-        //}
-
-        //user.PasswordHash = dto.NewPassword;
-        //await _context.SaveChangesAsync();
-
-        var hasher = new PasswordHasher<Benutzer>();
-        var verificationResult = hasher.VerifyHashedPassword(user, user.PasswordHash, dto.CurrentPassword);
-
-        if (verificationResult == PasswordVerificationResult.Failed)
+        // ============================
+        // رفع الصورة
+        // ============================
+        [HttpPost("avatar")]
+        public async Task<IActionResult> UploadAvatar([FromForm] AvatarUploadDto dto)
         {
-            return BadRequest("كلمة المرور الحالية غير صحيحة.");
-        }
+            if (dto.File == null || dto.File.Length == 0)
+                return BadRequest("File is empty");
 
-        user.PasswordHash = hasher.HashPassword(user, dto.NewPassword);
-        await _context.SaveChangesAsync();
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+            var extension = Path.GetExtension(dto.File.FileName).ToLowerInvariant();
 
-        return Ok(new { message = "تم تغيير كلمة المرور بنجاح" });
-    }
+            if (!allowedExtensions.Contains(extension))
+                return BadRequest("Invalid file type");
 
-    [HttpPost("avatar")]
-   
-    public async Task<IActionResult> UploadAvatar([FromForm] AvatarUploadDto dto)
-    {
-        // 1. التأكد من وجود ملف
-        if (dto.File == null || dto.File.Length == 0)
-            return BadRequest("File is empty");
+            if (dto.File.Length > 5 * 1024 * 1024)
+                return BadRequest("Max file size is 5MB");
 
-        //فحص نوع الملف ✅ 
-        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp" };
-        var extension = Path.GetExtension(dto.File.FileName).ToLowerInvariant();
-        if (!allowedExtensions.Contains(extension))
-            return BadRequest ("(webp ,png ,jpg (نوع الملف غير مسموح. يرجى رفع صورة فقط");
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
 
-
-        //(MB5) فحص حجم الملف ✅
-
-             var maxFileSize = 5 * 1024 * 1024;
-        if (dto.File.Length > maxFileSize)
-            return BadRequest ("MBحجم الملف كبير جدً. الحد اأقصى 5");
-
-        try
-        {
-            // 2. الحصول على معرف المستخدم الحالي (من التوكن)
-            var userId = GetCurrentUserId();
-            var user = await _context.Benutzer.FindAsync(userId);
-            if (user == null) return NotFound("User not found");
-
-            // 3. رفع الصورة إلى Cloudinary بدلاً من السيرفر المحلي
             var result = await _photoService.AddPhotoAsync(dto.File);
 
             if (result.Error != null)
                 return BadRequest(result.Error.Message);
 
-            // 4. تحديث رابط الصورة في قاعدة البيانات بالرابط الذي أعطاه Cloudinary
             user.ImageUrl = result.SecureUrl.AbsoluteUri;
 
-            await _context.SaveChangesAsync();
+            var updateResult = await _userManager.UpdateAsync(user);
+
+            if (!updateResult.Succeeded)
+                return BadRequest(updateResult.Errors);
 
             return Ok(new { imageUrl = user.ImageUrl });
         }
-        catch (Exception) { return Unauthorized(); }
-    }
 
+        // ============================
+        // حذف الحساب
+        // لكن الأفضل لاحقًا أن يكون Soft Delete وليس حذفًا فعليًا. 
+        // ============================
+        [HttpDelete("delete")]
+        public async Task<IActionResult> DeleteAccount()
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
+
+            var result = await _userManager.DeleteAsync(user);
+
+            if (!result.Succeeded)
+                return BadRequest(result.Errors);
+
+            return Ok(new { message = "Account deleted successfully" });
+        }
+    }
 }

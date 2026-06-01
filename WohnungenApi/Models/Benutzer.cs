@@ -1,24 +1,23 @@
 ﻿using System;
 using System.Collections.Generic;
+using Microsoft.AspNetCore.Identity;
 namespace WohnungenApi.Models
 {
-    public class Benutzer
+    public class Benutzer : IdentityUser<int>
     {
-        public int? Id { get; set; }
-        public string? DisplayName { get; set; } = string.Empty;
+        public string? DisplayName { get; set; }
         public bool? IsAgent { get; set; }
         public string? Name { get; set; }
         public string? Vorname { get; set; }
-        public string Email { get; set; } = string.Empty;
-        public string? Phone { get; set; }
-        public string PasswordHash { get; set; } = string.Empty;
+        // Email, PhoneNumber, PasswordHash, SecurityStamp, etc. ستأتي من IdentityUser
         public string? TaxNumber { get; set; }
-        public string? Role { get; set; } = "user";
+        // Role سيتم إدارته عبر IdentityRole
         public string? ImageUrl { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
-        public int? Anzahle_Wohnungen { get; set; } = 0;
+        // Anzahle_Wohnungen سيتم إزالته وحسابه عند الطلب
         public ICollection<Wohnung> Wohnungen { get; set; } = new List<Wohnung>();
         public ICollection<Messages> Messages { get; set; } = new List<Messages>();
         public ICollection<Favorite> Favorites { get; set; } = new List<Favorite>();
+        public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
     }
 }

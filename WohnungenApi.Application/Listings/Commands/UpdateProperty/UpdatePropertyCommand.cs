@@ -1,0 +1,62 @@
+﻿using MediatR;
+using WohnungenApi.Domain.Enums;
+
+namespace WohnungenApi.Application.Listings.Commands.UpdateProperty;
+
+/// <summary>
+/// Partial-update command. All fields are nullable — only non-null values are applied.
+/// This avoids the anti-pattern of accidentally overwriting fields with null.
+///
+/// BUG FIX: Was an empty "internal class UpdatePropertyCommand {}" — completely missing.
+/// </summary>
+public sealed record UpdatePropertyCommand(
+    Guid PropertyId,
+    Guid RequestingUserId,         // Authorization: must be owner (or admin)
+
+    // Core
+    string? Title,
+    string? Description,
+
+    // Address
+    string? Street,
+    string? City,
+    string? Region,
+    string? CountryCode,
+    string? PostalCode,
+
+    // Geo
+    decimal? Latitude,
+    decimal? Longitude,
+
+    // Pricing
+    decimal? ColdRent,
+    decimal? WarmRent,
+    decimal? PurchasePrice,
+    decimal? Deposit,
+    decimal? AdditionalCosts,
+    string? CurrencyCode,
+
+    // Physical
+    int? Rooms,
+    decimal? Area,
+    int? Floor,
+    int? TotalFloors,
+
+    // Features
+    bool? HasBalcony,
+    bool? HasElevator,
+    bool? HasParkingSpace,
+    HeatingType? HeatingType,
+
+    // Classification
+    PropertyStatus? Status,
+    PropertyCondition? Condition,
+    EnergyEfficiencyType? EnergyEfficiency,
+
+    // Dates
+    DateTime? AvailableFrom,
+    DateTime? ExpiresAt,
+
+    // Publishing — triggers domain methods Publish()/Unpublish()
+    bool? IsPublished
+) : IRequest<bool>;

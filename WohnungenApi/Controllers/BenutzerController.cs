@@ -13,11 +13,15 @@ namespace WohnungenApi.Controllers
     [Route("api/[controller]")]
     public class BenutzerController : ControllerBase
     {
-        private readonly WohnungenContext _context;
+        private readonly UserManager<Benutzer> _userManager;
+        private readonly RoleManager<IdentityRole<int>> _roleManager;
 
-        public BenutzerController(WohnungenContext context)
+        public BenutzerController(
+            UserManager<Benutzer> userManager,
+            RoleManager<IdentityRole<int>> roleManager)
         {
-            _context = context;
+            _userManager = userManager;
+            _roleManager = roleManager;
         }
 
         // ----------------------------
@@ -27,52 +31,38 @@ namespace WohnungenApi.Controllers
         [HttpPut("{id}/role")]
         public async Task<IActionResult> UpdateRole(int id, [FromBody] string newRole)
         {
-            var user = await _context.Benutzer.FindAsync(id);
+            var user = await _userManager.FindByIdAsync(id.ToString());
             if (user == null)
                 return NotFound("User not found.");
 
-            if (string.IsNullOrWhiteSpace(newRole))
-                return BadRequest("Invalid role.");
+            if (!await _roleManager.RoleExistsAsync(newRole))
+                return BadRequest("Role does not exist");
 
-            if (newRole != "Admin" && newRole != "user")
-                return BadRequest("Role must be either 'Admin' or 'user'.");
+            var currentRoles = await _userManager.GetRolesAsync(user);
 
-            user.Role = newRole;
-            await _context.SaveChangesAsync();
+            await _userManager.RemoveFromRolesAsync(user, currentRoles);
+            var result = await _userManager.AddToRoleAsync(user, newRole);
 
-            return Ok(user);
+            if (!result.Succeeded)
+                return BadRequest(result.Errors);
+
+            return Ok("Role updated successfully");
         }
 
         [Authorize]
         [HttpGet("me")]
-        public IActionResult Me()
+        public async Task<IActionResult> Me()
         {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            var roles = await _userManager.GetRolesAsync(user);
+
             return Ok(new
             {
-                email = User.FindFirst(ClaimTypes.Email)?.Value,
-                role = User.FindFirst(ClaimTypes.Role)?.Value
+                user.Email,
+                Roles = roles
             });
         }
-
-        // ----------------------------
-        // change-password
-        // ----------------------------
-        //[Authorize]
-        //[HttpPost("change-password")]
-        //public async Task<IActionResult> ChangePassword([FromBody] BenutzerDto dto)
-        //{
-        //    var userId = GetCurrentUserId();
-        //    var user = await _context.Benutzer.FindAsync(userId);
-
-        //    // التحقق من كلمة المرور القديمة (تأكد من استخدام التشفير إذا كنت تشفرها)
-        //    if (user.PasswordHash != dto.CurrentPassword)
-        //        return BadRequest("كلمة المرور الحالية غير صحيحة");
-
-        //    user.PasswordHash = dto.NewPassword; // يفضل تشفيرها هنا
-        //    await _context.SaveChangesAsync();
-
-        //    return Ok();
-        //}
-
     }
 }

@@ -1,50 +1,73 @@
-﻿using Microsoft.Extensions.Options;
+﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using WohnungenApi.Models;
 
-public class JwtService
+namespace WohnungenApi.Services
 {
-    private readonly JwtOptions _options;
-
-    public JwtService(IOptions<JwtOptions> options)
+    public class JwtService
     {
-        _options = options.Value;
-    }
+        private readonly JwtOptions _options;
+        private readonly UserManager<Benutzer> _userManager;
 
-    public string GenerateToken(Benutzer user)
-    {
-        if (user.Id == null)
-            throw new ArgumentException("User ID cannot be null");
-
-        var claims = new List<Claim>
+        public JwtService(
+            IOptions<JwtOptions> options,
+            UserManager<Benutzer> userManager)
         {
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.Value.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim(ClaimTypes.NameIdentifier, user.Id.Value.ToString()),
-            new Claim(ClaimTypes.Role, user.Role ?? "user")
-        };
+            _options = options.Value;
+            _userManager = userManager;
+        }
 
-        var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(_options.Key)
-        );
+        // ==========================
+        // توليد Access Token
+        // ==========================
+        public async Task<string> GenerateAccessToken(Benutzer user)
+        {
+            var roles = await _userManager.GetRolesAsync(user);
 
-        var creds = new SigningCredentials(
-            key,
-            SecurityAlgorithms.HmacSha256
-        );
+            var claims = new List<Claim>
+            {
+                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim(JwtRegisteredClaimNames.Email, user.Email!)
+            };
 
-        var token = new JwtSecurityToken(
-            issuer: _options.Issuer,
-            audience: _options.Audience,
-            claims: claims,
-            expires: DateTime.UtcNow.AddHours(_options.ExpiresInHours),
-            signingCredentials: creds
-        );
+            foreach (var role in roles)
+                claims.Add(new Claim(ClaimTypes.Role, role));
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
+            var key = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(_options.Key)
+            );
+
+            var creds = new SigningCredentials(
+                key,
+                SecurityAlgorithms.HmacSha256
+            );
+
+            var token = new JwtSecurityToken(
+                issuer: _options.Issuer,
+                audience: _options.Audience,
+                claims: claims,
+                expires: DateTime.UtcNow.AddMinutes(30), // قصير العمر
+                signingCredentials: creds
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        // ==========================
+        // توليد Refresh Token عشوائي آمن
+        // ==========================
+        public string GenerateRefreshToken()
+        {
+            var randomBytes = new byte[64];
+            using var rng = RandomNumberGenerator.Create();
+            rng.GetBytes(randomBytes);
+            return Convert.ToBase64String(randomBytes);
+        }
     }
 }
