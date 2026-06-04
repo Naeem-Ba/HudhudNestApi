@@ -197,6 +197,9 @@ app.MapControllers();
 
 app.Run();
 
+public partial class Program
+{
+}
 // --- Database Migration Helper -------------------------------
 static class ApplicationExtensions
 {
