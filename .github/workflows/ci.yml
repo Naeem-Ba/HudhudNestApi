@@ -3,9 +3,9 @@ name: CI — Build · Test · Validate
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
 
 env:
   DOTNET_VERSION: '8.0.x'
