@@ -1,0 +1,117 @@
+# .github/workflows/ci.yml
+name: CI — Build · Test · Validate
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+    
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  SOLUTION_PATH: 'PropertyApi.sln'
+
+jobs:
+  # ──────────────────────────────────────────────────────────
+  # Job 1: Build & Test
+  # ──────────────────────────────────────────────────────────
+  build-and-test:
+    name: Build + Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # cache NuGet packages لتسريع البناء
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      - name: Build (Release, no warnings)
+        run: |
+          dotnet build ${{ env.SOLUTION_PATH }} \
+            --configuration Release \
+            --no-restore \
+            --warnaserror
+
+      - name: Run Architecture Tests
+        run: |
+          dotnet test tests/PropertyApi.Architecture.Tests/ \
+            --configuration Release \
+            --no-build \
+            --verbosity normal
+
+  # ──────────────────────────────────────────────────────────
+  # Job 2: Secret Scan
+  # ──────────────────────────────────────────────────────────
+  secret-scan:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # كل الـ history لفحص شامل
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ──────────────────────────────────────────────────────────
+  # Job 3: Validate .gitignore (لا bin/obj في الـ commit)
+  # ──────────────────────────────────────────────────────────
+  validate-repo-hygiene:
+    name: Repo Hygiene Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check no build artifacts are tracked
+        run: |
+          # فشل إذا وُجد أي ملف DLL أو PDB في الـ repository
+          if git ls-files | grep -E '\.(dll|pdb|exe)$'; then
+            echo "❌ ERROR: Build artifacts found in repository!"
+            echo "Run: git rm --cached <file> for each artifact"
+            exit 1
+          fi
+          echo "✅ No build artifacts tracked."
+
+      - name: Check no real images in wwwroot
+        run: |
+          if git ls-files | grep -E 'wwwroot/(bilder|profile_fotos|uploads)/'; then
+            echo "❌ ERROR: Runtime uploads found in repository!"
+            exit 1
+          fi
+          echo "✅ No runtime uploads tracked."
+
+      - name: Check no Development secrets
+        run: |
+          if git ls-files | grep -E 'appsettings\.(Development|Production|Staging)\.json$'; then
+            echo "❌ ERROR: Environment-specific appsettings found in repository!"
+            exit 1
+          fi
+          echo "✅ No environment secrets tracked."

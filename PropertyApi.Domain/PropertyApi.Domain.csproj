@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!--
+    FIX: Removed the stale <Folder Include="Properties\ValueObjects\" />
+    "Properties\" is a reserved folder name in .NET (holds launchSettings.json).
+    Using it as a Bounded Context folder causes tooling confusion.
+    Value objects should live under:
+      Domain/Listings/ValueObjects/  (e.g. Address.cs, Money.cs)
+      Domain/Users/ValueObjects/
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.2" />
+  </ItemGroup>
+
+</Project>
