@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using PropertyApi.Application.Users.DTOs;
 using PropertyApi.Domain.Users.Entities;
+using MediatR;
+using PropertyApi.Application.Users.Commands.UpdateUser;
 
 namespace PropertyApi.Controllers;
 
@@ -13,9 +15,13 @@ namespace PropertyApi.Controllers;
 public sealed class UsersController : ControllerBase
 {
     private readonly UserManager<User> _userManager;
+private readonly ISender _mediator;
 
-    public UsersController(UserManager<User> userManager)
-        => _userManager = userManager;
+public UsersController(UserManager<User> userManager, ISender mediator)
+{
+    _userManager = userManager;
+    _mediator = mediator;
+}
 
     // -- GET /api/users/me -------------------------------------
     [HttpGet("me")]
@@ -72,35 +78,27 @@ public sealed class UsersController : ControllerBase
 
     // -- PUT /api/users/me -------------------------------------
     [HttpPut("me")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
     public async Task<IActionResult> UpdateProfile(
-        [FromBody] UpdateProfileRequest dto,
-        CancellationToken ct)
+    [FromBody] UpdateProfileRequest dto,
+    CancellationToken ct)
     {
-        // TODO Phase 2: route through UpdateUserCommand via MediatR
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (userId is null) return Unauthorized();
+        if (!Guid.TryParse(userId, out var id))
+            return Unauthorized();
 
-        var user = await _userManager.FindByIdAsync(userId);
-        if (user is null) return Unauthorized();
+        var result = await _mediator.Send(new UpdateUserCommand(
+            UserId: id,
+            FirstName: dto.FirstName,
+            LastName: dto.LastName,
+            DisplayName: dto.DisplayName,
+            PhoneNumber: dto.PhoneNumber,
+            ProfileImageUrl: null,
+            PreferredLanguage: null,
+            PreferredCurrency: null,
+            CountryCode: null
+        ), ct);
 
-        user.FirstName = dto.FirstName ?? user.FirstName;
-        user.LastName = dto.LastName ?? user.LastName;
-        user.DisplayName = dto.DisplayName;
-        user.PhoneNumber = dto.PhoneNumber;
-        user.IsAgent = dto.IsAgent;
-        user.UpdatedAt = DateTime.UtcNow;
-
-        if (dto.IsAgent && string.IsNullOrWhiteSpace(dto.PhoneNumber))
-            return BadRequest(new { message = "PhoneNumber is required for agents." });
-
-        var result = await _userManager.UpdateAsync(user);
-        if (!result.Succeeded)
-            return BadRequest(new { errors = result.Errors.Select(e => e.Description) });
-
-        return NoContent();
+        return result is null ? NotFound() : NoContent();
     }
 
     // -- POST /api/users/me/change-password --------------------
@@ -139,8 +137,18 @@ public sealed class UsersController : ControllerBase
         user.IsDeleted = true;
         user.DeletedAt = DateTime.UtcNow;
         user.UpdatedAt = DateTime.UtcNow;
+        user.SecurityStamp = Guid.NewGuid().ToString("N");
 
-        await _userManager.UpdateAsync(user);
+        var result = await _userManager.UpdateAsync(user);
+
+        if (!result.Succeeded)
+        {
+            return BadRequest(new
+            {
+                errors = result.Errors.Select(error => error.Description)
+            });
+        }
+
         return NoContent();
     }
 }
@@ -150,8 +158,7 @@ public sealed record UpdateProfileRequest(
     string? FirstName,
     string? LastName,
     string? DisplayName,
-    string? PhoneNumber,
-    bool IsAgent);
+    string? PhoneNumber);
 
 public sealed record ChangePasswordRequest(
     string CurrentPassword,

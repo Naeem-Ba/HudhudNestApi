@@ -43,11 +43,6 @@ public sealed class RegisterUserCommandValidator : AbstractValidator<RegisterUse
             .MaximumLength(30)
             .When(x => !string.IsNullOrWhiteSpace(x.PhoneNumber));
 
-        RuleFor(x => x.PhoneNumber)
-            .NotEmpty()
-            .When(x => x.IsAgent)
-            .WithMessage("PhoneNumber is required for agents.");
-
         RuleFor(x => x.PreferredLanguage)
             .NotEmpty()
             .MaximumLength(10)

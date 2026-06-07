@@ -2,13 +2,14 @@ using MediatR;
 using Microsoft.AspNetCore.Identity;
 using PropertyApi.Application.Users.DTOs;
 using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Domain.Users.Constants;
 
 namespace PropertyApi.Application.Users.Commands.RegisterUser;
 
 public sealed class RegisterUserCommandHandler
     : IRequestHandler<RegisterUserCommand, UserDto>
 {
-    private const string DefaultRole = "User";
+    private const string DefaultRole = RoleNames.User;
 
     private readonly UserManager<User> _userManager;
     private readonly RoleManager<IdentityRole<Guid>> _roleManager;
@@ -44,7 +45,7 @@ public sealed class RegisterUserCommandHandler
             PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber)
                 ? null
                 : request.PhoneNumber.Trim(),
-            IsAgent = request.IsAgent,
+            IsAgent = false,
             PreferredLanguage = request.PreferredLanguage.Trim().ToLowerInvariant(),
             PreferredCurrency = request.PreferredCurrency.Trim().ToUpperInvariant(),
             CountryCode = string.IsNullOrWhiteSpace(request.CountryCode)
