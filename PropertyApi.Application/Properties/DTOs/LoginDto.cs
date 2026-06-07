@@ -1,6 +1,5 @@
-using Microsoft.AspNetCore.Mvc;
 
-namespace PropertyApi.Dtos
+namespace PropertyApi.Application.Properties.DTOs
 {
     public class LoginDto
     {
