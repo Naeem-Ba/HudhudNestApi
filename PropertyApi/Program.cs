@@ -285,9 +285,12 @@ static class ApplicationExtensions
             var logger = services.GetRequiredService<ILogger<Program>>();
             logger.LogError(ex, "Migration failed.");
 
-            // In Development: crash immediately so you see the problem
-            // In Production: log and continue (Render will restart the service)
-            if (app.Environment.IsDevelopment()) throw;
+            if (app.Environment.IsDevelopment() ||
+                app.Environment.EnvironmentName == "Testing" ||
+                app.Environment.EnvironmentName == "CI")
+            {
+                throw;
+            }
         }
     }
 }
