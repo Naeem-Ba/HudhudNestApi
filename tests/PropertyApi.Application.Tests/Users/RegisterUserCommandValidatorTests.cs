@@ -44,7 +44,6 @@ public sealed class RegisterUserCommandValidatorTests
         Password: "SecureP@ss1",
         DisplayName: "أحمد الشمري",
         PhoneNumber: "+4915112345678",
-        IsAgent: false,
         PreferredLanguage: "ar",
         PreferredCurrency: "EUR",
         CountryCode: "DE"
@@ -76,7 +75,6 @@ public sealed class RegisterUserCommandValidatorTests
             Password: "Password1",
             DisplayName: null,
             PhoneNumber: null,
-            IsAgent: false,
             PreferredLanguage: "en",
             PreferredCurrency: "USD",
             CountryCode: null
@@ -666,7 +664,6 @@ public sealed class RegisterUserCommandValidatorTests
             Password: "abc",     // ← خطأ (قصير + بدون uppercase/digit)
             DisplayName: null,
             PhoneNumber: null,
-            IsAgent: false,
             PreferredLanguage: "xx",      // ← خطأ
             PreferredCurrency: "XY",      // ← خطأ
             CountryCode: null
