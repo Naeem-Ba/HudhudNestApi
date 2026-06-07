@@ -1,5 +1,6 @@
-namespace PropertyApi.Dtos;
 
+
+namespace PropertyApi.Application.Properties.DTOs;
 public sealed class ChangePasswordDto
 {
     public string CurrentPassword { get; set; } = string.Empty;

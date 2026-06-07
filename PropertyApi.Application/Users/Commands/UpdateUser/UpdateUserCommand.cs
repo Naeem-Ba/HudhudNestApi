@@ -13,7 +13,6 @@ public sealed record UpdateUserCommand(
     string? LastName,
     string? DisplayName,
     string? PhoneNumber,
-    bool? IsAgent,
     string? ProfileImageUrl,
     string? PreferredLanguage,
     string? PreferredCurrency,

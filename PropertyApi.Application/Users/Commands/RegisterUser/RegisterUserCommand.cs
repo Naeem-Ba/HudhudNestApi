@@ -14,7 +14,6 @@ public sealed record RegisterUserCommand(
     string Password,
     string? DisplayName = null,
     string? PhoneNumber = null,
-    bool IsAgent = false,
     string PreferredLanguage = "en",
     string PreferredCurrency = "EUR",
     string? CountryCode = "DE"

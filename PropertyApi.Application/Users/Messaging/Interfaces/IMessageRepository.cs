@@ -24,6 +24,11 @@ public interface IMessageRepository
         Guid senderId,
         Guid receiverId,
         CancellationToken ct = default);
+    Task<bool> ConversationExistsAsync(
+    Guid propertyId,
+    Guid firstUserId,
+    Guid secondUserId,
+    CancellationToken ct = default);
 
     /// <summary>Count unread messages for a user.</summary>
     Task<int> CountUnreadAsync(Guid receiverId, CancellationToken ct = default);

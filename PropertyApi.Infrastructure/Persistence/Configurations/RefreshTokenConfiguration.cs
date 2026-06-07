@@ -19,12 +19,12 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
         builder.ToTable("RefreshTokens");
         builder.HasKey(t => t.Id);
 
-        builder.Property(t => t.Token)
+        builder.Property(t => t.TokenHash)
             .IsRequired()
-            .HasMaxLength(512);
+            .HasMaxLength(64);
 
-        builder.Property(t => t.ReplacedByToken)
-            .HasMaxLength(512);
+        builder.Property(t => t.ReplacedByTokenHash)
+            .HasMaxLength(64);
 
         builder.Property(t => t.CreatedByIp)
             .HasMaxLength(64);
@@ -39,7 +39,7 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
             .OnDelete(DeleteBehavior.Cascade);
 
         // Index for token lookup (login + refresh flows hit this constantly)
-        builder.HasIndex(t => t.Token).IsUnique();
+        builder.HasIndex(t => t.TokenHash).IsUnique();
         builder.HasIndex(t => t.UserId);
     }
 }

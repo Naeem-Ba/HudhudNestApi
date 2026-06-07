@@ -29,9 +29,15 @@ public sealed class RegisterUserCommandValidator : AbstractValidator<RegisterUse
             .When(x => !string.IsNullOrWhiteSpace(x.DisplayName));
 
         RuleFor(x => x.Email)
+            .Cascade(CascadeMode.Stop)
             .NotEmpty()
+            .WithMessage("Email is required.")
+            .MaximumLength(254)
+            .WithMessage("Email must not exceed 254 characters.")
             .EmailAddress()
-            .MaximumLength(320);
+            .WithMessage("Email must be a valid email address.")
+            .Must(email => !email.Contains(' '))
+            .WithMessage("Email must be a valid email address.");
 
         RuleFor(x => x.Password)
             .NotEmpty()
@@ -42,11 +48,6 @@ public sealed class RegisterUserCommandValidator : AbstractValidator<RegisterUse
         RuleFor(x => x.PhoneNumber)
             .MaximumLength(30)
             .When(x => !string.IsNullOrWhiteSpace(x.PhoneNumber));
-
-        RuleFor(x => x.PhoneNumber)
-            .NotEmpty()
-            .When(x => x.IsAgent)
-            .WithMessage("PhoneNumber is required for agents.");
 
         RuleFor(x => x.PreferredLanguage)
             .NotEmpty()

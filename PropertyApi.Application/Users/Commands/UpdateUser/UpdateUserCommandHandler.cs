@@ -37,9 +37,6 @@ public sealed class UpdateUserCommandHandler
                 ? null
                 : request.PhoneNumber.Trim();
 
-        if (request.IsAgent.HasValue)
-            user.IsAgent = request.IsAgent.Value;
-
         if (request.ProfileImageUrl is not null)
             user.ProfileImageUrl = string.IsNullOrWhiteSpace(request.ProfileImageUrl)
                 ? null
