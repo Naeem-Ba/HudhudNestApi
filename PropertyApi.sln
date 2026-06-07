@@ -26,6 +26,26 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Validators", "Validators", 
 		RegisterUserCommandValidatorTests.cs = RegisterUserCommandValidatorTests.cs
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "PropertyApi.Application.Tests", "PropertyApi.Application.Tests", "{E509086E-C322-437E-9A73-DEF2B0A63BC5}"
+	ProjectSection(SolutionItems) = preProject
+		PropertyApi.Application.Tests.csproj = PropertyApi.Application.Tests.csproj
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Contact", "Contact", "{722C4A13-0874-4E6E-A708-8745774C0B28}"
+	ProjectSection(SolutionItems) = preProject
+		ContactControllerTests.cs = ContactControllerTests.cs
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Listings", "Listings", "{36B33BD9-5A33-4E36-BA9E-F7C4629303D0}"
+	ProjectSection(SolutionItems) = preProject
+		CreatePropertyCommandValidatorTests.cs = CreatePropertyCommandValidatorTests.cs
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Users", "Users", "{23174621-F6A8-48A4-8F11-C358D20D8C22}"
+	ProjectSection(SolutionItems) = preProject
+		RegisterUserCommandValidatorTests.cs = RegisterUserCommandValidatorTests.cs
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -60,5 +80,9 @@ Global
 		{E86A0C88-1624-4531-B57E-0B4F9826E4CA} = {8E35B6EB-3F53-47A1-AF28-0DA9C76CAA77}
 		{0B8C6ED5-2A91-475D-A832-27209E45B79F} = {8E35B6EB-3F53-47A1-AF28-0DA9C76CAA77}
 		{99B3B3B4-D586-41C4-A2FC-DB214689DEDA} = {0B8C6ED5-2A91-475D-A832-27209E45B79F}
+		{E509086E-C322-437E-9A73-DEF2B0A63BC5} = {8E35B6EB-3F53-47A1-AF28-0DA9C76CAA77}
+		{722C4A13-0874-4E6E-A708-8745774C0B28} = {E509086E-C322-437E-9A73-DEF2B0A63BC5}
+		{36B33BD9-5A33-4E36-BA9E-F7C4629303D0} = {E509086E-C322-437E-9A73-DEF2B0A63BC5}
+		{23174621-F6A8-48A4-8F11-C358D20D8C22} = {E509086E-C322-437E-9A73-DEF2B0A63BC5}
 	EndGlobalSection
 EndGlobal
