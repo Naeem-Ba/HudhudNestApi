@@ -37,6 +37,26 @@ public sealed class PropertyRepository : IPropertyRepository
             .FirstOrDefaultAsync(p => p.Id == id, ct);
     }
 
+    public async Task<Property?> GetPublishedByIdWithDetailsAsync(
+    Guid id,
+    CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+
+        return await _db.Properties
+            .AsNoTracking()
+            .Include(property => property.Owner)
+            .Include(property => property.Images)
+            .Include(property => property.PropertyAmenities)
+                .ThenInclude(propertyAmenity => propertyAmenity.Amenity)
+            .FirstOrDefaultAsync(
+                property =>
+                    property.Id == id &&
+                    property.IsPublished &&
+                    (property.ExpiresAt == null ||
+                     property.ExpiresAt > now),
+                ct);
+    }
     public async Task<PagedResult<Property>> GetPagedAsync(
         PropertyFilterDto filter,
         CancellationToken ct = default)
@@ -128,7 +148,12 @@ public sealed class PropertyRepository : IPropertyRepository
                     p.PropertyAmenities.Any(pa => pa.AmenityId == aid)));
 
         // Only published listings by default
-        query = query.Where(p => p.IsPublished);
+        var now = DateTime.UtcNow;
+
+        query = query.Where(property =>
+            property.IsPublished &&
+            (property.ExpiresAt == null ||
+             property.ExpiresAt > now));
 
         // -- Count (before pagination) -------------------------
         var totalCount = await query.CountAsync(ct);
@@ -148,9 +173,10 @@ public sealed class PropertyRepository : IPropertyRepository
         };
 
         // -- Paginate -----------------------------------------
-        var pageSize = Math.Min(filter.PageSize, 100); // hard cap at 100
+        var page = Math.Max(filter.Page, 1);
+        var pageSize = Math.Clamp(filter.PageSize, 1, 100);
         var items = await query
-            .Skip((filter.Page - 1) * pageSize)
+            .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
 
@@ -158,7 +184,7 @@ public sealed class PropertyRepository : IPropertyRepository
         {
             Items = items,
             TotalCount = totalCount,
-            Page = filter.Page,
+            Page = page,
             PageSize = pageSize
         };
     }

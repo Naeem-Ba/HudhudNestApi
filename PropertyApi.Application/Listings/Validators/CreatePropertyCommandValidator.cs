@@ -71,6 +71,21 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
             .When(x => x.ListingType == ListingType.ForSale)
             .WithMessage("Purchase price is required for sale listings.");
 
+        RuleFor(command => command)
+    .Must(command =>
+        command.ColdRent > 0 &&
+        command.PurchasePrice > 0)
+    .When(command =>
+        command.ListingType == ListingType.ForRentAndSale)
+    .WithMessage(
+        "Combined listings require both ColdRent and PurchasePrice.");
+
+        RuleFor(command => command.AmenityIds)
+    .Must(ids =>
+        ids is null ||
+        ids.Count == ids.Distinct().Count())
+    .WithMessage("AmenityIds must not contain duplicates.");
+
         // Coordinates: both or neither
         RuleFor(x => x.Latitude)
             .InclusiveBetween(-90, 90)

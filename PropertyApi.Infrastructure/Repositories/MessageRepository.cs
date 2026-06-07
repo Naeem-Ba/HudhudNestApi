@@ -32,11 +32,11 @@ public sealed class MessageRepository : IMessageRepository
             .OrderByDescending(m => m.CreatedAt);
 
         var total = await query.CountAsync(ct);
-        var safePage = Math.Min(pageSize, 50);
+        var safePageSize = Math.Min(pageSize, 50);
 
         var items = await query
-            .Skip((page - 1) * safePage)
-            .Take(safePage)
+            .Skip((page - 1) * safePageSize)
+            .Take(safePageSize)
             .ToListAsync(ct);
 
         return new PagedResult<Message>
@@ -44,7 +44,7 @@ public sealed class MessageRepository : IMessageRepository
             Items = items,
             TotalCount = total,
             Page = page,
-            PageSize = safePage
+            PageSize = safePageSize
         };
     }
 
@@ -63,6 +63,23 @@ public sealed class MessageRepository : IMessageRepository
             .ToListAsync(ct);
     }
 
+    public async Task<bool> ConversationExistsAsync(
+    Guid propertyId,
+    Guid firstUserId,
+    Guid secondUserId,
+    CancellationToken ct = default)
+    {
+        return await _db.Messages.AnyAsync(
+            message =>
+                message.PropertyId == propertyId &&
+                (
+                    (message.SenderId == firstUserId &&
+                     message.ReceiverId == secondUserId) ||
+                    (message.SenderId == secondUserId &&
+                     message.ReceiverId == firstUserId)
+                ),
+            ct);
+    }
     public async Task<int> CountUnreadAsync(Guid receiverId, CancellationToken ct = default)
         => await _db.Messages
             .CountAsync(m => m.ReceiverId == receiverId && !m.IsRead, ct);
