@@ -3,29 +3,26 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi.Domain", "PropertyApi.Domain\PropertyApi.Domain.csproj", "{A43C6307-D4AC-4506-B9D7-67C5E782AC49}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi.Domain", "PropertyApi.Domain\PropertyApi.Domain.csproj", "{A43C6307-D4AC-4506-B9D7-67C5E782AC49}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi.Application", "PropertyApi.Application\PropertyApi.Application.csproj", "{643C006B-3296-4C67-9135-405020970C42}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi.Application", "PropertyApi.Application\PropertyApi.Application.csproj", "{643C006B-3296-4C67-9135-405020970C42}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi.Infrastructure", "PropertyApi.Infrastructure\PropertyApi.Infrastructure.csproj", "{69CE47DB-5C71-4153-AB93-BFF0CD03E0D3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi.Infrastructure", "PropertyApi.Infrastructure\PropertyApi.Infrastructure.csproj", "{69CE47DB-5C71-4153-AB93-BFF0CD03E0D3}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi", "PropertyApi\PropertyApi.csproj", "{8105FA9A-9BBB-4F73-BE29-B1E0CE309908}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi", "PropertyApi\PropertyApi.csproj", "{8105FA9A-9BBB-4F73-BE29-B1E0CE309908}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{2FA9A0E0-803A-4C97-B240-3B7C474772EB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi.Architecture.Tests", "tests\PropertyApi.Architecture.Tests\PropertyApi.Architecture.Tests.csproj", "{02DB5D87-D2D7-4AF1-86C0-9BE66867CD13}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi.Architecture.Tests", "tests\PropertyApi.Architecture.Tests\PropertyApi.Architecture.Tests.csproj", "{02DB5D87-D2D7-4AF1-86C0-9BE66867CD13}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi.Application.Tests", "tests\PropertyApi.Application.Tests\PropertyApi.Application.Tests.csproj", "{D6EC12EA-9E81-4433-8E65-A6436392A770}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi.Application.Tests", "tests\PropertyApi.Application.Tests\PropertyApi.Application.Tests.csproj", "{D6EC12EA-9E81-4433-8E65-A6436392A770}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi.Integration.Tests", "tests\PropertyApi.Integration.Tests\PropertyApi.Integration.Tests.csproj", "{D549275E-81F1-4FC1-AE70-B9D91E3C28D2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi.Integration.Tests", "tests\PropertyApi.Integration.Tests\PropertyApi.Integration.Tests.csproj", "{D549275E-81F1-4FC1-AE70-B9D91E3C28D2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(SolutionProperties) = preSolution
-		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{A43C6307-D4AC-4506-B9D7-67C5E782AC49}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -56,6 +53,9 @@ Global
 		{D549275E-81F1-4FC1-AE70-B9D91E3C28D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D549275E-81F1-4FC1-AE70-B9D91E3C28D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D549275E-81F1-4FC1-AE70-B9D91E3C28D2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{02DB5D87-D2D7-4AF1-86C0-9BE66867CD13} = {2FA9A0E0-803A-4C97-B240-3B7C474772EB}

@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
@@ -10,6 +11,7 @@ namespace PropertyApi.Application.Tests.Contact;
 /// تتحقق من:
 ///   1. إرسال رسالة تواصل بنجاح
 ///   2. رفض رسالة ناقصة البيانات
+///   3. قراءة Enums عبر API
 /// </summary>
 public sealed class ContactControllerTests
     : IClassFixture<WebApplicationFactory<Program>>
@@ -17,7 +19,16 @@ public sealed class ContactControllerTests
     private readonly HttpClient _client;
 
     public ContactControllerTests(WebApplicationFactory<Program> factory)
-        => _client = factory.CreateClient();
+    {
+        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
+
+        _client = factory
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("environment", "Testing");
+            })
+            .CreateClient();
+    }
 
     [Fact]
     [Trait("Category", "Integration")]
@@ -34,53 +45,79 @@ public sealed class ContactControllerTests
 
         // Act
         var response = await _client.PostAsJsonAsync("/api/contact", dto);
+        var responseBody = await response.Content.ReadAsStringAsync();
 
         // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<dynamic>();
-        Assert.NotNull(body);
+        Assert.True(
+            response.StatusCode == HttpStatusCode.OK,
+            $"Expected OK but got {(int)response.StatusCode} {response.StatusCode}. Body: {responseBody}");
+
+        Assert.False(
+            string.IsNullOrWhiteSpace(responseBody),
+            "Expected a non-empty response body.");
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     public async Task Submit_MissingName_ReturnsBadRequest()
     {
-        var dto = new { Email = "test@test.com", Message = "test" };
-        // Name مفقود
+        // Arrange
+        var dto = new
+        {
+            Email = "test@test.com",
+            Message = "test"
+        };
 
+        // Act
         var response = await _client.PostAsJsonAsync("/api/contact", dto);
+        var responseBody = await response.Content.ReadAsStringAsync();
 
-        // يتوقع 400 من FluentValidation أو Model Binding
+        // Assert
         Assert.True(
             response.StatusCode == HttpStatusCode.BadRequest ||
-            response.StatusCode == HttpStatusCode.UnprocessableEntity);
+            response.StatusCode == HttpStatusCode.UnprocessableEntity,
+            $"Expected BadRequest or UnprocessableEntity but got {(int)response.StatusCode} {response.StatusCode}. Body: {responseBody}");
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     public async Task GetEnums_PropertyStatus_ReturnsValues()
     {
+        // Act
         var response = await _client.GetAsync("/api/enums/PropertyStatus");
+        var responseBody = await response.Content.ReadAsStringAsync();
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        // Assert
+        Assert.True(
+            response.StatusCode == HttpStatusCode.OK,
+            $"Expected OK but got {(int)response.StatusCode} {response.StatusCode}. Body: {responseBody}");
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     public async Task GetEnums_LegacyAlias_STATUS_ReturnsValues()
     {
-        // التحقق من التوافق مع الأسماء القديمة
+        // Act
         var response = await _client.GetAsync("/api/enums/STATUS");
+        var responseBody = await response.Content.ReadAsStringAsync();
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        // Assert
+        Assert.True(
+            response.StatusCode == HttpStatusCode.OK,
+            $"Expected OK but got {(int)response.StatusCode} {response.StatusCode}. Body: {responseBody}");
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     public async Task GetEnums_InvalidName_ReturnsBadRequest()
     {
+        // Act
         var response = await _client.GetAsync("/api/enums/INVALIDNAME");
+        var responseBody = await response.Content.ReadAsStringAsync();
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // Assert
+        Assert.True(
+            response.StatusCode == HttpStatusCode.BadRequest,
+            $"Expected BadRequest but got {(int)response.StatusCode} {response.StatusCode}. Body: {responseBody}");
     }
 }

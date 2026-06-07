@@ -18,7 +18,6 @@ namespace PropertyApi.Middleware;
 /// </summary>
 public sealed class ExceptionHandlingMiddleware
 {
-
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
     private readonly IHostEnvironment _env;
@@ -48,10 +47,11 @@ public sealed class ExceptionHandlingMiddleware
         {
             // 422 — fluentvalidation errors from ValidationBehavior
             _logger.LogWarning("Validation errors: {@Errors}", ex.Errors);
-            await WriteJson(context, 422, new
+
+            await WriteJson(context, StatusCodes.Status422UnprocessableEntity, new
             {
                 title = "Validation Error",
-                status = 422,
+                status = StatusCodes.Status422UnprocessableEntity,
                 errors = ex.Errors
             });
         }
@@ -61,10 +61,10 @@ public sealed class ExceptionHandlingMiddleware
                 "Resource not found: {Message}",
                 ex.Message);
 
-            await WriteJson(context, 404, new
+            await WriteJson(context, StatusCodes.Status404NotFound, new
             {
                 title = "Not Found",
-                status = 404,
+                status = StatusCodes.Status404NotFound,
                 message = ex.Message
             });
         }
@@ -74,10 +74,10 @@ public sealed class ExceptionHandlingMiddleware
                 "Conflict: {Message}",
                 ex.Message);
 
-            await WriteJson(context, 409, new
+            await WriteJson(context, StatusCodes.Status409Conflict, new
             {
                 title = "Conflict",
-                status = 409,
+                status = StatusCodes.Status409Conflict,
                 message = ex.Message
             });
         }
@@ -87,64 +87,84 @@ public sealed class ExceptionHandlingMiddleware
                 "Forbidden operation: {Message}",
                 ex.Message);
 
-            await WriteJson(context, 403, new
+            await WriteJson(context, StatusCodes.Status403Forbidden, new
             {
                 title = "Forbidden",
-                status = 403,
+                status = StatusCodes.Status403Forbidden,
                 message = ex.Message
             });
         }
-        
         catch (DomainException ex)
         {
             // 400 — business rule violation from Domain layer
             _logger.LogWarning("Domain error: {Message}", ex.Message);
-            await WriteJson(context, 400, new
+
+            await WriteJson(context, StatusCodes.Status400BadRequest, new
             {
                 title = "Business Rule Violation",
-                status = 400,
+                status = StatusCodes.Status400BadRequest,
                 message = ex.Message
             });
         }
         catch (UnauthorizedAccessException ex)
         {
             // 403 — ownership check failed in handler
-            await WriteJson(context, 403, new
+            _logger.LogWarning(
+                "Unauthorized access: {Message}",
+                ex.Message);
+
+            await WriteJson(context, StatusCodes.Status403Forbidden, new
             {
                 title = "Forbidden",
-                status = 403,
+                status = StatusCodes.Status403Forbidden,
                 message = ex.Message
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception for {Path}", context.Request.Path);
+            _logger.LogError(
+                ex,
+                "Unhandled exception for {Method} {Path}",
+                context.Request.Method,
+                context.Request.Path);
 
-            // In Development: expose full details. In Production: safe generic message.
-            object body = _env.IsDevelopment()
+            var shouldExposeDetails =
+                _env.IsDevelopment() ||
+                _env.EnvironmentName == "Testing" ||
+                _env.EnvironmentName == "CI";
+
+            object body = shouldExposeDetails
                 ? new
                 {
                     title = "Internal Server Error",
-                    status = 500,
+                    status = StatusCodes.Status500InternalServerError,
                     message = ex.Message,
+                    exception = ex.GetType().FullName,
                     detail = ex.StackTrace,
-                    innerException = ex.InnerException?.Message
+                    innerException = ex.InnerException?.Message,
+                    innerExceptionType = ex.InnerException?.GetType().FullName
                 }
-                : (object)new
+                : new
                 {
                     title = "Internal Server Error",
-                    status = 500,
+                    status = StatusCodes.Status500InternalServerError,
                     message = "An unexpected error occurred. Please try again later."
                 };
 
-            await WriteJson(context, 500, body);
+            await WriteJson(context, StatusCodes.Status500InternalServerError, body);
         }
     }
 
     private static Task WriteJson(HttpContext ctx, int statusCode, object body)
     {
+        if (ctx.Response.HasStarted)
+        {
+            return Task.CompletedTask;
+        }
+
         ctx.Response.StatusCode = statusCode;
         ctx.Response.ContentType = "application/json";
+
         return ctx.Response.WriteAsync(
             JsonSerializer.Serialize(body, _jsonOptions));
     }

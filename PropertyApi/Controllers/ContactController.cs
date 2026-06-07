@@ -40,12 +40,22 @@ public sealed class ContactController : ControllerBase
         if (dto is null)
             return BadRequest(new { message = "Request body is required." });
 
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
+
+        if (string.IsNullOrWhiteSpace(dto.Name) ||
+            string.IsNullOrWhiteSpace(dto.Email) ||
+            string.IsNullOrWhiteSpace(dto.Message))
+        {
+            return BadRequest(new { message = "Name, Email and Message are required." });
+        }
+
         var msg = new ContactMessage
         {
             Name = dto.Name.Trim(),
             Email = dto.Email.Trim().ToLowerInvariant(),
             Subject = dto.Subject?.Trim(),
-            Body = dto.Message.Trim(),      // ← "Message" من الـ DTO يُخزَّن في Body
+            Body = dto.Message.Trim(),
             IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
         };
 
@@ -163,20 +173,20 @@ public sealed class ContactController : ControllerBase
 
 
 public sealed record ContactSubmitRequest(
-    [property: Required]
-    [property: StringLength(150, MinimumLength = 2)]
+    [Required]
+    [StringLength(150, MinimumLength = 2)]
     string Name,
 
-    [property: Required]
-    [property: EmailAddress]
-    [property: StringLength(320)]
+    [Required]
+    [EmailAddress]
+    [StringLength(320)]
     string Email,
 
-    [property: StringLength(300)]
+    [StringLength(300)]
     string? Subject,
 
-    [property: Required]
-    [property: StringLength(5000, MinimumLength = 10)]
+    [Required]
+    [StringLength(5000, MinimumLength = 10)]
     string Message);
 
 /// <summary>
