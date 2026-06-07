@@ -55,6 +55,46 @@ public sealed class ExceptionHandlingMiddleware
                 errors = ex.Errors
             });
         }
+        catch (NotFoundException ex)
+        {
+            _logger.LogInformation(
+                "Resource not found: {Message}",
+                ex.Message);
+
+            await WriteJson(context, 404, new
+            {
+                title = "Not Found",
+                status = 404,
+                message = ex.Message
+            });
+        }
+        catch (ConflictException ex)
+        {
+            _logger.LogInformation(
+                "Conflict: {Message}",
+                ex.Message);
+
+            await WriteJson(context, 409, new
+            {
+                title = "Conflict",
+                status = 409,
+                message = ex.Message
+            });
+        }
+        catch (ForbiddenException ex)
+        {
+            _logger.LogWarning(
+                "Forbidden operation: {Message}",
+                ex.Message);
+
+            await WriteJson(context, 403, new
+            {
+                title = "Forbidden",
+                status = 403,
+                message = ex.Message
+            });
+        }
+        
         catch (DomainException ex)
         {
             // 400 — business rule violation from Domain layer
