@@ -53,23 +53,39 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
             .Must(c => ValidCurrencyCodes.Contains(c))
             .WithMessage("Invalid ISO 4217 currency code.");
 
-        // Pricing: at least one price must be set
-        RuleFor(x => x)
-            .Must(x => x.ColdRent > 0 || x.WarmRent > 0 || x.PurchasePrice > 0)
-            .WithMessage("At least one price (ColdRent, WarmRent, or PurchasePrice) must be set.")
-            .When(x => x.ListingType != ListingType.ForRentAndSale);
+        // ForRent: ColdRent is required.
+        RuleFor(x => x.ColdRent)
+            .NotNull()
+            .WithMessage("Cold rent is required for rental listings.")
+            .When(x => x.ListingType == ListingType.ForRent);
 
-        // ForRent: must have rent price
         RuleFor(x => x.ColdRent)
             .GreaterThan(0)
-            .When(x => x.ListingType == ListingType.ForRent)
-            .WithMessage("Cold rent is required for rental listings.");
+            .WithMessage("Cold rent must be greater than zero.")
+            .When(x => x.ListingType == ListingType.ForRent && x.ColdRent.HasValue);
 
-        // ForSale: must have purchase price
-        RuleFor(x => x.PurchasePrice)
+        RuleFor(x => x.WarmRent)
             .GreaterThan(0)
-            .When(x => x.ListingType == ListingType.ForSale)
-            .WithMessage("Purchase price is required for sale listings.");
+            .WithMessage("Warm rent must be greater than zero.")
+            .When(x => x.ListingType == ListingType.ForRent && x.WarmRent.HasValue);
+
+        // ForSale: PurchasePrice is required.
+        RuleFor(x => x.PurchasePrice)
+            .NotNull()
+            .WithMessage("Purchase price is required for sale listings.")
+            .GreaterThan(0)
+            .WithMessage("Purchase price must be greater than zero.")
+            .When(x => x.ListingType == ListingType.ForSale);
+
+        // ForRentAndSale: both ColdRent and PurchasePrice are required.
+        RuleFor(x => x)
+            .Must(x => x.ColdRent > 0 && x.PurchasePrice > 0)
+            .WithMessage("Combined listings require both ColdRent and PurchasePrice.")
+            .When(x => x.ListingType == ListingType.ForRentAndSale);
+
+        RuleFor(x => x.AmenityIds)
+            .Must(ids => ids is null || ids.Count == ids.Distinct().Count())
+            .WithMessage("AmenityIds must not contain duplicates.");
 
         // Coordinates: both or neither
         RuleFor(x => x.Latitude)

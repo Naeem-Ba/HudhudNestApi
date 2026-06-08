@@ -1,0 +1,106 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using PropertyApi.Domain.Enums;
+
+namespace PropertyApi.Controllers;
+
+/// <summary>
+/// يعيد قيم الـ Enums كـ JSON للـ Frontend.
+/// - يستخدم Domain Enums مثل PropertyStatus و PropertyCondition.
+/// - يدعم الأسماء الجديدة.
+/// - يحافظ على legacy aliases مثل STATUS و ZUSTAND للتوافق مع الـ Frontend القديم.
+/// </summary>
+[ApiController]
+[Route("api/enums")]
+public sealed class EnumController : ControllerBase
+{
+    private static readonly Dictionary<string, Type> EnumMap =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            // New Domain enum names
+            { "ListingType", typeof(ListingType) },
+            { "PropertyStatus", typeof(PropertyStatus) },
+            { "PropertyCondition", typeof(PropertyCondition) },
+            { "EnergyEfficiency", typeof(EnergyEfficiencyType) },
+            { "HeatingType", typeof(HeatingType) },
+
+            // Legacy aliases for frontend compatibility
+            { "STATUS", typeof(PropertyStatus) },
+            { "ZUSTAND", typeof(PropertyCondition) },
+            { "ENERGIEAUSWEISTYP", typeof(EnergyEfficiencyType) }
+        };
+
+    /// <summary>
+    /// GET /api/enums/{name}
+    /// Example:
+    /// GET /api/enums/PropertyStatus
+    /// GET /api/enums/STATUS
+    /// </summary>
+    [HttpGet("{name}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public IActionResult Get(string name)
+    {
+        if (!EnumMap.TryGetValue(name, out var enumType))
+        {
+            return BadRequest(new
+            {
+                message = $"Enum '{name}' not found.",
+                available = EnumMap.Keys.OrderBy(key => key).ToArray()
+            });
+        }
+
+        var result = Enum.GetValues(enumType)
+            .Cast<Enum>()
+            .Select(value => new EnumDto
+            {
+                Id = Convert.ToInt32(value),
+                Key = value.ToString()
+            })
+            .ToList();
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// GET /api/enums
+    /// Returns all supported enum groups.
+    /// </summary>
+    [HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult GetAll()
+    {
+        var result = EnumMap
+            .GroupBy(item => item.Value.Name)
+            .Select(group => new
+            {
+                typeName = group.Key,
+                aliases = group
+                    .Select(item => item.Key)
+                    .OrderBy(key => key)
+                    .ToArray(),
+                values = Enum.GetValues(group.First().Value)
+                    .Cast<Enum>()
+                    .Select(value => new EnumDto
+                    {
+                        Id = Convert.ToInt32(value),
+                        Key = value.ToString()
+                    })
+                    .ToArray()
+            })
+            .OrderBy(item => item.typeName)
+            .ToList();
+
+        return Ok(result);
+    }
+}
+
+/// <summary>
+/// DTO returned for enum values.
+/// Kept local to this controller because it is small and API-specific.
+/// </summary>
+public sealed class EnumDto
+{
+    public int Id { get; init; }
+
+    public string Key { get; init; } = string.Empty;
+}
