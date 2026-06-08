@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
 
 namespace PropertyApi.Controllers;
 
