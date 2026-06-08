@@ -1,7 +1,7 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Infrastructure.Media;
 using PropertyApi.Infrastructure.Persistence;
@@ -15,7 +15,8 @@ namespace PropertyApi.Controllers;
 ///   2. يتحقق من امتداد الملف.
 ///   3. يتحقق من Magic Bytes للملف.
 ///   4. يتحقق من الحجم قبل الرفع.
-///   5. يحذف الملفات المرفوعة من Cloudinary إذا فشل جزء من العملية.
+///   5. ينظّف الملفات التي رُفعت إلى Cloudinary إذا فشل رفع ملف لاحق أو فشل حفظ قاعدة البيانات.
+///   6. يحذف الصورة من Cloudinary قبل حذف سجلها من قاعدة البيانات.
 /// </summary>
 [ApiController]
 [Route("api/properties/{propertyId:guid}/images")]
@@ -70,6 +71,7 @@ public sealed class PropertyImagesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
     public async Task<IActionResult> Upload(
         Guid propertyId,
         [FromForm] IFormFileCollection files,
@@ -93,6 +95,7 @@ public sealed class PropertyImagesController : ControllerBase
         if (property.OwnerId != userId)
             return Forbid();
 
+        // Validate all files before uploading anything to Cloudinary.
         foreach (var file in files)
         {
             var validationError = await ValidateImageFileAsync(file, ct);
@@ -115,12 +118,17 @@ public sealed class PropertyImagesController : ControllerBase
 
                 if (result.Error is not null)
                 {
-                    await CleanupUploadedImagesAsync(uploadedPublicIds, ct);
+                    await CleanupUploadedImagesAsync(
+                        uploadedPublicIds,
+                        CancellationToken.None);
 
-                    return BadRequest(new
-                    {
-                        message = result.Error.Message
-                    });
+                    return StatusCode(
+                        StatusCodes.Status502BadGateway,
+                        new
+                        {
+                            message = "Image upload failed. All uploaded images were reverted.",
+                            storageError = result.Error.Message
+                        });
                 }
 
                 uploadedPublicIds.Add(result.PublicId);
@@ -151,8 +159,16 @@ public sealed class PropertyImagesController : ControllerBase
         }
         catch
         {
-            await CleanupUploadedImagesAsync(uploadedPublicIds, ct);
-            throw;
+            await CleanupUploadedImagesAsync(
+                uploadedPublicIds,
+                CancellationToken.None);
+
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                new
+                {
+                    message = "Image upload failed. All uploaded images were reverted."
+                });
         }
     }
 
@@ -407,7 +423,9 @@ public sealed class PropertyImagesController : ControllerBase
         IEnumerable<string> publicIds,
         CancellationToken ct)
     {
-        foreach (var publicId in publicIds.Where(id => !string.IsNullOrWhiteSpace(id)).Distinct())
+        foreach (var publicId in publicIds
+                     .Where(id => !string.IsNullOrWhiteSpace(id))
+                     .Distinct())
         {
             try
             {

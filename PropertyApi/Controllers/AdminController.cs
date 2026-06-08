@@ -41,7 +41,8 @@ public sealed class AdminController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUsers(
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20)
+        [FromQuery] int pageSize = 20,
+         CancellationToken ct = default)
     {
         // ✅ التحقق أولاً قبل أي استعلام
         page = Math.Max(page, 1);
@@ -57,22 +58,49 @@ public sealed class AdminController : ControllerBase
             .Take(pageSize)
             .ToListAsync();
 
-        var result = new List<object>();
-        foreach (var u in users)
-        {
-            var roles = await _userManager.GetRolesAsync(u);
-            result.Add(new
+        var userIds = users
+    .Select(user => user.Id)
+    .ToList();
+
+        var userRoles = await _db.UserRoles
+            .AsNoTracking()
+            .Where(userRole => userIds.Contains(userRole.UserId))
+            .Join(
+                _db.Roles.AsNoTracking(),
+                userRole => userRole.RoleId,
+                role => role.Id,
+                (userRole, role) => new
+                {
+                    userRole.UserId,
+                    RoleName = role.Name
+                })
+            .ToListAsync(ct);
+
+        var rolesMap = userRoles
+            .GroupBy(item => item.UserId)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .Select(item => item.RoleName)
+                    .Where(roleName => roleName != null)
+                    .Cast<string>()
+                    .ToList());
+
+        var result = users
+            .Select(user => new
             {
-                u.Id,
-                u.Email,
-                u.FirstName,
-                u.LastName,
-                u.DisplayName,
-                u.IsAgent,
-                u.CreatedAt,
-                Roles = roles
-            });
-        }
+                user.Id,
+                user.Email,
+                user.FirstName,
+                user.LastName,
+                user.DisplayName,
+                user.IsAgent,
+                user.CreatedAt,
+                Roles = rolesMap.TryGetValue(user.Id, out var roles)
+                    ? roles
+                    : []
+            })
+            .ToList();
 
         return Ok(new { total, page, pageSize, data = result });
     }
