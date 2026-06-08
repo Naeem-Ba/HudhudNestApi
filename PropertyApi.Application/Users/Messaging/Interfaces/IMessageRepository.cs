@@ -11,31 +11,43 @@ public interface IMessageRepository
     // Read
     Task<Message?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
-    /// <summary>Get all messages for a property (paged).</summary>
+    /// <summary>
+    /// Get all messages for a property, paged in the database.
+    /// </summary>
     Task<PagedResult<Message>> GetByPropertyAsync(
         Guid propertyId,
         int page,
         int pageSize,
         CancellationToken ct = default);
 
-    /// <summary>Get conversation thread between two users about a property.</summary>
-    Task<IReadOnlyList<Message>> GetConversationAsync(
+    /// <summary>
+    /// Get conversation thread between two users about a property, paged in the database.
+    /// </summary>
+    Task<PagedResult<Message>> GetConversationAsync(
         Guid propertyId,
-        Guid senderId,
-        Guid receiverId,
+        Guid firstUserId,
+        Guid secondUserId,
+        int page,
+        int pageSize,
         CancellationToken ct = default);
-    Task<bool> ConversationExistsAsync(
-    Guid propertyId,
-    Guid firstUserId,
-    Guid secondUserId,
-    CancellationToken ct = default);
 
-    /// <summary>Count unread messages for a user.</summary>
+    /// <summary>
+    /// Check whether a conversation exists between two users about a property.
+    /// </summary>
+    Task<bool> ConversationExistsAsync(
+        Guid propertyId,
+        Guid firstUserId,
+        Guid secondUserId,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Count unread messages for a user.
+    /// </summary>
     Task<int> CountUnreadAsync(Guid receiverId, CancellationToken ct = default);
 
     // Update
     Task MarkAsReadAsync(Guid messageId, CancellationToken ct = default);
 
-    // Soft delete
+    // Delete
     void Remove(Message message);
 }
