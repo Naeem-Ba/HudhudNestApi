@@ -232,9 +232,14 @@ builder.Services.AddRateLimiter(options =>
 var app = builder.Build();
 // --------------------------------------------------------------
 
-// -- 8. Run DB Migrations --------------------------------------
-await app.MigrateDatabaseAsync(); // Extension method below
-await IdentitySeeder.SeedRolesAsync(app.Services);
+// -- 8. Run DB Migrations / Seed Roles --------------------------
+// Automatic migrations and seed data are allowed only in non-production environments.
+// In Production, database migrations must be executed explicitly through a deployment step.
+if (IsNonProductionEnvironment(app.Environment))
+{
+    await app.MigrateDatabaseAsync();
+    await IdentitySeeder.SeedRolesAsync(app.Services);
+}
 
 // -- 9. Middleware (order is critical) -------------------------
 
@@ -242,8 +247,8 @@ await IdentitySeeder.SeedRolesAsync(app.Services);
 // FIX: replaces the inline lambda that had security issues
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-// Swagger — available in all environments (secured by network in Production)
-if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "CI")
+// Swagger is enabled only in Development and CI, never in Production.
+if (IsNonProductionEnvironment(app.Environment))
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
