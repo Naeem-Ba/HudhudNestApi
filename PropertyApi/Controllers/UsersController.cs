@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -65,7 +65,7 @@ public UsersController(UserManager<User> userManager, ISender mediator)
         var user = await _userManager.FindByIdAsync(id.ToString());
         if (user is null || user.IsDeleted) return NotFound();
 
-        // Public profile � no sensitive fields
+        // Public profile — no sensitive fields
         return Ok(new UserSummaryDto
         {
             Id = user.Id,
@@ -118,12 +118,13 @@ public UsersController(UserManager<User> userManager, ISender mediator)
 
         if (!result.Succeeded)
             return BadRequest(new { errors = result.Errors.Select(e => e.Description) });
-
+        //SecurityStamp يُبطل جميع tokens الحالية فوراً
+        await _userManager.UpdateSecurityStampAsync(user);
         return NoContent();
     }
 
     // -- DELETE /api/users/me ----------------------------------
-    // Soft delete � does NOT hard-delete the user
+    // Soft delete — does NOT hard-delete the user
     [HttpDelete("me")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> DeleteAccount()
