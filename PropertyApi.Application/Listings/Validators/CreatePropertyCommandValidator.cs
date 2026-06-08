@@ -109,6 +109,6 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
         RuleFor(x => x.Area)
             .GreaterThan(10)
             .When(x => x.Area.HasValue)
-            .WithMessage("Area must be greater than 10 m².");
+            .WithMessage("Area must be greater than 10 m\u00B2.");
     }
 }
