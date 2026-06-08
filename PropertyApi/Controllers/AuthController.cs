@@ -48,7 +48,7 @@ public sealed class AuthController : ControllerBase
     public async Task<IActionResult> Register([FromBody] RegisterRequest dto)
     {
         if (await _userManager.FindByEmailAsync(dto.Email) is not null)
-            return BadRequest(new { message = "Email already registered." });
+            return Conflict(new { message = "Email already registered." });
 
         var user = new User
         {
