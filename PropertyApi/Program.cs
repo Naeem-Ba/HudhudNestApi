@@ -120,6 +120,7 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddMemoryCache();
 
 // -- 5. CORS ---------------------------------------------------
 var allowedOrigins = builder.Configuration
