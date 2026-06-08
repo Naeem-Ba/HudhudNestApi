@@ -242,13 +242,14 @@ public sealed class PropertyImagesController : ControllerBase
 
     // ------------------------------------------------------------------
     // DELETE /api/properties/{propertyId}/images/{imageId}
-    // حذف صورة من قاعدة البيانات ومن Cloudinary
+    // حذف صورة من Cloudinary أولاً ثم من قاعدة البيانات
     // ------------------------------------------------------------------
     [HttpDelete("{imageId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
     public async Task<IActionResult> Delete(
         Guid propertyId,
         Guid imageId,
@@ -278,6 +279,26 @@ public sealed class PropertyImagesController : ControllerBase
         var wasMain = imageToDelete.IsMain;
         var publicId = imageToDelete.PublicId;
 
+        // 1. Delete from external storage first.
+        // If this fails, keep the DB unchanged so we do not lose the only reference
+        // to a still-public external image.
+        if (!string.IsNullOrWhiteSpace(publicId))
+        {
+            var deletionResult = await _storage.DeleteAsync(publicId, ct);
+
+            if (deletionResult.Error is not null)
+            {
+                return StatusCode(
+                    StatusCodes.Status502BadGateway,
+                    new
+                    {
+                        message = "Storage deletion failed. The image was not deleted from the database.",
+                        storageError = deletionResult.Error.Message
+                    });
+            }
+        }
+
+        // 2. Delete from database only after storage deletion succeeds.
         _db.PropertyImages.Remove(imageToDelete);
 
         if (wasMain)
@@ -292,9 +313,6 @@ public sealed class PropertyImagesController : ControllerBase
         }
 
         await _db.SaveChangesAsync(ct);
-
-        if (!string.IsNullOrWhiteSpace(publicId))
-            await _storage.DeleteAsync(publicId, ct);
 
         return NoContent();
     }
