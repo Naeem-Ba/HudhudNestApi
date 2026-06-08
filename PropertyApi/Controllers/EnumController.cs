@@ -1,97 +1,94 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using PropertyApi.Domain.Enums;
 using PropertyApi.Application.Properties.DTOs;
+using PropertyApi.Domain.Enums;
 
 namespace PropertyApi.Controllers;
 
 /// <summary>
-/// يُعيد قيم الـ Enums كـ JSON للـ Frontend.
-///   - يستخدم Domain Enums (PropertyStatus, PropertyCondition, etc.)
-///   - يُضيف HeatingType و ListingType الجديدَين
-///   - يُبقي أسماء المفاتيح القديمة كـ aliases للتوافق مع الـ Frontend
+/// يعيد قيم الـ Enums كـ JSON للـ Frontend.
+/// - يستخدم Domain Enums مثل PropertyStatus و PropertyCondition.
+/// - يدعم الأسماء الجديدة.
+/// - يحافظ على legacy aliases مثل STATUS و ZUSTAND و ENERGIEAUSWEISTYP للتوافق مع الـ Frontend القديم.
 /// </summary>
 [ApiController]
 [Route("api/enums")]
 public sealed class EnumController : ControllerBase
 {
-    // ------------------------------------------------------------------
-    // الخريطة: اسم يُرسله الـ Frontend → نوع الـ Enum المقابل في Domain
-    //
-    // BACKWARD COMPATIBILITY:
-    //   الأسماء القديمة (STADT, ZUSTAND, STATUS, ENERGIEAUSWEISTYP) محتفظ بها
-    //   لأن الـ Frontend يستخدمها. الأسماء الجديدة أُضيفت إضافةً.
-    // ------------------------------------------------------------------
     private static readonly Dictionary<string, Type> EnumMap =
         new(StringComparer.OrdinalIgnoreCase)
         {
-            // ── أسماء جديدة (Domain Enums) ──────────────────────────
-            { "ListingType",        typeof(ListingType)           },
-            { "PropertyStatus",     typeof(PropertyStatus)        },
-            { "PropertyCondition",  typeof(PropertyCondition)     },
-            { "EnergyEfficiency",   typeof(EnergyEfficiencyType)  },
-            { "HeatingType",        typeof(HeatingType)           },
+            // New Domain enum names
+            { "ListingType", typeof(ListingType) },
+            { "PropertyStatus", typeof(PropertyStatus) },
+            { "PropertyCondition", typeof(PropertyCondition) },
+            { "EnergyEfficiency", typeof(EnergyEfficiencyType) },
+            { "HeatingType", typeof(HeatingType) },
 
-            // ── أسماء قديمة (legacy aliases - للتوافق مع الـ Frontend) ──
-            // Frontend يُرسل "STATUS" → يحصل على PropertyStatus values
-            { "STATUS",             typeof(PropertyStatus)        },
-            { "ZUSTAND",            typeof(PropertyCondition)     },
-            { "ENERGIEAUSWEISTYP",  typeof(EnergyEfficiencyType)  },
-            // ملاحظة: "STADT" حُذف - لا يوجد مقابل في Domain الجديد
-            // يمكن إضافة CountryCodes endpoint مستقل لاحقاً
+            // Legacy aliases for frontend compatibility
+            { "STATUS", typeof(PropertyStatus) },
+            { "ZUSTAND", typeof(PropertyCondition) },
+            { "ENERGIEAUSWEISTYP", typeof(EnergyEfficiencyType) }
         };
 
-    // ------------------------------------------------------------------
-    // GET /api/enums/{name}
-    // مثال: GET /api/enums/PropertyStatus
-    //        GET /api/enums/STATUS  (legacy alias)
-    // ------------------------------------------------------------------
+    /// <summary>
+    /// GET /api/enums/{name}
+    /// Examples:
+    /// GET /api/enums/PropertyStatus
+    /// GET /api/enums/STATUS
+    /// </summary>
     [HttpGet("{name}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public IActionResult Get(string name)
     {
         if (!EnumMap.TryGetValue(name, out var enumType))
+        {
             return BadRequest(new
             {
                 message = $"Enum '{name}' not found.",
-                available = EnumMap.Keys.OrderBy(k => k).ToArray()
+                available = EnumMap.Keys.OrderBy(key => key).ToArray()
             });
+        }
 
         var result = Enum.GetValues(enumType)
             .Cast<Enum>()
-            .Select(e => new EnumDto
+            .Select(value => new EnumDto
             {
-                Id = Convert.ToInt32(e),
-                Key = e.ToString()
+                Id = Convert.ToInt32(value),
+                Key = value.ToString()
             })
             .ToList();
 
         return Ok(result);
     }
 
-    // ------------------------------------------------------------------
-    // GET /api/enums  (اختياري: يُعيد كل الـ Enums المتاحة)
-    // ------------------------------------------------------------------
+    /// <summary>
+    /// GET /api/enums
+    /// Returns all supported enum groups.
+    /// </summary>
     [HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult GetAll()
     {
         var result = EnumMap
-            .GroupBy(kv => kv.Value.Name)   // تجميع الـ aliases معاً
-            .Select(g => new
+            .GroupBy(item => item.Value.Name)
+            .Select(group => new
             {
-                typeName = g.Key,
-                aliases = g.Select(kv => kv.Key).OrderBy(k => k).ToArray(),
-                values = Enum.GetValues(g.First().Value)
-                               .Cast<Enum>()
-                               .Select(e => new EnumDto
-                               {
-                                   Id = Convert.ToInt32(e),
-                                   Key = e.ToString()
-                               })
-                               .ToArray()
+                typeName = group.Key,
+                aliases = group
+                    .Select(item => item.Key)
+                    .OrderBy(key => key)
+                    .ToArray(),
+                values = Enum.GetValues(group.First().Value)
+                    .Cast<Enum>()
+                    .Select(value => new EnumDto
+                    {
+                        Id = Convert.ToInt32(value),
+                        Key = value.ToString()
+                    })
+                    .ToArray()
             })
-            .OrderBy(x => x.typeName)
+            .OrderBy(item => item.typeName)
             .ToList();
 
         return Ok(result);

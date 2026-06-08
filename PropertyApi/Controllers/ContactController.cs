@@ -109,7 +109,9 @@ public sealed class ContactController : ControllerBase
     // GET /api/contact/{id}  (Admin فقط)
     // ----------------------------------------------------------
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = "Admin")]
     [Authorize(Roles = RoleNames.Admin)]
+
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
@@ -126,7 +128,11 @@ public sealed class ContactController : ControllerBase
     // PUT /api/contact/{id}/read  (Admin فقط)
     // ----------------------------------------------------------
     [HttpPut("{id:guid}/read")]
+
+    [Authorize(Roles = "Admin")]
+
     [Authorize(Roles = RoleNames.Admin)]
+
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkAsRead(Guid id, CancellationToken ct)
@@ -145,7 +151,11 @@ public sealed class ContactController : ControllerBase
     // DELETE /api/contact/{id}  (Admin فقط - Soft Delete)
     // ----------------------------------------------------------
     [HttpDelete("{id:guid}")]
+
+    [Authorize(Roles = "Admin")]
+
     [Authorize(Roles = RoleNames.Admin)]
+
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)

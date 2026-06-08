@@ -53,10 +53,7 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
             .Must(c => ValidCurrencyCodes.Contains(c))
             .WithMessage("Invalid ISO 4217 currency code.");
 
-        // ForRent: must have rent price
-        // ForRent: at least one valid rent price is required.
-        // The error is attached to ColdRent intentionally,
-        // because the tests expect the validation error on ColdRent.
+
         // ForRent: ColdRent is required.
         RuleFor(x => x.ColdRent)
             .NotNull()
@@ -73,7 +70,7 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
             .WithMessage("Warm rent must be greater than zero.")
             .When(x => x.ListingType == ListingType.ForRent && x.WarmRent.HasValue);
 
-        // ForSale: purchase price is required.
+
         RuleFor(x => x.PurchasePrice)
             .NotNull()
             .WithMessage("Purchase price is required for sale listings.")
@@ -81,20 +78,16 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
             .WithMessage("Purchase price must be greater than zero.")
             .When(x => x.ListingType == ListingType.ForSale);
 
-        RuleFor(command => command)
-    .Must(command =>
-        command.ColdRent > 0 &&
-        command.PurchasePrice > 0)
-    .When(command =>
-        command.ListingType == ListingType.ForRentAndSale)
-    .WithMessage(
-        "Combined listings require both ColdRent and PurchasePrice.");
 
-        RuleFor(command => command.AmenityIds)
-    .Must(ids =>
-        ids is null ||
-        ids.Count == ids.Distinct().Count())
-    .WithMessage("AmenityIds must not contain duplicates.");
+        // ForRentAndSale: both ColdRent and PurchasePrice are required.
+        RuleFor(x => x)
+            .Must(x => x.ColdRent > 0 && x.PurchasePrice > 0)
+            .WithMessage("Combined listings require both ColdRent and PurchasePrice.")
+            .When(x => x.ListingType == ListingType.ForRentAndSale);
+
+        RuleFor(x => x.AmenityIds)
+            .Must(ids => ids is null || ids.Count == ids.Distinct().Count())
+            .WithMessage("AmenityIds must not contain duplicates.");
 
         // Coordinates: both or neither
         RuleFor(x => x.Latitude)
@@ -116,6 +109,6 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
         RuleFor(x => x.Area)
             .GreaterThan(10)
             .When(x => x.Area.HasValue)
-            .WithMessage("Area must be greater than 10 m².");
+            .WithMessage("Area must be greater than 10 m\u00B2.");
     }
 }

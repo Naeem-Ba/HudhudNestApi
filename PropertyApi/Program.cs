@@ -18,6 +18,12 @@ using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+static bool IsNonProductionEnvironment(IHostEnvironment environment)
+{
+    return environment.IsDevelopment() ||
+           environment.EnvironmentName == "Testing" ||
+           environment.EnvironmentName == "CI";
+}
 // -- 1. Culture -----------------------------------------------
 // Required for Npgsql decimal/timestamp compatibility
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
@@ -124,7 +130,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("DefaultCors", policy =>
     {
-        if (builder.Environment.IsDevelopment() || builder.Environment.EnvironmentName == "CI")
+        if (IsNonProductionEnvironment(builder.Environment))
         {
             policy.AllowAnyOrigin()
                   .AllowAnyHeader()
@@ -135,7 +141,7 @@ builder.Services.AddCors(options =>
             if (allowedOrigins.Length == 0)
             {
                 throw new InvalidOperationException(
-                    "Cors:AllowedOrigins is required outside Development.");
+                    "Cors:AllowedOrigins is required outside Development, Testing, and CI.");
             }
 
             policy.WithOrigins(allowedOrigins)
@@ -144,6 +150,7 @@ builder.Services.AddCors(options =>
         }
     });
 });
+
 //builder.Services.AddCors(options =>
 //{
 //    options.AddPolicy("DevCors", policy =>
@@ -294,3 +301,4 @@ static class ApplicationExtensions
         }
     }
 }
+

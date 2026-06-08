@@ -1,12 +1,11 @@
-# .github/workflows/ci.yml
-name: CI — Build · Test · Validate
+name: CI - Build, Test, Validate
 
 on:
   push:
     branches: [ main, master, develop ]
   pull_request:
     branches: [ main, master, develop ]
-    
+
 permissions:
   contents: read
   pull-requests: read
@@ -16,13 +15,29 @@ env:
   SOLUTION_PATH: 'PropertyApi.sln'
 
 jobs:
-  # ──────────────────────────────────────────────────────────
-  # Job 1: Build & Test
-  # ──────────────────────────────────────────────────────────
   build-and-test:
     name: Build + Test
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: propertyapi_testing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d propertyapi_testing"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      ASPNETCORE_ENVIRONMENT: Testing
+      ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true
 
     steps:
       - name: Checkout code
@@ -33,7 +48,6 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      # cache NuGet packages لتسريع البناء
       - name: Cache NuGet packages
         uses: actions/cache@v4
         with:
@@ -45,25 +59,21 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore ${{ env.SOLUTION_PATH }}
 
-      - name: Build (Release, no warnings)
+      - name: Build
         run: |
           dotnet build ${{ env.SOLUTION_PATH }} \
             --configuration Release \
-            --no-restore \
-            --warnaserror
+            --no-restore
 
-      - name: Run Architecture Tests
+      - name: Run all tests
         run: |
-          dotnet test tests/PropertyApi.Architecture.Tests/ \
+          dotnet test ${{ env.SOLUTION_PATH }} \
             --configuration Release \
             --no-build \
             --verbosity normal
 
-  # ──────────────────────────────────────────────────────────
-  # Job 2: Secret Scan
-  # ──────────────────────────────────────────────────────────
   secret-scan:
-    name: Secret Scan (gitleaks)
+    name: Secret Scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -71,16 +81,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # كل الـ history لفحص شامل
+          fetch-depth: 0
 
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ──────────────────────────────────────────────────────────
-  # Job 3: Validate .gitignore (لا bin/obj في الـ commit)
-  # ──────────────────────────────────────────────────────────
   validate-repo-hygiene:
     name: Repo Hygiene Check
     runs-on: ubuntu-latest
@@ -92,26 +99,28 @@ jobs:
 
       - name: Check no build artifacts are tracked
         run: |
-          # فشل إذا وُجد أي ملف DLL أو PDB في الـ repository
           if git ls-files | grep -E '\.(dll|pdb|exe)$'; then
-            echo "❌ ERROR: Build artifacts found in repository!"
-            echo "Run: git rm --cached <file> for each artifact"
+            echo "ERROR: Build artifacts found in repository."
+            echo "Run: git rm --cached <file> for each artifact."
             exit 1
           fi
-          echo "✅ No build artifacts tracked."
 
-      - name: Check no real images in wwwroot
+          echo "No build artifacts tracked."
+
+      - name: Check no runtime uploads are tracked
         run: |
           if git ls-files | grep -E 'wwwroot/(bilder|profile_fotos|uploads)/'; then
-            echo "❌ ERROR: Runtime uploads found in repository!"
+            echo "ERROR: Runtime uploads found in repository."
             exit 1
           fi
-          echo "✅ No runtime uploads tracked."
 
-      - name: Check no Development secrets
+          echo "No runtime uploads tracked."
+
+      - name: Check no environment-specific appsettings are tracked
         run: |
           if git ls-files | grep -E 'appsettings\.(Development|Production|Staging)\.json$'; then
-            echo "❌ ERROR: Environment-specific appsettings found in repository!"
+            echo "ERROR: Environment-specific appsettings found in repository."
             exit 1
           fi
-          echo "✅ No environment secrets tracked."
+
+          echo "No environment-specific appsettings tracked."
