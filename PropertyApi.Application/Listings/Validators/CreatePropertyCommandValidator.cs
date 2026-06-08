@@ -53,6 +53,7 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
             .Must(c => ValidCurrencyCodes.Contains(c))
             .WithMessage("Invalid ISO 4217 currency code.");
 
+
         // ForRent: ColdRent is required.
         RuleFor(x => x.ColdRent)
             .NotNull()
@@ -69,13 +70,14 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
             .WithMessage("Warm rent must be greater than zero.")
             .When(x => x.ListingType == ListingType.ForRent && x.WarmRent.HasValue);
 
-        // ForSale: PurchasePrice is required.
+
         RuleFor(x => x.PurchasePrice)
             .NotNull()
             .WithMessage("Purchase price is required for sale listings.")
             .GreaterThan(0)
             .WithMessage("Purchase price must be greater than zero.")
             .When(x => x.ListingType == ListingType.ForSale);
+
 
         // ForRentAndSale: both ColdRent and PurchasePrice are required.
         RuleFor(x => x)

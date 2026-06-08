@@ -57,6 +57,12 @@ public sealed class AppDbContext
         builder.Entity<Message>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ContactMessage>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<User>().HasQueryFilter(e => !e.IsDeleted);
+
+        builder.Entity<Favorite>().HasQueryFilter(favorite =>!favorite.User.IsDeleted &&!favorite.Property.IsDeleted);
+
+        builder.Entity<PropertyAmenity>().HasQueryFilter(propertyAmenity =>!propertyAmenity.Property.IsDeleted &&!propertyAmenity.Amenity.IsDeleted);
+
+        builder.Entity<RefreshToken>().HasQueryFilter(refreshToken =>!refreshToken.User.IsDeleted);
     }
 
     // -- Auto-stamp UpdatedAt on every save ----------------------

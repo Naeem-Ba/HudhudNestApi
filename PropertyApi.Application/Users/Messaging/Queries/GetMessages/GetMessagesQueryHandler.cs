@@ -1,4 +1,5 @@
 using MediatR;
+using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Properties.DTOs;
@@ -34,7 +35,7 @@ public sealed class GetMessagesQueryHandler
 
         var property = await _properties.GetByIdAsync(request.PropertyId, cancellationToken);
         if (property is null)
-            throw new KeyNotFoundException("Property was not found.");
+            throw new NotFoundException("Property was not found.");
 
         if (request.OtherUserId.HasValue)
         {

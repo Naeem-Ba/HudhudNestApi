@@ -1,4 +1,5 @@
-namespace PropertyApi.Dtos
+
+namespace PropertyApi.Application.Properties.DTOs
 {
     public class ProfileDto
     {

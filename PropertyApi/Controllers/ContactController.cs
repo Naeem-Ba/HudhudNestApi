@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyApi.Domain.Messaging.Entities;
 using PropertyApi.Infrastructure.Persistence;
+using PropertyApi.Domain.Users.Constants;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -68,7 +69,7 @@ public sealed class ContactController : ControllerBase
     // GET /api/contact  (Admin فقط)
     // ----------------------------------------------------------
     [HttpGet]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = RoleNames.Admin)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
     [FromQuery] int page = 1,
@@ -109,6 +110,8 @@ public sealed class ContactController : ControllerBase
     // ----------------------------------------------------------
     [HttpGet("{id:guid}")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Roles = RoleNames.Admin)]
+
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
@@ -125,7 +128,11 @@ public sealed class ContactController : ControllerBase
     // PUT /api/contact/{id}/read  (Admin فقط)
     // ----------------------------------------------------------
     [HttpPut("{id:guid}/read")]
+
     [Authorize(Roles = "Admin")]
+
+    [Authorize(Roles = RoleNames.Admin)]
+
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkAsRead(Guid id, CancellationToken ct)
@@ -144,7 +151,11 @@ public sealed class ContactController : ControllerBase
     // DELETE /api/contact/{id}  (Admin فقط - Soft Delete)
     // ----------------------------------------------------------
     [HttpDelete("{id:guid}")]
+
     [Authorize(Roles = "Admin")]
+
+    [Authorize(Roles = RoleNames.Admin)]
+
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)

@@ -12,6 +12,7 @@ using PropertyApi.Infrastructure.Persistence;
 using PropertyApi.Infrastructure.Repositories;
 using PropertyApi.Infrastructure.Services;
 using PropertyApi.Infrastructure.Media;
+using PropertyApi.Infrastructure.Identity.Services;
 
 namespace PropertyApi.Infrastructure;
 
@@ -22,6 +23,30 @@ public static class DependencyInjection
         IConfiguration configuration,
         IHostEnvironment environment)
     {
+
+        services.AddOptions<JwtOptions>()
+     .Bind(configuration.GetSection(JwtOptions.SectionName))
+     .Validate(
+         options =>
+             !string.IsNullOrWhiteSpace(options.Key) &&
+             options.Key.Length >= 32,
+         "Jwt:Key must contain at least 32 characters.")
+     .Validate(
+         options => !string.IsNullOrWhiteSpace(options.Issuer),
+         "Jwt:Issuer is required.")
+     .Validate(
+         options => !string.IsNullOrWhiteSpace(options.Audience),
+         "Jwt:Audience is required.")
+     .Validate(
+         options => options.AccessTokenMinutes > 0,
+         "Jwt:AccessTokenMinutes must be greater than zero.")
+     .Validate(
+         options => options.RefreshTokenDays > 0,
+         "Jwt:RefreshTokenDays must be greater than zero.")
+     .ValidateOnStart();
+
+        services.AddScoped<ITokenService, TokenService>();
+
         // ── Database ─────────────────────────────────────────────
         services.AddDbContext<AppDbContext>(options =>
         {

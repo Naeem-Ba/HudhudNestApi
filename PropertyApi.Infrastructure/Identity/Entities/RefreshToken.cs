@@ -17,7 +17,7 @@ public class RefreshToken
     public Guid Id { get; set; } = Guid.NewGuid();
 
     /// <summary>The token value (or its hash — see security note above).</summary>
-    public string Token { get; set; } = string.Empty;
+    public string TokenHash { get; set; } = string.Empty;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime ExpiresAt { get; set; }
@@ -26,7 +26,7 @@ public class RefreshToken
     public DateTime? RevokedAt { get; set; }
 
     /// <summary>Token that replaced this one (rotation chain).</summary>
-    public string? ReplacedByToken { get; set; }
+    public string? ReplacedByTokenHash { get; set; }
 
     /// <summary>IP address that created this token.</summary>
     public string? CreatedByIp { get; set; }

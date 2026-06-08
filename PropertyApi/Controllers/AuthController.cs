@@ -1,7 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -10,6 +6,14 @@ using Microsoft.IdentityModel.Tokens;
 using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Infrastructure.Identity.Entities;
 using PropertyApi.Infrastructure.Persistence;
+using PropertyApi.Domain.Users.Constants;
+using PropertyApi.Application.Common.Security;
+using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Infrastructure.Identity.Services;
+using Microsoft.Extensions.Options;
+using System.Security.Cryptography;
+using System.Text;
+using System.Security.Claims;
 
 namespace PropertyApi.Controllers;
 
@@ -20,18 +24,21 @@ public sealed class AuthController : ControllerBase
     private readonly UserManager<User> _userManager;
     private readonly SignInManager<User> _signInManager;
     private readonly AppDbContext _db;
-    private readonly IConfiguration _config;
+    private readonly ITokenService _tokenService;
+    private readonly JwtOptions _jwtOptions;
 
     public AuthController(
-        UserManager<User> userManager,
-        SignInManager<User> signInManager,
-        AppDbContext db,
-        IConfiguration config)
+    UserManager<User> userManager,
+    SignInManager<User> signInManager,
+    AppDbContext db,
+    ITokenService tokenService,
+    IOptions<JwtOptions> jwtOptions)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _db = db;
-        _config = config;
+        _tokenService = tokenService;
+        _jwtOptions = jwtOptions.Value;
     }
 
     // -- POST /api/auth/register ------------------------------
@@ -57,7 +64,15 @@ public sealed class AuthController : ControllerBase
         if (!result.Succeeded)
             return BadRequest(new { errors = result.Errors.Select(e => e.Description) });
 
-        await _userManager.AddToRoleAsync(user, "User");
+        var roleResult = await _userManager.AddToRoleAsync(
+    user,
+    RoleNames.User);
+
+        if (!roleResult.Succeeded)
+        {
+            var errors = roleResult.Errors.Select(error => error.Description);
+            return BadRequest(new { errors });
+        }
 
         return StatusCode(StatusCodes.Status201Created,
             new { message = "Registration successful.", userId = user.Id });
@@ -77,14 +92,16 @@ public sealed class AuthController : ControllerBase
         if (!result.Succeeded)
             return Unauthorized(new { message = "Invalid credentials." });
 
-        var accessToken = await GenerateAccessTokenAsync(user);
-        var refreshToken = CreateRefreshToken(GetClientIp());
+        var roles = await _userManager.GetRolesAsync(user);
+        var accessToken = _tokenService.GenerateAccessToken(user, roles.ToArray());
+        var refreshToken = _tokenService.GenerateRefreshToken();
 
         _db.RefreshTokens.Add(new RefreshToken
         {
-            Token = refreshToken,
+            TokenHash = HashToken(refreshToken),
             UserId = user.Id,
-            ExpiresAt = DateTime.UtcNow.AddDays(30),
+            ExpiresAt = DateTime.UtcNow.AddDays(
+    _jwtOptions.RefreshTokenDays),
             CreatedByIp = GetClientIp()
         });
 
@@ -95,7 +112,7 @@ public sealed class AuthController : ControllerBase
         {
             accessToken,
             refreshToken,
-            expiresIn = 3600 // seconds
+            expiresIn = _jwtOptions.AccessTokenMinutes * 60
         });
     }
 
@@ -103,39 +120,100 @@ public sealed class AuthController : ControllerBase
     [HttpPost("refresh")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Refresh([FromBody] RefreshRequest dto)
+    public async Task<IActionResult> Refresh(
+    [FromBody] RefreshRequest dto,
+    CancellationToken ct)
     {
+        var now = DateTime.UtcNow;
+        var oldTokenHash = HashToken(dto.RefreshToken);
+        var clientIp = GetClientIp();
+
+        await using var transaction =
+            await _db.Database.BeginTransactionAsync(ct);
+
         var stored = await _db.RefreshTokens
-            .Include(t => t.User)
-            .FirstOrDefaultAsync(t => t.Token == dto.RefreshToken);
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Include(token => token.User)
+            .SingleOrDefaultAsync(
+                token => token.TokenHash == oldTokenHash,
+                ct);
 
-        if (stored is null || !stored.IsActive)
-            return Unauthorized(new { message = "Invalid or expired refresh token." });
+        if (stored is null ||
+            stored.IsRevoked ||
+            stored.ExpiresAt <= now ||
+            stored.User is null ||
+            stored.User.IsDeleted)
+        {
+            return Unauthorized(new
+            {
+                message = "Invalid or expired refresh token."
+            });
+        }
 
-        // Rotate: revoke old, issue new
-        stored.IsRevoked = true;
-        stored.RevokedAt = DateTime.UtcNow;
-        stored.RevokedByIp = GetClientIp();
+        var newRefreshToken =
+            _tokenService.GenerateRefreshToken();
 
-        var newRefreshToken = CreateRefreshToken(GetClientIp());
-        stored.ReplacedByToken = newRefreshToken;
+        var newRefreshTokenHash =
+            HashToken(newRefreshToken);
+
+        var affectedRows = await _db.RefreshTokens
+            .IgnoreQueryFilters()
+            .Where(token =>
+                token.Id == stored.Id &&
+                !token.IsRevoked &&
+                token.ExpiresAt > now)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        token => token.IsRevoked,
+                        true)
+                    .SetProperty(
+                        token => token.RevokedAt,
+                        now)
+                    .SetProperty(
+                        token => token.RevokedByIp,
+                        clientIp)
+                    .SetProperty(
+                        token => token.ReplacedByTokenHash,
+                        newRefreshTokenHash),
+                ct);
+
+        if (affectedRows != 1)
+        {
+            await transaction.RollbackAsync(ct);
+
+            return Unauthorized(new
+            {
+                message = "Refresh token was already used."
+            });
+        }
 
         _db.RefreshTokens.Add(new RefreshToken
         {
-            Token = newRefreshToken,
+            TokenHash = newRefreshTokenHash,
             UserId = stored.UserId,
-            ExpiresAt = DateTime.UtcNow.AddDays(30),
-            CreatedByIp = GetClientIp()
+            ExpiresAt = now.AddDays(
+                _jwtOptions.RefreshTokenDays),
+            CreatedByIp = clientIp
         });
 
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
-        var newAccessToken = await GenerateAccessTokenAsync(stored.User);
+        var roles = await _userManager
+            .GetRolesAsync(stored.User);
+
+        var accessToken =
+            _tokenService.GenerateAccessToken(
+                stored.User,
+                roles.ToArray());
 
         return Ok(new
         {
-            accessToken = newAccessToken,
-            refreshToken = newRefreshToken
+            accessToken,
+            refreshToken = newRefreshToken,
+            expiresIn = _jwtOptions.AccessTokenMinutes * 60
         });
     }
 
@@ -145,8 +223,18 @@ public sealed class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Logout([FromBody] RefreshRequest dto)
     {
+        var userIdText = User.FindFirstValue(
+    ClaimTypes.NameIdentifier);
+
+        if (!Guid.TryParse(userIdText, out var userId))
+            return Unauthorized();
+
+        var tokenHash = HashToken(dto.RefreshToken);
         var stored = await _db.RefreshTokens
-            .FirstOrDefaultAsync(t => t.Token == dto.RefreshToken);
+    .FirstOrDefaultAsync(
+        token =>
+            token.TokenHash == tokenHash &&
+            token.UserId == userId);
 
         if (stored is not null && stored.IsActive)
         {
@@ -159,48 +247,14 @@ public sealed class AuthController : ControllerBase
         return NoContent();
     }
 
-    // -- Helpers ----------------------------------------------
-    private async Task<string> GenerateAccessTokenAsync(User user)
-    {
-        var jwtSection = _config.GetSection("Jwt");
-        var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(jwtSection["Key"]!));
-
-        var roles = await _userManager.GetRolesAsync(user);
-
-        var claims = new List<Claim>
-        {
-            new(JwtRegisteredClaimNames.Sub,   user.Id.ToString()),
-            new(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
-            new(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
-            new(ClaimTypes.NameIdentifier,     user.Id.ToString()),
-            new("firstName", user.FirstName),
-            new("lastName",  user.LastName),
-        };
-
-        claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
-
-        var descriptor = new SecurityTokenDescriptor
-        {
-            Subject = new ClaimsIdentity(claims),
-            Expires = DateTime.UtcNow.AddHours(1),
-            Issuer = jwtSection["Issuer"],
-            Audience = jwtSection["Audience"],
-            SigningCredentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256)
-        };
-
-        var handler = new JwtSecurityTokenHandler();
-        return handler.WriteToken(handler.CreateToken(descriptor));
-    }
-
-    private static string CreateRefreshToken(string? ip)
-    {
-        var bytes = RandomNumberGenerator.GetBytes(64);
-        return Convert.ToBase64String(bytes);
-    }
-
     private string? GetClientIp()
         => HttpContext.Connection.RemoteIpAddress?.ToString();
+    private static string HashToken(string token)
+    {
+        var bytes = Encoding.UTF8.GetBytes(token);
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash);
+    }
 }
 
 // -- Request DTOs ---------------------------------------------

@@ -20,7 +20,7 @@ public sealed class GetPropertyByIdQueryHandler
         GetPropertyByIdQuery request,
         CancellationToken cancellationToken)
     {
-        var property = await _repo.GetByIdWithDetailsAsync(request.Id, cancellationToken);
+        var property = await _repo.GetPublishedByIdWithDetailsAsync(request.Id, cancellationToken);
         return property is null ? null : MapToDto(property);
     }
 

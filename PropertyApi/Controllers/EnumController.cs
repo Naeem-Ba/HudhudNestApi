@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Domain.Enums;
 
 namespace PropertyApi.Controllers;
@@ -7,7 +8,7 @@ namespace PropertyApi.Controllers;
 /// يعيد قيم الـ Enums كـ JSON للـ Frontend.
 /// - يستخدم Domain Enums مثل PropertyStatus و PropertyCondition.
 /// - يدعم الأسماء الجديدة.
-/// - يحافظ على legacy aliases مثل STATUS و ZUSTAND للتوافق مع الـ Frontend القديم.
+/// - يحافظ على legacy aliases مثل STATUS و ZUSTAND و ENERGIEAUSWEISTYP للتوافق مع الـ Frontend القديم.
 /// </summary>
 [ApiController]
 [Route("api/enums")]
@@ -31,7 +32,7 @@ public sealed class EnumController : ControllerBase
 
     /// <summary>
     /// GET /api/enums/{name}
-    /// Example:
+    /// Examples:
     /// GET /api/enums/PropertyStatus
     /// GET /api/enums/STATUS
     /// </summary>
@@ -92,15 +93,4 @@ public sealed class EnumController : ControllerBase
 
         return Ok(result);
     }
-}
-
-/// <summary>
-/// DTO returned for enum values.
-/// Kept local to this controller because it is small and API-specific.
-/// </summary>
-public sealed class EnumDto
-{
-    public int Id { get; init; }
-
-    public string Key { get; init; } = string.Empty;
 }

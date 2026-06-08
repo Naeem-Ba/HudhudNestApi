@@ -8,7 +8,13 @@ using Microsoft.IdentityModel.Tokens;
 using PropertyApi.Application;         
 using PropertyApi.Infrastructure;      
 using PropertyApi.Middleware;
-
+using PropertyApi.Seed;
+using PropertyApi.Infrastructure.Identity.Services;
+using System.Security.Claims;
+using PropertyApi.Application.Common.Security;
+using PropertyApi.Domain.Users.Entities;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -65,11 +71,49 @@ builder.Services
 
         options.Events = new JwtBearerEvents
         {
-            OnAuthenticationFailed = ctx =>
+            OnTokenValidated = async context =>
             {
-                // Log only in Development — avoid leaking details in Production
+                var userIdText = context.Principal?
+                    .FindFirstValue(ClaimTypes.NameIdentifier);
+
+                var tokenSecurityStamp = context.Principal?
+                    .FindFirstValue(CustomClaimTypes.SecurityStamp);
+
+                if (!Guid.TryParse(userIdText, out var userId) ||
+                    string.IsNullOrWhiteSpace(tokenSecurityStamp))
+                {
+                    context.Fail("The token does not contain valid user data.");
+                    return;
+                }
+
+                var userManager = context.HttpContext.RequestServices
+                    .GetRequiredService<UserManager<User>>();
+
+                var user = await userManager.FindByIdAsync(userId.ToString());
+
+                if (user is null || user.IsDeleted)
+                {
+                    context.Fail("The user account is disabled.");
+                    return;
+                }
+
+                if (!string.Equals(
+                        user.SecurityStamp,
+                        tokenSecurityStamp,
+                        StringComparison.Ordinal))
+                {
+                    context.Fail("The token is no longer valid.");
+                }
+            },
+
+            OnAuthenticationFailed = context =>
+            {
                 if (builder.Environment.IsDevelopment())
-                    Console.WriteLine($"[JWT] Auth failed: {ctx.Exception.Message}");
+                {
+                    Console.WriteLine(
+                        $"[JWT] Auth failed: {context.Exception.Message}");
+                }
+
                 return Task.CompletedTask;
             }
         };
@@ -167,12 +211,30 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode =
+        StatusCodes.Status429TooManyRequests;
+
+    options.AddFixedWindowLimiter(
+        "contact",
+        limiter =>
+        {
+            limiter.PermitLimit = 5;
+            limiter.Window = TimeSpan.FromMinutes(10);
+            limiter.QueueLimit = 0;
+            limiter.QueueProcessingOrder =
+                QueueProcessingOrder.OldestFirst;
+        });
+});
+
 // --------------------------------------------------------------
 var app = builder.Build();
 // --------------------------------------------------------------
 
 // -- 8. Run DB Migrations --------------------------------------
 await app.MigrateDatabaseAsync(); // Extension method below
+await IdentitySeeder.SeedRolesAsync(app.Services);
 
 // -- 9. Middleware (order is critical) -------------------------
 
@@ -193,9 +255,10 @@ if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "CI")
 
 app.UseStaticFiles();
 app.UseRouting();
-
+app.UseRateLimiter();
 // CORS must be between UseRouting() and UseAuthentication()
 app.UseCors("DefaultCors");
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
@@ -229,9 +292,12 @@ static class ApplicationExtensions
             var logger = services.GetRequiredService<ILogger<Program>>();
             logger.LogError(ex, "Migration failed.");
 
-            // In Development: crash immediately so you see the problem
-            // In Production: log and continue (Render will restart the service)
-            if (app.Environment.IsDevelopment()) throw;
+            if (app.Environment.IsDevelopment() ||
+                app.Environment.EnvironmentName == "Testing" ||
+                app.Environment.EnvironmentName == "CI")
+            {
+                throw;
+            }
         }
     }
 }
