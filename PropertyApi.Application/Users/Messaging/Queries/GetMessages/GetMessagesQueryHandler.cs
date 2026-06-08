@@ -31,29 +31,43 @@ public sealed class GetMessagesQueryHandler
         CancellationToken cancellationToken)
     {
         var currentUserId = _currentUser.UserId
-            ?? throw new UnauthorizedAccessException("Authentication is required to read messages.");
+            ?? throw new UnauthorizedAccessException(
+                "Authentication is required to read messages.");
 
-        var property = await _properties.GetByIdAsync(request.PropertyId, cancellationToken);
+        var property = await _properties.GetByIdAsync(
+            request.PropertyId,
+            cancellationToken);
+
         if (property is null)
             throw new NotFoundException("Property was not found.");
 
         if (request.OtherUserId.HasValue)
         {
-            var conversation = await _messages.GetConversationAsync(
+            var pagedConversation = await _messages.GetConversationAsync(
                 request.PropertyId,
                 currentUserId,
                 request.OtherUserId.Value,
+                request.Page,
+                request.PageSize,
                 cancellationToken);
 
-            return ToPagedResult(
-                conversation,
-                request.Page,
-                request.PageSize);
+            return new PagedResult<MessageDto>
+            {
+                Items = pagedConversation.Items
+                    .Select(MapToDto)
+                    .ToList()
+                    .AsReadOnly(),
+                TotalCount = pagedConversation.TotalCount,
+                Page = pagedConversation.Page,
+                PageSize = pagedConversation.PageSize
+            };
         }
 
         if (property.OwnerId != currentUserId)
+        {
             throw new UnauthorizedAccessException(
                 "Only the property owner can list all property messages. Provide OtherUserId to read a conversation.");
+        }
 
         var pagedMessages = await _messages.GetByPropertyAsync(
             request.PropertyId,
@@ -63,32 +77,13 @@ public sealed class GetMessagesQueryHandler
 
         return new PagedResult<MessageDto>
         {
-            Items = pagedMessages.Items.Select(MapToDto).ToList().AsReadOnly(),
-            TotalCount = pagedMessages.TotalCount,
-            Page = pagedMessages.Page,
-            PageSize = pagedMessages.PageSize
-        };
-    }
-
-    private static PagedResult<MessageDto> ToPagedResult(
-        IReadOnlyList<Message> messages,
-        int page,
-        int pageSize)
-    {
-        var safePage = Math.Max(page, 1);
-        var safePageSize = Math.Clamp(pageSize, 1, 50);
-
-        return new PagedResult<MessageDto>
-        {
-            Items = messages
-                .Skip((safePage - 1) * safePageSize)
-                .Take(safePageSize)
+            Items = pagedMessages.Items
                 .Select(MapToDto)
                 .ToList()
                 .AsReadOnly(),
-            TotalCount = messages.Count,
-            Page = safePage,
-            PageSize = safePageSize
+            TotalCount = pagedMessages.TotalCount,
+            Page = pagedMessages.Page,
+            PageSize = pagedMessages.PageSize
         };
     }
 
