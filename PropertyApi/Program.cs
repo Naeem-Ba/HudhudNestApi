@@ -209,27 +209,58 @@ builder.Services.AddRateLimiter(options =>
     options.RejectionStatusCode =
         StatusCodes.Status429TooManyRequests;
 
-    options.AddFixedWindowLimiter(
-        "contact",
-        limiter =>
-        {
-            limiter.PermitLimit = 5;
-            limiter.Window = TimeSpan.FromMinutes(10);
-            limiter.QueueLimit = 0;
-            limiter.QueueProcessingOrder =
-                QueueProcessingOrder.OldestFirst;
-        });
+    options.AddFixedWindowLimiter("contact", limiterOptions =>
+    {
+        limiterOptions.PermitLimit = 5;
+        limiterOptions.Window = TimeSpan.FromMinutes(1);
+        limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        limiterOptions.QueueLimit = 1;
+    });
 
-    options.AddFixedWindowLimiter(
-        "auth-password-reset",
-        limiter =>
-        {
-            limiter.PermitLimit = 5;
-            limiter.Window = TimeSpan.FromMinutes(10);
-            limiter.QueueLimit = 0;
-            limiter.QueueProcessingOrder =
-                QueueProcessingOrder.OldestFirst;
-        });
+    options.AddPolicy("send-otp", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ip,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 3,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
+    });
+
+    options.AddPolicy("verify-otp", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ip,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
+    });
+
+    options.AddPolicy("auth-password-reset", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ip,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
+    });
 });
 
 // --------------------------------------------------------------

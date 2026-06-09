@@ -51,6 +51,7 @@ public static class DependencyInjection
      .ValidateOnStart();
 
         services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
 
         // ── Email ---------------------------------------------------
         services.Configure<EmailOptions>(
@@ -68,6 +69,7 @@ public static class DependencyInjection
         // ── OTP / SMS Auth Services ─────────────────────────────────
         services.AddScoped<IOtpCodeRepository, OtpCodeRepository>();
         services.AddScoped<IOtpService, OtpService>();
+        services.AddScoped<IEmailVerificationService, EmailVerificationService>();
 
         if (environment.IsDevelopment() ||
             environment.EnvironmentName == "Testing" ||
@@ -100,7 +102,7 @@ public static class DependencyInjection
             options.Password.RequiredLength = 8;
             options.Password.RequireNonAlphanumeric = false;
             options.Password.RequireUppercase = true;
-            options.User.RequireUniqueEmail = true;
+            options.User.RequireUniqueEmail = false;
         })
         .AddEntityFrameworkStores<AppDbContext>()
         .AddDefaultTokenProviders();
@@ -124,6 +126,7 @@ public static class DependencyInjection
         // ملاحظة: هنا يُسجَّل كـ Scoped لأنه يُقرأ من IOptions (singleton)
         // CloudinaryMediaStorageService نفسه stateless تقريباً
         services.AddScoped<CloudinaryMediaStorageService>();
+
 
         return services;
     }

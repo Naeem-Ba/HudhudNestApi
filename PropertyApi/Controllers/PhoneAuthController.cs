@@ -125,7 +125,8 @@ public sealed class PhoneAuthController : ControllerBase
             PhoneNumber: request.PhoneNumber,
             Code: request.Code,
             FirstName: request.FirstName,
-            LastName: request.LastName);
+            LastName: request.LastName,
+            IpAddress: HttpContext.Connection.RemoteIpAddress?.ToString());
 
         var result = await _mediator.Send(command, ct);
 

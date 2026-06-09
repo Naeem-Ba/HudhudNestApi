@@ -29,10 +29,9 @@ namespace PropertyApi.Application.Auth.Commands.VerifyPhoneOtp;
 public sealed record VerifyPhoneOtpCommand(
     string PhoneNumber,
     string Code,
-
-    // حقول التسجيل اختيارية — فقط للمستخدمين الجدد
     string? FirstName = null,
-    string? LastName = null
+    string? LastName = null,
+    string? IpAddress = null
 ) : IRequest<VerifyOtpResult>;
 
 // ── معالج الأمر (Handler) ─────────────────────────────────────
@@ -43,6 +42,7 @@ public sealed class VerifyPhoneOtpCommandHandler
     private readonly IOtpService _otpService;
     private readonly UserManager<User> _userManager;
     private readonly ITokenService _tokenService;
+    private readonly IRefreshTokenStore _refreshTokenStore;
     private readonly ILogger<VerifyPhoneOtpCommandHandler> _logger;
 
     public VerifyPhoneOtpCommandHandler(
@@ -50,12 +50,14 @@ public sealed class VerifyPhoneOtpCommandHandler
         IOtpService otpService,
         UserManager<User> userManager,
         ITokenService tokenService,
+        IRefreshTokenStore refreshTokenStore,
         ILogger<VerifyPhoneOtpCommandHandler> logger)
     {
         _otpRepo = otpRepo;
         _otpService = otpService;
         _userManager = userManager;
         _tokenService = tokenService;
+        _refreshTokenStore = refreshTokenStore;
         _logger = logger;
     }
 
@@ -136,6 +138,12 @@ public sealed class VerifyPhoneOtpCommandHandler
             roles.ToArray());
 
         var refreshToken = _tokenService.GenerateRefreshToken();
+
+        await _refreshTokenStore.StoreAsync(
+            user.Id,
+            refreshToken,
+            request.IpAddress,
+            ct);
 
         _logger.LogInformation(
             "Phone auth successful for {Phone}. IsNewUser: {IsNewUser}",
