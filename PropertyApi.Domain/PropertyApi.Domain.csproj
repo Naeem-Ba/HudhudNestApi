@@ -6,6 +6,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Compile Remove="Enums\OtpPurpose.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Auth\Enums\OtpPurpose.cs" />
+  </ItemGroup>
+
   <!--
     FIX: Removed the stale <Folder Include="Properties\ValueObjects\" />
     "Properties\" is a reserved folder name in .NET (holds launchSettings.json).

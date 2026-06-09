@@ -1,12 +1,12 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using PropertyApi.Application;         
-using PropertyApi.Infrastructure;      
+using PropertyApi.Application;
+using PropertyApi.Infrastructure;
 using PropertyApi.Middleware;
 using PropertyApi.Seed;
 using PropertyApi.Infrastructure.Identity.Services;
@@ -18,12 +18,6 @@ using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
-static bool IsNonProductionEnvironment(IHostEnvironment environment)
-{
-    return environment.IsDevelopment() ||
-           environment.EnvironmentName == "Testing" ||
-           environment.EnvironmentName == "CI";
-}
 // -- 1. Culture -----------------------------------------------
 // Required for Npgsql decimal/timestamp compatibility
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
@@ -120,7 +114,6 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddMemoryCache();
 
 // -- 5. CORS ---------------------------------------------------
 var allowedOrigins = builder.Configuration
@@ -131,7 +124,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("DefaultCors", policy =>
     {
-        if (IsNonProductionEnvironment(builder.Environment))
+        if (builder.Environment.IsDevelopment() || builder.Environment.EnvironmentName == "CI")
         {
             policy.AllowAnyOrigin()
                   .AllowAnyHeader()
@@ -142,7 +135,7 @@ builder.Services.AddCors(options =>
             if (allowedOrigins.Length == 0)
             {
                 throw new InvalidOperationException(
-                    "Cors:AllowedOrigins is required outside Development, Testing, and CI.");
+                    "Cors:AllowedOrigins is required outside Development.");
             }
 
             policy.WithOrigins(allowedOrigins)
@@ -151,7 +144,6 @@ builder.Services.AddCors(options =>
         }
     });
 });
-
 //builder.Services.AddCors(options =>
 //{
 //    options.AddPolicy("DevCors", policy =>
@@ -227,20 +219,26 @@ builder.Services.AddRateLimiter(options =>
             limiter.QueueProcessingOrder =
                 QueueProcessingOrder.OldestFirst;
         });
+
+    options.AddFixedWindowLimiter(
+        "auth-password-reset",
+        limiter =>
+        {
+            limiter.PermitLimit = 5;
+            limiter.Window = TimeSpan.FromMinutes(10);
+            limiter.QueueLimit = 0;
+            limiter.QueueProcessingOrder =
+                QueueProcessingOrder.OldestFirst;
+        });
 });
 
 // --------------------------------------------------------------
 var app = builder.Build();
 // --------------------------------------------------------------
 
-// -- 8. Run DB Migrations / Seed Roles --------------------------
-// Automatic migrations and seed data are allowed only in non-production environments.
-// In Production, database migrations must be executed explicitly through a deployment step.
-if (IsNonProductionEnvironment(app.Environment))
-{
-    await app.MigrateDatabaseAsync();
-    await IdentitySeeder.SeedRolesAsync(app.Services);
-}
+// -- 8. Run DB Migrations --------------------------------------
+await app.MigrateDatabaseAsync(); // Extension method below
+await IdentitySeeder.SeedRolesAsync(app.Services);
 
 // -- 9. Middleware (order is critical) -------------------------
 
@@ -248,8 +246,8 @@ if (IsNonProductionEnvironment(app.Environment))
 // FIX: replaces the inline lambda that had security issues
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-// Swagger is enabled only in Development and CI, never in Production.
-if (IsNonProductionEnvironment(app.Environment))
+// Swagger � available in all environments (secured by network in Production)
+if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "CI")
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
@@ -298,13 +296,9 @@ static class ApplicationExtensions
             var logger = services.GetRequiredService<ILogger<Program>>();
             logger.LogError(ex, "Migration failed.");
 
-            if (app.Environment.IsDevelopment() ||
-                app.Environment.EnvironmentName == "Testing" ||
-                app.Environment.EnvironmentName == "CI")
-            {
-                throw;
-            }
+            // In Development: crash immediately so you see the problem
+            // In Production: log and continue (Render will restart the service)
+            if (app.Environment.IsDevelopment()) throw;
         }
     }
 }
-

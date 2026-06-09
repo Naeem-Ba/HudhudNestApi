@@ -6,6 +6,7 @@ using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Messaging.Entities;
 using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Infrastructure.Identity.Entities;
+using PropertyApi.Domain.Auth.Entities;
 
 namespace PropertyApi.Infrastructure.Persistence;
 
@@ -28,6 +29,7 @@ public sealed class AppDbContext
     public DbSet<PropertyAmenity> PropertyAmenities => Set<PropertyAmenity>();
     public DbSet<Favorite> Favorites => Set<Favorite>();
     public DbSet<Message> Messages => Set<Message>();
+    public DbSet<OtpCode> OtpCodes => Set<OtpCode>();
     public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 

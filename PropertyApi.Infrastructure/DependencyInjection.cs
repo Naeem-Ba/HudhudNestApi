@@ -13,6 +13,11 @@ using PropertyApi.Infrastructure.Repositories;
 using PropertyApi.Infrastructure.Services;
 using PropertyApi.Infrastructure.Media;
 using PropertyApi.Infrastructure.Identity.Services;
+using Microsoft.AspNetCore.Identity.UI.Services;
+using PropertyApi.Infrastructure.Auth.Services;
+using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Infrastructure.Email;
+using PropertyApi.Infrastructure.Auth.Repositories;
 
 namespace PropertyApi.Infrastructure;
 
@@ -47,6 +52,34 @@ public static class DependencyInjection
 
         services.AddScoped<ITokenService, TokenService>();
 
+        // ── Email ---------------------------------------------------
+        services.Configure<EmailOptions>(
+            configuration.GetSection(EmailOptions.SectionName));
+
+        if (environment.IsProduction())
+        {
+            services.AddScoped<IEmailSender, SmtpEmailSender>();
+        }
+        else
+        {
+            services.AddScoped<IEmailSender, ConsoleEmailSender>();
+        }
+
+        // ── OTP / SMS Auth Services ─────────────────────────────────
+        services.AddScoped<IOtpCodeRepository, OtpCodeRepository>();
+        services.AddScoped<IOtpService, OtpService>();
+
+        if (environment.IsDevelopment() ||
+            environment.EnvironmentName == "Testing" ||
+            environment.EnvironmentName == "CI")
+        {
+            services.AddScoped<ISmsService, ConsoleSmsService>();
+        }
+        else
+        {
+            services.AddHttpClient<ISmsService, HttpSmsService>();
+        }
+        
         // ── Database ─────────────────────────────────────────────
         services.AddDbContext<AppDbContext>(options =>
         {
