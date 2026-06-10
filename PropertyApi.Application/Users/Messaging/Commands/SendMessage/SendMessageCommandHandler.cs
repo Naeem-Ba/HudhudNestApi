@@ -1,11 +1,12 @@
 using MediatR;
+using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
+using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Application.Users.Messaging.DTOs;
 using PropertyApi.Application.Users.Messaging.Interfaces;
 using PropertyApi.Domain.Messaging.Entities;
-using PropertyApi.Application.Common.Exceptions;
 
 namespace PropertyApi.Application.Users.Messaging.Commands.SendMessage;
 
@@ -17,19 +18,22 @@ public sealed class SendMessageCommandHandler
     private readonly IUserRepository _users;
     private readonly IMessageRepository _messages;
     private readonly IUnitOfWork _uow;
+    private readonly INotificationService _notifications;
 
     public SendMessageCommandHandler(
         ICurrentUserService currentUser,
         IPropertyRepository properties,
         IUserRepository users,
         IMessageRepository messages,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        INotificationService notifications)
     {
         _currentUser = currentUser;
         _properties = properties;
         _users = users;
         _messages = messages;
         _uow = uow;
+        _notifications = notifications;
     }
 
     public async Task<MessageDto> Handle(
@@ -39,7 +43,10 @@ public sealed class SendMessageCommandHandler
         var senderId = _currentUser.UserId
             ?? throw new UnauthorizedAccessException("Authentication is required to send messages.");
 
-        var property = await _properties.GetByIdWithDetailsAsync(request.PropertyId, cancellationToken);
+        var property = await _properties.GetByIdWithDetailsAsync(
+            request.PropertyId,
+            cancellationToken);
+
         if (property is null)
             throw new KeyNotFoundException("Property was not found.");
 
@@ -111,21 +118,52 @@ public sealed class SendMessageCommandHandler
 
         var sender = await _users.GetByIdAsync(senderId, cancellationToken);
 
+        var senderDisplayName = BuildSenderDisplayName(sender);
+
+        // Notification is non-critical:
+        // the message has already been saved, so notification failure must not fail the command.
+        try
+        {
+            await _notifications.NotifyNewMessageAsync(
+                recipientId: receiverId,
+                senderId: senderId,
+                senderName: senderDisplayName,
+                messageId: message.Id,
+                propertyId: property.Id,
+                ct: cancellationToken);
+        }
+        catch
+        {
+            // Intentionally ignored.
+            // Later we can inject ILogger<SendMessageCommandHandler> and log this.
+        }
+
         return new MessageDto
         {
             Id = message.Id,
             PropertyId = message.PropertyId,
             SenderId = message.SenderId,
             ReceiverId = message.ReceiverId,
-            SenderDisplayName = sender is null
-                ? string.Empty
-                : (!string.IsNullOrWhiteSpace(sender.DisplayName)
-                    ? sender.DisplayName
-                    : $"{sender.FirstName} {sender.LastName}".Trim()),
+            SenderDisplayName = senderDisplayName,
             Content = message.Content,
             IsRead = message.IsRead,
             ReadAt = message.ReadAt,
             CreatedAt = message.CreatedAt
         };
+    }
+
+    private static string BuildSenderDisplayName(dynamic? sender)
+    {
+        if (sender is null)
+            return string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(sender.DisplayName))
+            return sender.DisplayName;
+
+        var fullName = $"{sender.FirstName} {sender.LastName}".Trim();
+
+        return string.IsNullOrWhiteSpace(fullName)
+            ? "مستخدم"
+            : fullName;
     }
 }

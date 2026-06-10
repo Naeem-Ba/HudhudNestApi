@@ -18,6 +18,8 @@ using PropertyApi.Infrastructure.Auth.Services;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Infrastructure.Email;
 using PropertyApi.Infrastructure.Auth.Repositories;
+using PropertyApi.Application.Notifications.Interfaces;
+using PropertyApi.Infrastructure.Notifications;
 
 namespace PropertyApi.Infrastructure;
 
@@ -52,6 +54,7 @@ public static class DependencyInjection
 
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
+        services.AddScoped<INotificationService, NotificationService>();
 
         // ── Email ---------------------------------------------------
         services.Configure<EmailOptions>(

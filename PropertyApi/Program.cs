@@ -15,6 +15,7 @@ using PropertyApi.Application.Common.Security;
 using PropertyApi.Domain.Users.Entities;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
+using PropertyApi.Infrastructure.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -109,7 +110,21 @@ builder.Services
                 }
 
                 return Task.CompletedTask;
-            }
+            },
+
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+
+                if (!string.IsNullOrWhiteSpace(accessToken) &&
+                    path.StartsWithSegments("/notificationHub"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            },
         };
     });
 
@@ -171,6 +186,15 @@ builder.Services
         options.JsonSerializerOptions.ReferenceHandler =
             System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     });
+
+
+
+builder.Services.AddSignalR(options =>
+{
+    options.MaximumReceiveMessageSize = 16 * 1024;
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+});
+
 
 // -- 7. Swagger ------------------------------------------------
 builder.Services.AddEndpointsApiExplorer();
@@ -297,6 +321,7 @@ app.UseCors("DefaultCors");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<NotificationHub>("/notificationHub");
 
 app.Run();
 

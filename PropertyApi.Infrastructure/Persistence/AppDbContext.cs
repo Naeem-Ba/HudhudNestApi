@@ -7,6 +7,7 @@ using PropertyApi.Domain.Messaging.Entities;
 using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Infrastructure.Identity.Entities;
 using PropertyApi.Domain.Auth.Entities;
+using PropertyApi.Domain.Notifications.Entities;
 
 namespace PropertyApi.Infrastructure.Persistence;
 
@@ -32,6 +33,7 @@ public sealed class AppDbContext
     public DbSet<OtpCode> OtpCodes => Set<OtpCode>();
     public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     // -- Model Configuration -------------------------------------
     protected override void OnModelCreating(ModelBuilder builder)
@@ -49,6 +51,7 @@ public sealed class AppDbContext
         builder.Entity<IdentityUserLogin<Guid>>().ToTable("UserLogins");
         builder.Entity<IdentityRoleClaim<Guid>>().ToTable("RoleClaims");
         builder.Entity<IdentityUserToken<Guid>>().ToTable("UserTokens");
+        builder.Entity<Notification>().HasQueryFilter(n => !n.IsDeleted);
 
         // -- Global soft-delete filter ---------------------------
         // Automatically excludes IsDeleted=true from ALL queries.
