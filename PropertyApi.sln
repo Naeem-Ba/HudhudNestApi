@@ -3,29 +3,26 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi.Domain", "PropertyApi.Domain\PropertyApi.Domain.csproj", "{17EFECFE-7852-475A-8753-FF57C17C17C4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi.Domain", "PropertyApi.Domain\PropertyApi.Domain.csproj", "{17EFECFE-7852-475A-8753-FF57C17C17C4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi.Application", "PropertyApi.Application\PropertyApi.Application.csproj", "{C7BECA71-AB68-4DD7-952F-D100FF32D7B3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi.Application", "PropertyApi.Application\PropertyApi.Application.csproj", "{C7BECA71-AB68-4DD7-952F-D100FF32D7B3}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi.Infrastructure", "PropertyApi.Infrastructure\PropertyApi.Infrastructure.csproj", "{D4BD2B70-6E42-4FF1-8068-E329E23DFB20}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi.Infrastructure", "PropertyApi.Infrastructure\PropertyApi.Infrastructure.csproj", "{D4BD2B70-6E42-4FF1-8068-E329E23DFB20}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi", "PropertyApi\PropertyApi.csproj", "{CFE0B408-3A60-4EE2-8C0B-1E922A53CF4E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi", "PropertyApi\PropertyApi.csproj", "{CFE0B408-3A60-4EE2-8C0B-1E922A53CF4E}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{1A29C35C-DA58-469E-9E81-496362C5D04F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi.Application.Tests", "tests\PropertyApi.Application.Tests\PropertyApi.Application.Tests.csproj", "{E0FB3F99-68B6-4831-8C60-2B40F0B69636}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi.Application.Tests", "tests\PropertyApi.Application.Tests\PropertyApi.Application.Tests.csproj", "{E0FB3F99-68B6-4831-8C60-2B40F0B69636}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi.Integration.Tests", "tests\PropertyApi.Integration.Tests\PropertyApi.Integration.Tests.csproj", "{8290BF42-23C4-4169-B2CA-940ED762AF5E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi.Integration.Tests", "tests\PropertyApi.Integration.Tests\PropertyApi.Integration.Tests.csproj", "{8290BF42-23C4-4169-B2CA-940ED762AF5E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi.Architecture.Tests", "tests\PropertyApi.Architecture.Tests\PropertyApi.Architecture.Tests.csproj", "{4D1C1337-521A-49A8-8728-97A269170ABB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi.Architecture.Tests", "tests\PropertyApi.Architecture.Tests\PropertyApi.Architecture.Tests.csproj", "{4D1C1337-521A-49A8-8728-97A269170ABB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(SolutionProperties) = preSolution
-		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{17EFECFE-7852-475A-8753-FF57C17C17C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -57,9 +54,15 @@ Global
 		{4D1C1337-521A-49A8-8728-97A269170ABB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4D1C1337-521A-49A8-8728-97A269170ABB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{E0FB3F99-68B6-4831-8C60-2B40F0B69636} = {1A29C35C-DA58-469E-9E81-496362C5D04F}
 		{8290BF42-23C4-4169-B2CA-940ED762AF5E} = {1A29C35C-DA58-469E-9E81-496362C5D04F}
 		{4D1C1337-521A-49A8-8728-97A269170ABB} = {1A29C35C-DA58-469E-9E81-496362C5D04F}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {8D2476DF-89D9-4F4D-BCC9-E63548CAB6B6}
 	EndGlobalSection
 EndGlobal

@@ -115,10 +115,9 @@ public sealed class AddEmailCommandValidator
 
         RuleFor(x => x.Email)
             .NotEmpty()
-            .WithMessage("البريد الإلكتروني مطلوب.")
-            .EmailAddress()
-            .WithMessage("صيغة البريد الإلكتروني غير صحيحة.")
             .MaximumLength(320)
-            .WithMessage("البريد الإلكتروني طويل جداً.");
+            .EmailAddress()
+            .Must(email => email is not null && !email.Any(char.IsWhiteSpace))
+            .WithMessage("Email must not contain whitespace.");
     }
 }
