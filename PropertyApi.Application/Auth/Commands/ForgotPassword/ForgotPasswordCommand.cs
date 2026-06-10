@@ -1,7 +1,6 @@
 using System.Net;
 using FluentValidation;
 using MediatR;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
@@ -35,18 +34,18 @@ public sealed record ForgotPasswordResult
 public sealed class ForgotPasswordCommandHandler
     : IRequestHandler<ForgotPasswordCommand, ForgotPasswordResult>
 {
-    private readonly UserManager<User> _userManager;
+    private readonly IIdentityUserService _identityUsers;
     private readonly IApplicationEmailSender _emailSender;
     private readonly IPasswordResetUrlBuilder _urlBuilder;
     private readonly ILogger<ForgotPasswordCommandHandler> _logger;
 
     public ForgotPasswordCommandHandler(
-        UserManager<User> userManager,
+        IIdentityUserService identityUsers,
         IApplicationEmailSender emailSender,
         IPasswordResetUrlBuilder urlBuilder,
         ILogger<ForgotPasswordCommandHandler> logger)
     {
-        _userManager = userManager;
+        _identityUsers = identityUsers;
         _emailSender = emailSender;
         _urlBuilder = urlBuilder;
         _logger = logger;
@@ -60,11 +59,11 @@ public sealed class ForgotPasswordCommandHandler
             return ForgotPasswordResult.BadRequest("Email is required.");
 
         var email = NormalizeEmail(request.Email);
-        var user = await _userManager.FindByEmailAsync(email);
+        var user = await _identityUsers.FindByEmailAsync(email, ct);
 
         if (user is not null && !user.IsDeleted && !string.IsNullOrWhiteSpace(user.Email))
         {
-            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var token = await _identityUsers.GeneratePasswordResetTokenAsync(user, ct);
 
             var resetUrl = _urlBuilder.Build(
                 email,

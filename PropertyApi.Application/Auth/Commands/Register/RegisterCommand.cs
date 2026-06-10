@@ -1,7 +1,7 @@
 using FluentValidation;
 using MediatR;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
+using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Domain.Users.Entities;
 
@@ -45,14 +45,14 @@ public sealed record RegisterResult
 public sealed class RegisterCommandHandler
     : IRequestHandler<RegisterCommand, RegisterResult>
 {
-    private readonly UserManager<User> _userManager;
+    private readonly IIdentityUserService _identityUsers;
     private readonly ILogger<RegisterCommandHandler> _logger;
 
     public RegisterCommandHandler(
-        UserManager<User> userManager,
+        IIdentityUserService identityUsers,
         ILogger<RegisterCommandHandler> logger)
     {
-        _userManager = userManager;
+        _identityUsers = identityUsers;
         _logger = logger;
     }
 
@@ -62,7 +62,7 @@ public sealed class RegisterCommandHandler
     {
         var email = NormalizeEmail(request.Email);
 
-        if (await _userManager.FindByEmailAsync(email) is not null)
+        if (await _identityUsers.FindByEmailAsync(email, ct) is not null)
             return RegisterResult.EmailConflict();
 
         var user = new User
@@ -75,28 +75,26 @@ public sealed class RegisterCommandHandler
             UpdatedAt = DateTime.UtcNow
         };
 
-        var createResult = await _userManager.CreateAsync(user, request.Password);
+        var createResult = await _identityUsers.CreateAsync(user, request.Password, ct);
         if (!createResult.Succeeded)
         {
-            var errors = createResult.Errors.Select(e => e.Description).ToArray();
             _logger.LogWarning(
                 "Registration failed for email {Email}. Errors: {Errors}",
                 email,
-                string.Join(", ", errors));
+                string.Join(", ", createResult.Errors));
 
-            return RegisterResult.Fail(errors);
+            return RegisterResult.Fail(createResult.Errors);
         }
 
-        var roleResult = await _userManager.AddToRoleAsync(user, RoleNames.User);
+        var roleResult = await _identityUsers.AddToRoleAsync(user, RoleNames.User, ct);
         if (!roleResult.Succeeded)
         {
-            var errors = roleResult.Errors.Select(e => e.Description).ToArray();
             _logger.LogWarning(
                 "Adding default role failed for user {UserId}. Errors: {Errors}",
                 user.Id,
-                string.Join(", ", errors));
+                string.Join(", ", roleResult.Errors));
 
-            return RegisterResult.Fail(errors);
+            return RegisterResult.Fail(roleResult.Errors);
         }
 
         _logger.LogInformation("User {UserId} registered with email {Email}.", user.Id, email);

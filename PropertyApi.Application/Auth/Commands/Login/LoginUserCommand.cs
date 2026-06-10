@@ -1,10 +1,8 @@
 using FluentValidation;
 using MediatR;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
-using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Auth.Commands.Login;
 
@@ -39,20 +37,20 @@ public sealed record LoginResult
 public sealed class LoginCommandHandler
     : IRequestHandler<LoginCommand, LoginResult>
 {
-    private readonly UserManager<User> _userManager;
+    private readonly IIdentityUserService _identityUsers;
     private readonly ITokenService _tokenService;
     private readonly IRefreshTokenRepository _refreshTokens;
     private readonly IJwtTokenSettings _jwtSettings;
     private readonly ILogger<LoginCommandHandler> _logger;
 
     public LoginCommandHandler(
-        UserManager<User> userManager,
+        IIdentityUserService identityUsers,
         ITokenService tokenService,
         IRefreshTokenRepository refreshTokens,
         IJwtTokenSettings jwtSettings,
         ILogger<LoginCommandHandler> logger)
     {
-        _userManager = userManager;
+        _identityUsers = identityUsers;
         _tokenService = tokenService;
         _refreshTokens = refreshTokens;
         _jwtSettings = jwtSettings;
@@ -64,7 +62,7 @@ public sealed class LoginCommandHandler
         CancellationToken ct)
     {
         var email = NormalizeEmail(request.Email);
-        var user = await _userManager.FindByEmailAsync(email);
+        var user = await _identityUsers.FindByEmailAsync(email, ct);
 
         if (user is null || user.IsDeleted)
         {
@@ -72,21 +70,21 @@ public sealed class LoginCommandHandler
             return LoginResult.InvalidCredentials();
         }
 
-        var passwordValid = await _userManager.CheckPasswordAsync(user, request.Password);
+        var passwordValid = await _identityUsers.CheckPasswordAsync(user, request.Password, ct);
         if (!passwordValid)
         {
             _logger.LogWarning("Login failed for user {UserId}: invalid password.", user.Id);
             return LoginResult.InvalidCredentials();
         }
 
-        var roles = await _userManager.GetRolesAsync(user);
-        var accessToken = _tokenService.GenerateAccessToken(user, roles.ToArray());
+        var roles = await _identityUsers.GetRolesAsync(user, ct);
+        var accessToken = _tokenService.GenerateAccessToken(user, roles);
         var refreshToken = _tokenService.GenerateRefreshToken();
 
         await _refreshTokens.AddAsync(user.Id, refreshToken, request.IpAddress, ct);
 
         user.UpdatedAt = DateTime.UtcNow;
-        await _userManager.UpdateAsync(user);
+        await _identityUsers.UpdateAsync(user, ct);
 
         _logger.LogInformation("User {UserId} logged in successfully.", user.Id);
 

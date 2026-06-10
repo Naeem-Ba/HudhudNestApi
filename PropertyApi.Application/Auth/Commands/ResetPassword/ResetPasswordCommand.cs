@@ -1,9 +1,7 @@
 using FluentValidation;
 using MediatR;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
-using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Auth.Commands.ResetPassword;
 
@@ -50,16 +48,16 @@ public sealed record ResetPasswordResult
 public sealed class ResetPasswordCommandHandler
     : IRequestHandler<ResetPasswordCommand, ResetPasswordResult>
 {
-    private readonly UserManager<User> _userManager;
+    private readonly IIdentityUserService _identityUsers;
     private readonly IRefreshTokenRepository _refreshTokens;
     private readonly ILogger<ResetPasswordCommandHandler> _logger;
 
     public ResetPasswordCommandHandler(
-        UserManager<User> userManager,
+        IIdentityUserService identityUsers,
         IRefreshTokenRepository refreshTokens,
         ILogger<ResetPasswordCommandHandler> logger)
     {
-        _userManager = userManager;
+        _identityUsers = identityUsers;
         _refreshTokens = refreshTokens;
         _logger = logger;
     }
@@ -79,33 +77,39 @@ public sealed class ResetPasswordCommandHandler
             return ResetPasswordResult.BadRequest("New password and confirmation password do not match.");
 
         var email = NormalizeEmail(request.Email);
-        var user = await _userManager.FindByEmailAsync(email);
+        var user = await _identityUsers.FindByEmailAsync(email, ct);
 
         if (user is null || user.IsDeleted)
             return ResetPasswordResult.BadRequest("Invalid password reset request.");
 
-        var isSamePassword = await _userManager.CheckPasswordAsync(user, request.NewPassword);
+        var isSamePassword = await _identityUsers.CheckPasswordAsync(user, request.NewPassword, ct);
         if (isSamePassword)
             return ResetPasswordResult.ConflictResult("New password must be different from the current password.");
 
         var token = Uri.UnescapeDataString(request.Token);
-        var result = await _userManager.ResetPasswordAsync(user, token, request.NewPassword);
+        var result = await _identityUsers.ResetPasswordAsync(user, token, request.NewPassword, ct);
 
         if (!result.Succeeded)
         {
-            var errors = result.Errors.Select(error => error.Description).ToArray();
             _logger.LogWarning(
                 "Password reset failed for user {UserId}. Errors: {Errors}",
                 user.Id,
-                string.Join(", ", errors));
+                string.Join(", ", result.Errors));
 
-            return ResetPasswordResult.Fail(errors);
+            return ResetPasswordResult.Fail(result.Errors);
         }
 
-        await _userManager.UpdateSecurityStampAsync(user);
+        var securityStampResult = await _identityUsers.UpdateSecurityStampAsync(user, ct);
+        if (!securityStampResult.Succeeded)
+        {
+            _logger.LogWarning(
+                "Security stamp update failed for user {UserId}. Errors: {Errors}",
+                user.Id,
+                string.Join(", ", securityStampResult.Errors));
+        }
 
         user.UpdatedAt = DateTime.UtcNow;
-        await _userManager.UpdateAsync(user);
+        await _identityUsers.UpdateAsync(user, ct);
 
         await _refreshTokens.RevokeActiveTokensForUserAsync(
             user.Id,

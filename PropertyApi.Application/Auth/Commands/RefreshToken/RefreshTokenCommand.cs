@@ -1,10 +1,8 @@
 using FluentValidation;
 using MediatR;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
-using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Auth.Commands.RefreshToken;
 
@@ -39,20 +37,20 @@ public sealed class RefreshTokenCommandHandler
     : IRequestHandler<RefreshTokenCommand, RefreshTokenResult>
 {
     private readonly IRefreshTokenRepository _refreshTokens;
-    private readonly UserManager<User> _userManager;
+    private readonly IIdentityUserService _identityUsers;
     private readonly ITokenService _tokenService;
     private readonly IJwtTokenSettings _jwtSettings;
     private readonly ILogger<RefreshTokenCommandHandler> _logger;
 
     public RefreshTokenCommandHandler(
         IRefreshTokenRepository refreshTokens,
-        UserManager<User> userManager,
+        IIdentityUserService identityUsers,
         ITokenService tokenService,
         IJwtTokenSettings jwtSettings,
         ILogger<RefreshTokenCommandHandler> logger)
     {
         _refreshTokens = refreshTokens;
-        _userManager = userManager;
+        _identityUsers = identityUsers;
         _tokenService = tokenService;
         _jwtSettings = jwtSettings;
         _logger = logger;
@@ -101,8 +99,8 @@ public sealed class RefreshTokenCommandHandler
                 request.IpAddress,
                 tokenCt);
 
-            var roles = await _userManager.GetRolesAsync(stored.User);
-            var accessToken = _tokenService.GenerateAccessToken(stored.User, roles.ToArray());
+            var roles = await _identityUsers.GetRolesAsync(stored.User, tokenCt);
+            var accessToken = _tokenService.GenerateAccessToken(stored.User, roles);
 
             return RefreshTokenResult.Ok(
                 accessToken,
