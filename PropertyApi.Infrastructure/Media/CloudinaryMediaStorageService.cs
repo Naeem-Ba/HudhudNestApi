@@ -1,14 +1,14 @@
-﻿using CloudinaryDotNet;
+using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
-using Npgsql.BackendMessages;
-using System.Security.Principal;
+using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Common.Models;
 
 namespace PropertyApi.Infrastructure.Media;
 
-public sealed class CloudinaryMediaStorageService
+public sealed class CloudinaryMediaStorageService : IMediaStorageService
 {
+    private static readonly HttpClient HttpClient = new();
     private readonly Cloudinary _cloudinary;
 
     public CloudinaryMediaStorageService(IOptions<CloudinaryOptions> options)
@@ -31,38 +31,81 @@ public sealed class CloudinaryMediaStorageService
         _cloudinary = new Cloudinary(account);
     }
 
-    public async Task<ImageUploadResult> UploadAsync(
-        IFormFile file,
+    public async Task<MediaUploadResult> UploadImageAsync(
+        Stream content,
+        string fileName,
+        string contentType,
         string folder,
         CancellationToken cancellationToken = default)
     {
-        if (file.Length == 0)
+        ArgumentNullException.ThrowIfNull(content);
+
+        if (content.CanSeek && content.Length == 0)
             throw new InvalidOperationException("Cannot upload empty file.");
 
-        await using var stream = file.OpenReadStream();
+        if (string.IsNullOrWhiteSpace(fileName))
+            throw new ArgumentException("File name is required.", nameof(fileName));
+
+        if (string.IsNullOrWhiteSpace(folder))
+            throw new ArgumentException("Folder is required.", nameof(folder));
 
         var uploadParams = new ImageUploadParams
         {
-            File = new FileDescription(file.FileName, stream),
+            File = new FileDescription(fileName, content),
             Folder = folder,
             UseFilename = false,
             UniqueFilename = true,
             Overwrite = false
         };
 
-        return await _cloudinary.UploadAsync(uploadParams, cancellationToken);
+        var result = await _cloudinary.UploadAsync(uploadParams, cancellationToken);
+
+        if (result.Error is not null)
+            return MediaUploadResult.Failed(result.Error.Message);
+
+        if (result.SecureUrl is null || string.IsNullOrWhiteSpace(result.PublicId))
+            return MediaUploadResult.Failed("Cloudinary upload did not return a valid URL or PublicId.");
+
+        return MediaUploadResult.Success(
+            result.SecureUrl.AbsoluteUri,
+            result.PublicId);
     }
 
-    public async Task<DeletionResult> DeleteAsync(
-     string publicId,
-     CancellationToken cancellationToken = default)
+    public async Task DeleteImageAsync(
+        string publicId,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(publicId))
             throw new ArgumentException("PublicId is required.", nameof(publicId));
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        return await _cloudinary.DestroyAsync(
-            new DeletionParams(publicId));
+        var result = await _cloudinary.DestroyAsync(new DeletionParams(publicId));
+
+        if (result.Error is not null)
+            throw new InvalidOperationException(result.Error.Message);
+    }
+
+    public async Task<MediaFileResult?> GetImageAsync(
+        string imageUrl,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(imageUrl))
+            throw new ArgumentException("Image URL is required.", nameof(imageUrl));
+
+        using var response = await HttpClient.GetAsync(imageUrl, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+            return null;
+
+        var content = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        var contentType = response.Content.Headers.ContentType?.MediaType
+            ?? "application/octet-stream";
+
+        var fileName = Path.GetFileName(new Uri(imageUrl).AbsolutePath);
+        if (string.IsNullOrWhiteSpace(fileName))
+            fileName = "image";
+
+        return new MediaFileResult(content, contentType, fileName);
     }
 }

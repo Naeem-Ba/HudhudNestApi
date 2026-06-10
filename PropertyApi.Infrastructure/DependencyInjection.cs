@@ -21,9 +21,8 @@ using PropertyApi.Infrastructure.Auth.Repositories;
 using PropertyApi.Infrastructure.Notifications;
 using PropertyApi.Application.Admin.Interfaces;
 using PropertyApi.Infrastructure.Admin;
-
-
 using IdentityEmailSender = Microsoft.AspNetCore.Identity.UI.Services.IEmailSender;
+
 
 namespace PropertyApi.Infrastructure;
 
@@ -148,9 +147,8 @@ else
         services.Configure<CloudinaryOptions>(
             configuration.GetSection(CloudinaryOptions.SectionName));
 
-        // ملاحظة: هنا يُسجَّل كـ Scoped لأنه يُقرأ من IOptions (singleton)
-        // CloudinaryMediaStorageService نفسه stateless تقريباً
-        services.AddScoped<CloudinaryMediaStorageService>();
+
+        services.AddScoped<IMediaStorageService, CloudinaryMediaStorageService>();
 
 
         return services;
