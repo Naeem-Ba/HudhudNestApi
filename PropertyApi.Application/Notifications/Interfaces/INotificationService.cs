@@ -39,4 +39,22 @@ public interface INotificationService
     Task<int> GetUnreadCountAsync(
         Guid userId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Physically deletes one notification owned by the current user.
+    /// Returns false if the notification does not exist or does not belong to the user.
+    /// </summary>
+    Task<bool> DeleteNotificationAsync(
+        Guid notificationId,
+        Guid userId,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Soft-deletes one notification owned by the current user by setting IsDeleted/DeletedAt.
+    /// Returns false if the notification does not exist or does not belong to the user.
+    /// </summary>
+    Task<bool> SoftDeleteNotificationAsync(
+        Guid notificationId,
+        Guid userId,
+        CancellationToken ct = default);
 }

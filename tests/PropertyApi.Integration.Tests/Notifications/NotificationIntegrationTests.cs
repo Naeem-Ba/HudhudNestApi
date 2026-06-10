@@ -270,6 +270,223 @@ public sealed class NotificationIntegrationTests
         Assert.Equal(50, json.RootElement.GetArrayLength());
     }
 
+
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Feature", "Notifications")]
+    public async Task SoftDeleteNotification_HidesNotificationFromList_AndUnreadCountBecomesZero()
+    {
+        // Arrange
+        var user = await CreateUserAsync("soft-delete-user");
+        var client = await CreateAuthenticatedClientAsync(user.Id);
+        var notification = await CreateStoredNotificationAsync(
+            user.Id,
+            NotificationType.PropertyPriceChanged,
+            "Soft-delete test notification");
+
+        // Act
+        var response = await client.PatchAsync(
+            $"/api/notifications/{notification.Id}/soft-delete",
+            content: null);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var stored = await db.Notifications
+                .IgnoreQueryFilters()
+                .SingleAsync(n => n.Id == notification.Id);
+
+            Assert.True(stored.IsDeleted);
+            Assert.NotNull(stored.DeletedAt);
+        }
+
+        var listResponse = await client.GetAsync("/api/notifications");
+        var listBody = await listResponse.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+
+        using (var document = JsonDocument.Parse(listBody))
+        {
+            Assert.Equal(JsonValueKind.Array, document.RootElement.ValueKind);
+            Assert.Empty(document.RootElement.EnumerateArray());
+        }
+
+        var countResponse = await client.GetAsync("/api/notifications/unread-count");
+        var countBody = await countResponse.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, countResponse.StatusCode);
+        Assert.Equal(0, GetIntFromJson(countBody, "UnreadCount"));
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Feature", "Notifications")]
+    public async Task DeleteNotification_RemovesNotificationPhysically()
+    {
+        // Arrange
+        var user = await CreateUserAsync("hard-delete-user");
+        var client = await CreateAuthenticatedClientAsync(user.Id);
+        var notification = await CreateStoredNotificationAsync(
+            user.Id,
+            NotificationType.PropertyStatusChanged,
+            "Hard-delete test notification");
+
+        // Act
+        var response = await client.DeleteAsync($"/api/notifications/{notification.Id}");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var exists = await db.Notifications
+            .IgnoreQueryFilters()
+            .AnyAsync(n => n.Id == notification.Id);
+
+        Assert.False(exists);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Feature", "Notifications")]
+    public async Task UpdateProperty_StatusChange_CreatesPropertyStatusChangedNotification()
+    {
+        // Arrange
+        var owner = await CreateUserAsync("property-status-owner");
+        var property = await CreatePropertyForOwnerAsync(owner.Id);
+        var ownerClient = await CreateAuthenticatedClientAsync(owner.Id);
+
+        // Act
+        var response = await ownerClient.PutAsJsonAsync(
+            $"/api/properties/{property.Id}",
+            CreateUpdatePropertyPayload(
+                property.Id,
+                owner.Id,
+                status: PropertyStatus.Reserved));
+
+        var body = await response.Content.ReadAsStringAsync();
+
+        // Assert
+        Assert.True(
+            response.StatusCode == HttpStatusCode.NoContent,
+            $"Expected 204 NoContent but got {(int)response.StatusCode} {response.StatusCode}. Body: {body}");
+
+        var notification = await GetSingleNotificationForUserAsync(owner.Id);
+
+        Assert.Equal(NotificationType.PropertyStatusChanged, notification.Type);
+        Assert.Equal(property.Id, notification.PropertyId);
+        Assert.False(notification.IsRead);
+        Assert.Contains("Reserved", notification.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Feature", "Notifications")]
+    public async Task UpdateProperty_ColdRentChange_CreatesPropertyPriceChangedNotification()
+    {
+        // Arrange
+        var owner = await CreateUserAsync("property-price-owner");
+        var property = await CreatePropertyForOwnerAsync(owner.Id);
+        var ownerClient = await CreateAuthenticatedClientAsync(owner.Id);
+        var newColdRent = property.ColdRent!.Value + 250;
+
+        // Act
+        var response = await ownerClient.PutAsJsonAsync(
+            $"/api/properties/{property.Id}",
+            CreateUpdatePropertyPayload(
+                property.Id,
+                owner.Id,
+                coldRent: newColdRent));
+
+        var body = await response.Content.ReadAsStringAsync();
+
+        // Assert
+        Assert.True(
+            response.StatusCode == HttpStatusCode.NoContent,
+            $"Expected 204 NoContent but got {(int)response.StatusCode} {response.StatusCode}. Body: {body}");
+
+        var notification = await GetSingleNotificationForUserAsync(owner.Id);
+
+        Assert.Equal(NotificationType.PropertyPriceChanged, notification.Type);
+        Assert.Equal(property.Id, notification.PropertyId);
+        Assert.False(notification.IsRead);
+        Assert.Contains("Cold rent", notification.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(newColdRent.ToString("0.##"), notification.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+
+    private async Task<Notification> CreateStoredNotificationAsync(
+        Guid recipientId,
+        NotificationType type,
+        string message)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var notification = new Notification
+        {
+            RecipientId = recipientId,
+            Type = type,
+            Message = message,
+            IsRead = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        db.Notifications.Add(notification);
+        await db.SaveChangesAsync();
+
+        return notification;
+    }
+
+    private static object CreateUpdatePropertyPayload(
+        Guid propertyId,
+        Guid requestingUserId,
+        PropertyStatus? status = null,
+        decimal? coldRent = null,
+        decimal? warmRent = null,
+        decimal? purchasePrice = null,
+        bool? isPublished = null)
+    {
+        return new
+        {
+            PropertyId = propertyId,
+            RequestingUserId = requestingUserId,
+            Title = (string?)null,
+            Description = (string?)null,
+            Street = (string?)null,
+            City = (string?)null,
+            Region = (string?)null,
+            CountryCode = (string?)null,
+            PostalCode = (string?)null,
+            Latitude = (decimal?)null,
+            Longitude = (decimal?)null,
+            ColdRent = coldRent,
+            WarmRent = warmRent,
+            PurchasePrice = purchasePrice,
+            Deposit = (decimal?)null,
+            AdditionalCosts = (decimal?)null,
+            CurrencyCode = (string?)null,
+            Rooms = (int?)null,
+            Area = (decimal?)null,
+            Floor = (int?)null,
+            TotalFloors = (int?)null,
+            HasBalcony = (bool?)null,
+            HasElevator = (bool?)null,
+            HasParkingSpace = (bool?)null,
+            HeatingType = (HeatingType?)null,
+            Status = status,
+            Condition = (PropertyCondition?)null,
+            EnergyEfficiency = (EnergyEfficiencyType?)null,
+            AvailableFrom = (DateTime?)null,
+            ExpiresAt = (DateTime?)null,
+            IsPublished = isPublished
+        };
+    }
+
     private async Task<HttpResponseMessage> SendMessageAndAssertCreatedAsync(
         HttpClient client,
         Guid propertyId,

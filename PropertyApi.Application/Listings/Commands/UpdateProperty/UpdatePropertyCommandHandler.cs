@@ -1,7 +1,9 @@
 using MediatR;
+using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Notifications.Interfaces;
+using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Notifications.Enums;
 
 namespace PropertyApi.Application.Listings.Commands.UpdateProperty;
@@ -16,15 +18,18 @@ public sealed class UpdatePropertyCommandHandler
     private readonly IPropertyRepository _repo;
     private readonly IUnitOfWork _uow;
     private readonly INotificationService _notifications;
+    private readonly ILogger<UpdatePropertyCommandHandler> _logger;
 
     public UpdatePropertyCommandHandler(
         IPropertyRepository repo,
         IUnitOfWork uow,
-        INotificationService notifications)
+        INotificationService notifications,
+        ILogger<UpdatePropertyCommandHandler> logger)
     {
         _repo = repo;
         _uow = uow;
         _notifications = notifications;
+        _logger = logger;
     }
 
     public async Task<bool> Handle(
@@ -43,101 +48,48 @@ public sealed class UpdatePropertyCommandHandler
             throw new UnauthorizedAccessException(
                 "You are not authorized to update this listing.");
 
-        // Capture old values before applying changes.
-        // These values are used to decide which notifications should be created.
         var oldStatus = property.Status;
         var oldColdRent = property.ColdRent;
         var oldWarmRent = property.WarmRent;
         var oldPurchasePrice = property.PurchasePrice;
         var oldIsPublished = property.IsPublished;
 
-        // Apply only non-null fields — use domain methods for guarded fields.
         if (request.Title is not null)
             property.UpdateTitle(request.Title);
 
         if (request.Description is not null)
             property.UpdateDescription(request.Description);
 
-        if (request.Street is not null)
-            property.Street = request.Street;
+        if (request.Street is not null) property.Street = request.Street;
+        if (request.City is not null) property.City = request.City;
+        if (request.Region is not null) property.Region = request.Region;
+        if (request.PostalCode is not null) property.PostalCode = request.PostalCode;
+        if (request.CountryCode is not null) property.CountryCode = request.CountryCode.ToUpperInvariant();
+        if (request.CurrencyCode is not null) property.CurrencyCode = request.CurrencyCode.ToUpperInvariant();
 
-        if (request.City is not null)
-            property.City = request.City;
+        if (request.Latitude.HasValue) property.Latitude = request.Latitude;
+        if (request.Longitude.HasValue) property.Longitude = request.Longitude;
+        if (request.ColdRent.HasValue) property.ColdRent = request.ColdRent;
+        if (request.WarmRent.HasValue) property.WarmRent = request.WarmRent;
+        if (request.PurchasePrice.HasValue) property.PurchasePrice = request.PurchasePrice;
+        if (request.Deposit.HasValue) property.Deposit = request.Deposit;
+        if (request.AdditionalCosts.HasValue) property.AdditionalCosts = request.AdditionalCosts;
+        if (request.Rooms.HasValue) property.Rooms = request.Rooms;
+        if (request.Area.HasValue) property.Area = request.Area;
+        if (request.Floor.HasValue) property.Floor = request.Floor;
+        if (request.TotalFloors.HasValue) property.TotalFloors = request.TotalFloors;
+        if (request.HasBalcony.HasValue) property.HasBalcony = request.HasBalcony.Value;
+        if (request.HasElevator.HasValue) property.HasElevator = request.HasElevator.Value;
+        if (request.HasParkingSpace.HasValue) property.HasParkingSpace = request.HasParkingSpace.Value;
+        if (request.HeatingType.HasValue) property.HeatingType = request.HeatingType.Value;
+        if (request.Condition.HasValue) property.Condition = request.Condition.Value;
+        if (request.EnergyEfficiency.HasValue) property.EnergyEfficiency = request.EnergyEfficiency.Value;
+        if (request.AvailableFrom.HasValue) property.AvailableFrom = request.AvailableFrom;
+        if (request.ExpiresAt.HasValue) property.ExpiresAt = request.ExpiresAt;
 
-        if (request.Region is not null)
-            property.Region = request.Region;
-
-        if (request.PostalCode is not null)
-            property.PostalCode = request.PostalCode;
-
-        if (request.CountryCode is not null)
-            property.CountryCode = request.CountryCode.ToUpperInvariant();
-
-        if (request.CurrencyCode is not null)
-            property.CurrencyCode = request.CurrencyCode.ToUpperInvariant();
-
-        if (request.Latitude.HasValue)
-            property.Latitude = request.Latitude;
-
-        if (request.Longitude.HasValue)
-            property.Longitude = request.Longitude;
-
-        if (request.ColdRent.HasValue)
-            property.ColdRent = request.ColdRent;
-
-        if (request.WarmRent.HasValue)
-            property.WarmRent = request.WarmRent;
-
-        if (request.PurchasePrice.HasValue)
-            property.PurchasePrice = request.PurchasePrice;
-
-        if (request.Deposit.HasValue)
-            property.Deposit = request.Deposit;
-
-        if (request.AdditionalCosts.HasValue)
-            property.AdditionalCosts = request.AdditionalCosts;
-
-        if (request.Rooms.HasValue)
-            property.Rooms = request.Rooms;
-
-        if (request.Area.HasValue)
-            property.Area = request.Area;
-
-        if (request.Floor.HasValue)
-            property.Floor = request.Floor;
-
-        if (request.TotalFloors.HasValue)
-            property.TotalFloors = request.TotalFloors;
-
-        if (request.HasBalcony.HasValue)
-            property.HasBalcony = request.HasBalcony.Value;
-
-        if (request.HasElevator.HasValue)
-            property.HasElevator = request.HasElevator.Value;
-
-        if (request.HasParkingSpace.HasValue)
-            property.HasParkingSpace = request.HasParkingSpace.Value;
-
-        if (request.HeatingType.HasValue)
-            property.HeatingType = request.HeatingType.Value;
-
-        if (request.Condition.HasValue)
-            property.Condition = request.Condition.Value;
-
-        if (request.EnergyEfficiency.HasValue)
-            property.EnergyEfficiency = request.EnergyEfficiency.Value;
-
-        if (request.AvailableFrom.HasValue)
-            property.AvailableFrom = request.AvailableFrom;
-
-        if (request.ExpiresAt.HasValue)
-            property.ExpiresAt = request.ExpiresAt;
-
-        // Status uses domain method (guards valid transitions).
         if (request.Status.HasValue)
             property.ChangeStatus(request.Status.Value);
 
-        // Publish / Unpublish via domain methods.
         if (request.IsPublished.HasValue)
         {
             if (request.IsPublished.Value && !property.IsPublished)
@@ -149,8 +101,6 @@ public sealed class UpdatePropertyCommandHandler
         _repo.Update(property);
         await _uow.SaveChangesAsync(cancellationToken);
 
-        // Notifications are non-critical:
-        // updating the property has already succeeded, so notification failure must not fail the command.
         try
         {
             await NotifyChangesAsync(
@@ -162,17 +112,20 @@ public sealed class UpdatePropertyCommandHandler
                 oldIsPublished,
                 cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
-            // Intentionally ignored.
-            // Later we can inject ILogger<UpdatePropertyCommandHandler> and log this.
+            _logger.LogError(
+                ex,
+                "Failed to create/send property update notification. PropertyId={PropertyId}, OwnerId={OwnerId}",
+                property.Id,
+                property.OwnerId);
         }
 
         return true;
     }
 
     private async Task NotifyChangesAsync(
-        dynamic property,
+        Property property,
         object? oldStatus,
         decimal? oldColdRent,
         decimal? oldWarmRent,

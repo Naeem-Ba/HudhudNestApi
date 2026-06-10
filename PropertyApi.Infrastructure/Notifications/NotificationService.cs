@@ -1,12 +1,10 @@
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Notifications.DTOs;
 using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Domain.Notifications.Entities;
 using PropertyApi.Domain.Notifications.Enums;
 using PropertyApi.Infrastructure.Hubs;
-using PropertyApi.Infrastructure.Persistence;
-using Microsoft.Extensions.Logging;
 
 namespace PropertyApi.Infrastructure.Notifications;
 
@@ -14,16 +12,16 @@ public sealed class NotificationService : INotificationService
 {
     private const int MaxPageSize = 50;
 
-    private readonly AppDbContext _db;
+    private readonly INotificationRepository _notifications;
     private readonly IHubContext<NotificationHub> _hub;
     private readonly ILogger<NotificationService> _logger;
 
     public NotificationService(
-        AppDbContext db,
+        INotificationRepository notifications,
         IHubContext<NotificationHub> hub,
         ILogger<NotificationService> logger)
     {
-        _db = db;
+        _notifications = notifications;
         _hub = hub;
         _logger = logger;
     }
@@ -136,24 +134,13 @@ public sealed class NotificationService : INotificationService
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
 
-        return await _db.Notifications
-            .AsNoTracking()
-            .Where(notification => notification.RecipientId == userId)
-            .OrderByDescending(notification => notification.CreatedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(notification => new NotificationDto
-            {
-                Id = notification.Id,
-                Type = notification.Type,
-                Message = notification.Message,
-                PropertyId = notification.PropertyId,
-                RelatedEntityId = notification.RelatedEntityId,
-                IsRead = notification.IsRead,
-                ReadAt = notification.ReadAt,
-                CreatedAt = notification.CreatedAt
-            })
-            .ToListAsync(ct);
+        var notifications = await _notifications.GetUserNotificationsAsync(
+            userId,
+            page,
+            pageSize,
+            ct);
+
+        return notifications.Select(MapToDto).ToList();
     }
 
     public async Task MarkAsReadAsync(
@@ -164,19 +151,18 @@ public sealed class NotificationService : INotificationService
         if (notificationId == Guid.Empty || userId == Guid.Empty)
             return;
 
-        var now = DateTime.UtcNow;
+        var affectedRows = await _notifications.MarkAsReadAsync(
+            notificationId,
+            userId,
+            ct);
 
-        await _db.Notifications
-            .Where(notification =>
-                notification.Id == notificationId &&
-                notification.RecipientId == userId &&
-                !notification.IsRead)
-            .ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(notification => notification.IsRead, true)
-                    .SetProperty(notification => notification.ReadAt, now)
-                    .SetProperty(notification => notification.UpdatedAt, now),
-                ct);
+        if (affectedRows == 0)
+        {
+            _logger.LogInformation(
+                "MarkAsRead ignored. NotificationId={NotificationId}, UserId={UserId}",
+                notificationId,
+                userId);
+        }
     }
 
     public async Task MarkAllAsReadAsync(
@@ -186,18 +172,12 @@ public sealed class NotificationService : INotificationService
         if (userId == Guid.Empty)
             return;
 
-        var now = DateTime.UtcNow;
+        var affectedRows = await _notifications.MarkAllAsReadAsync(userId, ct);
 
-        await _db.Notifications
-            .Where(notification =>
-                notification.RecipientId == userId &&
-                !notification.IsRead)
-            .ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(notification => notification.IsRead, true)
-                    .SetProperty(notification => notification.ReadAt, now)
-                    .SetProperty(notification => notification.UpdatedAt, now),
-                ct);
+        _logger.LogInformation(
+            "Marked all notifications as read. UserId={UserId}, AffectedRows={AffectedRows}",
+            userId,
+            affectedRows);
     }
 
     public async Task<int> GetUnreadCountAsync(
@@ -207,20 +187,70 @@ public sealed class NotificationService : INotificationService
         if (userId == Guid.Empty)
             return 0;
 
-        return await _db.Notifications
-            .AsNoTracking()
-            .CountAsync(notification =>
-                notification.RecipientId == userId &&
-                !notification.IsRead,
-                ct);
+        return await _notifications.GetUnreadCountAsync(userId, ct);
+    }
+
+    public async Task<bool> DeleteNotificationAsync(
+        Guid notificationId,
+        Guid userId,
+        CancellationToken ct = default)
+    {
+        if (notificationId == Guid.Empty || userId == Guid.Empty)
+            return false;
+
+        var deleted = await _notifications.DeleteAsync(notificationId, userId, ct);
+
+        if (deleted)
+        {
+            _logger.LogInformation(
+                "Notification hard-deleted. NotificationId={NotificationId}, UserId={UserId}",
+                notificationId,
+                userId);
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Notification hard-delete ignored. NotificationId={NotificationId}, UserId={UserId}",
+                notificationId,
+                userId);
+        }
+
+        return deleted;
+    }
+
+    public async Task<bool> SoftDeleteNotificationAsync(
+        Guid notificationId,
+        Guid userId,
+        CancellationToken ct = default)
+    {
+        if (notificationId == Guid.Empty || userId == Guid.Empty)
+            return false;
+
+        var deleted = await _notifications.SoftDeleteAsync(notificationId, userId, ct);
+
+        if (deleted)
+        {
+            _logger.LogInformation(
+                "Notification soft-deleted. NotificationId={NotificationId}, UserId={UserId}",
+                notificationId,
+                userId);
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Notification soft-delete ignored. NotificationId={NotificationId}, UserId={UserId}",
+                notificationId,
+                userId);
+        }
+
+        return deleted;
     }
 
     private async Task PersistAndPushAsync(
         Notification notification,
         CancellationToken ct)
     {
-        _db.Notifications.Add(notification);
-        await _db.SaveChangesAsync(ct);
+        await _notifications.AddAsync(notification, ct);
 
         var dto = MapToDto(notification);
         var groupName = NotificationHub.GetGroupName(notification.RecipientId.ToString());

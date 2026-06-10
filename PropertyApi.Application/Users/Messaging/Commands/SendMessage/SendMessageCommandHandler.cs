@@ -1,4 +1,5 @@
 using MediatR;
+using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
@@ -7,6 +8,7 @@ using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Application.Users.Messaging.DTOs;
 using PropertyApi.Application.Users.Messaging.Interfaces;
 using PropertyApi.Domain.Messaging.Entities;
+using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Users.Messaging.Commands.SendMessage;
 
@@ -19,6 +21,7 @@ public sealed class SendMessageCommandHandler
     private readonly IMessageRepository _messages;
     private readonly IUnitOfWork _uow;
     private readonly INotificationService _notifications;
+    private readonly ILogger<SendMessageCommandHandler> _logger;
 
     public SendMessageCommandHandler(
         ICurrentUserService currentUser,
@@ -26,7 +29,8 @@ public sealed class SendMessageCommandHandler
         IUserRepository users,
         IMessageRepository messages,
         IUnitOfWork uow,
-        INotificationService notifications)
+        INotificationService notifications,
+        ILogger<SendMessageCommandHandler> logger)
     {
         _currentUser = currentUser;
         _properties = properties;
@@ -34,6 +38,7 @@ public sealed class SendMessageCommandHandler
         _messages = messages;
         _uow = uow;
         _notifications = notifications;
+        _logger = logger;
     }
 
     public async Task<MessageDto> Handle(
@@ -117,11 +122,9 @@ public sealed class SendMessageCommandHandler
         await _uow.SaveChangesAsync(cancellationToken);
 
         var sender = await _users.GetByIdAsync(senderId, cancellationToken);
-
         var senderDisplayName = BuildSenderDisplayName(sender);
 
-        // Notification is non-critical:
-        // the message has already been saved, so notification failure must not fail the command.
+        // Notification is non-critical: message persistence has already succeeded.
         try
         {
             await _notifications.NotifyNewMessageAsync(
@@ -132,10 +135,15 @@ public sealed class SendMessageCommandHandler
                 propertyId: property.Id,
                 ct: cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
-            // Intentionally ignored.
-            // Later we can inject ILogger<SendMessageCommandHandler> and log this.
+            _logger.LogError(
+                ex,
+                "Failed to create/send message notification. MessageId={MessageId}, PropertyId={PropertyId}, SenderId={SenderId}, ReceiverId={ReceiverId}",
+                message.Id,
+                property.Id,
+                senderId,
+                receiverId);
         }
 
         return new MessageDto
@@ -152,7 +160,7 @@ public sealed class SendMessageCommandHandler
         };
     }
 
-    private static string BuildSenderDisplayName(dynamic? sender)
+    private static string BuildSenderDisplayName(User? sender)
     {
         if (sender is null)
             return string.Empty;

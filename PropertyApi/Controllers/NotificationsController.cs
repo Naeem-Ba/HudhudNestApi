@@ -97,4 +97,46 @@ public sealed class NotificationsController : ControllerBase
 
         return NoContent();
     }
+
+    [HttpPatch("{id:guid}/soft-delete")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SoftDelete(
+        Guid id,
+        CancellationToken ct)
+    {
+        var userId = _currentUser.UserId;
+
+        if (userId is null)
+            return Unauthorized();
+
+        var deleted = await _notifications.SoftDeleteNotificationAsync(
+            id,
+            userId.Value,
+            ct);
+
+        return deleted ? NoContent() : NotFound();
+    }
+
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Delete(
+        Guid id,
+        CancellationToken ct)
+    {
+        var userId = _currentUser.UserId;
+
+        if (userId is null)
+            return Unauthorized();
+
+        var deleted = await _notifications.DeleteNotificationAsync(
+            id,
+            userId.Value,
+            ct);
+
+        return deleted ? NoContent() : NotFound();
+    }
 }
