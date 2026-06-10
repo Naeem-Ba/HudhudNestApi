@@ -29,6 +29,9 @@ public sealed class IdentityUserService : IIdentityUserService
     public Task<User?> FindByIdAsync(Guid userId, CancellationToken ct = default)
         => _userManager.FindByIdAsync(userId.ToString());
 
+    public Task<User?> FindByUserNameAsync(string userName, CancellationToken ct = default)
+        => _userManager.FindByNameAsync(userName);
+
     public Task<bool> CheckPasswordAsync(User user, string password, CancellationToken ct = default)
         => _userManager.CheckPasswordAsync(user, password);
 
@@ -44,6 +47,14 @@ public sealed class IdentityUserService : IIdentityUserService
         CancellationToken ct = default)
     {
         var result = await _userManager.CreateAsync(user, password);
+        return Map(result);
+    }
+
+    public async Task<IdentityOperationResult> CreateAsync(
+        User user,
+        CancellationToken ct = default)
+    {
+        var result = await _userManager.CreateAsync(user);
         return Map(result);
     }
 
@@ -82,6 +93,29 @@ public sealed class IdentityUserService : IIdentityUserService
 
     public Task<string> GeneratePasswordResetTokenAsync(User user, CancellationToken ct = default)
         => _userManager.GeneratePasswordResetTokenAsync(user);
+
+    public async Task<IdentityOperationResult> SetEmailAsync(
+        User user,
+        string email,
+        CancellationToken ct = default)
+    {
+        var result = await _userManager.SetEmailAsync(user, email);
+        return Map(result);
+    }
+
+    public Task<string> GenerateEmailConfirmationTokenAsync(
+        User user,
+        CancellationToken ct = default)
+        => _userManager.GenerateEmailConfirmationTokenAsync(user);
+
+    public async Task<IdentityOperationResult> ConfirmEmailAsync(
+        User user,
+        string token,
+        CancellationToken ct = default)
+    {
+        var result = await _userManager.ConfirmEmailAsync(user, token);
+        return Map(result);
+    }
 
     private IdentityOperationResult Map(IdentityResult result)
     {

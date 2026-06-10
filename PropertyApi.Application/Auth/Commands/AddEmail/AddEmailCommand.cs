@@ -1,7 +1,5 @@
-﻿using FluentValidation;
+using FluentValidation;
 using MediatR;
-using PropertyApi.Domain.Users.Entities;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.DTOs;
 using PropertyApi.Application.Auth.Interfaces;
@@ -15,33 +13,29 @@ namespace PropertyApi.Application.Auth.Commands.AddEmail;
 // المستخدم سجّل بهاتفه فقط. بعد أسبوع يريد إضافة بريده
 // الإلكتروني ليتمكن من الدخول بطريقتين.
 //
-// التسلسل:
-// 1. المستخدم (مُسجَّل الدخول) يُرسل بريده الإلكتروني
-// 2. نتحقق أن البريد غير مستخدم من قبل
-// 3. نُرسل رابط تحقق لبريده
-// 4. المستخدم ينقر الرابط → يُفعَّل البريد
+// Clean Architecture:
+// هذا الـ Handler لا يعتمد على UserManager مباشرة.
+// يستخدم IIdentityUserService فقط، والتنفيذ الحقيقي في Infrastructure.
 // ══════════════════════════════════════════════════════════════
 
-// ── الأمر ─────────────────────────────────────────────────────
 public sealed record AddEmailCommand(
     Guid UserId,
     string Email
 ) : IRequest<AddEmailResult>;
 
-// ── المعالج ───────────────────────────────────────────────────
 public sealed class AddEmailCommandHandler
     : IRequestHandler<AddEmailCommand, AddEmailResult>
 {
-    private readonly UserManager<User> _userManager;
+    private readonly IIdentityUserService _identityUsers;
     private readonly IEmailVerificationService _emailService;
     private readonly ILogger<AddEmailCommandHandler> _logger;
 
     public AddEmailCommandHandler(
-        UserManager<User> userManager,
+        IIdentityUserService identityUsers,
         IEmailVerificationService emailService,
         ILogger<AddEmailCommandHandler> logger)
     {
-        _userManager = userManager;
+        _identityUsers = identityUsers;
         _emailService = emailService;
         _logger = logger;
     }
@@ -50,20 +44,22 @@ public sealed class AddEmailCommandHandler
         AddEmailCommand request,
         CancellationToken ct)
     {
-        // ── 1. تحقق من وجود المستخدم ──────────────────────────
-        var user = await _userManager.FindByIdAsync(request.UserId.ToString());
+        var email = NormalizeEmail(request.Email);
 
-        if (user is null)
+        // ── 1. تحقق من وجود المستخدم ──────────────────────────
+        var user = await _identityUsers.FindByIdAsync(request.UserId, ct);
+
+        if (user is null || user.IsDeleted)
             return AddEmailResult.Fail("USER_NOT_FOUND", "المستخدم غير موجود.");
 
         // ── 2. هل البريد مُضاف بالفعل؟ ───────────────────────
-        if (!string.IsNullOrEmpty(user.Email) && user.EmailConfirmed)
+        if (!string.IsNullOrWhiteSpace(user.Email) && user.EmailConfirmed)
             return AddEmailResult.Fail(
                 "EMAIL_ALREADY_SET",
                 "لديك بريد إلكتروني مُفعَّل بالفعل.");
 
         // ── 3. هل البريد مستخدم من قبل شخص آخر؟ ──────────────
-        var existingWithEmail = await _userManager.FindByEmailAsync(request.Email);
+        var existingWithEmail = await _identityUsers.FindByEmailAsync(email, ct);
 
         if (existingWithEmail is not null && existingWithEmail.Id != user.Id)
             return AddEmailResult.Fail(
@@ -71,39 +67,36 @@ public sealed class AddEmailCommandHandler
                 "هذا البريد الإلكتروني مستخدم من قبل حساب آخر.");
 
         // ── 4. أضف البريد (غير مُفعَّل بعد) ───────────────────
-        // SetEmailAsync يُعيّن البريد ويُعيّن EmailConfirmed = false تلقائياً
-        var result = await _userManager.SetEmailAsync(user, request.Email);
+        var setEmailResult = await _identityUsers.SetEmailAsync(user, email, ct);
 
-        if (!result.Succeeded)
+        if (!setEmailResult.Succeeded)
         {
             _logger.LogError(
                 "Failed to set email for user {UserId}: {Errors}",
                 request.UserId,
-                string.Join(", ", result.Errors.Select(e => e.Description)));
+                string.Join(", ", setEmailResult.Errors));
 
             return AddEmailResult.Fail("EMAIL_SET_FAILED", "فشل إضافة البريد.");
         }
 
         // ── 5. أنشئ رمز التحقق ────────────────────────────────
-        // GenerateEmailConfirmationTokenAsync = دالة من ASP.NET Identity
-        // تُنشئ رمزاً آمناً مرتبطاً بالمستخدم
-        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+        var token = await _identityUsers.GenerateEmailConfirmationTokenAsync(user, ct);
 
         // ── 6. أرسل رسالة التحقق ──────────────────────────────
-        await _emailService.SendVerificationLinkAsync(
-            request.Email,
-            token,
-            ct);
+        await _emailService.SendVerificationLinkAsync(email, token, ct);
 
         _logger.LogInformation(
             "Email verification sent to {Email} for user {UserId}",
-            request.Email, request.UserId);
+            email,
+            request.UserId);
 
         return AddEmailResult.Ok();
     }
+
+    private static string NormalizeEmail(string email)
+        => email.Trim().ToLowerInvariant();
 }
 
-// ── المُدقق ───────────────────────────────────────────────────
 public sealed class AddEmailCommandValidator
     : AbstractValidator<AddEmailCommand>
 {

@@ -1,11 +1,11 @@
-﻿using FluentValidation;
+using FluentValidation;
 using MediatR;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.DTOs;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Domain.Auth.Enums;
+using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Auth.Commands.VerifyPhoneOtp;
@@ -13,19 +13,11 @@ namespace PropertyApi.Application.Auth.Commands.VerifyPhoneOtp;
 // ══════════════════════════════════════════════════════════════
 // الخطوة 2: التحقق من رمز OTP (التسجيل + الدخول في آنٍ معاً)
 //
-// هذا الـ Handler هو قلب النظام. يحدد:
-//   • هل المستخدم موجود؟ → دخول
-//   • هل المستخدم جديد؟  → تسجيل ثم دخول
-//
-// تسلسل الأحداث:
-// 1. ابحث عن آخر رمز صالح لرقم الهاتف
-// 2. تحقق من تطابق الرمز المُدخَل
-// 3. إذا فشل → سجّل محاولة خاطئة
-// 4. إذا نجح → ابحث عن المستخدم أو أنشئه
-// 5. أصدر JWT + Refresh Token
+// Clean Architecture:
+// هذا الـ Handler لا يعتمد على UserManager مباشرة.
+// يستخدم IIdentityUserService فقط، والتنفيذ الحقيقي في Infrastructure.
 // ══════════════════════════════════════════════════════════════
 
-// ── الأمر (Command) ───────────────────────────────────────────
 public sealed record VerifyPhoneOtpCommand(
     string PhoneNumber,
     string Code,
@@ -34,13 +26,12 @@ public sealed record VerifyPhoneOtpCommand(
     string? IpAddress = null
 ) : IRequest<VerifyOtpResult>;
 
-// ── معالج الأمر (Handler) ─────────────────────────────────────
 public sealed class VerifyPhoneOtpCommandHandler
     : IRequestHandler<VerifyPhoneOtpCommand, VerifyOtpResult>
 {
     private readonly IOtpCodeRepository _otpRepo;
     private readonly IOtpService _otpService;
-    private readonly UserManager<User> _userManager;
+    private readonly IIdentityUserService _identityUsers;
     private readonly ITokenService _tokenService;
     private readonly IRefreshTokenStore _refreshTokenStore;
     private readonly ILogger<VerifyPhoneOtpCommandHandler> _logger;
@@ -48,14 +39,14 @@ public sealed class VerifyPhoneOtpCommandHandler
     public VerifyPhoneOtpCommandHandler(
         IOtpCodeRepository otpRepo,
         IOtpService otpService,
-        UserManager<User> userManager,
+        IIdentityUserService identityUsers,
         ITokenService tokenService,
         IRefreshTokenStore refreshTokenStore,
         ILogger<VerifyPhoneOtpCommandHandler> logger)
     {
         _otpRepo = otpRepo;
         _otpService = otpService;
-        _userManager = userManager;
+        _identityUsers = identityUsers;
         _tokenService = tokenService;
         _refreshTokenStore = refreshTokenStore;
         _logger = logger;
@@ -121,7 +112,7 @@ public sealed class VerifyPhoneOtpCommandHandler
         await _otpRepo.SaveChangesAsync(ct);
 
         // ── 4. ابحث عن المستخدم أو أنشئه ────────────────────
-        var (user, isNewUser) = await GetOrCreateUserAsync(request, phone);
+        var (user, isNewUser) = await GetOrCreateUserAsync(request, phone, ct);
 
         if (user is null)
         {
@@ -131,7 +122,7 @@ public sealed class VerifyPhoneOtpCommandHandler
         }
 
         // ── 5. أصدر JWT + Refresh Token ───────────────────────
-        var roles = await _userManager.GetRolesAsync(user);
+        var roles = await _identityUsers.GetRolesAsync(user, ct);
 
         var accessToken = _tokenService.GenerateAccessToken(
             user,
@@ -169,21 +160,30 @@ public sealed class VerifyPhoneOtpCommandHandler
             });
     }
 
-    // ── الدالة المساعدة: ابحث عن المستخدم أو أنشئه ────────────
     private async Task<(User? user, bool isNewUser)> GetOrCreateUserAsync(
         VerifyPhoneOtpCommand request,
-        string phone)
+        string phone,
+        CancellationToken ct)
     {
-        // ملاحظة: حاليًا نستخدم UserName = phone للمستخدمين المسجلين بالهاتف.
-        // لاحقًا الأفضل إضافة بحث مباشر بـ PhoneNumber لتقليل مخاطر التكرار.
-        var existingUser = await _userManager.FindByNameAsync(phone);
+        // حاليًا نستخدم UserName = phone للمستخدمين المسجلين بالهاتف.
+        var existingUser = await _identityUsers.FindByUserNameAsync(phone, ct);
 
         if (existingUser is not null)
         {
             if (!existingUser.PhoneNumberConfirmed)
             {
                 existingUser.PhoneNumberConfirmed = true;
-                await _userManager.UpdateAsync(existingUser);
+                var updateResult = await _identityUsers.UpdateAsync(existingUser, ct);
+
+                if (!updateResult.Succeeded)
+                {
+                    _logger.LogError(
+                        "Failed to update phone confirmation for user {UserId}: {Errors}",
+                        existingUser.Id,
+                        string.Join(", ", updateResult.Errors));
+
+                    return (null, isNewUser: false);
+                }
             }
 
             return (existingUser, isNewUser: false);
@@ -202,39 +202,31 @@ public sealed class VerifyPhoneOtpCommandHandler
             IsDeleted = false
         };
 
-        var createResult = await _userManager.CreateAsync(newUser);
+        var createResult = await _identityUsers.CreateAsync(newUser, ct);
 
         if (!createResult.Succeeded)
         {
-            foreach (var error in createResult.Errors)
-            {
-                _logger.LogError(
-                    "Failed to create phone user: {Code} - {Description}",
-                    error.Code,
-                    error.Description);
-            }
+            _logger.LogError(
+                "Failed to create phone user: {Errors}",
+                string.Join(", ", createResult.Errors));
 
             return (null, isNewUser: false);
         }
 
-        var roleResult = await _userManager.AddToRoleAsync(newUser, "User");
+        var roleResult = await _identityUsers.AddToRoleAsync(newUser, RoleNames.User, ct);
 
         if (!roleResult.Succeeded)
         {
-            foreach (var error in roleResult.Errors)
-            {
-                _logger.LogError(
-                    "Failed to add default role to phone user: {Code} - {Description}",
-                    error.Code,
-                    error.Description);
-            }
+            _logger.LogError(
+                "Failed to add default role to phone user {UserId}: {Errors}",
+                newUser.Id,
+                string.Join(", ", roleResult.Errors));
         }
 
         return (newUser, isNewUser: true);
     }
 }
 
-// ── المُدقق (Validator) ───────────────────────────────────────
 public sealed class VerifyPhoneOtpCommandValidator
     : AbstractValidator<VerifyPhoneOtpCommand>
 {
