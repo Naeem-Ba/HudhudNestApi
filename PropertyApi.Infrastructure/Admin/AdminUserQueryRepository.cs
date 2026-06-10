@@ -82,7 +82,6 @@ public sealed class AdminUserQueryRepository : IAdminUserQueryRepository
                 FirstName = user.FirstName,
                 LastName = user.LastName,
                 DisplayName = user.DisplayName,
-                IsAgent = user.IsAgent,
                 CreatedAt = user.CreatedAt,
                 Roles = rolesMap.TryGetValue(user.Id, out var roles)
                     ? roles

@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Messaging.Entities;
@@ -11,7 +6,7 @@ namespace PropertyApi.Domain.Users.Entities;
 
 /// <summary>
 /// Platform user. Extends IdentityUser with Guid PK.
-/// Roles (Admin, Agent, Tenant, Owner) managed via IdentityRole — not a bool flag.
+/// Roles (Admin, Agent, User) are managed through IdentityRole, not boolean flags.
 /// </summary>
 public class User : IdentityUser<Guid>
 {
@@ -20,13 +15,10 @@ public class User : IdentityUser<Guid>
     public string LastName { get; set; } = string.Empty;
     public string? DisplayName { get; set; }
 
-    // -- Agent-specific -----------------------------------------
-    public bool IsAgent { get; set; } = false;
-
     /// <summary>
     /// Tax/VAT number for agents/owners.
-    /// ?? SECURITY: Encrypt this column at the application level
-    ///    using IDataProtector before persisting to DB.
+    /// SECURITY: Encrypt this column at the application level
+    /// using IDataProtector before persisting to DB.
     /// </summary>
     public string? TaxNumber { get; set; }
 
@@ -55,6 +47,4 @@ public class User : IdentityUser<Guid>
     public ICollection<Property> Properties { get; set; } = new List<Property>();
     public ICollection<Message> Messages { get; set; } = new List<Message>();
     public ICollection<Favorite> Favorites { get; set; } = new List<Favorite>();
- 
 }
-

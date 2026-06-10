@@ -2,7 +2,8 @@ namespace PropertyApi.Application.Users.DTOs;
 
 /// <summary>
 /// Data Transfer Object for user profile responses.
-/// Never expose sensitive fields (PasswordHash, SecurityStamp, etc.).
+/// Never expose sensitive fields such as PasswordHash or SecurityStamp.
+/// Authorization state is derived from Roles, not boolean flags.
 /// </summary>
 public sealed class UserDto
 {
@@ -12,30 +13,27 @@ public sealed class UserDto
     public string LastName { get; set; } = string.Empty;
     public string? DisplayName { get; set; }
     public string? PhoneNumber { get; set; }
-    public bool IsAgent { get; set; }
     public string? ProfileImageUrl { get; set; }
 
-    // Localization
     public string PreferredLanguage { get; set; } = "en";
     public string PreferredCurrency { get; set; } = "EUR";
     public string? CountryCode { get; set; }
 
-    // Account meta
     public bool EmailConfirmed { get; set; }
     public DateTime CreatedAt { get; set; }
 
-    // Roles assigned to this user (e.g. ["Admin", "Agent"])
     public IReadOnlyList<string> Roles { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>
-/// Minimal user summary used in property listings (owner info).
+/// Minimal user summary used in public owner profile responses.
+/// Agent status must be determined from Roles externally.
 /// </summary>
 public sealed class UserSummaryDto
 {
     public Guid Id { get; set; }
     public string DisplayName { get; set; } = string.Empty;
     public string? ProfileImageUrl { get; set; }
-    public bool IsAgent { get; set; }
     public string? PhoneNumber { get; set; }
+    public IReadOnlyList<string> Roles { get; set; } = Array.Empty<string>();
 }

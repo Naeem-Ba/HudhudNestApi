@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Admin.DTOs;
 using PropertyApi.Application.Admin.Interfaces;
-using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Infrastructure.Persistence;
 
@@ -55,7 +54,7 @@ public sealed class AdminIdentityService : IAdminIdentityService
             return MapFailure("Could not add the new role.", addResult);
         }
 
-        var updateResult = await UpdateUserRoleFlagsAsync(user, role, ct);
+        var updateResult = await TouchUserAfterRoleChangeAsync(user);
         if (!updateResult.Succeeded)
         {
             await transaction.RollbackAsync(ct);
@@ -84,7 +83,7 @@ public sealed class AdminIdentityService : IAdminIdentityService
         if (!addResult.Succeeded)
             return MapFailure("Could not add the role.", addResult);
 
-        var updateResult = await UpdateUserRoleFlagsAsync(user, role, ct);
+        var updateResult = await TouchUserAfterRoleChangeAsync(user);
         if (!updateResult.Succeeded)
             return updateResult;
 
@@ -108,16 +107,9 @@ public sealed class AdminIdentityService : IAdminIdentityService
         if (!removeResult.Succeeded)
             return MapFailure("Could not remove the role.", removeResult);
 
-        var remainingRoles = await _userManager.GetRolesAsync(user);
-        user.IsAgent = remainingRoles.Any(currentRole =>
-            string.Equals(currentRole, RoleNames.Agent, StringComparison.OrdinalIgnoreCase));
-
-        user.SecurityStamp = Guid.NewGuid().ToString("N");
-        user.UpdatedAt = DateTime.UtcNow;
-
-        var updateResult = await _userManager.UpdateAsync(user);
+        var updateResult = await TouchUserAfterRoleChangeAsync(user);
         if (!updateResult.Succeeded)
-            return MapFailure("Could not update the user.", updateResult);
+            return updateResult;
 
         return AdminOperationResult.Ok($"Role '{role}' removed.");
     }
@@ -145,12 +137,8 @@ public sealed class AdminIdentityService : IAdminIdentityService
     private Task<User?> FindActiveUserAsync(Guid userId)
         => _userManager.FindByIdAsync(userId.ToString());
 
-    private async Task<AdminOperationResult> UpdateUserRoleFlagsAsync(
-        User user,
-        string effectiveRole,
-        CancellationToken ct)
+    private async Task<AdminOperationResult> TouchUserAfterRoleChangeAsync(User user)
     {
-        user.IsAgent = string.Equals(effectiveRole, RoleNames.Agent, StringComparison.OrdinalIgnoreCase);
         user.SecurityStamp = Guid.NewGuid().ToString("N");
         user.UpdatedAt = DateTime.UtcNow;
 

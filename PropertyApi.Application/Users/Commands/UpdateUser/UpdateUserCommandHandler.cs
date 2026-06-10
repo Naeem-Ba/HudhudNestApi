@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using PropertyApi.Application.Users.DTOs;
+using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Users.Commands.UpdateUser;
@@ -20,6 +21,9 @@ public sealed class UpdateUserCommandHandler
         var user = await _userManager.FindByIdAsync(request.UserId.ToString());
         if (user is null || user.IsDeleted)
             return null;
+
+        var roles = await _userManager.GetRolesAsync(user);
+        var isAgent = roles.Any(role => string.Equals(role, RoleNames.Agent, StringComparison.OrdinalIgnoreCase));
 
         if (request.FirstName is not null)
             user.FirstName = request.FirstName.Trim();
@@ -53,7 +57,7 @@ public sealed class UpdateUserCommandHandler
                 ? null
                 : request.CountryCode.Trim().ToUpperInvariant();
 
-        if (user.IsAgent && string.IsNullOrWhiteSpace(user.PhoneNumber))
+        if (isAgent && string.IsNullOrWhiteSpace(user.PhoneNumber))
             throw new InvalidOperationException("PhoneNumber is required for agents.");
 
         user.UpdatedAt = DateTime.UtcNow;
@@ -63,8 +67,6 @@ public sealed class UpdateUserCommandHandler
             throw new InvalidOperationException(
                 string.Join(" | ", result.Errors.Select(e => e.Description)));
 
-        var roles = await _userManager.GetRolesAsync(user);
-
         return new UserDto
         {
             Id = user.Id,
@@ -73,7 +75,6 @@ public sealed class UpdateUserCommandHandler
             LastName = user.LastName,
             DisplayName = user.DisplayName,
             PhoneNumber = user.PhoneNumber,
-            IsAgent = user.IsAgent,
             ProfileImageUrl = user.ProfileImageUrl,
             PreferredLanguage = user.PreferredLanguage,
             PreferredCurrency = user.PreferredCurrency,

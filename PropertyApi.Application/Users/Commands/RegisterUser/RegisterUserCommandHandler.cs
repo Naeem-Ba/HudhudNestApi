@@ -1,8 +1,8 @@
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using PropertyApi.Application.Users.DTOs;
-using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Domain.Users.Constants;
+using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Users.Commands.RegisterUser;
 
@@ -45,7 +45,6 @@ public sealed class RegisterUserCommandHandler
             PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber)
                 ? null
                 : request.PhoneNumber.Trim(),
-            IsAgent = false,
             PreferredLanguage = request.PreferredLanguage.Trim().ToLowerInvariant(),
             PreferredCurrency = request.PreferredCurrency.Trim().ToUpperInvariant(),
             CountryCode = string.IsNullOrWhiteSpace(request.CountryCode)
@@ -74,7 +73,6 @@ public sealed class RegisterUserCommandHandler
             LastName = user.LastName,
             DisplayName = user.DisplayName,
             PhoneNumber = user.PhoneNumber,
-            IsAgent = user.IsAgent,
             ProfileImageUrl = user.ProfileImageUrl,
             PreferredLanguage = user.PreferredLanguage,
             PreferredCurrency = user.PreferredCurrency,

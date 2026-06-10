@@ -7,7 +7,6 @@ public sealed class AdminUserDto
     public string FirstName { get; init; } = string.Empty;
     public string LastName { get; init; } = string.Empty;
     public string? DisplayName { get; init; }
-    public bool IsAgent { get; init; }
     public DateTime CreatedAt { get; init; }
     public IReadOnlyList<string> Roles { get; init; } = Array.Empty<string>();
 }

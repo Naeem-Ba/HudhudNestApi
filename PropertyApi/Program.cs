@@ -10,7 +10,7 @@ using PropertyApi.Middleware;
 using PropertyApi.Seed;
 using System.Security.Claims;
 using PropertyApi.Application.Common.Security;
-using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Domain.Users.Constants;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Infrastructure.Hubs;
@@ -121,7 +121,11 @@ builder.Services
             };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(RoleNames.Agent, policy =>
+        policy.RequireRole(RoleNames.Agent));
+});
 
 // -- 5. CORS ---------------------------------------------------
 var allowedOrigins = builder.Configuration
