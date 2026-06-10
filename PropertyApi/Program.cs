@@ -2,20 +2,19 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PropertyApi.Application;
 using PropertyApi.Infrastructure;
 using PropertyApi.Middleware;
 using PropertyApi.Seed;
-using PropertyApi.Infrastructure.Identity.Services;
 using System.Security.Claims;
 using PropertyApi.Application.Common.Security;
 using PropertyApi.Domain.Users.Entities;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Infrastructure.Hubs;
+using PropertyApi.Application.Common.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -64,68 +63,62 @@ builder.Services
             ClockSkew = TimeSpan.FromSeconds(30)
         };
 
-        options.Events = new JwtBearerEvents
-        {
-            OnTokenValidated = async context =>
+            options.Events = new JwtBearerEvents
             {
-                var userIdText = context.Principal?
-                    .FindFirstValue(ClaimTypes.NameIdentifier);
-
-                var tokenSecurityStamp = context.Principal?
-                    .FindFirstValue(CustomClaimTypes.SecurityStamp);
-
-                if (!Guid.TryParse(userIdText, out var userId) ||
-                    string.IsNullOrWhiteSpace(tokenSecurityStamp))
+                OnTokenValidated = async context =>
                 {
-                    context.Fail("The token does not contain valid user data.");
-                    return;
-                }
+                    var userIdText = context.Principal?
+                        .FindFirstValue(ClaimTypes.NameIdentifier);
 
-                var userManager = context.HttpContext.RequestServices
-                    .GetRequiredService<UserManager<User>>();
+                    var tokenSecurityStamp = context.Principal?
+                        .FindFirstValue(CustomClaimTypes.SecurityStamp);
 
-                var user = await userManager.FindByIdAsync(userId.ToString());
+                    if (!Guid.TryParse(userIdText, out var userId) ||
+                        string.IsNullOrWhiteSpace(tokenSecurityStamp))
+                    {
+                        context.Fail("The token does not contain valid user data.");
+                        return;
+                    }
 
-                if (user is null || user.IsDeleted)
-                {
-                    context.Fail("The user account is disabled.");
-                    return;
-                }
+                    var securityStampValidator = context.HttpContext.RequestServices
+                        .GetRequiredService<IUserSecurityStampValidator>();
 
-                if (!string.Equals(
-                        user.SecurityStamp,
+                    var validationResult = await securityStampValidator.ValidateAsync(
+                        userId,
                         tokenSecurityStamp,
-                        StringComparison.Ordinal))
+                        context.HttpContext.RequestAborted);
+
+                    if (!validationResult.IsValid)
+                    {
+                        context.Fail(validationResult.FailureMessage ?? "The token is no longer valid.");
+                    }
+                },
+
+                OnAuthenticationFailed = context =>
                 {
-                    context.Fail("The token is no longer valid.");
-                }
-            },
+                    if (builder.Environment.IsDevelopment())
+                    {
+                        Console.WriteLine(
+                            $"[JWT] Auth failed: {context.Exception.Message}");
+                    }
 
-            OnAuthenticationFailed = context =>
-            {
-                if (builder.Environment.IsDevelopment())
+                    return Task.CompletedTask;
+                },
+
+                OnMessageReceived = context =>
                 {
-                    Console.WriteLine(
-                        $"[JWT] Auth failed: {context.Exception.Message}");
-                }
+                    var accessToken = context.Request.Query["access_token"];
+                    var path = context.HttpContext.Request.Path;
 
-                return Task.CompletedTask;
-            },
+                    if (!string.IsNullOrWhiteSpace(accessToken) &&
+                        path.StartsWithSegments("/notificationHub"))
+                    {
+                        context.Token = accessToken;
+                    }
 
-            OnMessageReceived = context =>
-            {
-                var accessToken = context.Request.Query["access_token"];
-                var path = context.HttpContext.Request.Path;
-
-                if (!string.IsNullOrWhiteSpace(accessToken) &&
-                    path.StartsWithSegments("/notificationHub"))
-                {
-                    context.Token = accessToken;
-                }
-
-                return Task.CompletedTask;
-            },
-        };
+                    return Task.CompletedTask;
+                },
+            };
     });
 
 builder.Services.AddAuthorization();

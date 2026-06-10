@@ -58,6 +58,12 @@ public static class DependencyInjection
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
         services.AddScoped<IIdentityUserService, IdentityUserService>();
+
+        services.AddMemoryCache();
+
+        services.AddScoped<IUserSecurityStampReader, IdentitySecurityStampReader>();
+        services.AddScoped<IUserSecurityStampValidator, CachedSecurityStampValidator>();
+
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
@@ -65,6 +71,7 @@ public static class DependencyInjection
         services.AddScoped<IJwtTokenSettings, JwtTokenSettings>();
         services.AddScoped<IAdminUserQueryRepository, AdminUserQueryRepository>();
         services.AddScoped<IAdminIdentityService, AdminIdentityService>();
+
         // ── Email ---------------------------------------------------
         services.Configure<EmailOptions>(
             configuration.GetSection(EmailOptions.SectionName));
