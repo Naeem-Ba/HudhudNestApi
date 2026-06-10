@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.DTOs;
@@ -8,20 +8,8 @@ using PropertyApi.Domain.Auth.Enums;
 
 namespace PropertyApi.Application.Auth.Commands.SendPhoneOtp;
 
-// ══════════════════════════════════════════════════════════════
-// الخطوة 1: إرسال رمز OTP للهاتف
-//
-// تسلسل الأحداث:
-// 1. المستخدم يُدخل رقم هاتفه
-// 2. نتحقق من حد الطلبات (3 رسائل كحد أقصى/ساعة)
-// 3. نُولّد رمزاً عشوائياً من 6 أرقام
-// 4. نحفظ هاش الرمز في قاعدة البيانات
-// 5. نُرسل الرمز عبر SMS
-// ══════════════════════════════════════════════════════════════
-
-// ── الأمر (Command) ───────────────────────────────────────────
 /// <summary>
-/// أمر CQRS لإرسال رمز OTP
+/// أمر CQRS لإرسال رمز OTP إلى رقم هاتف بصيغة E.164.
 /// </summary>
 public sealed record SendPhoneOtpCommand(
     string PhoneNumber,
@@ -29,14 +17,23 @@ public sealed record SendPhoneOtpCommand(
     string? IpAddress = null
 ) : IRequest<SendOtpResult>;
 
-// ── معالج الأمر (Handler) ─────────────────────────────────────
+/// <summary>
+/// معالج إرسال OTP.
+///
+/// القاعدة المهمة هنا:
+/// لا نحفظ OTP في قاعدة البيانات إلا بعد نجاح إرسال SMS.
+/// السبب: CountRecentAsync يعتمد على السجلات المحفوظة، ولذلك حفظ OTP قبل الإرسال
+/// يجعل فشل مزود SMS يُحسب ضد المستخدم في rate limiting.
+/// </summary>
 public sealed class SendPhoneOtpCommandHandler
     : IRequestHandler<SendPhoneOtpCommand, SendOtpResult>
 {
-    // ── حدود الأمان ─────────────────────────────────────────
-    private const int MaxOtpPerHour = 3;    // أقصى 3 رسائل في الساعة
-    private const int OtpExpiryMinutes = 5;    // الرمز صالح 5 دقائق
-    private const int RetryWindowMinutes = 60;   // نافذة إعادة المحاولة
+    private const int MaxOtpPerHour = 3;
+    private const int OtpExpiryMinutes = 5;
+    private const int RetryWindowMinutes = 60;
+
+    // 1 محاولة أصلية + 2 retry = 3 محاولات إجمالاً.
+    private const int SmsSendMaxAttempts = 3;
 
     private readonly IOtpCodeRepository _otpRepo;
     private readonly IOtpService _otpService;
@@ -61,7 +58,6 @@ public sealed class SendPhoneOtpCommandHandler
     {
         var phone = request.PhoneNumber.Trim();
 
-        // ── 1. فحص حد الطلبات ─────────────────────────────────
         var recentCount = await _otpRepo.CountRecentAsync(
             phone,
             TimeSpan.FromMinutes(RetryWindowMinutes),
@@ -70,7 +66,9 @@ public sealed class SendPhoneOtpCommandHandler
         if (recentCount >= MaxOtpPerHour)
         {
             _logger.LogWarning(
-                "Rate limit exceeded for phone {Phone}", phone);
+                "Rate limit exceeded for phone {Phone}. Recent OTP count: {RecentCount}",
+                phone,
+                recentCount);
 
             return SendOtpResult.Fail(
                 "RATE_LIMITED",
@@ -78,10 +76,27 @@ public sealed class SendPhoneOtpCommandHandler
                 retryAfter: RetryWindowMinutes * 60);
         }
 
-        // ── 2. توليد رمز OTP وهاشه ───────────────────────────
         var (otp, hash) = _otpService.Generate();
 
-        // ── 3. حفظ الهاش في قاعدة البيانات ──────────────────
+        _logger.LogInformation(
+            "Sending OTP SMS to {Phone} for purpose {Purpose}",
+            phone,
+            request.Purpose);
+
+        var sent = await SendSmsWithRetryAsync(phone, otp, ct);
+
+        if (!sent)
+        {
+            _logger.LogError(
+                "OTP SMS sending failed for phone {Phone} after {AttemptCount} attempts. OTP will not be persisted.",
+                phone,
+                SmsSendMaxAttempts);
+
+            return SendOtpResult.Fail(
+                "SMS_FAILED",
+                "فشل إرسال الرسالة. تأكد من رقم الهاتف أو حاول لاحقاً.");
+        }
+
         var otpCode = OtpCode.Create(
             phoneNumber: phone,
             codeHash: hash,
@@ -89,34 +104,81 @@ public sealed class SendPhoneOtpCommandHandler
             ipAddress: request.IpAddress,
             expiryMinutes: OtpExpiryMinutes);
 
-        await _otpRepo.AddAsync(otpCode, ct);
-        await _otpRepo.SaveChangesAsync(ct);
-
-        // ── 4. إرسال SMS ──────────────────────────────────────
-        var sent = await _smsService.SendOtpAsync(phone, otp, ct);
-
-        if (!sent)
+        try
         {
+            await _otpRepo.AddAsync(otpCode, ct);
+            await _otpRepo.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            // لا يمكن حذف SMS بعد إرساله. أفضل تعويض هنا هو عدم إخفاء المشكلة:
+            // المستخدم سيحصل على رد فشل، والسجل لن يكون قابلاً للتحقق إن فشل الحفظ.
             _logger.LogError(
-                "SMS sending failed for phone {Phone}", phone);
+                ex,
+                "OTP SMS was sent to {Phone}, but persisting OTP failed. User must request a new code.",
+                phone);
 
             return SendOtpResult.Fail(
-                "SMS_FAILED",
-                "فشل إرسال الرسالة. تأكد من رقم الهاتف أو حاول لاحقاً.");
+                "OTP_STORE_FAILED",
+                "تم إرسال الرسالة لكن حدث خطأ أثناء حفظ الرمز. حاول طلب رمز جديد.");
         }
 
         _logger.LogInformation(
-            "OTP sent successfully to {Phone} for purpose {Purpose}",
-            phone, request.Purpose);
+            "OTP sent and persisted successfully for phone {Phone} and purpose {Purpose}",
+            phone,
+            request.Purpose);
 
         return SendOtpResult.Ok();
     }
+
+    private async Task<bool> SendSmsWithRetryAsync(
+        string phone,
+        string otp,
+        CancellationToken ct)
+    {
+        for (var attempt = 1; attempt <= SmsSendMaxAttempts; attempt++)
+        {
+            try
+            {
+                var sent = await _smsService.SendOtpAsync(phone, otp, ct);
+
+                if (sent)
+                {
+                    _logger.LogInformation(
+                        "OTP SMS sent successfully to {Phone} on attempt {Attempt}",
+                        phone,
+                        attempt);
+
+                    return true;
+                }
+
+                _logger.LogWarning(
+                    "OTP SMS provider returned false for phone {Phone} on attempt {Attempt}/{MaxAttempts}",
+                    phone,
+                    attempt,
+                    SmsSendMaxAttempts);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "OTP SMS sending threw exception for phone {Phone} on attempt {Attempt}/{MaxAttempts}",
+                    phone,
+                    attempt,
+                    SmsSendMaxAttempts);
+            }
+        }
+
+        return false;
+    }
 }
 
-// ── المُدقق (Validator) ───────────────────────────────────────
 /// <summary>
-/// التحقق من صحة الأمر قبل تنفيذه
-/// يعمل تلقائياً عبر ValidationBehavior في MediatR Pipeline
+/// التحقق من صحة الأمر قبل تنفيذه عبر MediatR validation pipeline.
 /// </summary>
 public sealed class SendPhoneOtpCommandValidator
     : AbstractValidator<SendPhoneOtpCommand>
@@ -130,9 +192,5 @@ public sealed class SendPhoneOtpCommandValidator
             .WithMessage(
                 "رقم الهاتف يجب أن يكون بصيغة دولية مثل: +963911234567")
             .WithName("PhoneNumber");
-
-        // مثال لرقم سوري: +963 + 9 أرقام
-        // مثال لرقم ألماني: +49 + 10 أرقام
-        // الصيغة E.164: + ثم 8-15 رقم
     }
 }
