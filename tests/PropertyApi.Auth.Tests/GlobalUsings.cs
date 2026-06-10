@@ -5,7 +5,7 @@ global using Microsoft.AspNetCore.Identity;
 global using Microsoft.Extensions.Logging;
 
 global using PropertyApi.Domain.Auth.Entities;
-global using PropertyApi.Domain.Auth.Enums;
+global using PropertyApi.Domain.Enums;
 global using PropertyApi.Domain.Users.Entities;
 global using PropertyApi.Application.Auth.DTOs;
 global using PropertyApi.Application.Auth.Interfaces;

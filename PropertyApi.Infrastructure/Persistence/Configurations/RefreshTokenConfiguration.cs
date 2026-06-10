@@ -41,6 +41,9 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
         // Index for token lookup (login + refresh flows hit this constantly)
         builder.HasIndex(t => t.TokenHash).IsUnique();
         builder.HasIndex(t => t.UserId);
+
+        builder.HasIndex(t => new { t.UserId, t.IsRevoked, t.ExpiresAt })
+            .HasDatabaseName("IX_RefreshTokens_User_Active_ExpiresAt");
     }
 }
 

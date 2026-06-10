@@ -21,6 +21,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi.Architecture.Te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi.Auth.Tests", "tests\PropertyApi.Auth.Tests\PropertyApi.Auth.Tests.csproj", "{00C502DB-36A2-401E-90E0-4CBBFE86F3E9}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{F10912E2-55E8-4C6A-BF2B-F56CDE6D9068}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi.Migrator", "tools\PropertyApi.Migrator\PropertyApi.Migrator.csproj", "{872B6A57-5466-4083-A75B-F11704DC5461}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -59,6 +63,10 @@ Global
 		{00C502DB-36A2-401E-90E0-4CBBFE86F3E9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{00C502DB-36A2-401E-90E0-4CBBFE86F3E9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{00C502DB-36A2-401E-90E0-4CBBFE86F3E9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{872B6A57-5466-4083-A75B-F11704DC5461}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{872B6A57-5466-4083-A75B-F11704DC5461}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{872B6A57-5466-4083-A75B-F11704DC5461}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{872B6A57-5466-4083-A75B-F11704DC5461}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -68,6 +76,7 @@ Global
 		{8290BF42-23C4-4169-B2CA-940ED762AF5E} = {1A29C35C-DA58-469E-9E81-496362C5D04F}
 		{4D1C1337-521A-49A8-8728-97A269170ABB} = {1A29C35C-DA58-469E-9E81-496362C5D04F}
 		{00C502DB-36A2-401E-90E0-4CBBFE86F3E9} = {1A29C35C-DA58-469E-9E81-496362C5D04F}
+		{872B6A57-5466-4083-A75B-F11704DC5461} = {F10912E2-55E8-4C6A-BF2B-F56CDE6D9068}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {8D2476DF-89D9-4F4D-BCC9-E63548CAB6B6}

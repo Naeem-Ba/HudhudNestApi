@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -6,19 +6,19 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Domain.Auth.Entities;
-using PropertyApi.Domain.Auth.Enums;
+using PropertyApi.Domain.Enums;
 using PropertyApi.Infrastructure.Persistence;
 
 namespace PropertyApi.Infrastructure.Auth.Repositories;
 
 /// <summary>
-/// مستودع OtpCode — يتعامل مع قاعدة البيانات
+/// ?????? OtpCode � ?????? ?? ????? ????????
 ///
-/// ملاحظة للمبتدئين:
-/// ──────────────────
-/// Repository Pattern = طبقة وسيطة بين الكود والقاعدة.
-/// يمنع تشتت استعلامات قاعدة البيانات في كل مكان.
-/// كل الاستعلامات المتعلقة بـ OtpCode هنا فقط.
+/// ?????? ?????????:
+/// ------------------
+/// Repository Pattern = ???? ????? ??? ????? ????????.
+/// ???? ???? ????????? ????? ???????? ?? ?? ????.
+/// ?? ??????????? ???????? ?? OtpCode ??? ???.
 /// </summary>
 public sealed class OtpCodeRepository : IOtpCodeRepository
 {
@@ -27,20 +27,20 @@ public sealed class OtpCodeRepository : IOtpCodeRepository
     public OtpCodeRepository(AppDbContext db)
         => _db = db;
 
-    /// <summary>أضف رمز OTP جديداً للقاعدة</summary>
+    /// <summary>??? ??? OTP ?????? ???????</summary>
     public async Task AddAsync(OtpCode otpCode, CancellationToken ct = default)
         => await _db.OtpCodes.AddAsync(otpCode, ct);
 
     /// <summary>
-    /// احصل على آخر رمز صالح
+    /// ???? ??? ??? ??? ????
     ///
-    /// "صالح" يعني:
-    ///   • رقم الهاتف متطابق
-    ///   • الغرض متطابق (تسجيل / دخول / ...)
-    ///   • لم ينتهِ بعد (ExpiresAt > الآن)
-    ///   • لم يُستخدم (IsUsed = false)
-    ///   • عدد المحاولات < 3 (AttemptCount < 3)
-    ///   • نأخذ الأحدث فقط (CreatedAt الأكبر)
+    /// "????" ????:
+    ///   � ??? ?????? ??????
+    ///   � ????? ?????? (????? / ???? / ...)
+    ///   � ?? ????? ??? (ExpiresAt > ????)
+    ///   � ?? ??????? (IsUsed = false)
+    ///   � ??? ????????? < 3 (AttemptCount < 3)
+    ///   � ???? ?????? ??? (CreatedAt ??????)
     /// </summary>
     public async Task<OtpCode?> GetLatestValidAsync(
         string phoneNumber,
@@ -48,6 +48,7 @@ public sealed class OtpCodeRepository : IOtpCodeRepository
         CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
+        await DeleteExpiredAsync(now, ct);
 
         return await _db.OtpCodes
             .Where(o =>
@@ -61,10 +62,10 @@ public sealed class OtpCodeRepository : IOtpCodeRepository
     }
 
     /// <summary>
-    /// عُدّ طلبات OTP الأخيرة لرقم الهاتف
+    /// ???? ????? OTP ??????? ???? ??????
     ///
-    /// يُستخدم لفحص حد الطلبات:
-    ///   إذا طلب المستخدم 3+ رموز في ساعة → ارفض
+    /// ??????? ???? ?? ???????:
+    ///   ??? ??? ???????? 3+ ???? ?? ???? ? ????
     /// </summary>
     public async Task<int> CountRecentAsync(
         string phoneNumber,
@@ -72,6 +73,8 @@ public sealed class OtpCodeRepository : IOtpCodeRepository
         CancellationToken ct = default)
     {
         var cutoff = DateTime.UtcNow - window;
+
+        await DeleteExpiredAsync(DateTime.UtcNow, ct);
 
         return await _db.OtpCodes
             .CountAsync(o =>
@@ -82,4 +85,13 @@ public sealed class OtpCodeRepository : IOtpCodeRepository
 
     public async Task SaveChangesAsync(CancellationToken ct = default)
         => await _db.SaveChangesAsync(ct);
+
+    public async Task<int> DeleteExpiredAsync(
+    DateTime utcNow,
+    CancellationToken ct = default)
+    {
+        return await _db.OtpCodes
+            .Where(o => o.ExpiresAt <= utcNow)
+            .ExecuteDeleteAsync(ct);
+    }
 }

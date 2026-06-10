@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Infrastructure.Identity.Entities;
@@ -13,13 +14,16 @@ public sealed class RefreshTokenRepository : IRefreshTokenRepository
 {
     private readonly AppDbContext _db;
     private readonly JwtOptions _jwtOptions;
+    private readonly ILogger<RefreshTokenRepository> _logger;
 
     public RefreshTokenRepository(
         AppDbContext db,
-        IOptions<JwtOptions> jwtOptions)
+        IOptions<JwtOptions> jwtOptions,
+        ILogger<RefreshTokenRepository> logger)
     {
         _db = db;
         _jwtOptions = jwtOptions.Value;
+        _logger = logger;
     }
 
     public async Task AddAsync(
@@ -28,12 +32,36 @@ public sealed class RefreshTokenRepository : IRefreshTokenRepository
         string? createdByIp,
         CancellationToken ct = default)
     {
+        var now = DateTime.UtcNow;
+        var newTokenHash = HashToken(refreshToken);
+
+        var revokedOldTokens = await _db.RefreshTokens
+            .IgnoreQueryFilters()
+            .Where(token =>
+                token.UserId == userId &&
+                !token.IsRevoked &&
+                token.ExpiresAt > now)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(token => token.IsRevoked, true)
+                .SetProperty(token => token.RevokedAt, now)
+                .SetProperty(token => token.RevokedByIp, createdByIp)
+                .SetProperty(token => token.ReplacedByTokenHash, newTokenHash), ct);
+
+        if (revokedOldTokens > 0)
+        {
+            _logger.LogInformation(
+                "Revoked {Count} active refresh token(s) before issuing a new token for user {UserId}.",
+                revokedOldTokens,
+                userId);
+        }
+
         _db.RefreshTokens.Add(new RefreshToken
         {
-            TokenHash = HashToken(refreshToken),
+            TokenHash = newTokenHash,
             UserId = userId,
-            ExpiresAt = DateTime.UtcNow.AddDays(_jwtOptions.RefreshTokenDays),
-            CreatedByIp = createdByIp
+            ExpiresAt = now.AddDays(_jwtOptions.RefreshTokenDays),
+            CreatedByIp = createdByIp,
+            LastUsedAt = null
         });
 
         await _db.SaveChangesAsync(ct);
@@ -44,6 +72,7 @@ public sealed class RefreshTokenRepository : IRefreshTokenRepository
         CancellationToken ct = default)
     {
         var hash = HashToken(refreshToken);
+        var now = DateTime.UtcNow;
 
         var token = await _db.RefreshTokens
             .AsNoTracking()
@@ -51,14 +80,30 @@ public sealed class RefreshTokenRepository : IRefreshTokenRepository
             .Include(x => x.User)
             .SingleOrDefaultAsync(x => x.TokenHash == hash, ct);
 
-        return token is null
-            ? null
-            : new RefreshTokenRecord(
-                token.Id,
-                token.UserId,
-                token.ExpiresAt,
-                token.IsRevoked,
-                token.User);
+        if (token is null)
+        {
+            return null;
+        }
+
+        if (!token.IsRevoked && token.ExpiresAt > now)
+        {
+            await _db.RefreshTokens
+                .IgnoreQueryFilters()
+                .Where(x => x.Id == token.Id)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(x => x.LastUsedAt, now), ct);
+
+            _logger.LogInformation(
+                "Refresh token last-used timestamp updated for user {UserId}.",
+                token.UserId);
+        }
+
+        return new RefreshTokenRecord(
+            token.Id,
+            token.UserId,
+            token.ExpiresAt,
+            token.IsRevoked,
+            token.User);
     }
 
     public async Task<bool> RevokeIfActiveAsync(
@@ -84,6 +129,13 @@ public sealed class RefreshTokenRepository : IRefreshTokenRepository
                 .SetProperty(token => token.RevokedByIp, revokedByIp)
                 .SetProperty(token => token.ReplacedByTokenHash, replacementHash), ct);
 
+        if (affectedRows == 1)
+        {
+            _logger.LogInformation(
+                "Refresh token {TokenId} was revoked successfully.",
+                tokenId);
+        }
+
         return affectedRows == 1;
     }
 
@@ -93,7 +145,7 @@ public sealed class RefreshTokenRepository : IRefreshTokenRepository
         string? revokedByIp,
         CancellationToken ct = default)
     {
-        await _db.RefreshTokens
+        var affectedRows = await _db.RefreshTokens
             .IgnoreQueryFilters()
             .Where(token =>
                 token.UserId == userId &&
@@ -103,6 +155,14 @@ public sealed class RefreshTokenRepository : IRefreshTokenRepository
                 .SetProperty(token => token.IsRevoked, true)
                 .SetProperty(token => token.RevokedAt, now)
                 .SetProperty(token => token.RevokedByIp, revokedByIp), ct);
+
+        if (affectedRows > 0)
+        {
+            _logger.LogInformation(
+                "Revoked {Count} active refresh token(s) for user {UserId}.",
+                affectedRows,
+                userId);
+        }
     }
 
     public async Task<bool> RevokeUserTokenAsync(
@@ -125,6 +185,13 @@ public sealed class RefreshTokenRepository : IRefreshTokenRepository
                 .SetProperty(token => token.IsRevoked, true)
                 .SetProperty(token => token.RevokedAt, now)
                 .SetProperty(token => token.RevokedByIp, revokedByIp), ct);
+
+        if (affectedRows == 1)
+        {
+            _logger.LogInformation(
+                "Refresh token was revoked for user {UserId}.",
+                userId);
+        }
 
         return affectedRows == 1;
     }

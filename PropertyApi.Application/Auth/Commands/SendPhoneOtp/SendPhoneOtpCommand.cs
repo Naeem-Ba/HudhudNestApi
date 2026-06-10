@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.DTOs;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Domain.Auth.Entities;
-using PropertyApi.Domain.Auth.Enums;
+using PropertyApi.Domain.Enums;
 
 namespace PropertyApi.Application.Auth.Commands.SendPhoneOtp;
 

@@ -71,7 +71,7 @@ public static class DependencyInjection
         services.AddScoped<IJwtTokenSettings, JwtTokenSettings>();
         services.AddScoped<IAdminUserQueryRepository, AdminUserQueryRepository>();
         services.AddScoped<IAdminIdentityService, AdminIdentityService>();
-
+        services.AddHostedService<OtpCleanupHostedService>();
         // ── Email ---------------------------------------------------
         services.Configure<EmailOptions>(
             configuration.GetSection(EmailOptions.SectionName));

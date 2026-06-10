@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.DTOs;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
-using PropertyApi.Domain.Auth.Enums;
+using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Domain.Users.Entities;
 
@@ -21,6 +21,7 @@ namespace PropertyApi.Application.Auth.Commands.VerifyPhoneOtp;
 public sealed record VerifyPhoneOtpCommand(
     string PhoneNumber,
     string Code,
+    OtpPurpose Purpose = OtpPurpose.PhoneRegistration,
     string? FirstName = null,
     string? LastName = null,
     string? IpAddress = null
@@ -62,7 +63,7 @@ public sealed class VerifyPhoneOtpCommandHandler
         // ── 1. ابحث عن آخر رمز صالح ──────────────────────────
         var otpCode = await _otpRepo.GetLatestValidAsync(
             phone,
-            OtpPurpose.PhoneRegistration,
+            request.Purpose,
             ct);
 
         if (otpCode is null)
@@ -255,5 +256,10 @@ public sealed class VerifyPhoneOtpCommandValidator
             .MaximumLength(100)
             .When(x => !string.IsNullOrEmpty(x.LastName))
             .WithMessage("اسم العائلة يجب ألا يتجاوز 100 حرف.");
+
+        RuleFor(x => x.Purpose)
+            .IsInEnum()
+            .WithMessage("غرض رمز التحقق غير مدعوم.");
+
     }
 }

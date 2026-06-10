@@ -1,3 +1,7 @@
+using FluentValidation.TestHelper;
+using PropertyApi.Application.Auth.Commands.VerifyPhoneOtp;
+using PropertyApi.Domain.Enums;
+
 namespace PropertyApi.Auth.Tests.Application.Validators;
 
 [Trait("Category", "Validators")]
@@ -42,35 +46,43 @@ public sealed class VerifyPhoneOtpCommandValidatorTests
 {
     private readonly VerifyPhoneOtpCommandValidator _validator = new();
 
-    private static VerifyPhoneOtpCommand ValidCommand(
-        string phone = "+963911234567",
-        string code = "123456",
-        string? firstName = null,
-        string? lastName = null,
-        string? ipAddress = null) =>
-        new(phone, code, firstName, lastName, ipAddress);
-
     [Fact(DisplayName = "Valid phone and six-digit code pass")]
     public void ValidPhoneAndCode_ShouldPass()
     {
-        var result = _validator.TestValidate(ValidCommand());
+        var command = new VerifyPhoneOtpCommand(
+            "+491701234567",
+            "123456",
+            OtpPurpose.PhoneRegistration);
+
+        var result = _validator.TestValidate(command);
+
         result.ShouldNotHaveAnyValidationErrors();
     }
 
     [Fact(DisplayName = "FirstName and LastName are optional")]
     public void WithoutFirstLastName_ShouldPass()
     {
-        var result = _validator.TestValidate(ValidCommand());
+        var command = new VerifyPhoneOtpCommand(
+            "+491701234567",
+            "123456",
+            OtpPurpose.PhoneRegistration);
+
+        var result = _validator.TestValidate(command);
+
         result.ShouldNotHaveAnyValidationErrors();
     }
 
     [Fact(DisplayName = "Names at maximum length pass")]
     public void NameAtMaxLength_ShouldPass()
     {
-        var result = _validator.TestValidate(
-            ValidCommand(
-                firstName: new string('A', 100),
-                lastName: new string('B', 100)));
+        var command = new VerifyPhoneOtpCommand(
+            "+491701234567",
+            "123456",
+            OtpPurpose.PhoneRegistration,
+            new string('A', 100),
+            new string('B', 100));
+
+        var result = _validator.TestValidate(command);
 
         result.ShouldNotHaveAnyValidationErrors();
     }
@@ -78,23 +90,48 @@ public sealed class VerifyPhoneOtpCommandValidatorTests
     [Theory(DisplayName = "Invalid code fails")]
     [InlineData("")]
     [InlineData("   ")]
+    [InlineData("1")]
     [InlineData("12345")]
     [InlineData("1234567")]
-    [InlineData("1")]
-    [InlineData("12345A")]
     [InlineData("ABCDEF")]
+    [InlineData("12345A")]
     [InlineData("123 56")]
     public void InvalidCode_ShouldFail(string code)
     {
-        var result = _validator.TestValidate(ValidCommand(code: code));
+        var command = new VerifyPhoneOtpCommand(
+            "+491701234567",
+            code,
+            OtpPurpose.PhoneRegistration);
+
+        var result = _validator.TestValidate(command);
+
         result.ShouldHaveValidationErrorFor(x => x.Code);
+    }
+
+    [Fact(DisplayName = "Invalid purpose fails")]
+    public void InvalidPurpose_ShouldFail()
+    {
+        var command = new VerifyPhoneOtpCommand(
+            "+491701234567",
+            "123456",
+            (OtpPurpose)999);
+
+        var result = _validator.TestValidate(command);
+
+        result.ShouldHaveValidationErrorFor(x => x.Purpose);
     }
 
     [Fact(DisplayName = "FirstName longer than 100 chars fails")]
     public void FirstNameTooLong_ShouldFail()
     {
-        var result = _validator.TestValidate(
-            ValidCommand(firstName: new string('A', 101)));
+        var command = new VerifyPhoneOtpCommand(
+            "+491701234567",
+            "123456",
+            OtpPurpose.PhoneRegistration,
+            new string('A', 101),
+            "Valid");
+
+        var result = _validator.TestValidate(command);
 
         result.ShouldHaveValidationErrorFor(x => x.FirstName);
     }
@@ -102,8 +139,14 @@ public sealed class VerifyPhoneOtpCommandValidatorTests
     [Fact(DisplayName = "LastName longer than 100 chars fails")]
     public void LastNameTooLong_ShouldFail()
     {
-        var result = _validator.TestValidate(
-            ValidCommand(lastName: new string('B', 101)));
+        var command = new VerifyPhoneOtpCommand(
+            "+491701234567",
+            "123456",
+            OtpPurpose.PhoneRegistration,
+            "Valid",
+            new string('B', 101));
+
+        var result = _validator.TestValidate(command);
 
         result.ShouldHaveValidationErrorFor(x => x.LastName);
     }

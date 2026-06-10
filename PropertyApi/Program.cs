@@ -2,7 +2,6 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PropertyApi.Application;
 using PropertyApi.Infrastructure;
@@ -289,7 +288,8 @@ var app = builder.Build();
 // --------------------------------------------------------------
 
 // -- 8. Run DB Migrations --------------------------------------
-await app.MigrateDatabaseAsync(); // Extension method below
+
+
 await IdentitySeeder.SeedRolesAsync(app.Services);
 
 // -- 9. Middleware (order is critical) -------------------------
@@ -325,33 +325,4 @@ app.Run();
 public partial class Program
 {
 }
-// --- Database Migration Helper -------------------------------
-static class ApplicationExtensions
-{
-    public static async Task MigrateDatabaseAsync(this WebApplication app)
-    {
-        using var scope = app.Services.CreateScope();
-        var services = scope.ServiceProvider;
 
-        try
-        {
-            var context = services
-                .GetRequiredService<PropertyApi.Infrastructure.Persistence.AppDbContext>();
-            var logger = services
-                .GetRequiredService<ILogger<Program>>();
-
-            logger.LogInformation("Applying database migrations...");
-            await context.Database.MigrateAsync();
-            logger.LogInformation("Database ready.");
-        }
-        catch (Exception ex)
-        {
-            var logger = services.GetRequiredService<ILogger<Program>>();
-            logger.LogError(ex, "Migration failed.");
-
-            // In Development: crash immediately so you see the problem
-            // In Production: log and continue (Render will restart the service)
-            if (app.Environment.IsDevelopment()) throw;
-        }
-    }
-}
