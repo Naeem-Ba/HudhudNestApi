@@ -26,6 +26,9 @@ public sealed class RefreshTokenStore : IRefreshTokenStore
         string? createdByIp,
         CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(refreshToken))
+            throw new ArgumentException("Refresh token is required.", nameof(refreshToken));
+
         _db.RefreshTokens.Add(new RefreshToken
         {
             TokenHash = HashToken(refreshToken),
@@ -39,7 +42,8 @@ public sealed class RefreshTokenStore : IRefreshTokenStore
 
     private static string HashToken(string token)
     {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
-        return Convert.ToBase64String(bytes);
+        var bytes = Encoding.UTF8.GetBytes(token);
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash);
     }
 }
