@@ -1,12 +1,14 @@
 ﻿using System.Net;
 using System.Net.Mail;
-using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using PropertyApi.Application.Common.Interfaces;
+using IdentityEmailSender = Microsoft.AspNetCore.Identity.UI.Services.IEmailSender;
 
 namespace PropertyApi.Infrastructure.Email;
 
-public sealed class SmtpEmailSender : IEmailSender
+public sealed class SmtpEmailSender
+    : IdentityEmailSender, IApplicationEmailSender
 {
     private readonly EmailOptions _options;
     private readonly ILogger<SmtpEmailSender> _logger;
@@ -44,7 +46,9 @@ public sealed class SmtpEmailSender : IEmailSender
 
         message.To.Add(email);
 
-        using var client = new SmtpClient(_options.SmtpHost, _options.SmtpPort)
+        using var client = new SmtpClient(
+            _options.SmtpHost,
+            _options.SmtpPort)
         {
             EnableSsl = _options.EnableSsl,
             Credentials = new NetworkCredential(

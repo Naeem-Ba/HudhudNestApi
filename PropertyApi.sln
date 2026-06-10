@@ -19,6 +19,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi.Integration.Tes
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyApi.Architecture.Tests", "tests\PropertyApi.Architecture.Tests\PropertyApi.Architecture.Tests.csproj", "{4D1C1337-521A-49A8-8728-97A269170ABB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyApi.Auth.Tests", "tests\PropertyApi.Auth.Tests\PropertyApi.Auth.Tests.csproj", "{00C502DB-36A2-401E-90E0-4CBBFE86F3E9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -53,6 +55,10 @@ Global
 		{4D1C1337-521A-49A8-8728-97A269170ABB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4D1C1337-521A-49A8-8728-97A269170ABB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4D1C1337-521A-49A8-8728-97A269170ABB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{00C502DB-36A2-401E-90E0-4CBBFE86F3E9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{00C502DB-36A2-401E-90E0-4CBBFE86F3E9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{00C502DB-36A2-401E-90E0-4CBBFE86F3E9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{00C502DB-36A2-401E-90E0-4CBBFE86F3E9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -61,6 +67,7 @@ Global
 		{E0FB3F99-68B6-4831-8C60-2B40F0B69636} = {1A29C35C-DA58-469E-9E81-496362C5D04F}
 		{8290BF42-23C4-4169-B2CA-940ED762AF5E} = {1A29C35C-DA58-469E-9E81-496362C5D04F}
 		{4D1C1337-521A-49A8-8728-97A269170ABB} = {1A29C35C-DA58-469E-9E81-496362C5D04F}
+		{00C502DB-36A2-401E-90E0-4CBBFE86F3E9} = {1A29C35C-DA58-469E-9E81-496362C5D04F}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {8D2476DF-89D9-4F4D-BCC9-E63548CAB6B6}

@@ -1,9 +1,11 @@
-﻿using Microsoft.AspNetCore.Identity.UI.Services;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
+using PropertyApi.Application.Common.Interfaces;
+using IdentityEmailSender = Microsoft.AspNetCore.Identity.UI.Services.IEmailSender;
 
 namespace PropertyApi.Infrastructure.Email;
 
-public sealed class ConsoleEmailSender : IEmailSender
+public sealed class ConsoleEmailSender
+    : IdentityEmailSender, IApplicationEmailSender
 {
     private readonly ILogger<ConsoleEmailSender> _logger;
 

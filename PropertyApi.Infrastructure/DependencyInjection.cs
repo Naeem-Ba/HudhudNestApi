@@ -7,19 +7,19 @@ using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Application.Users.Messaging.Interfaces;
+using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Infrastructure.Persistence;
 using PropertyApi.Infrastructure.Repositories;
 using PropertyApi.Infrastructure.Services;
 using PropertyApi.Infrastructure.Media;
 using PropertyApi.Infrastructure.Identity.Services;
-using Microsoft.AspNetCore.Identity.UI.Services;
 using PropertyApi.Infrastructure.Auth.Services;
-using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Infrastructure.Email;
 using PropertyApi.Infrastructure.Auth.Repositories;
-using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Infrastructure.Notifications;
+using IdentityEmailSender = Microsoft.AspNetCore.Identity.UI.Services.IEmailSender;
 
 namespace PropertyApi.Infrastructure;
 
@@ -56,19 +56,33 @@ public static class DependencyInjection
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<INotificationService, NotificationService>();
-
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IPasswordResetUrlBuilder, PasswordResetUrlBuilder>();
+        services.AddScoped<IJwtTokenSettings, JwtTokenSettings>();
         // ── Email ---------------------------------------------------
         services.Configure<EmailOptions>(
             configuration.GetSection(EmailOptions.SectionName));
 
         if (environment.IsProduction())
-        {
-            services.AddScoped<IEmailSender, SmtpEmailSender>();
-        }
-        else
-        {
-            services.AddScoped<IEmailSender, ConsoleEmailSender>();
-        }
+{
+    services.AddScoped<SmtpEmailSender>();
+
+    services.AddScoped<IdentityEmailSender>(
+        sp => sp.GetRequiredService<SmtpEmailSender>());
+
+    services.AddScoped<IApplicationEmailSender>(
+        sp => sp.GetRequiredService<SmtpEmailSender>());
+}
+else
+{
+    services.AddScoped<ConsoleEmailSender>();
+
+    services.AddScoped<IdentityEmailSender>(
+        sp => sp.GetRequiredService<ConsoleEmailSender>());
+
+    services.AddScoped<IApplicationEmailSender>(
+        sp => sp.GetRequiredService<ConsoleEmailSender>());
+}
 
         // ── OTP / SMS Auth Services ─────────────────────────────────
         services.AddScoped<IOtpCodeRepository, OtpCodeRepository>();
