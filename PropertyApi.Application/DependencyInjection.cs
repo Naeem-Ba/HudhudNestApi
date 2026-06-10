@@ -2,6 +2,8 @@ using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using PropertyApi.Application.Common.Behaviors;
+using PropertyApi.Application.Admin.Interfaces;
+using PropertyApi.Application.Admin.Services;
 
 namespace PropertyApi.Application;
 
@@ -33,6 +35,7 @@ public static class DependencyInjection
         // ── FluentValidation ─────────────────────────────────────
         // Scans for all AbstractValidator<T> in this assembly
         services.AddValidatorsFromAssembly(assembly);
+        services.AddScoped<IAdminService, AdminService>();
 
         return services;
     }

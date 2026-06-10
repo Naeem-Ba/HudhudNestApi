@@ -19,6 +19,10 @@ using PropertyApi.Infrastructure.Auth.Services;
 using PropertyApi.Infrastructure.Email;
 using PropertyApi.Infrastructure.Auth.Repositories;
 using PropertyApi.Infrastructure.Notifications;
+using PropertyApi.Application.Admin.Interfaces;
+using PropertyApi.Infrastructure.Admin;
+
+
 using IdentityEmailSender = Microsoft.AspNetCore.Identity.UI.Services.IEmailSender;
 
 namespace PropertyApi.Infrastructure;
@@ -60,6 +64,8 @@ public static class DependencyInjection
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IPasswordResetUrlBuilder, PasswordResetUrlBuilder>();
         services.AddScoped<IJwtTokenSettings, JwtTokenSettings>();
+        services.AddScoped<IAdminUserQueryRepository, AdminUserQueryRepository>();
+        services.AddScoped<IAdminIdentityService, AdminIdentityService>();
         // ── Email ---------------------------------------------------
         services.Configure<EmailOptions>(
             configuration.GetSection(EmailOptions.SectionName));
