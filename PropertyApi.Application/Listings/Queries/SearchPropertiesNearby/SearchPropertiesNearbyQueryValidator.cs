@@ -30,6 +30,10 @@ public sealed class SearchPropertiesNearbyQueryValidator
             RuleFor(x => x.Filter.PageSize)
                 .InclusiveBetween(1, 100);
 
+            RuleFor(x => x.Filter)
+                .Must(filter => filter.Page * filter.PageSize <= 1000)
+                .WithMessage("Geo search cannot request more than 1000 skipped/returned rows. Reduce Page or PageSize.");
+
             RuleFor(x => x.Filter.CountryCode)
                 .Length(2)
                 .When(x => !string.IsNullOrWhiteSpace(x.Filter.CountryCode));

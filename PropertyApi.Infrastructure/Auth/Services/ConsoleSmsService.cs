@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Json;
@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using PropertyApi.Application.Auth.Interfaces;
 
 namespace PropertyApi.Infrastructure.Auth.Services;
@@ -128,13 +129,15 @@ public sealed class HttpSmsService : ISmsService
 
     public HttpSmsService(
         HttpClient httpClient,
-        IConfiguration config,
+        IOptions<SmsProviderOptions> options,
         ILogger<HttpSmsService> logger)
     {
+        var value = options.Value;
+
         _httpClient = httpClient;
-        _apiUrl = config["SmsProvider:ApiUrl"] ?? string.Empty;
-        _apiKey = config["SmsProvider:ApiKey"] ?? string.Empty;
-        _fromNumber = config["SmsProvider:FromNumber"] ?? string.Empty;
+        _apiUrl = value.ApiUrl;
+        _apiKey = value.ApiKey;
+        _fromNumber = value.FromNumber;
         _logger = logger;
     }
 

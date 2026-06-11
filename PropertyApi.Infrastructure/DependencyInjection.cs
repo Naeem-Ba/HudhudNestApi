@@ -25,6 +25,8 @@ using PropertyApi.Infrastructure.Lookups;
 using PropertyApi.Application.Admin.Interfaces;
 using PropertyApi.Infrastructure.Admin;
 using IdentityEmailSender = Microsoft.AspNetCore.Identity.UI.Services.IEmailSender;
+using Microsoft.Extensions.Options;
+using PropertyApi.Infrastructure.Health;
 
 
 namespace PropertyApi.Infrastructure;
@@ -61,8 +63,6 @@ public static class DependencyInjection
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
         services.AddScoped<IIdentityUserService, IdentityUserService>();
-
-        services.AddMemoryCache();
 
         services.AddScoped<IUserSecurityStampReader, IdentitySecurityStampReader>();
         services.AddScoped<IUserSecurityStampValidator, CachedSecurityStampValidator>();
@@ -104,6 +104,23 @@ else
 }
 
         // ── OTP / SMS Auth Services ─────────────────────────────────
+        services.AddOptions<SmsProviderOptions>()
+            .Bind(configuration.GetSection(SmsProviderOptions.SectionName));
+
+        if (environment.IsProduction())
+        {
+            services.AddOptions<SmsProviderOptions>()
+                .Bind(configuration.GetSection(SmsProviderOptions.SectionName))
+                .Validate(options => !string.IsNullOrWhiteSpace(options.Provider), "SmsProvider:Provider is required in Production.")
+                .Validate(options => !string.IsNullOrWhiteSpace(options.ApiUrl), "SmsProvider:ApiUrl is required in Production.")
+                .Validate(options => Uri.TryCreate(options.ApiUrl, UriKind.Absolute, out var uri) &&
+                                     (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp),
+                    "SmsProvider:ApiUrl must be a valid absolute HTTP/HTTPS URL in Production.")
+                .Validate(options => !string.IsNullOrWhiteSpace(options.ApiKey), "SmsProvider:ApiKey is required in Production.")
+                .Validate(options => !string.IsNullOrWhiteSpace(options.FromNumber), "SmsProvider:FromNumber is required in Production.")
+                .ValidateOnStart();
+        }
+
         services.AddScoped<IOtpCodeRepository, OtpCodeRepository>();
         services.AddScoped<IOtpService, OtpService>();
         services.AddScoped<IEmailVerificationService, EmailVerificationService>();
@@ -164,26 +181,49 @@ else
             configuration.GetSection(CloudinaryOptions.SectionName));
 
 
-        services.AddScoped<IMediaStorageService, CloudinaryMediaStorageService>();
+        services.AddHttpClient<CloudinaryMediaStorageService>();
+        services.AddScoped<IMediaStorageService>(sp =>
+            sp.GetRequiredService<CloudinaryMediaStorageService>());
 
         var redisConnectionString = configuration.GetConnectionString("Redis")
     ?? configuration["Redis:ConnectionString"];
 
-        if (!string.IsNullOrWhiteSpace(redisConnectionString))
-        {
-            services.AddStackExchangeRedisCache(options =>
-            {
-                options.Configuration = redisConnectionString;
-                options.InstanceName = "PropertyApi:";
-            });
-        }
-        else
-        {
-            services.AddDistributedMemoryCache();
-        }
+var isTestingOrCi =
+    environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase) ||
+    environment.EnvironmentName.Equals("CI", StringComparison.OrdinalIgnoreCase);
 
+if (environment.IsProduction())
+{
+    if (string.IsNullOrWhiteSpace(redisConnectionString))
+    {
+        throw new InvalidOperationException(
+            "Redis is required in Production for distributed security stamp caching. Configure ConnectionStrings:Redis or Redis:ConnectionString.");
+    }
+
+    services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnectionString;
+        options.InstanceName = "PropertyApi:";
+    });
+}
+else if (!isTestingOrCi && !string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnectionString;
+        options.InstanceName = "PropertyApi:";
+    });
+}
+else
+{
+    services.AddDistributedMemoryCache();
+}
         services.AddScoped<ICommonLookupService, CommonLookupService>();
 
+        services.AddScoped<PostGisHealthCheck>();
+        services.AddHostedService<ProductionStartupValidator>();
+        services.AddHealthChecks()
+            .AddCheck<PostGisHealthCheck>("postgis");
 
         return services;
     }
@@ -210,7 +250,21 @@ else
 
                 return $"Host={uri.Host};Port={port};Database={db};" +
                        $"Username={user};Password={pass};" +
-                       $"SSL Mode=Require;Trust Server Certificate=true;";
+                       $"SSL Mode=Require;";
+            }
+
+            if (databaseUrl.Contains("Trust Server Certificate=true", StringComparison.OrdinalIgnoreCase) ||
+                databaseUrl.Contains("TrustServerCertificate=true", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Production database connection must not contain Trust Server Certificate=true.");
+            }
+
+            if (!databaseUrl.Contains("SSL Mode=Require", StringComparison.OrdinalIgnoreCase) &&
+                !databaseUrl.Contains("SSL Mode=VerifyFull", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Production database connection must explicitly use SSL Mode=Require or SSL Mode=VerifyFull.");
             }
 
             return databaseUrl;

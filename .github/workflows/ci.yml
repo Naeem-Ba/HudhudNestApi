@@ -77,7 +77,7 @@ jobs:
             -h localhost \
             -U postgres \
             -d propertyapi_testing \
-            -c "CREATE EXTENSION IF NOT EXISTS postgis; SELECT postgis_version();"
+            -c "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pg_trgm; SELECT postgis_version();"
 
       - name: Apply EF Core migrations
         run: |

@@ -14,6 +14,7 @@ public sealed class CICDPipelineTests
 
         Assert.Contains("postgis/postgis", yaml);
         Assert.Contains("CREATE EXTENSION IF NOT EXISTS postgis", yaml);
+        Assert.Contains("CREATE EXTENSION IF NOT EXISTS pg_trgm", yaml);
         Assert.Contains("tools/PropertyApi.Migrator/PropertyApi.Migrator.csproj", yaml);
         Assert.Contains("dotnet test", yaml);
         Assert.Contains("ConnectionStrings__DefaultConnection", yaml);

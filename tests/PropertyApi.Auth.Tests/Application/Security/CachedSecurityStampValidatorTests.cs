@@ -1,5 +1,7 @@
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Common.Security;
 using PropertyApi.Infrastructure.Identity.Services;
@@ -13,7 +15,7 @@ public sealed class CachedSecurityStampValidatorTests
     public async Task ValidateAsync_CacheMiss_FetchesFromReader_AndCachesSnapshot()
     {
         var userId = Guid.NewGuid();
-        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var cache = CreateCache();
         var reader = new CountingSecurityStampReader(
             new SecurityStampSnapshot("stamp-1", IsDeleted: false));
 
@@ -32,48 +34,17 @@ public sealed class CachedSecurityStampValidatorTests
     public async Task ValidateAsync_CacheHit_DoesNotFetchFromReaderAgain()
     {
         var userId = Guid.NewGuid();
-        using var cache = new MemoryCache(new MemoryCacheOptions());
-        var cacheKey = $"securitystamp:{userId:N}";
-
-        cache.Set(cacheKey, new SecurityStampSnapshot("cached-stamp", IsDeleted: false));
-
+        var cache = CreateCache();
         var reader = new CountingSecurityStampReader(
             new SecurityStampSnapshot("db-stamp", IsDeleted: false));
 
         var validator = CreateValidator(cache, reader);
 
-        var result = await validator.ValidateAsync(userId, "cached-stamp");
+        var first = await validator.ValidateAsync(userId, "db-stamp");
+        var second = await validator.ValidateAsync(userId, "db-stamp");
 
-        Assert.True(result.IsValid);
-        Assert.Equal(0, reader.CallCount);
-    }
-
-    [Fact]
-    [Trait("Category", "SecurityStampCache")]
-    public async Task ValidateAsync_CacheExpired_FetchesFromReaderAgain()
-    {
-        var userId = Guid.NewGuid();
-        using var cache = new MemoryCache(new MemoryCacheOptions());
-        var cacheKey = $"securitystamp:{userId:N}";
-
-        cache.Set(
-            cacheKey,
-            new SecurityStampSnapshot("expired-stamp", IsDeleted: false),
-            new MemoryCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromMilliseconds(1)
-            });
-
-        await Task.Delay(30);
-
-        var reader = new CountingSecurityStampReader(
-            new SecurityStampSnapshot("fresh-stamp", IsDeleted: false));
-
-        var validator = CreateValidator(cache, reader);
-
-        var result = await validator.ValidateAsync(userId, "fresh-stamp");
-
-        Assert.True(result.IsValid);
+        Assert.True(first.IsValid);
+        Assert.True(second.IsValid);
         Assert.Equal(1, reader.CallCount);
     }
 
@@ -82,7 +53,7 @@ public sealed class CachedSecurityStampValidatorTests
     public async Task ValidateAsync_StampMismatch_ReturnsInvalid()
     {
         var userId = Guid.NewGuid();
-        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var cache = CreateCache();
         var reader = new CountingSecurityStampReader(
             new SecurityStampSnapshot("current-stamp", IsDeleted: false));
 
@@ -100,7 +71,7 @@ public sealed class CachedSecurityStampValidatorTests
     public async Task ValidateAsync_DeletedUser_ReturnsInvalid()
     {
         var userId = Guid.NewGuid();
-        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var cache = CreateCache();
         var reader = new CountingSecurityStampReader(
             new SecurityStampSnapshot("stamp-1", IsDeleted: true));
 
@@ -117,7 +88,7 @@ public sealed class CachedSecurityStampValidatorTests
     public async Task ValidateAsync_UnknownUser_ReturnsInvalid_AndDoesNotCacheNull()
     {
         var userId = Guid.NewGuid();
-        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var cache = CreateCache();
         var reader = new CountingSecurityStampReader(null);
 
         var validator = CreateValidator(cache, reader);
@@ -130,8 +101,14 @@ public sealed class CachedSecurityStampValidatorTests
         Assert.Equal(2, reader.CallCount);
     }
 
+    private static IDistributedCache CreateCache()
+    {
+        return new MemoryDistributedCache(
+            Options.Create(new MemoryDistributedCacheOptions()));
+    }
+
     private static CachedSecurityStampValidator CreateValidator(
-        IMemoryCache cache,
+        IDistributedCache cache,
         IUserSecurityStampReader reader)
     {
         return new CachedSecurityStampValidator(

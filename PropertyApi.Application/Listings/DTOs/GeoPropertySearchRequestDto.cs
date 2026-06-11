@@ -2,6 +2,12 @@ using PropertyApi.Domain.Enums;
 
 namespace PropertyApi.Application.Listings.DTOs;
 
+/// <summary>
+/// Geo search filter. Default radius is 5 km and maximum allowed radius is 50 km.
+/// Page and PageSize are capped so one request cannot scan/page beyond 1000 rows.
+/// Price filtering matches any populated price field for MinPrice and requires all populated
+/// price fields to be below MaxPrice, preserving the existing rental/purchase mixed-listing behavior.
+/// </summary>
 public sealed class GeoPropertySearchRequestDto
 {
     public decimal Latitude { get; set; }

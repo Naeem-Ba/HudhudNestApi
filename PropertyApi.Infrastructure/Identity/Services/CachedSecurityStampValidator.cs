@@ -1,4 +1,5 @@
-using Microsoft.Extensions.Caching.Memory;
+using System.Text.Json;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Common.Security;
@@ -9,12 +10,14 @@ public sealed class CachedSecurityStampValidator : IUserSecurityStampValidator
 {
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
 
-    private readonly IMemoryCache _cache;
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private readonly IDistributedCache _cache;
     private readonly IUserSecurityStampReader _reader;
     private readonly ILogger<CachedSecurityStampValidator> _logger;
 
     public CachedSecurityStampValidator(
-        IMemoryCache cache,
+        IDistributedCache cache,
         IUserSecurityStampReader reader,
         ILogger<CachedSecurityStampValidator> logger)
     {
@@ -32,28 +35,44 @@ public sealed class CachedSecurityStampValidator : IUserSecurityStampValidator
             return SecurityStampValidationResult.Fail("The token does not contain a security stamp.");
 
         var cacheKey = BuildCacheKey(userId);
+        var cachedPayload = await _cache.GetStringAsync(cacheKey, cancellationToken);
 
-        if (_cache.TryGetValue(cacheKey, out SecurityStampSnapshot? cachedSnapshot) && cachedSnapshot is not null)
+        if (!string.IsNullOrWhiteSpace(cachedPayload))
         {
-            _logger.LogDebug("Security stamp cache hit for {CacheKey}", cacheKey);
-            return ValidateSnapshot(cachedSnapshot, tokenSecurityStamp);
+            var cachedSnapshot = JsonSerializer.Deserialize<SecurityStampSnapshot>(
+                cachedPayload,
+                JsonOptions);
+
+            if (cachedSnapshot is not null)
+            {
+                _logger.LogDebug("Security stamp distributed cache hit for {CacheKey}", cacheKey);
+                return ValidateSnapshot(cachedSnapshot, tokenSecurityStamp);
+            }
+
+            _logger.LogWarning(
+                "Security stamp cache entry for {CacheKey} could not be deserialized. Removing cache entry.",
+                cacheKey);
+
+            await _cache.RemoveAsync(cacheKey, cancellationToken);
         }
 
-        _logger.LogDebug("Security stamp cache miss for {CacheKey}. Fetching from DB.", cacheKey);
+        _logger.LogDebug("Security stamp distributed cache miss for {CacheKey}. Fetching from DB.", cacheKey);
 
         var snapshot = await _reader.GetSecurityStampAsync(userId, cancellationToken);
 
         if (snapshot is null)
             return SecurityStampValidationResult.Fail("The user account is disabled.");
 
-        _cache.Set(
+        var serializedSnapshot = JsonSerializer.Serialize(snapshot, JsonOptions);
+
+        await _cache.SetStringAsync(
             cacheKey,
-            snapshot,
-            new MemoryCacheEntryOptions
+            serializedSnapshot,
+            new DistributedCacheEntryOptions
             {
-                AbsoluteExpirationRelativeToNow = CacheDuration,
-                Priority = CacheItemPriority.High
-            });
+                AbsoluteExpirationRelativeToNow = CacheDuration
+            },
+            cancellationToken);
 
         return ValidateSnapshot(snapshot, tokenSecurityStamp);
     }

@@ -8,11 +8,14 @@ namespace PropertyApi.Infrastructure.Media;
 
 public sealed class CloudinaryMediaStorageService : IMediaStorageService
 {
-    private static readonly HttpClient HttpClient = new();
+    private readonly HttpClient _httpClient;
     private readonly Cloudinary _cloudinary;
 
-    public CloudinaryMediaStorageService(IOptions<CloudinaryOptions> options)
+    public CloudinaryMediaStorageService(
+        IOptions<CloudinaryOptions> options,
+        HttpClient httpClient)
     {
+        _httpClient = httpClient;
         var value = options.Value;
 
         if (string.IsNullOrWhiteSpace(value.CloudName) ||
@@ -93,7 +96,7 @@ public sealed class CloudinaryMediaStorageService : IMediaStorageService
         if (string.IsNullOrWhiteSpace(imageUrl))
             throw new ArgumentException("Image URL is required.", nameof(imageUrl));
 
-        using var response = await HttpClient.GetAsync(imageUrl, cancellationToken);
+        using var response = await _httpClient.GetAsync(imageUrl, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
             return null;

@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -14,8 +14,55 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Infrastructure.Hubs;
 using PropertyApi.Application.Common.Interfaces;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
+var forwardedHeadersOptions = builder.Configuration
+    .GetSection("ForwardedHeaders")
+    .Get<ForwardedHeadersOptions>() ?? new ForwardedHeadersOptions();
+
+forwardedHeadersOptions.ForwardedHeaders =
+    ForwardedHeaders.XForwardedFor |
+    ForwardedHeaders.XForwardedProto |
+    ForwardedHeaders.XForwardedHost;
+
+if (builder.Environment.IsProduction() &&
+    !builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Exists() &&
+    !builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Exists())
+{
+    // Cloud platforms such as Render/Netlify proxy traffic before Kestrel.
+    // If you have fixed proxy IPs, configure ForwardedHeaders:KnownProxies instead of clearing these lists.
+    forwardedHeadersOptions.KnownNetworks.Clear();
+    forwardedHeadersOptions.KnownProxies.Clear();
+}
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = forwardedHeadersOptions.ForwardedHeaders;
+    options.ForwardLimit = forwardedHeadersOptions.ForwardLimit ?? 1;
+
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+
+    foreach (var network in forwardedHeadersOptions.KnownNetworks)
+    {
+        options.KnownNetworks.Add(network);
+    }
+
+    foreach (var proxy in forwardedHeadersOptions.KnownProxies)
+    {
+        options.KnownProxies.Add(proxy);
+    }
+});
+
+builder.Services.AddHsts(options =>
+{
+    options.MaxAge = TimeSpan.FromDays(365);
+    options.IncludeSubDomains = true;
+    options.Preload = true;
+});
+
 
 // -- 1. Culture -----------------------------------------------
 // Required for Npgsql decimal/timestamp compatibility
@@ -173,7 +220,13 @@ builder.Services.AddCors(options =>
 
 // -- 6. Controllers + JSON -------------------------------------
 builder.Services
-    .AddControllers()
+    .AddControllers(options =>
+    {
+        if (builder.Environment.IsProduction())
+        {
+            options.Filters.Add(new RequireHttpsAttribute());
+        }
+    })
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = null;
@@ -185,11 +238,35 @@ builder.Services
 
 
 
-builder.Services.AddSignalR(options =>
+var signalRBuilder = builder.Services.AddSignalR(options =>
 {
     options.MaximumReceiveMessageSize = 16 * 1024;
     options.EnableDetailedErrors = builder.Environment.IsDevelopment();
 });
+
+var signalRProvider = builder.Configuration["SignalR:Provider"];
+
+if (string.Equals(signalRProvider, "Redis", StringComparison.OrdinalIgnoreCase))
+{
+    var signalRRedisConnectionString =
+        builder.Configuration.GetConnectionString("SignalRRedis")
+        ?? builder.Configuration["SignalR:Redis:ConnectionString"]
+        ?? builder.Configuration.GetConnectionString("Redis")
+        ?? builder.Configuration["Redis:ConnectionString"];
+
+    if (string.IsNullOrWhiteSpace(signalRRedisConnectionString))
+    {
+        throw new InvalidOperationException(
+            "SignalR Redis backplane is enabled, but no Redis connection string is configured.");
+    }
+
+    signalRBuilder.AddStackExchangeRedis(signalRRedisConnectionString);
+}
+else if (string.Equals(signalRProvider, "AzureSignalR", StringComparison.OrdinalIgnoreCase))
+{
+    throw new InvalidOperationException(
+        "SignalR:Provider=AzureSignalR is configured, but Azure SignalR registration is not implemented in this build.");
+}
 
 
 // -- 7. Swagger ------------------------------------------------
@@ -325,7 +402,15 @@ await IdentitySeeder.SeedRolesAsync(app.Services);
 
 // -- 9. Middleware (order is critical) -------------------------
 
-// MUST be first: catches all unhandled exceptions before CORS headers are set
+app.UseForwardedHeaders();
+
+if (app.Environment.IsProduction())
+{
+    app.UseHsts();
+    app.UseHttpsRedirection();
+}
+
+// MUST be first after forwarded headers: catches all unhandled exceptions before CORS headers are set
 // FIX: replaces the inline lambda that had security issues
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
@@ -349,6 +434,7 @@ app.UseCors("DefaultCors");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHealthChecks("/health");
 app.MapHub<NotificationHub>("/notificationHub");
 
 app.Run();
