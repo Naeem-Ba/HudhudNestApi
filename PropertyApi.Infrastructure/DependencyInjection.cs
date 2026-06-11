@@ -19,6 +19,7 @@ using PropertyApi.Infrastructure.Auth.Services;
 using PropertyApi.Infrastructure.Email;
 using PropertyApi.Infrastructure.Auth.Repositories;
 using PropertyApi.Infrastructure.Notifications;
+using PropertyApi.Infrastructure.Lookups;
 using PropertyApi.Application.Admin.Interfaces;
 using PropertyApi.Infrastructure.Admin;
 using IdentityEmailSender = Microsoft.AspNetCore.Identity.UI.Services.IEmailSender;
@@ -159,6 +160,24 @@ else
 
 
         services.AddScoped<IMediaStorageService, CloudinaryMediaStorageService>();
+
+        var redisConnectionString = configuration.GetConnectionString("Redis")
+    ?? configuration["Redis:ConnectionString"];
+
+        if (!string.IsNullOrWhiteSpace(redisConnectionString))
+        {
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnectionString;
+                options.InstanceName = "PropertyApi:";
+            });
+        }
+        else
+        {
+            services.AddDistributedMemoryCache();
+        }
+
+        services.AddScoped<ICommonLookupService, CommonLookupService>();
 
 
         return services;

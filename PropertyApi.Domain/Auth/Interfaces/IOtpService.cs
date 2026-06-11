@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading.Tasks;
 using PropertyApi.Domain.Auth.Entities;
 using PropertyApi.Domain.Enums;
-using PropertyApi.Domain.Enums;
 
 namespace PropertyApi.Application.Auth.Interfaces;
 
