@@ -6,47 +6,64 @@ namespace PropertyApi.Seed;
 
 public static class IdentitySeeder
 {
+    private static readonly SemaphoreSlim SeedLock = new(1, 1);
+
     public static async Task SeedRolesAsync(IServiceProvider serviceProvider)
     {
-        using var scope = serviceProvider.CreateScope();
+        await SeedLock.WaitAsync();
 
-        var roleManager = scope.ServiceProvider
-            .GetRequiredService<RoleManager<IdentityRole<Guid>>>();
-
-        foreach (var desiredRoleName in RoleNames.All)
+        try
         {
-            var normalizedName = desiredRoleName.ToUpperInvariant();
+            using var scope = serviceProvider.CreateScope();
 
-            var existingRole = await roleManager.Roles
-                .SingleOrDefaultAsync(role =>
-                    role.NormalizedName == normalizedName);
+            var roleManager = scope.ServiceProvider
+                .GetRequiredService<RoleManager<IdentityRole<Guid>>>();
 
-            if (existingRole is null)
+            foreach (var desiredRoleName in RoleNames.All)
             {
-                var createResult = await roleManager.CreateAsync(
-                    new IdentityRole<Guid>(desiredRoleName));
-
-                EnsureSucceeded(
-                    createResult,
-                    $"Failed to create role '{desiredRoleName}'.");
-
-                continue;
+                await EnsureRoleExistsAsync(roleManager, desiredRoleName);
             }
+        }
+        finally
+        {
+            SeedLock.Release();
+        }
+    }
 
-            // This also repairs old values such as ADMIN -> Admin.
-            if (!string.Equals(
-                    existingRole.Name,
-                    desiredRoleName,
-                    StringComparison.Ordinal))
-            {
-                existingRole.Name = desiredRoleName;
+    private static async Task EnsureRoleExistsAsync(
+        RoleManager<IdentityRole<Guid>> roleManager,
+        string desiredRoleName)
+    {
+        var normalizedName = desiredRoleName.ToUpperInvariant();
 
-                var updateResult = await roleManager.UpdateAsync(existingRole);
+        var existingRole = await roleManager.Roles
+            .SingleOrDefaultAsync(role => role.NormalizedName == normalizedName);
 
-                EnsureSucceeded(
-                    updateResult,
-                    $"Failed to normalize role '{desiredRoleName}'.");
-            }
+        if (existingRole is null)
+        {
+            var createResult = await roleManager.CreateAsync(
+                new IdentityRole<Guid>(desiredRoleName));
+
+            EnsureSucceeded(
+                createResult,
+                $"Failed to create role '{desiredRoleName}'.");
+
+            return;
+        }
+
+        // Repairs legacy values such as ADMIN -> Admin.
+        if (!string.Equals(
+                existingRole.Name,
+                desiredRoleName,
+                StringComparison.Ordinal))
+        {
+            existingRole.Name = desiredRoleName;
+
+            var updateResult = await roleManager.UpdateAsync(existingRole);
+
+            EnsureSucceeded(
+                updateResult,
+                $"Failed to normalize role '{desiredRoleName}'.");
         }
     }
 
