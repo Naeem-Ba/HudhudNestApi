@@ -2,11 +2,13 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using PropertyApi.Application.Listings.DTOs;
 using PropertyApi.Application.Listings.Commands.CreateProperty;
 using PropertyApi.Application.Listings.Commands.DeleteProperty;
 using PropertyApi.Application.Listings.Commands.UpdateProperty;
 using PropertyApi.Application.Listings.Queries.GetPropertiesList;
 using PropertyApi.Application.Listings.Queries.GetPropertyById;
+using PropertyApi.Application.Listings.Queries.SearchPropertiesNearby;
 using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Domain.Enums;
 
@@ -40,6 +42,18 @@ public sealed class PropertiesController : ControllerBase
         CancellationToken ct)
     {
         var result = await _mediator.Send(new GetPropertiesListQuery(filter), ct);
+        return Ok(result);
+    }
+
+    // ── GET /api/properties/geo-search?latitude=51.45&longitude=7.01&radiusKm=5 ──
+    [HttpGet("geo-search")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> SearchNearby(
+    [FromQuery] GeoPropertySearchRequestDto filter,
+    CancellationToken ct)
+    {
+        var result = await _mediator.Send(new SearchPropertiesNearbyQuery(filter), ct);
         return Ok(result);
     }
 
