@@ -1,234 +1,98 @@
 using System.Security.Claims;
+using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using PropertyApi.Application.Common.Interfaces;
-using PropertyApi.Application.Common.Models;
+using Moq;
+using PropertyApi.Application.Listings.Commands.DeletePropertyImage;
+using PropertyApi.Application.Listings.Commands.UploadPropertyImages;
+using PropertyApi.Application.Listings.DTOs;
+using PropertyApi.Application.Listings.Queries.GetPropertyImages;
 using PropertyApi.Controllers;
-using PropertyApi.Domain.Enums;
-using PropertyApi.Domain.Listings.Entities;
-using PropertyApi.Infrastructure.Persistence;
 
 namespace PropertyApi.Integration.Tests.Controllers;
 
 [Trait("Feature", "PropertyImages")]
 public sealed class PropertyImagesControllerTests
 {
-    [Fact(DisplayName = "Upload persists image and uses IMediaStorageService for owner")]
-    public async Task Upload_ValidOwnerImage_PersistsImage_AndCallsStorage()
+    [Fact(DisplayName = "Upload delegates to ISender and returns uploaded images")]
+    public async Task Upload_ValidRequest_Delegates_To_ISender()
     {
-        await using var db = CreateDbContext();
-        var ownerId = Guid.NewGuid();
-        var property = Property.Create(
-            "Nice flat",
-            "A clean test property",
-            ownerId,
-            ListingType.ForRent);
+        var propertyId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var image = new PropertyImageDto(Guid.NewGuid(), "https://cdn.example.com/property.jpg", true, 0);
 
-        db.Properties.Add(property);
-        await db.SaveChangesAsync();
+        var sender = new Mock<ISender>();
+        sender.Setup(x => x.Send(It.IsAny<UploadPropertyImagesCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UploadPropertyImagesResult.Success([image]));
 
-        var storage = new FakeMediaStorageService
-        {
-            UploadResult = MediaUploadResult.Success(
-                "https://cdn.example.com/property.jpg",
-                "property-images/test-public-id")
-        };
-
-        var controller = CreateController(db, storage, ownerId);
+        var controller = CreateController(sender.Object, userId);
         var files = CreateImageFiles("property.jpg", "image/jpeg", 128);
 
-        var response = await controller.Upload(property.Id, files, CancellationToken.None);
+        var response = await controller.Upload(propertyId, files, CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(response);
-        Assert.NotNull(ok.Value);
+        var images = Assert.IsAssignableFrom<IReadOnlyList<PropertyImageDto>>(ok.Value);
+        Assert.Single(images);
 
-        var savedImage = await db.PropertyImages.SingleAsync();
-        Assert.Equal(property.Id, savedImage.PropertyId);
-        Assert.Equal("https://cdn.example.com/property.jpg", savedImage.Url);
-        Assert.Equal("property-images/test-public-id", savedImage.PublicId);
-        Assert.True(savedImage.IsMain);
-
-        Assert.Equal(1, storage.UploadCallCount);
-        Assert.Equal("property-images", storage.LastUploadFolder);
-        Assert.Equal("property.jpg", storage.LastUploadedFileName);
-        Assert.Equal("image/jpeg", storage.LastUploadedContentType);
+        sender.Verify(x => x.Send(
+            It.Is<UploadPropertyImagesCommand>(command =>
+                command.PropertyId == propertyId &&
+                command.UserId == userId &&
+                command.Files.Count == 1),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact(DisplayName = "Upload rejects unsupported content type and does not call storage")]
-    public async Task Upload_UnsupportedContentType_ReturnsBadRequest_AndDoesNotCallStorage()
+    [Fact(DisplayName = "Delete maps Forbidden handler result to ForbidResult")]
+    public async Task Delete_ForbiddenResult_Returns_Forbid()
     {
-        await using var db = CreateDbContext();
-        var ownerId = Guid.NewGuid();
-        var property = Property.Create(
-            "Nice flat",
-            "A clean test property",
-            ownerId,
-            ListingType.ForRent);
+        var propertyId = Guid.NewGuid();
+        var imageId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
 
-        db.Properties.Add(property);
-        await db.SaveChangesAsync();
+        var sender = new Mock<ISender>();
+        sender.Setup(x => x.Send(It.IsAny<DeletePropertyImageCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(PropertyImageMutationResult.Forbidden());
 
-        var storage = new FakeMediaStorageService();
-        var controller = CreateController(db, storage, ownerId);
-        var files = CreateImageFiles("notes.txt", "text/plain", 128);
+        var controller = CreateController(sender.Object, userId);
 
-        var response = await controller.Upload(property.Id, files, CancellationToken.None);
-
-        Assert.IsType<BadRequestObjectResult>(response);
-        Assert.Equal(0, storage.UploadCallCount);
-        Assert.Empty(await db.PropertyImages.ToListAsync());
-    }
-
-    [Fact(DisplayName = "Delete removes image from database and calls IMediaStorageService delete")]
-    public async Task Delete_ExistingOwnerImage_RemovesImage_AndCallsStorageDelete()
-    {
-        await using var db = CreateDbContext();
-        var ownerId = Guid.NewGuid();
-        var property = Property.Create(
-            "Nice flat",
-            "A clean test property",
-            ownerId,
-            ListingType.ForRent);
-
-        var image = new PropertyImage
-        {
-            PropertyId = property.Id,
-            Url = "https://cdn.example.com/property.jpg",
-            PublicId = "property-images/test-public-id",
-            IsMain = true,
-            SortOrder = 0
-        };
-
-        property.Images.Add(image);
-        db.Properties.Add(property);
-        await db.SaveChangesAsync();
-
-        var storage = new FakeMediaStorageService();
-        var controller = CreateController(db, storage, ownerId);
-
-        var response = await controller.Delete(property.Id, image.Id, CancellationToken.None);
-
-        Assert.IsType<NoContentResult>(response);
-        Assert.Equal(1, storage.DeleteCallCount);
-        Assert.Equal("property-images/test-public-id", storage.LastDeletedPublicId);
-
-        Assert.Empty(await db.PropertyImages.ToListAsync());
-
-        var softDeleted = await db.PropertyImages
-            .IgnoreQueryFilters()
-            .SingleAsync(x => x.Id == image.Id);
-
-        Assert.True(softDeleted.IsDeleted);
-        Assert.NotNull(softDeleted.DeletedAt);
-    }
-
-    [Fact(DisplayName = "Delete by non-owner returns forbidden and does not call storage")]
-    public async Task Delete_NonOwner_ReturnsForbidden_AndDoesNotCallStorage()
-    {
-        await using var db = CreateDbContext();
-        var ownerId = Guid.NewGuid();
-        var anotherUserId = Guid.NewGuid();
-
-        var property = Property.Create(
-            "Nice flat",
-            "A clean test property",
-            ownerId,
-            ListingType.ForRent);
-
-        var image = new PropertyImage
-        {
-            PropertyId = property.Id,
-            Url = "https://cdn.example.com/property.jpg",
-            PublicId = "property-images/test-public-id",
-            IsMain = true,
-            SortOrder = 0
-        };
-
-        property.Images.Add(image);
-        db.Properties.Add(property);
-        await db.SaveChangesAsync();
-
-        var storage = new FakeMediaStorageService();
-        var controller = CreateController(db, storage, anotherUserId);
-
-        var response = await controller.Delete(property.Id, image.Id, CancellationToken.None);
+        var response = await controller.Delete(propertyId, imageId, CancellationToken.None);
 
         Assert.IsType<ForbidResult>(response);
-        Assert.Equal(0, storage.DeleteCallCount);
-        Assert.Single(await db.PropertyImages.ToListAsync());
     }
 
-    [Fact(DisplayName = "GetAll returns public property images ordered by sort order")]
-    public async Task GetAll_PublicProperty_ReturnsOrderedImages()
+    [Fact(DisplayName = "GetAll returns public property images ordered by handler")]
+    public async Task GetAll_PublicProperty_Returns_Images()
     {
-        await using var db = CreateDbContext();
-        var ownerId = Guid.NewGuid();
-        var property = Property.Create(
-            "Nice flat",
-            "A clean test property",
-            ownerId,
-            ListingType.ForRent);
-        property.Publish();
-        property.ExpiresAt = DateTime.UtcNow.AddDays(1);
-
-        property.Images.Add(new PropertyImage
+        var propertyId = Guid.NewGuid();
+        var images = new List<PropertyImageDto>
         {
-            PropertyId = property.Id,
-            Url = "https://cdn.example.com/2.jpg",
-            PublicId = "p2",
-            SortOrder = 2,
-            IsMain = false
-        });
+            new(Guid.NewGuid(), "https://cdn.example.com/1.jpg", true, 1),
+            new(Guid.NewGuid(), "https://cdn.example.com/2.jpg", false, 2)
+        };
 
-        property.Images.Add(new PropertyImage
-        {
-            PropertyId = property.Id,
-            Url = "https://cdn.example.com/1.jpg",
-            PublicId = "p1",
-            SortOrder = 1,
-            IsMain = true
-        });
+        var sender = new Mock<ISender>();
+        sender.Setup(x => x.Send(It.IsAny<GetPropertyImagesQuery>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(PropertyImagesQueryResult.Success(images));
 
-        db.Properties.Add(property);
-        await db.SaveChangesAsync();
+        var controller = CreateController(sender.Object, userId: null);
 
-        var controller = CreateController(db, new FakeMediaStorageService(), userId: null);
-
-        var response = await controller.GetAll(property.Id, CancellationToken.None);
+        var response = await controller.GetAll(propertyId, CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(response);
-        var images = Assert.IsAssignableFrom<IEnumerable<ImageResultDto>>(ok.Value);
-        var list = images.ToList();
-
-        Assert.Equal(2, list.Count);
-        Assert.Equal("https://cdn.example.com/1.jpg", list[0].Url);
-        Assert.Equal("https://cdn.example.com/2.jpg", list[1].Url);
+        var result = Assert.IsAssignableFrom<IReadOnlyList<PropertyImageDto>>(ok.Value);
+        Assert.Equal(2, result.Count);
     }
 
-    private static AppDbContext CreateDbContext()
+    private static PropertyImagesController CreateController(ISender sender, Guid? userId)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase($"property-images-tests-{Guid.NewGuid():N}")
-            .Options;
-
-        return new AppDbContext(options);
-    }
-
-    private static PropertyImagesController CreateController(
-        AppDbContext db,
-        IMediaStorageService storage,
-        Guid? userId)
-    {
-        var controller = new PropertyImagesController(db, storage);
-
+        var controller = new PropertyImagesController(sender);
         var httpContext = new DefaultHttpContext();
 
         if (userId.HasValue)
         {
             httpContext.User = new ClaimsPrincipal(
                 new ClaimsIdentity(
-                    new[] { new Claim(ClaimTypes.NameIdentifier, userId.Value.ToString()) },
+                    [new Claim(ClaimTypes.NameIdentifier, userId.Value.ToString())],
                     authenticationType: "TestAuth"));
         }
 
@@ -254,58 +118,6 @@ public sealed class PropertyImagesControllerTests
             ContentType = contentType
         };
 
-        var collection = new FormFileCollection { file };
-        return collection;
-    }
-
-    private sealed class FakeMediaStorageService : IMediaStorageService
-    {
-        public MediaUploadResult UploadResult { get; init; }
-            = MediaUploadResult.Success("https://cdn.example.com/default.jpg", "default-public-id");
-
-        public int UploadCallCount { get; private set; }
-        public string? LastUploadFolder { get; private set; }
-        public string? LastUploadedFileName { get; private set; }
-        public string? LastUploadedContentType { get; private set; }
-
-        public int DeleteCallCount { get; private set; }
-        public string? LastDeletedPublicId { get; private set; }
-
-        public Task<MediaUploadResult> UploadImageAsync(
-            Stream content,
-            string fileName,
-            string contentType,
-            string folder,
-            CancellationToken cancellationToken = default)
-        {
-            UploadCallCount++;
-            LastUploadFolder = folder;
-            LastUploadedFileName = fileName;
-            LastUploadedContentType = contentType;
-
-            return Task.FromResult(UploadResult);
-        }
-
-        public Task DeleteImageAsync(
-            string publicId,
-            CancellationToken cancellationToken = default)
-        {
-            DeleteCallCount++;
-            LastDeletedPublicId = publicId;
-
-            return Task.CompletedTask;
-        }
-
-        public Task<MediaFileResult?> GetImageAsync(
-            string imageUrl,
-            CancellationToken cancellationToken = default)
-        {
-            var result = new MediaFileResult(
-                Array.Empty<byte>(),
-                "image/jpeg",
-                "image.jpg");
-
-            return Task.FromResult<MediaFileResult?>(result);
-        }
+        return new FormFileCollection { file };
     }
 }

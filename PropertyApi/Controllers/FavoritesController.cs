@@ -1,108 +1,77 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-using PropertyApi.Domain.Listings.Entities;
-using PropertyApi.Infrastructure.Persistence;
+using MediatR;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using PropertyApi.Application.Favorites.Commands.AddFavorite;
+using PropertyApi.Application.Favorites.Commands.RemoveFavorite;
+using PropertyApi.Application.Favorites.DTOs;
+using PropertyApi.Application.Favorites.Queries.GetMyFavorites;
 
 namespace PropertyApi.Controllers;
 
-/// <summary>
-/// إدارة العقارات المفضلة للمستخدم.
-/// الآن يُضاف كـ feature مكتمل.
-/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
 public sealed class FavoritesController : ControllerBase
 {
-    private readonly AppDbContext _db;
+    private readonly ISender _sender;
 
-    public FavoritesController(AppDbContext db)
-        => _db = db;
+    public FavoritesController(ISender sender)
+        => _sender = sender;
 
-    // GET /api/favorites  (قائمة مفضلاتي)
     [HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetMyFavorites(CancellationToken ct)
     {
         var userId = GetCurrentUserId();
-        if (userId is null) return Unauthorized();
+        if (userId is null)
+            return Unauthorized();
 
-        var favorites = await _db.Favorites
-            .Where(f => f.UserId == userId)
-            .Include(f => f.Property)
-                .ThenInclude(p => p!.Images.Where(i => i.IsMain))
-            .Select(f => new
-            {
-                f.PropertyId,
-                f.CreatedAt,
-                Property = new
-                {
-                    f.Property!.Title,
-                    f.Property.City,
-                    f.Property.CountryCode,
-                    f.Property.ColdRent,
-                    f.Property.PurchasePrice,
-                    MainImageUrl = f.Property.Images
-                        .Where(i => i.IsMain)
-                        .Select(i => i.Url)
-                        .FirstOrDefault()
-                }
-            })
-            .ToListAsync(ct);
-
+        var favorites = await _sender.Send(new GetMyFavoritesQuery(userId.Value), ct);
         return Ok(favorites);
     }
 
-    // POST /api/favorites/{propertyId}  (إضافة للمفضلة)
     [HttpPost("{propertyId:guid}")]
     [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Add(Guid propertyId, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
-        if (userId is null) return Unauthorized();
+        if (userId is null)
+            return Unauthorized();
 
-        // تحقق من عدم الإضافة مسبقاً
-        var exists = await _db.Favorites
-            .AnyAsync(f => f.UserId == userId && f.PropertyId == propertyId, ct);
+        var result = await _sender.Send(new AddFavoriteCommand(userId.Value, propertyId), ct);
 
-        if (exists)
-            return Conflict(new { message = "Property already in favorites." });
-
-        _db.Favorites.Add(new Favorite
+        return result.Status switch
         {
-            UserId = userId.Value,
-            PropertyId = propertyId,
-            CreatedAt = DateTime.UtcNow
-        });
-
-        await _db.SaveChangesAsync(ct);
-
-        return StatusCode(StatusCodes.Status201Created,
-            new { message = "Added to favorites." });
+            FavoriteMutationStatus.Success => StatusCode(StatusCodes.Status201Created, new { message = result.Message }),
+            FavoriteMutationStatus.NotFound => NotFound(new { message = result.Message }),
+            FavoriteMutationStatus.Conflict => Conflict(new { message = result.Message }),
+            _ => BadRequest(new { message = result.Message })
+        };
     }
 
-    // DELETE /api/favorites/{propertyId}  (حذف من المفضلة)
     [HttpDelete("{propertyId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Remove(Guid propertyId, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
-        if (userId is null) return Unauthorized();
+        if (userId is null)
+            return Unauthorized();
 
-        var fav = await _db.Favorites
-            .FirstOrDefaultAsync(
-                f => f.UserId == userId && f.PropertyId == propertyId, ct);
+        var result = await _sender.Send(new RemoveFavoriteCommand(userId.Value, propertyId), ct);
 
-        if (fav is null) return NotFound();
-
-        _db.Favorites.Remove(fav);
-        await _db.SaveChangesAsync(ct);
-
-        return NoContent();
+        return result.Status switch
+        {
+            FavoriteMutationStatus.Success => NoContent(),
+            FavoriteMutationStatus.NotFound => NotFound(),
+            _ => BadRequest(new { message = result.Message })
+        };
     }
 
     private Guid? GetCurrentUserId()

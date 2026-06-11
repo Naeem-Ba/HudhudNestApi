@@ -40,10 +40,13 @@ public sealed class CommonLookupService : ICommonLookupService
 
                 var items = await _db.Amenities
                     .AsNoTracking()
-                    .OrderBy(x => x.Name)
+                    .OrderBy(x => x.Category)
+                    .ThenBy(x => x.Name)
                     .Select(x => new AmenityLookupDto(
                         x.Id.ToString(),
-                        x.Name))
+                        x.Name,
+                        x.Category,
+                        x.IconName))
                     .ToListAsync(token);
 
                 return (IReadOnlyList<AmenityLookupDto>)items;

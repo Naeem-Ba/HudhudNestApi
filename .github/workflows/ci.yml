@@ -16,13 +16,13 @@ env:
 
 jobs:
   build-and-test:
-    name: Build + Test
+    name: Build + Test + PostGIS Migrations
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     services:
       postgres:
-        image: postgres:16
+        image: postgis/postgis:16-3.4
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -33,11 +33,15 @@ jobs:
           --health-cmd="pg_isready -U postgres -d propertyapi_testing"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=5
+          --health-retries=10
 
     env:
       ASPNETCORE_ENVIRONMENT: Testing
       ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true
+      Jwt__Issuer: PropertyApi
+      Jwt__Audience: PropertyApiClient
+      Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
+      OtpSettings__SecretKey: TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890
 
     steps:
       - name: Checkout code
@@ -64,6 +68,23 @@ jobs:
           dotnet build ${{ env.SOLUTION_PATH }} \
             --configuration Release \
             --no-restore
+
+      - name: Verify PostGIS extension is available
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          PGPASSWORD=postgres psql \
+            -h localhost \
+            -U postgres \
+            -d propertyapi_testing \
+            -c "CREATE EXTENSION IF NOT EXISTS postgis; SELECT postgis_version();"
+
+      - name: Apply EF Core migrations
+        run: |
+          dotnet run \
+            --project tools/PropertyApi.Migrator/PropertyApi.Migrator.csproj \
+            --configuration Release \
+            --no-build
 
       - name: Run all tests
         run: |
