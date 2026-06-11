@@ -36,7 +36,8 @@ jobs:
           --health-retries=10
 
     env:
-      ASPNETCORE_ENVIRONMENT: Testing
+      ASPNETCORE_ENVIRONMENT: CI
+      DOTNET_ENVIRONMENT: CI
       ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true
       Jwt__Issuer: PropertyApi
       Jwt__Audience: PropertyApiClient
@@ -69,7 +70,7 @@ jobs:
             --configuration Release \
             --no-restore
 
-      - name: Verify PostGIS extension is available
+      - name: Verify PostGIS and pg_trgm extensions are available
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
@@ -85,6 +86,14 @@ jobs:
             --project tools/PropertyApi.Migrator/PropertyApi.Migrator.csproj \
             --configuration Release \
             --no-build
+        env:
+          ASPNETCORE_ENVIRONMENT: CI
+          DOTNET_ENVIRONMENT: CI
+          ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true
+          Jwt__Issuer: PropertyApi
+          Jwt__Audience: PropertyApiClient
+          Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
+          OtpSettings__SecretKey: TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890
 
       - name: Run all tests
         run: |
@@ -92,6 +101,14 @@ jobs:
             --configuration Release \
             --no-build \
             --verbosity normal
+        env:
+          ASPNETCORE_ENVIRONMENT: CI
+          DOTNET_ENVIRONMENT: CI
+          ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true
+          Jwt__Issuer: PropertyApi
+          Jwt__Audience: PropertyApiClient
+          Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
+          OtpSettings__SecretKey: TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890
 
   secret-scan:
     name: Secret Scan
