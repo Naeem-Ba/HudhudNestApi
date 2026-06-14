@@ -414,14 +414,21 @@ if (app.Environment.IsProduction())
 // FIX: replaces the inline lambda that had security issues
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-// Swagger � available in all environments (secured by network in Production)
-if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "CI")
+// Swagger / OpenAPI
+// Enabled by default in Development and CI. For Staging, set Swagger:Enabled=true.
+// Do not expose Swagger publicly in Production unless it is protected by network/VPN/auth gateway.
+var swaggerEnabled = app.Environment.IsDevelopment()
+    || app.Environment.EnvironmentName == "CI"
+    || builder.Configuration.GetValue<bool>("Swagger:Enabled");
+
+if (swaggerEnabled)
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "PropertyApi v1");
-        c.RoutePrefix = string.Empty;
+        c.RoutePrefix = "swagger";
+        c.DisplayRequestDuration();
     });
 }
 
