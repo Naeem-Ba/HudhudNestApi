@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +11,10 @@ using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Application.Users.Messaging.Interfaces;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Notifications.Interfaces;
+using PropertyApi.Application.Bookings.Interfaces;
+using PropertyApi.Application.Reviews.Interfaces;
+using PropertyApi.Infrastructure.Bookings;
+using PropertyApi.Infrastructure.Reviews;
 using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Infrastructure.Persistence;
 using PropertyApi.Infrastructure.Repositories;
@@ -29,6 +33,8 @@ using Microsoft.Extensions.Options;
 using PropertyApi.Infrastructure.Health;
 
 
+using PropertyApi.Application.Analytics.Interfaces;
+using PropertyApi.Infrastructure.Analytics;
 namespace PropertyApi.Infrastructure;
 
 public static class DependencyInjection
@@ -75,10 +81,14 @@ public static class DependencyInjection
         services.AddScoped<IAdminUserQueryRepository, AdminUserQueryRepository>();
         services.AddScoped<IAdminIdentityService, AdminIdentityService>();
         services.AddScoped<IPropertyGeoSearchRepository, PropertyGeoSearchRepository>();
+        services.AddScoped<IAnalyticsReadRepository, AnalyticsReadRepository>();
+
+        services.AddScoped<IVisitRepository, VisitRepository>();
+        services.AddScoped<IPropertyReviewRepository, PropertyReviewRepository>();
 
         services.AddHostedService<OtpCleanupHostedService>();
 
-        // ── Email ---------------------------------------------------
+        // â”€â”€ Email ---------------------------------------------------
         services.Configure<EmailOptions>(
             configuration.GetSection(EmailOptions.SectionName));
 
@@ -103,7 +113,7 @@ else
         sp => sp.GetRequiredService<ConsoleEmailSender>());
 }
 
-        // ── OTP / SMS Auth Services ─────────────────────────────────
+        // â”€â”€ OTP / SMS Auth Services â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         services.AddOptions<SmsProviderOptions>()
             .Bind(configuration.GetSection(SmsProviderOptions.SectionName));
 
@@ -136,7 +146,7 @@ else
             services.AddHttpClient<ISmsService, HttpSmsService>();
         }
         
-        // ── Database ─────────────────────────────────────────────
+        // â”€â”€ Database â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         services.AddDbContext<AppDbContext>(options =>
         {
             var connectionString = ResolveConnectionString(configuration, environment);
@@ -149,7 +159,7 @@ else
             }
         });
 
-        // ── ASP.NET Identity ─────────────────────────────────────
+        // â”€â”€ ASP.NET Identity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         services.AddIdentity<User, IdentityRole<Guid>>(options =>
         {
             options.Password.RequireDigit = true;
@@ -161,22 +171,22 @@ else
         .AddEntityFrameworkStores<AppDbContext>()
         .AddDefaultTokenProviders();
 
-        // ── Repositories ─────────────────────────────────────────
+        // â”€â”€ Repositories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         services.AddScoped<IPropertyRepository, PropertyRepository>();
         services.AddScoped<IPropertyImageRepository, PropertyImageRepository>();
         services.AddScoped<IFavoriteRepository, FavoriteRepository>();
         services.AddScoped<IContactMessageRepository, ContactMessageRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
-        services.AddScoped<IMessageRepository, MessageRepository>();  // ← ADDED
+        services.AddScoped<IMessageRepository, MessageRepository>();  // â† ADDED
 
-        // ── Unit of Work ─────────────────────────────────────────
+        // â”€â”€ Unit of Work â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
-        // ── Current User Service ─────────────────────────────────
+        // â”€â”€ Current User Service â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
 
-        // ── Cloudinary Media Service ──────────────────────────────
+        // â”€â”€ Cloudinary Media Service â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         services.Configure<CloudinaryOptions>(
             configuration.GetSection(CloudinaryOptions.SectionName));
 
@@ -228,7 +238,7 @@ else
         return services;
     }
 
-    // ── Connection String Resolver ─────────────────────────────
+    // â”€â”€ Connection String Resolver â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private static string ResolveConnectionString(
         IConfiguration configuration,
         IHostEnvironment environment)
@@ -275,3 +285,6 @@ else
                 "ConnectionStrings:DefaultConnection is missing in appsettings.json.");
     }
 }
+
+
+
