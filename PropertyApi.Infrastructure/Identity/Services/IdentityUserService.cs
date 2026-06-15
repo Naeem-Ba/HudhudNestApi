@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Auth.Models;
 using PropertyApi.Domain.Users.Entities;
 
@@ -13,13 +14,16 @@ namespace PropertyApi.Infrastructure.Identity.Services;
 public sealed class IdentityUserService : IIdentityUserService
 {
     private readonly UserManager<User> _userManager;
+    private readonly IUserSecurityStampCacheInvalidator _securityStampCacheInvalidator;
     private readonly ILogger<IdentityUserService> _logger;
 
     public IdentityUserService(
         UserManager<User> userManager,
+        IUserSecurityStampCacheInvalidator securityStampCacheInvalidator,
         ILogger<IdentityUserService> logger)
     {
         _userManager = userManager;
+        _securityStampCacheInvalidator = securityStampCacheInvalidator;
         _logger = logger;
     }
 
@@ -88,6 +92,12 @@ public sealed class IdentityUserService : IIdentityUserService
         CancellationToken ct = default)
     {
         var result = await _userManager.UpdateSecurityStampAsync(user);
+
+        if (result.Succeeded)
+        {
+            await _securityStampCacheInvalidator.InvalidateAsync(user.Id, ct);
+        }
+
         return Map(result);
     }
 

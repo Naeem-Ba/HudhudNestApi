@@ -136,6 +136,7 @@ public sealed class AuthController : ControllerBase
     // POST /api/auth/refresh
     [HttpPost("refresh")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth-refresh")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Refresh(
@@ -160,6 +161,7 @@ public sealed class AuthController : ControllerBase
     // POST /api/auth/logout
     [Authorize]
     [HttpPost("logout")]
+    [EnableRateLimiting("auth-logout")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Logout(
