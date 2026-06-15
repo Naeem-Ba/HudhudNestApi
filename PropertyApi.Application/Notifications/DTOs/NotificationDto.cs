@@ -1,4 +1,4 @@
-using PropertyApi.Domain.Notifications.Enums;
+﻿using PropertyApi.Domain.Notifications.Enums;
 
 namespace PropertyApi.Application.Notifications.DTOs;
 
@@ -13,3 +13,4 @@ public sealed class NotificationDto
     public DateTime? ReadAt { get; init; }
     public DateTime CreatedAt { get; init; }
 }
+

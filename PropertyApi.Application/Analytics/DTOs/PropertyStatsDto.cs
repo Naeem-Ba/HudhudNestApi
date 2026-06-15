@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Analytics.DTOs;
+﻿namespace PropertyApi.Application.Analytics.DTOs;
 
 public sealed record PropertyStatsDto(
     Guid   PropertyId,
@@ -9,7 +9,7 @@ public sealed record PropertyStatsDto(
     int    TotalFavorites,
     int    TotalReviews,
     double AverageRating,
-    decimal? AreaAveragePrice   // Average price/m² for same city
+    decimal? AreaAveragePrice   // Average price/mÂ² for same city
 );
 
 public sealed record CityMarketInsightDto(

@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Auth.Models;
+﻿namespace PropertyApi.Application.Auth.Models;
 
 public sealed record IdentityOperationResult(
     bool Succeeded,

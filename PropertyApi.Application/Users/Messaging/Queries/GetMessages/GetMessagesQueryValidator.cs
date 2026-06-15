@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 
 namespace PropertyApi.Application.Users.Messaging.Queries.GetMessages;
 
@@ -20,3 +20,4 @@ public sealed class GetMessagesQueryValidator : AbstractValidator<GetMessagesQue
             .InclusiveBetween(1, 50);
     }
 }
+

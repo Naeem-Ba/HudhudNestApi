@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Listings.DTOs;
+﻿namespace PropertyApi.Application.Listings.DTOs;
 
 public sealed class GeoPropertySearchResultDto
 {
@@ -37,3 +37,4 @@ public sealed class GeoPropertySearchResultDto
 
     public DateTime CreatedAt { get; set; }
 }
+

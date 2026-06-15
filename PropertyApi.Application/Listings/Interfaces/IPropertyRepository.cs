@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -22,9 +22,10 @@ public interface IPropertyRepository
     Task<IReadOnlyList<Property>> GetByOwnerAsync(Guid ownerId, CancellationToken ct = default);
     Task<bool> ExistsAsync(Guid id, CancellationToken ct = default);
 
-    // Update — repository just tracks, UnitOfWork saves
+    // Update â€” repository just tracks, UnitOfWork saves
     void Update(Property property);
 
-    // Delete — soft delete via MarkAsDeleted() domain method
+    // Delete â€” soft delete via MarkAsDeleted() domain method
     void Remove(Property property);
 }
+

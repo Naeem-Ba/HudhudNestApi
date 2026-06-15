@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Contact.DTOs;
+﻿namespace PropertyApi.Application.Contact.DTOs;
 
 public sealed record ContactMessageDto(
     Guid Id,
@@ -8,3 +8,4 @@ public sealed record ContactMessageDto(
     string Body,
     bool IsRead,
     DateTime CreatedAt);
+

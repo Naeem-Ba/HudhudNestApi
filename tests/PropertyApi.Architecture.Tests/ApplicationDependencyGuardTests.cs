@@ -14,6 +14,7 @@ public sealed class ApplicationDependencyGuardTests
         "Microsoft.EntityFrameworkCore",
         "Microsoft.AspNetCore.Mvc",
         "Microsoft.AspNetCore.Http",
+        "Microsoft.AspNetCore.Identity",
         "Microsoft.AspNetCore.Identity.UI"
     ];
 
@@ -23,6 +24,7 @@ public sealed class ApplicationDependencyGuardTests
         "Microsoft.EntityFrameworkCore",
         "Microsoft.AspNetCore.Mvc",
         "Microsoft.AspNetCore.Http",
+        "Microsoft.AspNetCore.Identity",
         "Microsoft.AspNetCore.Identity.UI"
     ];
 
@@ -32,7 +34,9 @@ public sealed class ApplicationDependencyGuardTests
         "DbContext",
         "DbSet",
         "ControllerBase",
-        "IHttpContextAccessor"
+        "IHttpContextAccessor",
+        "UserManager`1",
+        "RoleManager`1"
     ];
 
     private static readonly string[] ForbiddenSourceTokens =
@@ -44,6 +48,10 @@ public sealed class ApplicationDependencyGuardTests
         "AppDbContext",
         "DbContext",
         "DbSet",
+        "using Microsoft.AspNetCore.Identity",
+        "Microsoft.AspNetCore.Identity",
+        "UserManager<",
+        "RoleManager<",
         "using Microsoft.AspNetCore.Identity.UI.Services",
         "Microsoft.AspNetCore.Identity.UI.Services",
         "using Microsoft.AspNetCore.Mvc",
@@ -51,7 +59,9 @@ public sealed class ApplicationDependencyGuardTests
         "using Microsoft.AspNetCore.Http",
         "Microsoft.AspNetCore.Http",
         "ControllerBase",
-        "IHttpContextAccessor"
+        "IHttpContextAccessor",
+        "UserManager`1",
+        "RoleManager`1"
     ];
 
     [Fact(DisplayName = "Application must not depend on Infrastructure, EF Core, DbContext, or ASP.NET UI/Web services")]
@@ -279,6 +289,7 @@ public sealed class ApplicationDependencyGuardTests
         builder.AppendLine("- PropertyApi.Infrastructure");
         builder.AppendLine("- Microsoft.EntityFrameworkCore");
         builder.AppendLine("- AppDbContext / DbContext / DbSet");
+        builder.AppendLine("- Microsoft.AspNetCore.Identity / UserManager / RoleManager");
         builder.AppendLine("- Microsoft.AspNetCore.Identity.UI.Services");
         builder.AppendLine("- Microsoft.AspNetCore.Mvc / ControllerBase");
         builder.AppendLine("- Microsoft.AspNetCore.Http / IHttpContextAccessor");

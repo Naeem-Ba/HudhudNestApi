@@ -1,4 +1,4 @@
-using PropertyApi.Application.Favorites.DTOs;
+﻿using PropertyApi.Application.Favorites.DTOs;
 using PropertyApi.Domain.Listings.Entities;
 
 namespace PropertyApi.Application.Favorites.Interfaces;
@@ -12,3 +12,4 @@ public interface IFavoriteRepository
     void Add(Favorite favorite);
     void Remove(Favorite favorite);
 }
+

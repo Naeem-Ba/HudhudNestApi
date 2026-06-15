@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 
 namespace PropertyApi.Application.Listings.Queries.SearchPropertiesNearby;
 
@@ -58,3 +58,4 @@ public sealed class SearchPropertiesNearbyQueryValidator
         });
     }
 }
+

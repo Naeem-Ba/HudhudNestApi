@@ -1,4 +1,4 @@
-using PropertyApi.Application.Contact.DTOs;
+﻿using PropertyApi.Application.Contact.DTOs;
 using PropertyApi.Domain.Messaging.Entities;
 
 namespace PropertyApi.Application.Contact.Interfaces;
@@ -10,3 +10,4 @@ public interface IContactMessageRepository
     Task<ContactMessage?> GetByIdAsync(Guid id, CancellationToken ct = default);
     void Remove(ContactMessage message);
 }
+

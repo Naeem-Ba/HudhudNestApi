@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Common.Security;
+﻿namespace PropertyApi.Application.Common.Security;
 
 public sealed record SecurityStampValidationResult(
     bool IsValid,
@@ -8,3 +8,4 @@ public sealed record SecurityStampValidationResult(
 
     public static SecurityStampValidationResult Fail(string message) => new(false, message);
 }
+

@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 
 namespace PropertyApi.Application.Users.Messaging.Commands.SendMessage;
 
@@ -18,3 +18,4 @@ public sealed class SendMessageCommandValidator : AbstractValidator<SendMessageC
             .MaximumLength(3000);
     }
 }
+

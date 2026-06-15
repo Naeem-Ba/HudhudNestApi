@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Favorites.DTOs;
+﻿namespace PropertyApi.Application.Favorites.DTOs;
 
 public sealed record FavoriteDto(
     Guid PropertyId,
@@ -12,3 +12,4 @@ public sealed record FavoritePropertyDto(
     decimal? ColdRent,
     decimal? PurchasePrice,
     string? MainImageUrl);
+

@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 
 namespace PropertyApi.Application.Users.Commands.UpdateUser;
 
@@ -44,3 +44,4 @@ public sealed class UpdateUserCommandValidator : AbstractValidator<UpdateUserCom
             .When(x => x.CountryCode is not null && x.CountryCode.Length > 0);
     }
 }
+

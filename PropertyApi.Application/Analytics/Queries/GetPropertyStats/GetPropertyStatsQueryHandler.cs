@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Analytics.DTOs;
 using PropertyApi.Application.Analytics.Interfaces;
 
@@ -24,3 +24,4 @@ public sealed class GetPropertyStatsQueryHandler
             ct);
     }
 }
+

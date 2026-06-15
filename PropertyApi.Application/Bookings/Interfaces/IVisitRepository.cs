@@ -1,4 +1,4 @@
-using PropertyApi.Domain.Bookings.Entities;
+﻿using PropertyApi.Domain.Bookings.Entities;
 
 namespace PropertyApi.Application.Bookings.Interfaces;
 
@@ -21,3 +21,4 @@ public interface IVisitRepository
         Guid propertyId,
         CancellationToken ct = default);
 }
+

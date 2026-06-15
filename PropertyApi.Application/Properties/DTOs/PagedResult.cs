@@ -1,4 +1,4 @@
-
+﻿
 
 namespace PropertyApi.Application.Properties.DTOs;
 
@@ -15,3 +15,4 @@ public sealed class PagedResult<T>
     public bool HasNext => Page < TotalPages;
     public bool HasPrevious => Page > 1;
 }
+

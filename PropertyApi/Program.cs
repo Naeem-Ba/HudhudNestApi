@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -16,48 +16,47 @@ using PropertyApi.Infrastructure.Hubs;
 using PropertyApi.Application.Common.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.Extensions.Options;
-using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
-var forwardedHeadersOptions = builder.Configuration
-    .GetSection("ForwardedHeaders")
-    .Get<ForwardedHeadersOptions>() ?? new ForwardedHeadersOptions();
-
-var forwardedHeaderKnownNetworksConfigured =
+var configuredKnownProxies = ReadKnownProxies(builder.Configuration);
+var configuredKnownNetworks = ReadKnownNetworks(builder.Configuration);
+var hasConfiguredKnownForwardingSource =
+    builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Exists() ||
     builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Exists();
-var forwardedHeaderKnownProxiesConfigured =
-    builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Exists();
 
-forwardedHeadersOptions.ForwardedHeaders =
-    ForwardedHeaders.XForwardedFor |
-    ForwardedHeaders.XForwardedProto |
-    ForwardedHeaders.XForwardedHost;
-
-if (builder.Environment.IsProduction() &&
-    !forwardedHeaderKnownNetworksConfigured &&
-    !forwardedHeaderKnownProxiesConfigured)
+if (builder.Environment.IsProduction() && !hasConfiguredKnownForwardingSource)
 {
     throw new InvalidOperationException(
-        "ForwardedHeaders:KnownProxies or ForwardedHeaders:KnownNetworks is required in Production. " +
-        "Do not trust X-Forwarded-* headers from unknown proxies.");
+        "ForwardedHeaders:KnownProxies or ForwardedHeaders:KnownNetworks is required in Production.");
+}
+
+if (builder.Environment.IsProduction() &&
+    configuredKnownProxies.Count == 0 &&
+    configuredKnownNetworks.Count == 0)
+{
+    throw new InvalidOperationException(
+        "ForwardedHeaders:KnownProxies or ForwardedHeaders:KnownNetworks must contain at least one valid IP address or CIDR network in Production.");
 }
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
-    options.ForwardedHeaders = forwardedHeadersOptions.ForwardedHeaders;
-    options.ForwardLimit = forwardedHeadersOptions.ForwardLimit ?? 1;
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto |
+        ForwardedHeaders.XForwardedHost;
+
+    options.ForwardLimit = 1;
     options.RequireHeaderSymmetry = true;
 
     options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
 
-    foreach (var network in forwardedHeadersOptions.KnownNetworks)
+    foreach (var network in configuredKnownNetworks)
     {
         options.KnownNetworks.Add(network);
     }
 
-    foreach (var proxy in forwardedHeadersOptions.KnownProxies)
+    foreach (var proxy in configuredKnownProxies)
     {
         options.KnownProxies.Add(proxy);
     }
@@ -403,6 +402,32 @@ builder.Services.AddRateLimiter(options =>
 
 // --------------------------------------------------------------
 var app = builder.Build();
+
+// EARLY_PRODUCTION_FORWARDED_HEADERS_REJECTION
+if (app.Environment.IsProduction())
+{
+    app.Use(async (context, next) =>
+    {
+        if (RequestHasForwardedHeaders(context.Request))
+        {
+            var forwardedHeadersOptions = context.RequestServices
+                .GetRequiredService<Microsoft.Extensions.Options.IOptions<ForwardedHeadersOptions>>()
+                .Value;
+
+            if (!IsKnownForwardingSource(
+                    context.Connection.RemoteIpAddress,
+                    forwardedHeadersOptions))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsync(
+                    "X-Forwarded-* headers from unknown proxies are not allowed in Production.");
+                return;
+            }
+        }
+
+        await next();
+    });
+}
 // --------------------------------------------------------------
 
 // -- 8. Run DB Migrations --------------------------------------
@@ -414,7 +439,25 @@ await IdentitySeeder.SeedRolesAsync(app.Services);
 
 if (app.Environment.IsProduction())
 {
-    app.Use(RejectUnknownForwardedHeaderProxiesAsync);
+    app.Use(async (context, next) =>
+    {
+        if (RequestHasForwardedHeaders(context.Request))
+        {
+            var forwardedHeadersOptions = context.RequestServices
+                .GetRequiredService<Microsoft.Extensions.Options.IOptions<ForwardedHeadersOptions>>()
+                .Value;
+
+            if (!IsKnownForwardingSource(
+                    context.Connection.RemoteIpAddress,
+                    forwardedHeadersOptions))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return;
+            }
+        }
+
+        await next();
+    });
 }
 
 app.UseForwardedHeaders();
@@ -466,48 +509,102 @@ static string GetClientRateLimitPartitionKey(HttpContext httpContext)
     return httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown-client";
 }
 
-static async Task RejectUnknownForwardedHeaderProxiesAsync(
-    HttpContext context,
-    Func<Task> next)
+static IReadOnlyCollection<System.Net.IPAddress> ReadKnownProxies(IConfiguration configuration)
 {
-    if (!RequestContainsForwardedHeaders(context.Request))
+    var proxies = new List<System.Net.IPAddress>();
+
+    foreach (var child in configuration.GetSection("ForwardedHeaders:KnownProxies").GetChildren())
     {
-        await next();
-        return;
+        var value = child.Value ?? child["Address"] ?? child["IpAddress"];
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            continue;
+        }
+
+        if (!System.Net.IPAddress.TryParse(value, out var address))
+        {
+            throw new InvalidOperationException(
+                $"ForwardedHeaders:KnownProxies contains an invalid IP address: {value}.");
+        }
+
+        proxies.Add(address);
     }
 
-    var options = context.RequestServices
-        .GetRequiredService<IOptions<ForwardedHeadersOptions>>()
-        .Value;
-
-    if (!IsKnownForwardedHeaderProxy(context.Connection.RemoteIpAddress, options))
-    {
-        context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        await context.Response.WriteAsync(
-            "Forwarded headers from unknown proxies are not allowed.");
-        return;
-    }
-
-    await next();
+    return proxies;
 }
 
-static bool RequestContainsForwardedHeaders(HttpRequest request)
+static IReadOnlyCollection<IPNetwork> ReadKnownNetworks(IConfiguration configuration)
+{
+    var networks = new List<IPNetwork>();
+
+    foreach (var child in configuration.GetSection("ForwardedHeaders:KnownNetworks").GetChildren())
+    {
+        var value = child.Value ?? child["Cidr"] ?? child["Network"];
+        var prefixLengthValue = child["PrefixLength"];
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            continue;
+        }
+
+        var cidrParts = value.Split('/', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var prefixValue = cidrParts[0];
+
+        if (!System.Net.IPAddress.TryParse(prefixValue, out var prefix))
+        {
+            throw new InvalidOperationException(
+                $"ForwardedHeaders:KnownNetworks contains an invalid IP network prefix: {value}.");
+        }
+
+        int prefixLength;
+        if (cidrParts.Length == 2)
+        {
+            if (!int.TryParse(cidrParts[1], out prefixLength))
+            {
+                throw new InvalidOperationException(
+                    $"ForwardedHeaders:KnownNetworks contains an invalid CIDR prefix length: {value}.");
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(prefixLengthValue))
+        {
+            if (!int.TryParse(prefixLengthValue, out prefixLength))
+            {
+                throw new InvalidOperationException(
+                    $"ForwardedHeaders:KnownNetworks contains an invalid PrefixLength value: {prefixLengthValue}.");
+            }
+        }
+        else
+        {
+            prefixLength = prefix.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128;
+        }
+
+        networks.Add(new IPNetwork(prefix, prefixLength));
+    }
+
+    return networks;
+}
+
+static bool RequestHasForwardedHeaders(HttpRequest request)
 {
     return request.Headers.ContainsKey("X-Forwarded-For") ||
            request.Headers.ContainsKey("X-Forwarded-Proto") ||
-           request.Headers.ContainsKey("X-Forwarded-Host") ||
-           request.Headers.ContainsKey("Forwarded");
+           request.Headers.ContainsKey("X-Forwarded-Host");
 }
 
-static bool IsKnownForwardedHeaderProxy(
-    IPAddress? remoteIpAddress,
+static bool IsKnownForwardingSource(
+    System.Net.IPAddress? remoteIpAddress,
     ForwardedHeadersOptions options)
 {
     if (remoteIpAddress is null)
+    {
         return false;
+    }
 
     if (options.KnownProxies.Any(proxy => proxy.Equals(remoteIpAddress)))
+    {
         return true;
+    }
 
     return options.KnownNetworks.Any(network => network.Contains(remoteIpAddress));
 }
@@ -515,4 +612,5 @@ static bool IsKnownForwardedHeaderProxy(
 public partial class Program
 {
 }
+
 

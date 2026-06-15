@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Application.Users.Messaging.DTOs;
 
@@ -15,3 +15,4 @@ public sealed record GetMessagesQuery(
     int Page = 1,
     int PageSize = 20
 ) : IRequest<PagedResult<MessageDto>>;
+

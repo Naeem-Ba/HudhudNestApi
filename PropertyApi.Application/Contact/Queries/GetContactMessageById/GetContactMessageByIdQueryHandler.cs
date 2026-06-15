@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Contact.DTOs;
 using PropertyApi.Application.Contact.Interfaces;
 
@@ -30,3 +30,4 @@ public sealed class GetContactMessageByIdQueryHandler
             message.CreatedAt);
     }
 }
+

@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
@@ -45,3 +45,4 @@ public sealed class LogoutCommandValidator : AbstractValidator<LogoutCommand>
         RuleFor(x => x.RefreshToken).NotEmpty();
     }
 }
+

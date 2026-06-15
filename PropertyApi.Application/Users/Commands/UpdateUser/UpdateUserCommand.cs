@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Users.DTOs;
 
 namespace PropertyApi.Application.Users.Commands.UpdateUser;
@@ -18,3 +18,4 @@ public sealed record UpdateUserCommand(
     string? PreferredCurrency,
     string? CountryCode
 ) : IRequest<UserDto?>;
+

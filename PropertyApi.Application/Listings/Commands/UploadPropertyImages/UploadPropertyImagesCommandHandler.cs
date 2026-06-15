@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.DTOs;
 using PropertyApi.Application.Listings.Interfaces;
@@ -113,3 +113,4 @@ public sealed class UploadPropertyImagesCommandHandler
         }
     }
 }
+

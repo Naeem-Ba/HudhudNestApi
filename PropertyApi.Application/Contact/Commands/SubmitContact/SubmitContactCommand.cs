@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 
 namespace PropertyApi.Application.Contact.Commands.SubmitContact;
 
@@ -8,3 +8,4 @@ public sealed record SubmitContactCommand(
     string? Subject,
     string Message,
     string? IpAddress) : IRequest<Guid>;
+

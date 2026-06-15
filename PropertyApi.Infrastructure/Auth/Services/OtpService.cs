@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using PropertyApi.Application.Auth.Interfaces;
@@ -47,9 +47,12 @@ public sealed class OtpService : IOtpService
     /// </summary>
     public (string otp, string hash) Generate()
     {
-        // RandomNumberGenerator → آمن تشفيرياً (أقوى من Random).
-        // GetInt32 avoids modulo bias and avoids the rare Math.Abs(int.MinValue) overflow case.
-        var number = RandomNumberGenerator.GetInt32(0, 1_000_000);
+        // RandomNumberGenerator → آمن تشفيرياً (أقوى من Random)
+        var bytes = new byte[4];
+        RandomNumberGenerator.Fill(bytes);
+
+        // نحوّله لرقم من 0-999999 ثم نملأه بالأصفار لنضمن 6 أرقام
+        var number = Math.Abs(BitConverter.ToInt32(bytes, 0)) % 1_000_000;
         var otp = number.ToString("D6"); // "D6" = 6 أرقام مع أصفار إذا لزم
 
         var hash = ComputeHash(otp);

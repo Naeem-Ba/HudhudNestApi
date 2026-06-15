@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Listings.DTOs;
 using PropertyApi.Application.Listings.Interfaces;
 
@@ -28,3 +28,4 @@ public sealed class GetPropertyImagesQueryHandler
         return PropertyImagesQueryResult.Success(images);
     }
 }
+

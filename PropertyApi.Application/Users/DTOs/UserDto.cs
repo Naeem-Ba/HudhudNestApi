@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Users.DTOs;
+﻿namespace PropertyApi.Application.Users.DTOs;
 
 /// <summary>
 /// Data Transfer Object for user profile responses.
@@ -37,3 +37,4 @@ public sealed class UserSummaryDto
     public string? PhoneNumber { get; set; }
     public IReadOnlyList<string> Roles { get; set; } = Array.Empty<string>();
 }
+

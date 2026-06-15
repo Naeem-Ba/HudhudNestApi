@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Bookings.DTOs;
 using PropertyApi.Application.Bookings.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
@@ -22,10 +22,10 @@ public sealed class GetPropertyVisitsQueryHandler
         GetPropertyVisitsQuery request, CancellationToken ct)
     {
         var property = await _properties.GetByIdAsync(request.PropertyId, ct)
-            ?? throw new NotFoundException("العقار غير موجود.");
+            ?? throw new NotFoundException("Ø§Ù„Ø¹Ù‚Ø§Ø± ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯.");
 
         if (property.OwnerId != request.OwnerId)
-            throw new ForbiddenException("فقط مالك العقار يمكنه رؤية طلبات الزيارة.");
+            throw new ForbiddenException("ÙÙ‚Ø· Ù…Ø§Ù„Ùƒ Ø§Ù„Ø¹Ù‚Ø§Ø± ÙŠÙ…ÙƒÙ†Ù‡ Ø±Ø¤ÙŠØ© Ø·Ù„Ø¨Ø§Øª Ø§Ù„Ø²ÙŠØ§Ø±Ø©.");
 
         var visits = await _visits.GetByPropertyIdAsync(request.PropertyId, ct);
 

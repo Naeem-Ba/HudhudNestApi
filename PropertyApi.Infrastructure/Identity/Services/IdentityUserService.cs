@@ -35,6 +35,16 @@ public sealed class IdentityUserService : IIdentityUserService
     public Task<bool> CheckPasswordAsync(User user, string password, CancellationToken ct = default)
         => _userManager.CheckPasswordAsync(user, password);
 
+    public async Task<IdentityOperationResult> ChangePasswordAsync(
+        User user,
+        string currentPassword,
+        string newPassword,
+        CancellationToken ct = default)
+    {
+        var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+        return Map(result);
+    }
+
     public async Task<IReadOnlyList<string>> GetRolesAsync(User user, CancellationToken ct = default)
     {
         var roles = await _userManager.GetRolesAsync(user);

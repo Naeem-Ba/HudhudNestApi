@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Users.DTOs;
 
 namespace PropertyApi.Application.Users.Commands.RegisterUser;
@@ -18,3 +18,4 @@ public sealed record RegisterUserCommand(
     string PreferredCurrency = "EUR",
     string? CountryCode = "DE"
 ) : IRequest<UserDto>;
+

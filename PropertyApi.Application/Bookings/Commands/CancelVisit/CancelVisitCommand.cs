@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Bookings.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
@@ -50,3 +50,4 @@ public sealed class CancelVisitCommandHandler : IRequestHandler<CancelVisitComma
         return true;
     }
 }
+

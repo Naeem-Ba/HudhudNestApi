@@ -1,7 +1,8 @@
-namespace PropertyApi.Application.Contact.DTOs;
+﻿namespace PropertyApi.Application.Contact.DTOs;
 
 public sealed record ContactMessagesPageDto(
     int Total,
     int Page,
     int PageSize,
     IReadOnlyList<ContactMessageDto> Data);
+

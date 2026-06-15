@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Listings.DTOs;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Properties.DTOs;
@@ -22,3 +22,4 @@ public sealed class SearchPropertiesNearbyQueryHandler
         return _repository.SearchNearbyAsync(request.Filter, cancellationToken);
     }
 }
+

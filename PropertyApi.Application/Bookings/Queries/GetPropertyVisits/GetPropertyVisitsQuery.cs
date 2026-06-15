@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Bookings.DTOs;
 
 namespace PropertyApi.Application.Bookings.Queries.GetPropertyVisits;

@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Auth.Interfaces;
+﻿namespace PropertyApi.Application.Auth.Interfaces;
 
 public interface IPasswordResetUrlBuilder
 {
@@ -8,3 +8,4 @@ public interface IPasswordResetUrlBuilder
         string? requestScheme,
         string? requestHost);
 }
+

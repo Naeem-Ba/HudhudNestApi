@@ -1,3 +1,5 @@
+﻿using Xunit;
+
 namespace PropertyApi.Architecture.Tests.ProductionHardening;
 
 public sealed class SecurityTests
@@ -30,14 +32,16 @@ public sealed class SecurityTests
     {
         var dependencyInjection = ReadSource("PropertyApi.Infrastructure", "DependencyInjection.cs");
         var startupValidator = ReadSource("PropertyApi.Infrastructure", "Health", "ProductionStartupValidator.cs");
-        var smsProviderOptions = ReadSource("PropertyApi.Infrastructure", "Auth", "Services", "SmsProviderOptions.cs");
+        var smsOptions = ReadSource("PropertyApi.Infrastructure", "Auth", "Services", "SmsProviderOptions.cs");
 
         Assert.Contains("SmsProviderOptions", dependencyInjection);
         Assert.Contains("ValidateOnStart", dependencyInjection);
+        Assert.Contains("ValidateSmsSettings", startupValidator);
         Assert.Contains("ValidateForEnvironment", startupValidator);
-        Assert.Contains("SmsProvider:ApiKey is required in Production", smsProviderOptions);
-        Assert.Contains("SmsProvider:ApiUrl must be a valid absolute HTTPS URL in Production", smsProviderOptions);
-        Assert.Contains("SmsProvider:ApiUrl must use HTTPS in Production", smsProviderOptions);
+
+        Assert.Contains("SmsProvider:ApiKey is required in Production", smsOptions);
+        Assert.Contains("SmsProvider:ApiUrl must be a valid absolute HTTPS URL in Production", smsOptions);
+        Assert.Contains("SmsProvider:ApiUrl must use HTTPS in Production", smsOptions);
     }
 
     private static string ReadSource(params string[] relativePath)

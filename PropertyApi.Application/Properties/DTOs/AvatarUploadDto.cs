@@ -1,4 +1,4 @@
-using PropertyApi.Domain.Enums;
+﻿using PropertyApi.Domain.Enums;
 
 namespace PropertyApi.Application.Properties.DTOs;
 public sealed class AvatarUploadDto

@@ -1,13 +1,13 @@
-using MediatR;
+ï»¿using MediatR;
 using PropertyApi.Domain.Enums;
 
 namespace PropertyApi.Application.Listings.Commands.UpdateProperty;
 
 /// <summary>
-/// Partial-update command. All fields are nullable — only non-null values are applied.
+/// Partial-update command. All fields are nullable â€” only non-null values are applied.
 /// This avoids the anti-pattern of accidentally overwriting fields with null.
 ///
-/// BUG FIX: Was an empty "internal class UpdatePropertyCommand {}" — completely missing.
+/// BUG FIX: Was an empty "internal class UpdatePropertyCommand {}" â€” completely missing.
 /// </summary>
 public sealed record UpdatePropertyCommand(
     Guid PropertyId,
@@ -57,6 +57,7 @@ public sealed record UpdatePropertyCommand(
     DateTime? AvailableFrom,
     DateTime? ExpiresAt,
 
-    // Publishing — triggers domain methods Publish()/Unpublish()
+    // Publishing â€” triggers domain methods Publish()/Unpublish()
     bool? IsPublished
 ) : IRequest<bool>;
+

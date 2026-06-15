@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Common.Models;
+﻿namespace PropertyApi.Application.Common.Models;
 
 /// <summary>
 /// Storage-agnostic result returned after uploading a media file.
@@ -19,3 +19,4 @@ public sealed record MediaUploadResult(
     public static MediaUploadResult Failed(string errorMessage)
         => new(null, null, errorMessage);
 }
+

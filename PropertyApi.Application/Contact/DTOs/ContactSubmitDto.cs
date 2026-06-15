@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace PropertyApi.Application.Contact.DTOs;
 
@@ -18,3 +18,4 @@ public sealed record ContactSubmitDto(
     [Required]
     [StringLength(5000, MinimumLength = 10)]
     string Message);
+

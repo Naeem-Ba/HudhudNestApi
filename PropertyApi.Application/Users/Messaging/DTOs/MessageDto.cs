@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Users.Messaging.DTOs;
+﻿namespace PropertyApi.Application.Users.Messaging.DTOs;
 
 public sealed class MessageDto
 {
@@ -12,3 +12,4 @@ public sealed class MessageDto
     public DateTime? ReadAt { get; set; }
     public DateTime CreatedAt { get; set; }
 }
+

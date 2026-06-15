@@ -80,5 +80,3 @@ PropertyApi/wwwroot/profile_fotos/
 # Docker local overrides
 compose.override.yml
 docker-compose.override.yml
-# Local temporary patch/test packs
-_*_pack/

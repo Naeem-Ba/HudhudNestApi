@@ -1,4 +1,4 @@
-
+﻿
 
 namespace PropertyApi.Application.Properties.DTOs
 {
@@ -8,3 +8,4 @@ namespace PropertyApi.Application.Properties.DTOs
         public string Key { get; set; } = string.Empty;
     }
 }
+

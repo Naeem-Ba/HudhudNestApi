@@ -1,4 +1,4 @@
-using MediatR;
+ï»¿using MediatR;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
@@ -8,7 +8,7 @@ namespace PropertyApi.Application.Common.Behaviors;
 /// MediatR pipeline behavior that logs every Command/Query
 /// with execution time. Runs AFTER validation, BEFORE the handler.
 ///
-/// BUG FIX: Was declared as "internal interface LoggingBehavior {}" — completely wrong.
+/// BUG FIX: Was declared as "internal interface LoggingBehavior {}" â€” completely wrong.
 /// </summary>
 public sealed class LoggingBehavior<TRequest, TResponse>
     : IPipelineBehavior<TRequest, TResponse>
@@ -52,7 +52,7 @@ public sealed class LoggingBehavior<TRequest, TResponse>
         if (sw.ElapsedMilliseconds > 500)
         {
             _logger.LogWarning(
-                "[SLOW] {RequestName} took {Elapsed}ms — consider optimization",
+                "[SLOW] {RequestName} took {Elapsed}ms â€” consider optimization",
                 requestName,
                 sw.ElapsedMilliseconds);
         }
@@ -67,3 +67,4 @@ public sealed class LoggingBehavior<TRequest, TResponse>
         return response;
     }
 }
+

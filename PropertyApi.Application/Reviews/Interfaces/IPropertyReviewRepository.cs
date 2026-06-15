@@ -1,4 +1,4 @@
-using PropertyApi.Domain.Reviews.Entities;
+﻿using PropertyApi.Domain.Reviews.Entities;
 
 namespace PropertyApi.Application.Reviews.Interfaces;
 

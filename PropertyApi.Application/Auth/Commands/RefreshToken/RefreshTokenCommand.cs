@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
@@ -117,3 +117,4 @@ public sealed class RefreshTokenCommandValidator : AbstractValidator<RefreshToke
         RuleFor(x => x.RefreshToken).NotEmpty();
     }
 }
+

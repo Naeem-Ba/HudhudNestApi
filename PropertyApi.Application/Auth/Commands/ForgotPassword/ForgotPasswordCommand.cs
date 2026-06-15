@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -129,3 +129,4 @@ public sealed class ForgotPasswordCommandValidator
             .EmailAddress();
     }
 }
+

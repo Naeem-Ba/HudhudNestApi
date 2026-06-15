@@ -1,4 +1,4 @@
-using PropertyApi.Application.Listings.DTOs;
+﻿using PropertyApi.Application.Listings.DTOs;
 using PropertyApi.Domain.Listings.Entities;
 
 namespace PropertyApi.Application.Listings.Interfaces;
@@ -13,3 +13,4 @@ public interface IPropertyImageRepository
     void Add(PropertyImage image);
     void Remove(PropertyImage image);
 }
+

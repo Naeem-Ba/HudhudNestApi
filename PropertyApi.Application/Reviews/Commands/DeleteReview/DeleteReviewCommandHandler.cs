@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Reviews.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
@@ -17,10 +17,10 @@ public sealed class DeleteReviewCommandHandler
     public async Task<bool> Handle(DeleteReviewCommand request, CancellationToken ct)
     {
         var review = await _reviews.GetByIdAsync(request.ReviewId, ct)
-            ?? throw new NotFoundException("التقييم غير موجود.");
+            ?? throw new NotFoundException("Ø§Ù„ØªÙ‚ÙŠÙŠÙ… ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯.");
 
         if (!request.IsAdmin && review.ReviewerId != request.ActorId)
-            throw new ForbiddenException("يمكنك حذف تقييماتك فقط.");
+            throw new ForbiddenException("ÙŠÙ…ÙƒÙ†Ùƒ Ø­Ø°Ù ØªÙ‚ÙŠÙŠÙ…Ø§ØªÙƒ ÙÙ‚Ø·.");
 
         await _reviews.DeleteAsync(review, ct);
         await _uow.SaveChangesAsync(ct);

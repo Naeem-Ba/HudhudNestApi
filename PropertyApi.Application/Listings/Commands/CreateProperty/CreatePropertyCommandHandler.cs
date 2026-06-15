@@ -1,4 +1,4 @@
-using MediatR;
+ï»¿using MediatR;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Domain.Listings.Entities;
@@ -10,7 +10,7 @@ namespace PropertyApi.Application.Listings.Commands.CreateProperty;
 /// Uses the Property.Create() factory method (enforces domain invariants),
 /// then saves via UnitOfWork.
 ///
-/// BUG FIX: Was an empty "internal class CreatePropertyCommandHandler {}" — non-functional.
+/// BUG FIX: Was an empty "internal class CreatePropertyCommandHandler {}" â€” non-functional.
 /// </summary>
 public sealed class CreatePropertyCommandHandler
     : IRequestHandler<CreatePropertyCommand, Guid>
@@ -28,7 +28,7 @@ public sealed class CreatePropertyCommandHandler
         CreatePropertyCommand request,
         CancellationToken cancellationToken)
     {
-        // Factory method — the ONLY correct way to create a Property.
+        // Factory method â€” the ONLY correct way to create a Property.
         // Throws DomainException if invariants are violated.
         var property = Property.Create(
             title: request.Title,
@@ -38,7 +38,7 @@ public sealed class CreatePropertyCommandHandler
             countryCode: request.CountryCode,
             currencyCode: request.CurrencyCode);
 
-        // Set optional fields (public setters — no invariants to enforce)
+        // Set optional fields (public setters â€” no invariants to enforce)
         property.Street = request.Street;
         property.City = request.City;
         property.Region = request.Region;
@@ -78,3 +78,4 @@ public sealed class CreatePropertyCommandHandler
         return property.Id;
     }
 }
+

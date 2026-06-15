@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -9,9 +9,9 @@ namespace PropertyApi.Application.Common.Interfaces;
 /// <summary>
 /// Provides access to the currently authenticated user's identity.
 /// Implemented in Infrastructure (reads from IHttpContextAccessor).
-/// Application layer only sees this interface — no ASP.NET dependency.
+/// Application layer only sees this interface â€” no ASP.NET dependency.
 ///
-/// BUG FIX: Was an empty "internal interface ICurrentUserService {}" — useless.
+/// BUG FIX: Was an empty "internal interface ICurrentUserService {}" â€” useless.
 /// </summary>
 public interface ICurrentUserService
 {
@@ -27,3 +27,4 @@ public interface ICurrentUserService
     /// <summary>All role claims for the current user.</summary>
     IEnumerable<string> Roles { get; }
 }
+

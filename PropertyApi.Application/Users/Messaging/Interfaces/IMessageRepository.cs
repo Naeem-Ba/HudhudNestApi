@@ -1,4 +1,4 @@
-using PropertyApi.Application.Properties.DTOs;
+﻿using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Domain.Messaging.Entities;
 
 namespace PropertyApi.Application.Users.Messaging.Interfaces;

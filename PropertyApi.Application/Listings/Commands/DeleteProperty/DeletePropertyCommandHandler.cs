@@ -1,11 +1,11 @@
-using MediatR;
+ï»¿using MediatR;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
 
 namespace PropertyApi.Application.Listings.Commands.DeleteProperty;
 
 /// <summary>
-/// BUG FIX: Was an empty "internal class DeletePropertyCommandHandler {}" — completely missing.
+/// BUG FIX: Was an empty "internal class DeletePropertyCommandHandler {}" â€” completely missing.
 /// </summary>
 public sealed class DeletePropertyCommandHandler
     : IRequestHandler<DeletePropertyCommand, bool>
@@ -37,10 +37,11 @@ public sealed class DeletePropertyCommandHandler
 
         // AppDbContext.SaveChangesAsync() intercepts EntityState.Deleted
         // and converts it to soft-delete automatically.
-        // Calling Remove() here is fine — the DbContext handles conversion.
+        // Calling Remove() here is fine â€” the DbContext handles conversion.
         _repo.Remove(property);
         await _uow.SaveChangesAsync(cancellationToken);
 
         return true;
     }
 }
+

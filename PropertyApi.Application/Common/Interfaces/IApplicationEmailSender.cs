@@ -15,3 +15,4 @@ namespace PropertyApi.Application.Common.Interfaces
             string htmlMessage);
     }
 }
+

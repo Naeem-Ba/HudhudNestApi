@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using MediatR;
 using ValidationException = PropertyApi.Application.Common.Exceptions.ValidationException;
 
@@ -8,7 +8,7 @@ namespace PropertyApi.Application.Common.Behaviors;
 /// MediatR pipeline behavior that runs FluentValidation validators
 /// BEFORE the handler is called.
 ///
-/// BUG FIX: Was declared as "internal interface ValidationBehavior {}" � completely wrong.
+/// BUG FIX: Was declared as "internal interface ValidationBehavior {}" — completely wrong.
 /// Must be a generic class implementing IPipelineBehavior to work as a MediatR pipeline.
 /// </summary>
 public sealed class ValidationBehavior<TRequest, TResponse>
@@ -46,3 +46,4 @@ public sealed class ValidationBehavior<TRequest, TResponse>
         return await next();
     }
 }
+

@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Bookings.DTOs;
 
 namespace PropertyApi.Application.Bookings.Commands.RequestVisit;
@@ -10,3 +10,4 @@ public sealed record RequestVisitCommand(
     string VisitorName,
     string VisitorPhone,
     string? VisitorNote) : IRequest<VisitDto>;
+

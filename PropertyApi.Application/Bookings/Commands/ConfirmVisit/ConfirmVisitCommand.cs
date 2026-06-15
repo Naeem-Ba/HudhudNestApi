@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Bookings.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
@@ -58,3 +58,4 @@ public sealed class ConfirmVisitCommandHandler : IRequestHandler<ConfirmVisitCom
         return true;
     }
 }
+

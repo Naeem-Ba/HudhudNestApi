@@ -11,7 +11,8 @@ public sealed class APIDependencyGuardTests
         nameof(PropertyImagesController),
         nameof(FavoritesController),
         nameof(ContactController),
-        nameof(AmenitiesController)
+        nameof(AmenitiesController),
+        nameof(UsersController)
     ];
 
     [Fact(DisplayName = "Critical controllers must depend on ISender only")]
@@ -94,6 +95,9 @@ public sealed class APIDependencyGuardTests
 
             if (ns.StartsWith("PropertyApi.Infrastructure", StringComparison.Ordinal) ||
                 ns.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal) ||
+                ns.StartsWith("Microsoft.AspNetCore.Identity", StringComparison.Ordinal) ||
+                candidate.Name.StartsWith("UserManager", StringComparison.Ordinal) ||
+                candidate.Name.StartsWith("RoleManager", StringComparison.Ordinal) ||
                 candidate.Name.Equals("AppDbContext", StringComparison.Ordinal))
             {
                 failures.Add($"{controllerType.Name} uses forbidden type '{fullName}' via {usage}.");
@@ -137,6 +141,9 @@ public sealed class APIDependencyGuardTests
         {
             "PropertyApi.Infrastructure",
             "Microsoft.EntityFrameworkCore",
+            "Microsoft.AspNetCore.Identity",
+            "UserManager<",
+            "RoleManager<",
             "AppDbContext",
             "DbSet<",
             ".SaveChangesAsync(",

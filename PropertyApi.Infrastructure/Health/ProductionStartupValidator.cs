@@ -67,7 +67,6 @@ public sealed class ProductionStartupValidator : IHostedService
     {
         using var scope = _services.CreateScope();
         var options = scope.ServiceProvider.GetRequiredService<IOptions<SmsProviderOptions>>().Value;
-
         options.ValidateForEnvironment(_environment.EnvironmentName);
     }
 

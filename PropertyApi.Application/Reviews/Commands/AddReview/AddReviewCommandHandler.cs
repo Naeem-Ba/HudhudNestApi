@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Application.Reviews.DTOs;
@@ -34,15 +34,15 @@ public sealed class AddReviewCommandHandler
         AddReviewCommand request, CancellationToken ct)
     {
         var property = await _properties.GetByIdAsync(request.PropertyId, ct)
-            ?? throw new NotFoundException("العقار غير موجود.");
+            ?? throw new NotFoundException("Ø§Ù„Ø¹Ù‚Ø§Ø± ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯.");
 
         if (property.OwnerId == request.ReviewerId)
-            throw new DomainException("لا يمكن للمالك تقييم عقاره.");
+            throw new DomainException("Ù„Ø§ ÙŠÙ…ÙƒÙ† Ù„Ù„Ù…Ø§Ù„Ùƒ ØªÙ‚ÙŠÙŠÙ… Ø¹Ù‚Ø§Ø±Ù‡.");
 
         var alreadyReviewed = await _reviews.HasUserReviewedAsync(
             request.PropertyId, request.ReviewerId, ct);
         if (alreadyReviewed)
-            throw new DomainException("لقد قمت بتقييم هذا العقار مسبقًا.");
+            throw new DomainException("Ù„Ù‚Ø¯ Ù‚Ù…Øª Ø¨ØªÙ‚ÙŠÙŠÙ… Ù‡Ø°Ø§ Ø§Ù„Ø¹Ù‚Ø§Ø± Ù…Ø³Ø¨Ù‚Ù‹Ø§.");
 
         var review = PropertyReview.Create(
             request.PropertyId, request.ReviewerId,
@@ -57,14 +57,14 @@ public sealed class AddReviewCommandHandler
             propertyId:    property.Id,
             propertyTitle: property.Title,
             type:          NotificationType.ReviewAdded,
-            detail:        $"تم إضافة تقييم جديد ({request.Rating}/5) لعقارك.",
+            detail:        $"ØªÙ… Ø¥Ø¶Ø§ÙØ© ØªÙ‚ÙŠÙŠÙ… Ø¬Ø¯ÙŠØ¯ ({request.Rating}/5) Ù„Ø¹Ù‚Ø§Ø±Ùƒ.",
             ct:            ct);
 
         return new PropertyReviewDto(
             Id:              review.Id,
             PropertyId:      review.PropertyId,
             ReviewerId:      review.ReviewerId,
-            ReviewerName:    "—",   // resolved in query handler with navigation
+            ReviewerName:    "â€”",   // resolved in query handler with navigation
             ReviewerImageUrl: null,
             Rating:          review.Rating,
             Comment:         review.Comment,
