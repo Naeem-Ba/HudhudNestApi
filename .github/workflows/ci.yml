@@ -36,10 +36,23 @@ jobs:
           --health-timeout=5s
           --health-retries=10
 
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
     env:
       ASPNETCORE_ENVIRONMENT: CI
       DOTNET_ENVIRONMENT: CI
       ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true
+      ConnectionStrings__Redis: localhost:6379
+      Redis__ConnectionString: localhost:6379
+      RateLimiting__Redis__Enabled: "true"
       Jwt__Issuer: PropertyApi
       Jwt__Audience: PropertyApiClient
       Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
@@ -91,6 +104,9 @@ jobs:
           ASPNETCORE_ENVIRONMENT: CI
           DOTNET_ENVIRONMENT: CI
           ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true
+          ConnectionStrings__Redis: localhost:6379
+          Redis__ConnectionString: localhost:6379
+          RateLimiting__Redis__Enabled: "true"
           Jwt__Issuer: PropertyApi
           Jwt__Audience: PropertyApiClient
           Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
@@ -106,6 +122,9 @@ jobs:
           ASPNETCORE_ENVIRONMENT: CI
           DOTNET_ENVIRONMENT: CI
           ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true
+          ConnectionStrings__Redis: localhost:6379
+          Redis__ConnectionString: localhost:6379
+          RateLimiting__Redis__Enabled: "true"
           Jwt__Issuer: PropertyApi
           Jwt__Audience: PropertyApiClient
           Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
