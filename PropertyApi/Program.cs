@@ -16,8 +16,28 @@ using PropertyApi.Infrastructure.Hubs;
 using PropertyApi.Application.Common.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.HttpOverrides;
+using PropertyApi.Security.Csrf;
+using PropertyApi.Security.Headers;
+using PropertyApi.Security.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+var isTestingOrCi =
+    builder.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase) ||
+    builder.Environment.EnvironmentName.Equals("CI", StringComparison.OrdinalIgnoreCase);
+
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis")
+    ?? builder.Configuration["Redis:ConnectionString"];
+
+var useRedisRateLimiting =
+    !isTestingOrCi &&
+    builder.Configuration.GetValue("RateLimiting:Redis:Enabled", true) &&
+    !string.IsNullOrWhiteSpace(redisConnectionString);
+
+if (builder.Environment.IsProduction() && !useRedisRateLimiting)
+{
+    throw new InvalidOperationException(
+        "Redis distributed rate limiting is required in Production. Configure ConnectionStrings:Redis or Redis:ConnectionString.");
+}
 var configuredKnownProxies = ReadKnownProxies(builder.Configuration);
 var configuredKnownNetworks = ReadKnownNetworks(builder.Configuration);
 var hasConfiguredKnownForwardingSource =
@@ -83,6 +103,16 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(
     builder.Configuration,
     builder.Environment);
+
+builder.Services.AddPropertyApiSecurityHeaders(builder.Configuration);
+builder.Services.AddPropertyApiAntiforgery(builder.Configuration, builder.Environment);
+
+if (useRedisRateLimiting)
+{
+    builder.Services.AddPropertyApiRedisRateLimiting(
+        builder.Configuration,
+        builder.Environment);
+}
 
 // -- 4. JWT Authentication ------------------------------------
 var jwtSection = builder.Configuration.GetSection("Jwt");
@@ -376,6 +406,27 @@ builder.Services.AddRateLimiter(options =>
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             }));
+    options.AddPolicy("auth-refresh", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetClientRateLimitPartitionKey(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(5),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy("auth-logout", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetClientRateLimitPartitionKey(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(5),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
 
     options.AddPolicy("visits", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
@@ -471,6 +522,7 @@ if (app.Environment.IsProduction())
 // MUST be first after forwarded headers: catches all unhandled exceptions before CORS headers are set
 // FIX: replaces the inline lambda that had security issues
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UsePropertyApiSecurityHeaders();
 
 // Swagger / OpenAPI
 // Enabled by default in Development and CI. For Staging, set Swagger:Enabled=true.
@@ -492,7 +544,15 @@ if (swaggerEnabled)
 
 app.UseStaticFiles();
 app.UseRouting();
-app.UseRateLimiter();
+if (useRedisRateLimiting)
+{
+    app.UseRedisRateLimiting();
+}
+else
+{
+    app.UseRateLimiter();
+}
+app.UseCookieCsrfProtection();
 // CORS must be between UseRouting() and UseAuthentication()
 app.UseCors("DefaultCors");
 
@@ -612,5 +672,7 @@ static bool IsKnownForwardingSource(
 public partial class Program
 {
 }
+
+
 
 

@@ -29,7 +29,31 @@ public sealed class RateLimitingGuardTests
         Assert.Equal("auth-register", attribute.PolicyName);
     }
 
-    [Fact(DisplayName = "Program.cs must define auth-login and auth-register policies")]
+    [Fact(DisplayName = "Auth refresh endpoint must use auth-refresh rate limiting policy")]
+    public void Refresh_Should_Have_AuthRefresh_RateLimit()
+    {
+        var method = typeof(AuthController).GetMethod(nameof(AuthController.Refresh));
+        Assert.NotNull(method);
+
+        var attribute = Assert.Single(method!.GetCustomAttributes(typeof(EnableRateLimitingAttribute), inherit: false)
+            .Cast<EnableRateLimitingAttribute>());
+
+        Assert.Equal("auth-refresh", attribute.PolicyName);
+    }
+
+    [Fact(DisplayName = "Auth logout endpoint must use auth-logout rate limiting policy")]
+    public void Logout_Should_Have_AuthLogout_RateLimit()
+    {
+        var method = typeof(AuthController).GetMethod(nameof(AuthController.Logout));
+        Assert.NotNull(method);
+
+        var attribute = Assert.Single(method!.GetCustomAttributes(typeof(EnableRateLimitingAttribute), inherit: false)
+            .Cast<EnableRateLimitingAttribute>());
+
+        Assert.Equal("auth-logout", attribute.PolicyName);
+    }
+
+    [Fact(DisplayName = "Program.cs must define local fallback auth policies and enable Redis rate limiting")]
     public void Program_Should_Define_Auth_RateLimit_Policies()
     {
         var repoRoot = FindRepositoryRoot();
@@ -42,6 +66,8 @@ public sealed class RateLimitingGuardTests
         Assert.Contains("auth-register", source);
         Assert.Contains("PermitLimit = 5", source);
         Assert.Contains("TimeSpan.FromMinutes(10)", source);
+        Assert.Contains("UseRedisRateLimiting", source);
+        Assert.Contains("AddPropertyApiRedisRateLimiting", source);
     }
 
     private static string FindRepositoryRoot()

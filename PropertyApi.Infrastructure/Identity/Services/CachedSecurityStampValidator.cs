@@ -93,5 +93,5 @@ public sealed class CachedSecurityStampValidator : IUserSecurityStampValidator
         return SecurityStampValidationResult.Success();
     }
 
-    private static string BuildCacheKey(Guid userId) => $"securitystamp:{userId:N}";
+    private static string BuildCacheKey(Guid userId) => SecurityStampCacheKeys.ForUser(userId);
 }
