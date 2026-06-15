@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Admin.DTOs;
+﻿namespace PropertyApi.Application.Admin.DTOs;
 
 public sealed class AdminUserDto
 {
@@ -10,3 +10,4 @@ public sealed class AdminUserDto
     public DateTime CreatedAt { get; init; }
     public IReadOnlyList<string> Roles { get; init; } = Array.Empty<string>();
 }
+

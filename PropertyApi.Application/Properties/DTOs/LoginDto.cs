@@ -1,4 +1,4 @@
-
+﻿
 namespace PropertyApi.Application.Properties.DTOs
 {
     public class LoginDto
@@ -7,3 +7,4 @@ namespace PropertyApi.Application.Properties.DTOs
         public string Password { get; set; } = string.Empty;
     }
 }
+

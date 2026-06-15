@@ -1,4 +1,4 @@
-
+﻿
 
 namespace PropertyApi.Application.Properties.DTOs;
 public sealed class ContactDto

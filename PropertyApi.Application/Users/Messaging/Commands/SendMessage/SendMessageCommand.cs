@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Users.Messaging.DTOs;
 
 namespace PropertyApi.Application.Users.Messaging.Commands.SendMessage;
@@ -12,3 +12,4 @@ public sealed record SendMessageCommand(
     Guid? ReceiverId,
     string Content
 ) : IRequest<MessageDto>;
+

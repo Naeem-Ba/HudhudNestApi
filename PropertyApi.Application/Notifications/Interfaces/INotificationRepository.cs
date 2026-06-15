@@ -1,4 +1,4 @@
-using PropertyApi.Domain.Notifications.Entities;
+﻿using PropertyApi.Domain.Notifications.Entities;
 
 namespace PropertyApi.Application.Notifications.Interfaces;
 
@@ -31,3 +31,4 @@ public interface INotificationRepository
         Guid userId,
         CancellationToken ct = default);
 }
+

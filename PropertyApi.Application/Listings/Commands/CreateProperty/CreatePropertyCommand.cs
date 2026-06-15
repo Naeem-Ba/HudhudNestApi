@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Domain.Enums;
 
 namespace PropertyApi.Application.Listings.Commands.CreateProperty;
@@ -7,7 +7,7 @@ namespace PropertyApi.Application.Listings.Commands.CreateProperty;
 /// Command to create a new property listing.
 /// Returns the new property's Guid ID on success.
 ///
-/// CHANGE: Added ": IRequest&lt;Guid&gt;" � without this MediatR cannot route it.
+/// CHANGE: Added ": IRequest&lt;Guid&gt;" — without this MediatR cannot route it.
 /// </summary>
 public sealed record CreatePropertyCommand(
     Guid OwnerId,
@@ -37,3 +37,4 @@ public sealed record CreatePropertyCommand(
     DateTime? AvailableFrom,
     List<Guid>? AmenityIds
 ) : IRequest<Guid>;
+

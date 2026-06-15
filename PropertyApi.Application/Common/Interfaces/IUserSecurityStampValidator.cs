@@ -1,4 +1,4 @@
-using PropertyApi.Application.Common.Security;
+﻿using PropertyApi.Application.Common.Security;
 
 namespace PropertyApi.Application.Common.Interfaces;
 
@@ -9,3 +9,4 @@ public interface IUserSecurityStampValidator
         string tokenSecurityStamp,
         CancellationToken cancellationToken = default);
 }
+

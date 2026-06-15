@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Favorites.DTOs;
 using PropertyApi.Application.Favorites.Interfaces;
@@ -45,3 +45,4 @@ public sealed class AddFavoriteCommandHandler
         return FavoriteMutationResult.Success("Added to favorites.");
     }
 }
+

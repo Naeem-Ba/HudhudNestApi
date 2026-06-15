@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Common.DTOs;
+﻿namespace PropertyApi.Application.Common.DTOs;
 
 public sealed record LookupItemDto(
     string Id,

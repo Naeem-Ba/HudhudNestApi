@@ -1,0 +1,45 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging;
+using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Auth.Models;
+
+namespace PropertyApi.Infrastructure.Identity.Services;
+
+/// <summary>
+/// Infrastructure implementation of role-management operations backed by ASP.NET Identity.
+/// Keeps RoleManager and IdentityResult outside the Application layer.
+/// </summary>
+public sealed class IdentityRoleService : IIdentityRoleService
+{
+    private readonly RoleManager<IdentityRole<Guid>> _roleManager;
+    private readonly ILogger<IdentityRoleService> _logger;
+
+    public IdentityRoleService(
+        RoleManager<IdentityRole<Guid>> roleManager,
+        ILogger<IdentityRoleService> logger)
+    {
+        _roleManager = roleManager;
+        _logger = logger;
+    }
+
+    public Task<bool> RoleExistsAsync(string role, CancellationToken ct = default)
+        => _roleManager.RoleExistsAsync(role);
+
+    public async Task<IdentityOperationResult> CreateRoleAsync(
+        string role,
+        CancellationToken ct = default)
+    {
+        var result = await _roleManager.CreateAsync(new IdentityRole<Guid>(role));
+        return Map(result);
+    }
+
+    private IdentityOperationResult Map(IdentityResult result)
+    {
+        if (result.Succeeded)
+            return IdentityOperationResult.Success();
+
+        var errors = result.Errors.Select(error => error.Description).ToArray();
+        _logger.LogDebug("Identity role operation failed. Errors: {Errors}", string.Join(", ", errors));
+        return IdentityOperationResult.Failed(errors);
+    }
+}

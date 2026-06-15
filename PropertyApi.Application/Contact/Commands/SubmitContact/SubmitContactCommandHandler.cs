@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Contact.Interfaces;
 using PropertyApi.Domain.Messaging.Entities;
@@ -36,3 +36,4 @@ public sealed class SubmitContactCommandHandler
         return message.Id;
     }
 }
+

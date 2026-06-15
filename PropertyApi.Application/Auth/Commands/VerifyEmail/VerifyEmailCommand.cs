@@ -50,7 +50,7 @@ public sealed record VerifyEmailCommand(
 
     /// <summary>
     /// الرمز المُنشَأ بواسطة:
-    /// UserManager.GenerateEmailConfirmationTokenAsync(user)
+    /// the identity provider generates an email confirmation token for the user
     /// يجب URL-Decode قبل الاستخدام (لأنه يحتوي أحرف خاصة)
     /// </summary>
     string Token

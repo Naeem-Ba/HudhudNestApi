@@ -1,4 +1,4 @@
-using PropertyApi.Domain.Bookings.Enums;
+﻿using PropertyApi.Domain.Bookings.Enums;
 
 namespace PropertyApi.Application.Bookings.DTOs;
 
@@ -19,3 +19,4 @@ public sealed record VisitDto(
     VisitStatus Status,
     DateTime   CreatedAt
 );
+

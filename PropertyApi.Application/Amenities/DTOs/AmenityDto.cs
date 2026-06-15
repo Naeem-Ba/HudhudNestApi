@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Amenities.DTOs;
+﻿namespace PropertyApi.Application.Amenities.DTOs;
 
 public sealed class AmenityDto
 {
@@ -7,3 +7,4 @@ public sealed class AmenityDto
     public string? Category { get; init; }
     public string? IconName { get; init; }
 }
+

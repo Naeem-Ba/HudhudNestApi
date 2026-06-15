@@ -1,4 +1,4 @@
-using PropertyApi.Application.Common.Models;
+﻿using PropertyApi.Application.Common.Models;
 
 namespace PropertyApi.Application.Common.Interfaces;
 
@@ -32,3 +32,4 @@ public interface IMediaStorageService
         string imageUrl,
         CancellationToken cancellationToken = default);
 }
+

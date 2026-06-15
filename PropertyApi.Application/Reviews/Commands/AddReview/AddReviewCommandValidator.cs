@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 
 namespace PropertyApi.Application.Reviews.Commands.AddReview;
 
@@ -10,7 +10,7 @@ public sealed class AddReviewCommandValidator : AbstractValidator<AddReviewComma
         RuleFor(x => x.ReviewerId).NotEmpty();
         RuleFor(x => x.Rating)
             .InclusiveBetween(1, 5)
-            .WithMessage("التقييم يجب أن يكون بين 1 و5 نجوم.");
+            .WithMessage("Ø§Ù„ØªÙ‚ÙŠÙŠÙ… ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø¨ÙŠÙ† 1 Ùˆ5 Ù†Ø¬ÙˆÙ….");
         RuleFor(x => x.Comment)
             .MaximumLength(1000)
             .When(x => x.Comment is not null);

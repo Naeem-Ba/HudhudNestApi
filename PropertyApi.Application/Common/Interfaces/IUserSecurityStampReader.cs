@@ -1,4 +1,4 @@
-using PropertyApi.Application.Common.Security;
+﻿using PropertyApi.Application.Common.Security;
 
 namespace PropertyApi.Application.Common.Interfaces;
 
@@ -8,3 +8,4 @@ public interface IUserSecurityStampReader
         Guid userId,
         CancellationToken cancellationToken = default);
 }
+

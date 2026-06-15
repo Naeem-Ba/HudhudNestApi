@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Listings.DTOs;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Listings.Queries.GetPropertyById;
@@ -7,7 +7,7 @@ using PropertyApi.Application.Properties.DTOs;
 namespace PropertyApi.Application.Listings.Queries.GetPropertiesList;
 
 /// <summary>
-/// BUG FIX: Was an empty "internal class GetPropertiesListQueryHandler {}" � completely missing.
+/// BUG FIX: Was an empty "internal class GetPropertiesListQueryHandler {}" — completely missing.
 ///
 /// NOTE: Uses GetPropertyByIdQueryHandler.MapToDto() to avoid duplicating mapping logic.
 /// If you later add AutoMapper or Mapster, replace the MapToDto call.
@@ -40,3 +40,4 @@ public sealed class GetPropertiesListQueryHandler
         };
     }
 }
+

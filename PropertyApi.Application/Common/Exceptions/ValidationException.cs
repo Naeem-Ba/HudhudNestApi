@@ -1,4 +1,4 @@
-using FluentValidation.Results;
+﻿using FluentValidation.Results;
 
 namespace PropertyApi.Application.Common.Exceptions;
 
@@ -6,7 +6,7 @@ namespace PropertyApi.Application.Common.Exceptions;
 /// Thrown by ValidationBehavior when a Command/Query fails FluentValidation.
 /// Contains a dictionary of field ? error messages for structured API responses.
 ///
-/// BUG FIX: Was an empty "internal class ValidationException {}" � completely non-functional.
+/// BUG FIX: Was an empty "internal class ValidationException {}" — completely non-functional.
 /// </summary>
 public sealed class ValidationException : Exception
 {
@@ -32,3 +32,4 @@ public sealed class ValidationException : Exception
                 group => group.ToArray());
     }
 }
+

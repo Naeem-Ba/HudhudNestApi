@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Properties.DTOs;
+﻿namespace PropertyApi.Application.Properties.DTOs;
 
 public class ProfileDto
 {
@@ -9,3 +9,4 @@ public class ProfileDto
     public string? TaxNumber { get; set; }
     public IReadOnlyList<string> Roles { get; set; } = Array.Empty<string>();
 }
+

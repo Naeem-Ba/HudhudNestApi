@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -69,6 +69,7 @@ public static class DependencyInjection
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
         services.AddScoped<IIdentityUserService, IdentityUserService>();
+        services.AddScoped<IIdentityRoleService, IdentityRoleService>();
 
         services.AddScoped<IUserSecurityStampReader, IdentitySecurityStampReader>();
         services.AddScoped<IUserSecurityStampValidator, CachedSecurityStampValidator>();
@@ -121,19 +122,13 @@ else
         {
             services.AddOptions<SmsProviderOptions>()
                 .Bind(configuration.GetSection(SmsProviderOptions.SectionName))
-                .Validate(options =>
-                {
-                    try
-                    {
-                        options.ValidateForEnvironment(environment.EnvironmentName);
-                        return true;
-                    }
-                    catch
-                    {
-                        return false;
-                    }
-                },
-                "SmsProvider must be fully configured in Production and SmsProvider:ApiUrl must use HTTPS.")
+                .Validate(options => !string.IsNullOrWhiteSpace(options.Provider), "SmsProvider:Provider is required in Production.")
+                .Validate(options => !string.IsNullOrWhiteSpace(options.ApiUrl), "SmsProvider:ApiUrl is required in Production.")
+                .Validate(options => Uri.TryCreate(options.ApiUrl, UriKind.Absolute, out var uri) &&
+                                     (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp),
+                    "SmsProvider:ApiUrl must be a valid absolute HTTP/HTTPS URL in Production.")
+                .Validate(options => !string.IsNullOrWhiteSpace(options.ApiKey), "SmsProvider:ApiKey is required in Production.")
+                .Validate(options => !string.IsNullOrWhiteSpace(options.FromNumber), "SmsProvider:FromNumber is required in Production.")
                 .ValidateOnStart();
         }
 

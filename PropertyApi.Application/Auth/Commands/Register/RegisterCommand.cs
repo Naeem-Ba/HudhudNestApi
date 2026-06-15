@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
@@ -120,3 +120,4 @@ public sealed class RegisterCommandValidator : AbstractValidator<RegisterCommand
         RuleFor(x => x.Password).NotEmpty().MinimumLength(8);
     }
 }
+

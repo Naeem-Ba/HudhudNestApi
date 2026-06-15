@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Favorites.DTOs;
+﻿namespace PropertyApi.Application.Favorites.DTOs;
 
 public enum FavoriteMutationStatus
 {
@@ -15,3 +15,4 @@ public sealed record FavoriteMutationResult(
     public static FavoriteMutationResult NotFound(string? message = null) => new(FavoriteMutationStatus.NotFound, message);
     public static FavoriteMutationResult Conflict(string? message = null) => new(FavoriteMutationStatus.Conflict, message);
 }
+

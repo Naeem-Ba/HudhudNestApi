@@ -1,5 +1,6 @@
-using MediatR;
-using Microsoft.AspNetCore.Identity;
+﻿using MediatR;
+using Microsoft.Extensions.Logging;
+using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Users.DTOs;
 using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Domain.Users.Entities;
@@ -9,20 +10,26 @@ namespace PropertyApi.Application.Users.Commands.UpdateUser;
 public sealed class UpdateUserCommandHandler
     : IRequestHandler<UpdateUserCommand, UserDto?>
 {
-    private readonly UserManager<User> _userManager;
+    private readonly IIdentityUserService _identityUsers;
+    private readonly ILogger<UpdateUserCommandHandler> _logger;
 
-    public UpdateUserCommandHandler(UserManager<User> userManager)
-        => _userManager = userManager;
+    public UpdateUserCommandHandler(
+        IIdentityUserService identityUsers,
+        ILogger<UpdateUserCommandHandler> logger)
+    {
+        _identityUsers = identityUsers;
+        _logger = logger;
+    }
 
     public async Task<UserDto?> Handle(
         UpdateUserCommand request,
         CancellationToken cancellationToken)
     {
-        var user = await _userManager.FindByIdAsync(request.UserId.ToString());
+        var user = await _identityUsers.FindByIdAsync(request.UserId, cancellationToken);
         if (user is null || user.IsDeleted)
             return null;
 
-        var roles = await _userManager.GetRolesAsync(user);
+        var roles = await _identityUsers.GetRolesAsync(user, cancellationToken);
         var isAgent = roles.Any(role => string.Equals(role, RoleNames.Agent, StringComparison.OrdinalIgnoreCase));
 
         if (request.FirstName is not null)
@@ -62,10 +69,17 @@ public sealed class UpdateUserCommandHandler
 
         user.UpdatedAt = DateTime.UtcNow;
 
-        var result = await _userManager.UpdateAsync(user);
+        var result = await _identityUsers.UpdateAsync(user, cancellationToken);
         if (!result.Succeeded)
+        {
+            _logger.LogWarning(
+                "User profile update failed for user {UserId}. Errors: {Errors}",
+                user.Id,
+                string.Join(", ", result.Errors));
+
             throw new InvalidOperationException(
-                string.Join(" | ", result.Errors.Select(e => e.Description)));
+                string.Join(" | ", result.Errors));
+        }
 
         return new UserDto
         {
@@ -85,3 +99,4 @@ public sealed class UpdateUserCommandHandler
         };
     }
 }
+

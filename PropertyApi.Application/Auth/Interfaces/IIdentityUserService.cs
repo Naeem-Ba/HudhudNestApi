@@ -1,11 +1,11 @@
-using PropertyApi.Application.Auth.Models;
+﻿using PropertyApi.Application.Auth.Models;
 using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Auth.Interfaces;
 
 /// <summary>
 /// Application-level abstraction over ASP.NET Identity.
-/// Handlers depend on this interface instead of UserManager/SignInManager.
+/// Handlers depend on this interface instead of ASP.NET Core Identity services.
 /// Infrastructure provides the implementation.
 /// </summary>
 public interface IIdentityUserService
@@ -17,6 +17,12 @@ public interface IIdentityUserService
     Task<User?> FindByUserNameAsync(string userName, CancellationToken ct = default);
 
     Task<bool> CheckPasswordAsync(User user, string password, CancellationToken ct = default);
+
+    Task<IdentityOperationResult> ChangePasswordAsync(
+        User user,
+        string currentPassword,
+        string newPassword,
+        CancellationToken ct = default);
 
     Task<IReadOnlyList<string>> GetRolesAsync(User user, CancellationToken ct = default);
 
@@ -55,3 +61,4 @@ public interface IIdentityUserService
         string token,
         CancellationToken ct = default);
 }
+

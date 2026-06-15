@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.DTOs;
@@ -10,13 +10,13 @@ using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Auth.Commands.VerifyPhoneOtp;
 
-// ══════════════════════════════════════════════════════════════
-// الخطوة 2: التحقق من رمز OTP (التسجيل + الدخول في آنٍ معاً)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ø§Ù„Ø®Ø·ÙˆØ© 2: Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø±Ù…Ø² OTP (Ø§Ù„ØªØ³Ø¬ÙŠÙ„ + Ø§Ù„Ø¯Ø®ÙˆÙ„ ÙÙŠ Ø¢Ù†Ù Ù…Ø¹Ø§Ù‹)
 //
 // Clean Architecture:
-// هذا الـ Handler لا يعتمد على UserManager مباشرة.
-// يستخدم IIdentityUserService فقط، والتنفيذ الحقيقي في Infrastructure.
-// ══════════════════════════════════════════════════════════════
+// Ù‡Ø°Ø§ Ø§Ù„Ù€ Handler Ù„Ø§ ÙŠØ¹ØªÙ…Ø¯ Ø¹Ù„Ù‰ concrete identity user service Ù…Ø¨Ø§Ø´Ø±Ø©.
+// ÙŠØ³ØªØ®Ø¯Ù… IIdentityUserService ÙÙ‚Ø·ØŒ ÙˆØ§Ù„ØªÙ†ÙÙŠØ° Ø§Ù„Ø­Ù‚ÙŠÙ‚ÙŠ ÙÙŠ Infrastructure.
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 public sealed record VerifyPhoneOtpCommand(
     string PhoneNumber,
@@ -60,7 +60,7 @@ public sealed class VerifyPhoneOtpCommandHandler
         var phone = request.PhoneNumber.Trim();
         var code = request.Code.Trim();
 
-        // ── 1. ابحث عن آخر رمز صالح ──────────────────────────
+        // â”€â”€ 1. Ø§Ø¨Ø­Ø« Ø¹Ù† Ø¢Ø®Ø± Ø±Ù…Ø² ØµØ§Ù„Ø­ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         var otpCode = await _otpRepo.GetLatestValidAsync(
             phone,
             request.Purpose,
@@ -70,23 +70,23 @@ public sealed class VerifyPhoneOtpCommandHandler
         {
             return VerifyOtpResult.Fail(
                 "OTP_NOT_FOUND",
-                "لا يوجد رمز صالح لهذا الرقم. اطلب رمزاً جديداً.");
+                "Ù„Ø§ ÙŠÙˆØ¬Ø¯ Ø±Ù…Ø² ØµØ§Ù„Ø­ Ù„Ù‡Ø°Ø§ Ø§Ù„Ø±Ù‚Ù…. Ø§Ø·Ù„Ø¨ Ø±Ù…Ø²Ø§Ù‹ Ø¬Ø¯ÙŠØ¯Ø§Ù‹.");
         }
 
         if (!otpCode.IsValid())
         {
             var reason = otpCode.IsExpired()
-                ? "انتهت صلاحية الرمز."
+                ? "Ø§Ù†ØªÙ‡Øª ØµÙ„Ø§Ø­ÙŠØ© Ø§Ù„Ø±Ù…Ø²."
                 : otpCode.IsUsed
-                    ? "الرمز مُستخدَم مسبقاً."
+                    ? "Ø§Ù„Ø±Ù…Ø² Ù…ÙØ³ØªØ®Ø¯ÙŽÙ… Ù…Ø³Ø¨Ù‚Ø§Ù‹."
                     : otpCode.IsExhausted()
-                        ? "تجاوزت عدد المحاولات."
-                        : "الرمز غير صالح.";
+                        ? "ØªØ¬Ø§ÙˆØ²Øª Ø¹Ø¯Ø¯ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø§Øª."
+                        : "Ø§Ù„Ø±Ù…Ø² ØºÙŠØ± ØµØ§Ù„Ø­.";
 
             return VerifyOtpResult.Fail("OTP_INVALID", reason);
         }
 
-        // ── 2. تحقق من تطابق الرمز ───────────────────────────
+        // â”€â”€ 2. ØªØ­Ù‚Ù‚ Ù…Ù† ØªØ·Ø§Ø¨Ù‚ Ø§Ù„Ø±Ù…Ø² â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         var isMatch = _otpService.Verify(code, otpCode.CodeHash);
 
         if (!isMatch)
@@ -104,25 +104,25 @@ public sealed class VerifyPhoneOtpCommandHandler
             return VerifyOtpResult.Fail(
                 "OTP_WRONG",
                 remaining > 0
-                    ? $"الرمز غير صحيح. تبقى لك {remaining} محاولة."
-                    : "استنفدت جميع المحاولات. اطلب رمزاً جديداً.");
+                    ? $"Ø§Ù„Ø±Ù…Ø² ØºÙŠØ± ØµØ­ÙŠØ­. ØªØ¨Ù‚Ù‰ Ù„Ùƒ {remaining} Ù…Ø­Ø§ÙˆÙ„Ø©."
+                    : "Ø§Ø³ØªÙ†ÙØ¯Øª Ø¬Ù…ÙŠØ¹ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø§Øª. Ø§Ø·Ù„Ø¨ Ø±Ù…Ø²Ø§Ù‹ Ø¬Ø¯ÙŠØ¯Ø§Ù‹.");
         }
 
-        // ── 3. الرمز صحيح — ضع علامة "تم الاستخدام" ──────────
+        // â”€â”€ 3. Ø§Ù„Ø±Ù…Ø² ØµØ­ÙŠØ­ â€” Ø¶Ø¹ Ø¹Ù„Ø§Ù…Ø© "ØªÙ… Ø§Ù„Ø§Ø³ØªØ®Ø¯Ø§Ù…" â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         otpCode.MarkAsUsed();
         await _otpRepo.SaveChangesAsync(ct);
 
-        // ── 4. ابحث عن المستخدم أو أنشئه ────────────────────
+        // â”€â”€ 4. Ø§Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ø£Ùˆ Ø£Ù†Ø´Ø¦Ù‡ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         var (user, isNewUser) = await GetOrCreateUserAsync(request, phone, ct);
 
         if (user is null)
         {
             return VerifyOtpResult.Fail(
                 "USER_CREATE_FAILED",
-                "فشل إنشاء الحساب. حاول مجدداً.");
+                "ÙØ´Ù„ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ø­Ø³Ø§Ø¨. Ø­Ø§ÙˆÙ„ Ù…Ø¬Ø¯Ø¯Ø§Ù‹.");
         }
 
-        // ── 5. أصدر JWT + Refresh Token ───────────────────────
+        // â”€â”€ 5. Ø£ØµØ¯Ø± JWT + Refresh Token â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         var roles = await _identityUsers.GetRolesAsync(user, ct);
 
         var accessToken = _tokenService.GenerateAccessToken(
@@ -166,7 +166,7 @@ public sealed class VerifyPhoneOtpCommandHandler
         string phone,
         CancellationToken ct)
     {
-        // حاليًا نستخدم UserName = phone للمستخدمين المسجلين بالهاتف.
+        // Ø­Ø§Ù„ÙŠÙ‹Ø§ Ù†Ø³ØªØ®Ø¯Ù… UserName = phone Ù„Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ† Ø§Ù„Ù…Ø³Ø¬Ù„ÙŠÙ† Ø¨Ø§Ù„Ù‡Ø§ØªÙ.
         var existingUser = await _identityUsers.FindByUserNameAsync(phone, ct);
 
         if (existingUser is not null)
@@ -235,31 +235,32 @@ public sealed class VerifyPhoneOtpCommandValidator
     {
         RuleFor(x => x.PhoneNumber)
             .NotEmpty()
-            .WithMessage("رقم الهاتف مطلوب.")
+            .WithMessage("Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ Ù…Ø·Ù„ÙˆØ¨.")
             .Matches(@"^\+[1-9]\d{7,14}$")
-            .WithMessage("رقم الهاتف يجب أن يكون بصيغة دولية.");
+            .WithMessage("Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø¨ØµÙŠØºØ© Ø¯ÙˆÙ„ÙŠØ©.");
 
         RuleFor(x => x.Code)
             .NotEmpty()
-            .WithMessage("رمز التحقق مطلوب.")
+            .WithMessage("Ø±Ù…Ø² Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ø·Ù„ÙˆØ¨.")
             .Length(6)
-            .WithMessage("رمز التحقق يتكون من 6 أرقام.")
+            .WithMessage("Ø±Ù…Ø² Ø§Ù„ØªØ­Ù‚Ù‚ ÙŠØªÙƒÙˆÙ† Ù…Ù† 6 Ø£Ø±Ù‚Ø§Ù….")
             .Matches(@"^\d{6}$")
-            .WithMessage("رمز التحقق يجب أن يحتوي على أرقام فقط.");
+            .WithMessage("Ø±Ù…Ø² Ø§Ù„ØªØ­Ù‚Ù‚ ÙŠØ¬Ø¨ Ø£Ù† ÙŠØ­ØªÙˆÙŠ Ø¹Ù„Ù‰ Ø£Ø±Ù‚Ø§Ù… ÙÙ‚Ø·.");
 
         RuleFor(x => x.FirstName)
             .MaximumLength(100)
             .When(x => !string.IsNullOrEmpty(x.FirstName))
-            .WithMessage("الاسم الأول يجب ألا يتجاوز 100 حرف.");
+            .WithMessage("Ø§Ù„Ø§Ø³Ù… Ø§Ù„Ø£ÙˆÙ„ ÙŠØ¬Ø¨ Ø£Ù„Ø§ ÙŠØªØ¬Ø§ÙˆØ² 100 Ø­Ø±Ù.");
 
         RuleFor(x => x.LastName)
             .MaximumLength(100)
             .When(x => !string.IsNullOrEmpty(x.LastName))
-            .WithMessage("اسم العائلة يجب ألا يتجاوز 100 حرف.");
+            .WithMessage("Ø§Ø³Ù… Ø§Ù„Ø¹Ø§Ø¦Ù„Ø© ÙŠØ¬Ø¨ Ø£Ù„Ø§ ÙŠØªØ¬Ø§ÙˆØ² 100 Ø­Ø±Ù.");
 
         RuleFor(x => x.Purpose)
             .IsInEnum()
-            .WithMessage("غرض رمز التحقق غير مدعوم.");
+            .WithMessage("ØºØ±Ø¶ Ø±Ù…Ø² Ø§Ù„ØªØ­Ù‚Ù‚ ØºÙŠØ± Ù…Ø¯Ø¹ÙˆÙ….");
 
     }
 }
+

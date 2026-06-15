@@ -1,4 +1,4 @@
-using PropertyApi.Domain.Enums;
+﻿using PropertyApi.Domain.Enums;
 
 namespace PropertyApi.Application.Listings.DTOs;
 
@@ -42,3 +42,4 @@ public sealed class GeoPropertySearchRequestDto
 
     public Guid? OwnerId { get; set; }
 }
+

@@ -1,4 +1,4 @@
-// NEW FILE: Extracts MapToDto() from GetPropertyByIdQueryHandler.
+﻿// NEW FILE: Extracts MapToDto() from GetPropertyByIdQueryHandler.
 //
 // WHY: Having MapToDto() as an internal static method on a query handler
 //      and calling it from another handler creates coupling between handlers.
@@ -88,3 +88,4 @@ public static class PropertyMapper
             .ToList()
     };
 }
+

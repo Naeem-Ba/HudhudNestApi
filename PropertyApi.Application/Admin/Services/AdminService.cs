@@ -1,4 +1,4 @@
-using PropertyApi.Application.Admin.DTOs;
+﻿using PropertyApi.Application.Admin.DTOs;
 using PropertyApi.Application.Admin.Interfaces;
 using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Domain.Users.Constants;
@@ -95,3 +95,4 @@ public sealed class AdminService : IAdminService
                 role,
                 StringComparison.OrdinalIgnoreCase));
 }
+

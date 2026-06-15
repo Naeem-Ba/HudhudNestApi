@@ -1,4 +1,4 @@
-using PropertyApi.Domain.Users.Entities;
+﻿using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Auth.Interfaces;
 
@@ -45,3 +45,4 @@ public interface IRefreshTokenRepository
         Func<CancellationToken, Task<T>> action,
         CancellationToken ct = default);
 }
+

@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
@@ -171,7 +171,8 @@ public sealed class SendMessageCommandHandler
         var fullName = $"{sender.FirstName} {sender.LastName}".Trim();
 
         return string.IsNullOrWhiteSpace(fullName)
-            ? "مستخدم"
+            ? "Ù…Ø³ØªØ®Ø¯Ù…"
             : fullName;
     }
 }
+

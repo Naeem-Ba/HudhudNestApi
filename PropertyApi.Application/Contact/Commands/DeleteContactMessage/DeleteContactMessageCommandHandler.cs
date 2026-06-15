@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Contact.Interfaces;
 
@@ -30,3 +30,4 @@ public sealed class DeleteContactMessageCommandHandler
         return true;
     }
 }
+

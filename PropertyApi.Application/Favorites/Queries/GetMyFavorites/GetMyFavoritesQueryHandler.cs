@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Favorites.DTOs;
 using PropertyApi.Application.Favorites.Interfaces;
 
@@ -19,3 +19,4 @@ public sealed class GetMyFavoritesQueryHandler
         return _favorites.GetByUserIdAsync(request.UserId, cancellationToken);
     }
 }
+

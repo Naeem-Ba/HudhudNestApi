@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Admin.DTOs;
+﻿namespace PropertyApi.Application.Admin.DTOs;
 
 public sealed record AdminOperationResult
 {
@@ -38,3 +38,4 @@ public sealed record AdminOperationResult
         Errors = allowedRoles.ToArray()
     };
 }
+

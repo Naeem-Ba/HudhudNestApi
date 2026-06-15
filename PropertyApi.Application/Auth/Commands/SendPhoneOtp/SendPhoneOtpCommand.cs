@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.DTOs;
@@ -9,7 +9,7 @@ using PropertyApi.Domain.Enums;
 namespace PropertyApi.Application.Auth.Commands.SendPhoneOtp;
 
 /// <summary>
-/// أمر CQRS لإرسال رمز OTP إلى رقم هاتف بصيغة E.164.
+/// Ø£Ù…Ø± CQRS Ù„Ø¥Ø±Ø³Ø§Ù„ Ø±Ù…Ø² OTP Ø¥Ù„Ù‰ Ø±Ù‚Ù… Ù‡Ø§ØªÙ Ø¨ØµÙŠØºØ© E.164.
 /// </summary>
 public sealed record SendPhoneOtpCommand(
     string PhoneNumber,
@@ -18,12 +18,12 @@ public sealed record SendPhoneOtpCommand(
 ) : IRequest<SendOtpResult>;
 
 /// <summary>
-/// معالج إرسال OTP.
+/// Ù…Ø¹Ø§Ù„Ø¬ Ø¥Ø±Ø³Ø§Ù„ OTP.
 ///
-/// القاعدة المهمة هنا:
-/// لا نحفظ OTP في قاعدة البيانات إلا بعد نجاح إرسال SMS.
-/// السبب: CountRecentAsync يعتمد على السجلات المحفوظة، ولذلك حفظ OTP قبل الإرسال
-/// يجعل فشل مزود SMS يُحسب ضد المستخدم في rate limiting.
+/// Ø§Ù„Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ù…Ù‡Ù…Ø© Ù‡Ù†Ø§:
+/// Ù„Ø§ Ù†Ø­ÙØ¸ OTP ÙÙŠ Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø¥Ù„Ø§ Ø¨Ø¹Ø¯ Ù†Ø¬Ø§Ø­ Ø¥Ø±Ø³Ø§Ù„ SMS.
+/// Ø§Ù„Ø³Ø¨Ø¨: CountRecentAsync ÙŠØ¹ØªÙ…Ø¯ Ø¹Ù„Ù‰ Ø§Ù„Ø³Ø¬Ù„Ø§Øª Ø§Ù„Ù…Ø­ÙÙˆØ¸Ø©ØŒ ÙˆÙ„Ø°Ù„Ùƒ Ø­ÙØ¸ OTP Ù‚Ø¨Ù„ Ø§Ù„Ø¥Ø±Ø³Ø§Ù„
+/// ÙŠØ¬Ø¹Ù„ ÙØ´Ù„ Ù…Ø²ÙˆØ¯ SMS ÙŠÙØ­Ø³Ø¨ Ø¶Ø¯ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… ÙÙŠ rate limiting.
 /// </summary>
 public sealed class SendPhoneOtpCommandHandler
     : IRequestHandler<SendPhoneOtpCommand, SendOtpResult>
@@ -32,7 +32,7 @@ public sealed class SendPhoneOtpCommandHandler
     private const int OtpExpiryMinutes = 5;
     private const int RetryWindowMinutes = 60;
 
-    // 1 محاولة أصلية + 2 retry = 3 محاولات إجمالاً.
+    // 1 Ù…Ø­Ø§ÙˆÙ„Ø© Ø£ØµÙ„ÙŠØ© + 2 retry = 3 Ù…Ø­Ø§ÙˆÙ„Ø§Øª Ø¥Ø¬Ù…Ø§Ù„Ø§Ù‹.
     private const int SmsSendMaxAttempts = 3;
 
     private readonly IOtpCodeRepository _otpRepo;
@@ -72,7 +72,7 @@ public sealed class SendPhoneOtpCommandHandler
 
             return SendOtpResult.Fail(
                 "RATE_LIMITED",
-                "لقد طلبت كثيراً من الرموز. انتظر ساعة ثم حاول مجدداً.",
+                "Ù„Ù‚Ø¯ Ø·Ù„Ø¨Øª ÙƒØ«ÙŠØ±Ø§Ù‹ Ù…Ù† Ø§Ù„Ø±Ù…ÙˆØ². Ø§Ù†ØªØ¸Ø± Ø³Ø§Ø¹Ø© Ø«Ù… Ø­Ø§ÙˆÙ„ Ù…Ø¬Ø¯Ø¯Ø§Ù‹.",
                 retryAfter: RetryWindowMinutes * 60);
         }
 
@@ -94,7 +94,7 @@ public sealed class SendPhoneOtpCommandHandler
 
             return SendOtpResult.Fail(
                 "SMS_FAILED",
-                "فشل إرسال الرسالة. تأكد من رقم الهاتف أو حاول لاحقاً.");
+                "ÙØ´Ù„ Ø¥Ø±Ø³Ø§Ù„ Ø§Ù„Ø±Ø³Ø§Ù„Ø©. ØªØ£ÙƒØ¯ Ù…Ù† Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ Ø£Ùˆ Ø­Ø§ÙˆÙ„ Ù„Ø§Ø­Ù‚Ø§Ù‹.");
         }
 
         var otpCode = OtpCode.Create(
@@ -111,8 +111,8 @@ public sealed class SendPhoneOtpCommandHandler
         }
         catch (Exception ex)
         {
-            // لا يمكن حذف SMS بعد إرساله. أفضل تعويض هنا هو عدم إخفاء المشكلة:
-            // المستخدم سيحصل على رد فشل، والسجل لن يكون قابلاً للتحقق إن فشل الحفظ.
+            // Ù„Ø§ ÙŠÙ…ÙƒÙ† Ø­Ø°Ù SMS Ø¨Ø¹Ø¯ Ø¥Ø±Ø³Ø§Ù„Ù‡. Ø£ÙØ¶Ù„ ØªØ¹ÙˆÙŠØ¶ Ù‡Ù†Ø§ Ù‡Ùˆ Ø¹Ø¯Ù… Ø¥Ø®ÙØ§Ø¡ Ø§Ù„Ù…Ø´ÙƒÙ„Ø©:
+            // Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ø³ÙŠØ­ØµÙ„ Ø¹Ù„Ù‰ Ø±Ø¯ ÙØ´Ù„ØŒ ÙˆØ§Ù„Ø³Ø¬Ù„ Ù„Ù† ÙŠÙƒÙˆÙ† Ù‚Ø§Ø¨Ù„Ø§Ù‹ Ù„Ù„ØªØ­Ù‚Ù‚ Ø¥Ù† ÙØ´Ù„ Ø§Ù„Ø­ÙØ¸.
             _logger.LogError(
                 ex,
                 "OTP SMS was sent to {Phone}, but persisting OTP failed. User must request a new code.",
@@ -120,7 +120,7 @@ public sealed class SendPhoneOtpCommandHandler
 
             return SendOtpResult.Fail(
                 "OTP_STORE_FAILED",
-                "تم إرسال الرسالة لكن حدث خطأ أثناء حفظ الرمز. حاول طلب رمز جديد.");
+                "ØªÙ… Ø¥Ø±Ø³Ø§Ù„ Ø§Ù„Ø±Ø³Ø§Ù„Ø© Ù„ÙƒÙ† Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ Ø­ÙØ¸ Ø§Ù„Ø±Ù…Ø². Ø­Ø§ÙˆÙ„ Ø·Ù„Ø¨ Ø±Ù…Ø² Ø¬Ø¯ÙŠØ¯.");
         }
 
         _logger.LogInformation(
@@ -178,7 +178,7 @@ public sealed class SendPhoneOtpCommandHandler
 }
 
 /// <summary>
-/// التحقق من صحة الأمر قبل تنفيذه عبر MediatR validation pipeline.
+/// Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† ØµØ­Ø© Ø§Ù„Ø£Ù…Ø± Ù‚Ø¨Ù„ ØªÙ†ÙÙŠØ°Ù‡ Ø¹Ø¨Ø± MediatR validation pipeline.
 /// </summary>
 public sealed class SendPhoneOtpCommandValidator
     : AbstractValidator<SendPhoneOtpCommand>
@@ -187,10 +187,11 @@ public sealed class SendPhoneOtpCommandValidator
     {
         RuleFor(x => x.PhoneNumber)
             .NotEmpty()
-            .WithMessage("رقم الهاتف مطلوب.")
+            .WithMessage("Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ Ù…Ø·Ù„ÙˆØ¨.")
             .Matches(@"^\+[1-9]\d{7,14}$")
             .WithMessage(
-                "رقم الهاتف يجب أن يكون بصيغة دولية مثل: +963911234567")
+                "Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø¨ØµÙŠØºØ© Ø¯ÙˆÙ„ÙŠØ© Ù…Ø«Ù„: +963911234567")
             .WithName("PhoneNumber");
     }
 }
+

@@ -1,12 +1,12 @@
-using MediatR;
+﻿using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
 
 namespace PropertyApi.Application.Auth.Commands.VerifyEmail;
 
 /// <summary>
-/// معالج تفعيل البريد الإلكتروني.
-/// يعتمد على IIdentityUserService بدلاً من UserManager حتى لا تعرف Application تفاصيل ASP.NET Identity.
+/// Ù…Ø¹Ø§Ù„Ø¬ ØªÙØ¹ÙŠÙ„ Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ.
+/// ÙŠØ¹ØªÙ…Ø¯ Ø¹Ù„Ù‰ IIdentityUserService Ø¨Ø¯Ù„Ø§Ù‹ Ù…Ù† concrete identity user service Ø­ØªÙ‰ Ù„Ø§ ØªØ¹Ø±Ù Application ØªÙØ§ØµÙŠÙ„ ASP.NET Identity.
 /// </summary>
 public sealed class VerifyEmailCommandHandler
     : IRequestHandler<VerifyEmailCommand, VerifyEmailResult>
@@ -26,7 +26,7 @@ public sealed class VerifyEmailCommandHandler
         VerifyEmailCommand command,
         CancellationToken ct)
     {
-        // ── 1. ابحث عن المستخدم ───────────────────────────────
+        // â”€â”€ 1. Ø§Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         var user = await _identityUsers.FindByIdAsync(command.UserId, ct);
 
         if (user is null || user.IsDeleted)
@@ -37,10 +37,10 @@ public sealed class VerifyEmailCommandHandler
 
             return VerifyEmailResult.Fail(
                 "INVALID_TOKEN",
-                "رابط التحقق غير صالح أو منتهي الصلاحية.");
+                "Ø±Ø§Ø¨Ø· Ø§Ù„ØªØ­Ù‚Ù‚ ØºÙŠØ± ØµØ§Ù„Ø­ Ø£Ùˆ Ù…Ù†ØªÙ‡ÙŠ Ø§Ù„ØµÙ„Ø§Ø­ÙŠØ©.");
         }
 
-        // ── 2. هل البريد مُفعَّل بالفعل؟ ─────────────────────
+        // â”€â”€ 2. Ù‡Ù„ Ø§Ù„Ø¨Ø±ÙŠØ¯ Ù…ÙÙØ¹ÙŽÙ‘Ù„ Ø¨Ø§Ù„ÙØ¹Ù„ØŸ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if (user.EmailConfirmed)
         {
             _logger.LogInformation(
@@ -50,7 +50,7 @@ public sealed class VerifyEmailCommandHandler
             return VerifyEmailResult.Ok();
         }
 
-        // ── 3. تأكد من وجود بريد إلكتروني ─────────────────────
+        // â”€â”€ 3. ØªØ£ÙƒØ¯ Ù…Ù† ÙˆØ¬ÙˆØ¯ Ø¨Ø±ÙŠØ¯ Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         if (string.IsNullOrWhiteSpace(user.Email))
         {
             _logger.LogWarning(
@@ -59,10 +59,10 @@ public sealed class VerifyEmailCommandHandler
 
             return VerifyEmailResult.Fail(
                 "NO_EMAIL",
-                "لا يوجد بريد إلكتروني مُضاف لهذا الحساب.");
+                "Ù„Ø§ ÙŠÙˆØ¬Ø¯ Ø¨Ø±ÙŠØ¯ Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ Ù…ÙØ¶Ø§Ù Ù„Ù‡Ø°Ø§ Ø§Ù„Ø­Ø³Ø§Ø¨.");
         }
 
-        // ── 4. التحقق من الرمز عبر Infrastructure Identity ─────
+        // â”€â”€ 4. Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ø±Ù…Ø² Ø¹Ø¨Ø± Infrastructure Identity â”€â”€â”€â”€â”€
         var confirmResult = await _identityUsers.ConfirmEmailAsync(
             user,
             command.Token,
@@ -77,7 +77,7 @@ public sealed class VerifyEmailCommandHandler
 
             return VerifyEmailResult.Fail(
                 "INVALID_TOKEN",
-                "رابط التحقق غير صالح أو منتهي الصلاحية. اطلب رابطاً جديداً.");
+                "Ø±Ø§Ø¨Ø· Ø§Ù„ØªØ­Ù‚Ù‚ ØºÙŠØ± ØµØ§Ù„Ø­ Ø£Ùˆ Ù…Ù†ØªÙ‡ÙŠ Ø§Ù„ØµÙ„Ø§Ø­ÙŠØ©. Ø§Ø·Ù„Ø¨ Ø±Ø§Ø¨Ø·Ø§Ù‹ Ø¬Ø¯ÙŠØ¯Ø§Ù‹.");
         }
 
         _logger.LogInformation(
@@ -88,3 +88,4 @@ public sealed class VerifyEmailCommandHandler
         return VerifyEmailResult.Ok();
     }
 }
+

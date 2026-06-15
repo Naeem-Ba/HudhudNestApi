@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
@@ -135,3 +135,4 @@ public sealed class ResetPasswordCommandValidator : AbstractValidator<ResetPassw
         RuleFor(x => x.ConfirmPassword).Equal(x => x.NewPassword);
     }
 }
+

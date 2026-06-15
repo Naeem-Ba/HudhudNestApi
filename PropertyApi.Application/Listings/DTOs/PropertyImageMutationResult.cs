@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Listings.DTOs;
+﻿namespace PropertyApi.Application.Listings.DTOs;
 
 public enum PropertyImageMutationStatus
 {
@@ -48,3 +48,4 @@ public sealed record PropertyImagesQueryResult(
     public static PropertyImagesQueryResult NotFound() => new(false, Array.Empty<PropertyImageDto>());
     public static PropertyImagesQueryResult Success(IReadOnlyList<PropertyImageDto> images) => new(true, images);
 }
+

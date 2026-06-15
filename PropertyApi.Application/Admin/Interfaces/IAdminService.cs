@@ -1,4 +1,4 @@
-using PropertyApi.Application.Admin.DTOs;
+﻿using PropertyApi.Application.Admin.DTOs;
 using PropertyApi.Application.Properties.DTOs;
 
 namespace PropertyApi.Application.Admin.Interfaces;
@@ -32,3 +32,4 @@ public interface IAdminService
         Guid userId,
         CancellationToken ct = default);
 }
+

@@ -1,4 +1,4 @@
-using PropertyApi.Application.Common.DTOs;
+﻿using PropertyApi.Application.Common.DTOs;
 
 namespace PropertyApi.Application.Common.Interfaces;
 
@@ -12,3 +12,4 @@ public interface ICommonLookupService
     Task RefreshAsync(string key, CancellationToken ct = default);
     Task RefreshAllAsync(CancellationToken ct = default);
 }
+

@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
@@ -41,7 +41,7 @@ public sealed class UpdatePropertyCommandHandler
             cancellationToken);
 
         if (property is null)
-            return false; // 404 — controller handles response
+            return false; // 404 â€” controller handles response
 
         // Authorization check: only the owner can edit their listing.
         if (property.OwnerId != request.RequestingUserId)
@@ -136,7 +136,7 @@ public sealed class UpdatePropertyCommandHandler
         var ownerId = property.OwnerId;
         var propertyId = property.Id;
         var title = string.IsNullOrWhiteSpace(property.Title)
-            ? "العقار"
+            ? "Ø§Ù„Ø¹Ù‚Ø§Ø±"
             : property.Title;
 
         var currencyCode = string.IsNullOrWhiteSpace(property.CurrencyCode)
@@ -150,7 +150,7 @@ public sealed class UpdatePropertyCommandHandler
                 propertyId: propertyId,
                 propertyTitle: title,
                 type: NotificationType.PropertyStatusChanged,
-                detail: $"{oldStatus} → {property.Status}",
+                detail: $"{oldStatus} â†’ {property.Status}",
                 ct: cancellationToken);
         }
 
@@ -161,7 +161,7 @@ public sealed class UpdatePropertyCommandHandler
                 propertyId: propertyId,
                 propertyTitle: title,
                 type: NotificationType.PropertyPriceChanged,
-                detail: $"Cold rent: {FormatMoney(oldColdRent, currencyCode)} → {FormatMoney(property.ColdRent, currencyCode)}",
+                detail: $"Cold rent: {FormatMoney(oldColdRent, currencyCode)} â†’ {FormatMoney(property.ColdRent, currencyCode)}",
                 ct: cancellationToken);
         }
 
@@ -172,7 +172,7 @@ public sealed class UpdatePropertyCommandHandler
                 propertyId: propertyId,
                 propertyTitle: title,
                 type: NotificationType.PropertyPriceChanged,
-                detail: $"Warm rent: {FormatMoney(oldWarmRent, currencyCode)} → {FormatMoney(property.WarmRent, currencyCode)}",
+                detail: $"Warm rent: {FormatMoney(oldWarmRent, currencyCode)} â†’ {FormatMoney(property.WarmRent, currencyCode)}",
                 ct: cancellationToken);
         }
 
@@ -183,7 +183,7 @@ public sealed class UpdatePropertyCommandHandler
                 propertyId: propertyId,
                 propertyTitle: title,
                 type: NotificationType.PropertyPriceChanged,
-                detail: $"Purchase price: {FormatMoney(oldPurchasePrice, currencyCode)} → {FormatMoney(property.PurchasePrice, currencyCode)}",
+                detail: $"Purchase price: {FormatMoney(oldPurchasePrice, currencyCode)} â†’ {FormatMoney(property.PurchasePrice, currencyCode)}",
                 ct: cancellationToken);
         }
 
@@ -220,3 +220,4 @@ public sealed class UpdatePropertyCommandHandler
             : $"{value.Value:0.##} {currencyCode}";
     }
 }
+

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -68,3 +68,4 @@ public sealed class AmenityDto
     public string? Category { get; set; }
     public string? IconName { get; set; }
 }
+

@@ -1,4 +1,4 @@
-using PropertyApi.Domain.Enums;
+﻿using PropertyApi.Domain.Enums;
 
 namespace PropertyApi.Application.Properties.DTOs;
 
@@ -48,3 +48,4 @@ public sealed class PropertyFilterDto
     public string SortBy { get; set; } = "CreatedAt";
     public bool SortDescending { get; set; } = true;
 }
+

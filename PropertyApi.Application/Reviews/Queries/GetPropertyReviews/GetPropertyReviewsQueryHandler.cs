@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Reviews.DTOs;
 using PropertyApi.Application.Reviews.Interfaces;
 
@@ -27,7 +27,7 @@ public sealed class GetPropertyReviewsQueryHandler
                 ReviewerId:       r.ReviewerId,
                 ReviewerName:     r.Reviewer != null
                     ? $"{r.Reviewer.FirstName} {r.Reviewer.LastName}".Trim()
-                    : "مجهول",
+                    : "Ù…Ø¬Ù‡ÙˆÙ„",
                 ReviewerImageUrl: r.Reviewer?.ProfileImageUrl,
                 Rating:           r.Rating,
                 Comment:          r.Comment,

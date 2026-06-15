@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Reviews.DTOs;
+﻿namespace PropertyApi.Application.Reviews.DTOs;
 
 public sealed record PropertyReviewDto(
     Guid    Id,
@@ -16,3 +16,4 @@ public sealed record PropertyReviewSummaryDto(
     int                           TotalCount,
     IReadOnlyList<PropertyReviewDto> Reviews
 );
+

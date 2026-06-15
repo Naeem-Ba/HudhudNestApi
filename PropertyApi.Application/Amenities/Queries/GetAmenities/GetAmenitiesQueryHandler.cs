@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Amenities.DTOs;
 using PropertyApi.Application.Common.Interfaces;
 
@@ -29,3 +29,4 @@ public sealed class GetAmenitiesQueryHandler
             .ToList();
     }
 }
+

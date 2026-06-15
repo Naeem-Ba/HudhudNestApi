@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Listings.DTOs;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Domain.Listings.Entities;
@@ -6,7 +6,7 @@ using PropertyApi.Domain.Listings.Entities;
 namespace PropertyApi.Application.Listings.Queries.GetPropertyById;
 
 /// <summary>
-/// BUG FIX: Was an empty "internal class GetPropertyByIdQueryHandler {}" � completely missing.
+/// BUG FIX: Was an empty "internal class GetPropertyByIdQueryHandler {}" — completely missing.
 /// </summary>
 public sealed class GetPropertyByIdQueryHandler
     : IRequestHandler<GetPropertyByIdQuery, PropertyDto?>
@@ -78,3 +78,4 @@ public sealed class GetPropertyByIdQueryHandler
             .ToList()
     };
 }
+

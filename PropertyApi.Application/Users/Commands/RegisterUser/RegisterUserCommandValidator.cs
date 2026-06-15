@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 
 namespace PropertyApi.Application.Users.Commands.RegisterUser;
 
@@ -66,3 +66,4 @@ public sealed class RegisterUserCommandValidator : AbstractValidator<RegisterUse
             .When(x => !string.IsNullOrWhiteSpace(x.CountryCode));
     }
 }
+

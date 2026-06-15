@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 
 namespace PropertyApi.Application.Listings.Commands.DeleteProperty;
 
@@ -7,9 +7,10 @@ namespace PropertyApi.Application.Listings.Commands.DeleteProperty;
 /// Returns true if found and deleted, false if not found.
 /// Throws UnauthorizedAccessException if caller is not the owner.
 ///
-/// BUG FIX: Was an empty "internal class DeletePropertyCommand {}" � completely missing.
+/// BUG FIX: Was an empty "internal class DeletePropertyCommand {}" — completely missing.
 /// </summary>
 public sealed record DeletePropertyCommand(
     Guid PropertyId,
     Guid RequestingUserId
 ) : IRequest<bool>;
+

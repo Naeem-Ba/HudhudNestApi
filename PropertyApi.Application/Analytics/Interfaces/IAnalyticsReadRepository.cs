@@ -1,4 +1,4 @@
-using PropertyApi.Application.Analytics.DTOs;
+﻿using PropertyApi.Application.Analytics.DTOs;
 
 namespace PropertyApi.Application.Analytics.Interfaces;
 
@@ -13,3 +13,4 @@ public interface IAnalyticsReadRepository
         string? countryCode,
         CancellationToken ct = default);
 }
+

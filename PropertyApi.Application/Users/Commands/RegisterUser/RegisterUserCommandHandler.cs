@@ -1,5 +1,7 @@
-using MediatR;
-using Microsoft.AspNetCore.Identity;
+﻿using MediatR;
+using Microsoft.Extensions.Logging;
+using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Users.DTOs;
 using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Domain.Users.Entities;
@@ -11,15 +13,18 @@ public sealed class RegisterUserCommandHandler
 {
     private const string DefaultRole = RoleNames.User;
 
-    private readonly UserManager<User> _userManager;
-    private readonly RoleManager<IdentityRole<Guid>> _roleManager;
+    private readonly IIdentityUserService _identityUsers;
+    private readonly IIdentityRoleService _identityRoles;
+    private readonly ILogger<RegisterUserCommandHandler> _logger;
 
     public RegisterUserCommandHandler(
-        UserManager<User> userManager,
-        RoleManager<IdentityRole<Guid>> roleManager)
+        IIdentityUserService identityUsers,
+        IIdentityRoleService identityRoles,
+        ILogger<RegisterUserCommandHandler> logger)
     {
-        _userManager = userManager;
-        _roleManager = roleManager;
+        _identityUsers = identityUsers;
+        _identityRoles = identityRoles;
+        _logger = logger;
     }
 
     public async Task<UserDto> Handle(
@@ -28,9 +33,9 @@ public sealed class RegisterUserCommandHandler
     {
         var email = request.Email.Trim().ToLowerInvariant();
 
-        var existingUser = await _userManager.FindByEmailAsync(email);
+        var existingUser = await _identityUsers.FindByEmailAsync(email, cancellationToken);
         if (existingUser is not null)
-            throw new InvalidOperationException("Email already registered.");
+            throw new ConflictException("Email already registered.");
 
         var now = DateTime.UtcNow;
         var user = new User
@@ -54,16 +59,45 @@ public sealed class RegisterUserCommandHandler
             UpdatedAt = now
         };
 
-        var createResult = await _userManager.CreateAsync(user, request.Password);
+        var createResult = await _identityUsers.CreateAsync(
+            user,
+            request.Password,
+            cancellationToken);
+
         if (!createResult.Succeeded)
-            throw new InvalidOperationException(ToErrorMessage(createResult));
+        {
+            _logger.LogWarning(
+                "User registration failed for email {Email}. Errors: {Errors}",
+                email,
+                string.Join(", ", createResult.Errors));
 
-        if (!await _roleManager.RoleExistsAsync(DefaultRole))
-            await _roleManager.CreateAsync(new IdentityRole<Guid>(DefaultRole));
+            throw new InvalidOperationException(ToErrorMessage(createResult.Errors));
+        }
 
-        var roleResult = await _userManager.AddToRoleAsync(user, DefaultRole);
+        if (!await _identityRoles.RoleExistsAsync(DefaultRole, cancellationToken))
+        {
+            var createRoleResult = await _identityRoles.CreateRoleAsync(DefaultRole, cancellationToken);
+            if (!createRoleResult.Succeeded)
+            {
+                _logger.LogWarning(
+                    "Default role creation failed. Role={Role}. Errors: {Errors}",
+                    DefaultRole,
+                    string.Join(", ", createRoleResult.Errors));
+
+                throw new InvalidOperationException(ToErrorMessage(createRoleResult.Errors));
+            }
+        }
+
+        var roleResult = await _identityUsers.AddToRoleAsync(user, DefaultRole, cancellationToken);
         if (!roleResult.Succeeded)
-            throw new InvalidOperationException(ToErrorMessage(roleResult));
+        {
+            _logger.LogWarning(
+                "Adding default role failed for user {UserId}. Errors: {Errors}",
+                user.Id,
+                string.Join(", ", roleResult.Errors));
+
+            throw new InvalidOperationException(ToErrorMessage(roleResult.Errors));
+        }
 
         return new UserDto
         {
@@ -83,6 +117,7 @@ public sealed class RegisterUserCommandHandler
         };
     }
 
-    private static string ToErrorMessage(IdentityResult result)
-        => string.Join(" | ", result.Errors.Select(e => e.Description));
+    private static string ToErrorMessage(IEnumerable<string> errors)
+        => string.Join(" | ", errors);
 }
+

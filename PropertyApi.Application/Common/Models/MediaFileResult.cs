@@ -1,4 +1,4 @@
-namespace PropertyApi.Application.Common.Models;
+﻿namespace PropertyApi.Application.Common.Models;
 
 /// <summary>
 /// Storage-agnostic file content result.
@@ -8,3 +8,4 @@ public sealed record MediaFileResult(
     byte[] Content,
     string ContentType,
     string FileName);
+

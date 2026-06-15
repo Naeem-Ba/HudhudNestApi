@@ -1,4 +1,4 @@
-using PropertyApi.Application.Notifications.DTOs;
+﻿using PropertyApi.Application.Notifications.DTOs;
 using PropertyApi.Domain.Notifications.Enums;
 
 namespace PropertyApi.Application.Notifications.Interfaces;
@@ -58,3 +58,4 @@ public interface INotificationService
         Guid userId,
         CancellationToken ct = default);
 }
+

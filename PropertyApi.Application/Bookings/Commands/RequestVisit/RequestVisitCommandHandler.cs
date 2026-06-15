@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using PropertyApi.Application.Bookings.DTOs;
 using PropertyApi.Application.Bookings.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
@@ -91,3 +91,4 @@ public sealed class RequestVisitCommandHandler : IRequestHandler<RequestVisitCom
             CreatedAt: visit.CreatedAt);
     }
 }
+

@@ -55,7 +55,7 @@ public sealed class VisitsController : ControllerBase
     [HttpPost]
     [EnableRateLimiting("visits")]
     [ProducesResponseType(typeof(VisitDto), StatusCodes.Status201Created)]
-    public async Task<IActionResult> RequestVisit(
+    public async Task<IActionResult> Request(
         [FromBody] RequestVisitRequest dto, CancellationToken ct)
     {
         var requesterId = GetUserId();
