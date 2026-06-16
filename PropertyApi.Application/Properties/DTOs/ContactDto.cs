@@ -1,6 +1,7 @@
-﻿
+
 
 namespace PropertyApi.Application.Properties.DTOs;
+
 public sealed class ContactDto
 {
     public string Name { get; set; } = string.Empty;
