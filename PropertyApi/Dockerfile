@@ -9,8 +9,7 @@ COPY PropertyApi.Application/PropertyApi.Application.csproj PropertyApi.Applicat
 COPY PropertyApi.Domain/PropertyApi.Domain.csproj PropertyApi.Domain/
 COPY PropertyApi.Infrastructure/PropertyApi.Infrastructure.csproj PropertyApi.Infrastructure/
 
-RUN dotnet restore
-
+RUN dotnet restore "PropertyApi/PropertyApi.csproj"
 COPY . .
 WORKDIR /src/PropertyApi
 RUN dotnet publish -c Release -o /app/publish --no-restore
