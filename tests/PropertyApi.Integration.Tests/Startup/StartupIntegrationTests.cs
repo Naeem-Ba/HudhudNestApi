@@ -62,7 +62,7 @@ public sealed class StartupIntegrationTests : IAsyncLifetime
         var programSource = File.ReadAllText(
             Path.Combine(FindRepositoryRoot(), "PropertyApi", "Program.cs"));
 
-        Assert.Equal(1, Regex.Matches(programSource, @"AddRateLimiter\s*\(").Count);
+        Assert.Single(Regex.Matches(programSource, @"AddRateLimiter\s*\("));
 
         var rateLimiterBlock = ExtractRateLimiterBlock(programSource);
         var policyNames = Regex.Matches(

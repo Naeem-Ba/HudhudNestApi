@@ -22,22 +22,22 @@ public sealed class GetPropertyReviewsQueryHandler
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
             .Select(r => new PropertyReviewDto(
-                Id:               r.Id,
-                PropertyId:       r.PropertyId,
-                ReviewerId:       r.ReviewerId,
-                ReviewerName:     r.Reviewer != null
+                Id: r.Id,
+                PropertyId: r.PropertyId,
+                ReviewerId: r.ReviewerId,
+                ReviewerName: r.Reviewer != null
                     ? $"{r.Reviewer.FirstName} {r.Reviewer.LastName}".Trim()
                     : "Ù…Ø¬Ù‡ÙˆÙ„",
                 ReviewerImageUrl: r.Reviewer?.ProfileImageUrl,
-                Rating:           r.Rating,
-                Comment:          r.Comment,
-                CreatedAt:        r.CreatedAt))
+                Rating: r.Rating,
+                Comment: r.Comment,
+                CreatedAt: r.CreatedAt))
             .ToList()
             .AsReadOnly();
 
         return new PropertyReviewSummaryDto(
             AverageRating: Math.Round(average, 1),
-            TotalCount:    reviews.Count,
-            Reviews:       paged);
+            TotalCount: reviews.Count,
+            Reviews: paged);
     }
 }

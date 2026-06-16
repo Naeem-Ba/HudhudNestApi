@@ -3,5 +3,5 @@
 namespace PropertyApi.Application.Properties.DTOs;
 public sealed class AvatarUploadDto
 {
-   // public IFormFile File { get; set; } = default!;
+    // public IFormFile File { get; set; } = default!;
 }

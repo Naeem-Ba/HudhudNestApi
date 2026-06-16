@@ -96,25 +96,25 @@ public static class DependencyInjection
             configuration.GetSection(EmailOptions.SectionName));
 
         if (environment.IsProduction())
-{
-    services.AddScoped<SmtpEmailSender>();
+        {
+            services.AddScoped<SmtpEmailSender>();
 
-    services.AddScoped<IdentityEmailSender>(
-        sp => sp.GetRequiredService<SmtpEmailSender>());
+            services.AddScoped<IdentityEmailSender>(
+                sp => sp.GetRequiredService<SmtpEmailSender>());
 
-    services.AddScoped<IApplicationEmailSender>(
-        sp => sp.GetRequiredService<SmtpEmailSender>());
-}
-else
-{
-    services.AddScoped<ConsoleEmailSender>();
+            services.AddScoped<IApplicationEmailSender>(
+                sp => sp.GetRequiredService<SmtpEmailSender>());
+        }
+        else
+        {
+            services.AddScoped<ConsoleEmailSender>();
 
-    services.AddScoped<IdentityEmailSender>(
-        sp => sp.GetRequiredService<ConsoleEmailSender>());
+            services.AddScoped<IdentityEmailSender>(
+                sp => sp.GetRequiredService<ConsoleEmailSender>());
 
-    services.AddScoped<IApplicationEmailSender>(
-        sp => sp.GetRequiredService<ConsoleEmailSender>());
-}
+            services.AddScoped<IApplicationEmailSender>(
+                sp => sp.GetRequiredService<ConsoleEmailSender>());
+        }
 
         // Ã¢â€â‚¬Ã¢â€â‚¬ OTP / SMS Auth Services Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         services.AddOptions<SmsProviderOptions>()
@@ -148,7 +148,7 @@ else
         {
             services.AddHttpClient<ISmsService, HttpSmsService>();
         }
-        
+
         // Ã¢â€â‚¬Ã¢â€â‚¬ Database Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         services.AddDbContext<AppDbContext>(options =>
         {
@@ -201,36 +201,36 @@ else
         var redisConnectionString = configuration.GetConnectionString("Redis")
     ?? configuration["Redis:ConnectionString"];
 
-var isTestingOrCi =
-    environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase) ||
-    environment.EnvironmentName.Equals("CI", StringComparison.OrdinalIgnoreCase);
+        var isTestingOrCi =
+            environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase) ||
+            environment.EnvironmentName.Equals("CI", StringComparison.OrdinalIgnoreCase);
 
-if (environment.IsProduction())
-{
-    if (string.IsNullOrWhiteSpace(redisConnectionString))
-    {
-        throw new InvalidOperationException(
-            "Redis is required in Production for distributed security stamp caching. Configure ConnectionStrings:Redis or Redis:ConnectionString.");
-    }
+        if (environment.IsProduction())
+        {
+            if (string.IsNullOrWhiteSpace(redisConnectionString))
+            {
+                throw new InvalidOperationException(
+                    "Redis is required in Production for distributed security stamp caching. Configure ConnectionStrings:Redis or Redis:ConnectionString.");
+            }
 
-    services.AddStackExchangeRedisCache(options =>
-    {
-        options.Configuration = redisConnectionString;
-        options.InstanceName = "PropertyApi:";
-    });
-}
-else if (!isTestingOrCi && !string.IsNullOrWhiteSpace(redisConnectionString))
-{
-    services.AddStackExchangeRedisCache(options =>
-    {
-        options.Configuration = redisConnectionString;
-        options.InstanceName = "PropertyApi:";
-    });
-}
-else
-{
-    services.AddDistributedMemoryCache();
-}
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnectionString;
+                options.InstanceName = "PropertyApi:";
+            });
+        }
+        else if (!isTestingOrCi && !string.IsNullOrWhiteSpace(redisConnectionString))
+        {
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnectionString;
+                options.InstanceName = "PropertyApi:";
+            });
+        }
+        else
+        {
+            services.AddDistributedMemoryCache();
+        }
         services.AddScoped<ICommonLookupService, CommonLookupService>();
 
         services.AddScoped<PostGisHealthCheck>();

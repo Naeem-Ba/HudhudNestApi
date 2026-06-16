@@ -14,9 +14,9 @@ public sealed class AddReviewCommandHandler
     : IRequestHandler<AddReviewCommand, PropertyReviewDto>
 {
     private readonly IPropertyReviewRepository _reviews;
-    private readonly IPropertyReadRepository   _properties;
-    private readonly IUnitOfWork               _uow;
-    private readonly INotificationService      _notifications;
+    private readonly IPropertyReadRepository _properties;
+    private readonly IUnitOfWork _uow;
+    private readonly INotificationService _notifications;
 
     public AddReviewCommandHandler(
         IPropertyReviewRepository reviews,
@@ -24,9 +24,9 @@ public sealed class AddReviewCommandHandler
         IUnitOfWork uow,
         INotificationService notifications)
     {
-        _reviews       = reviews;
-        _properties    = properties;
-        _uow           = uow;
+        _reviews = reviews;
+        _properties = properties;
+        _uow = uow;
         _notifications = notifications;
     }
 
@@ -53,21 +53,21 @@ public sealed class AddReviewCommandHandler
 
         // Notify property owner
         await _notifications.NotifyPropertyUpdateAsync(
-            recipientId:   property.OwnerId,
-            propertyId:    property.Id,
+            recipientId: property.OwnerId,
+            propertyId: property.Id,
             propertyTitle: property.Title,
-            type:          NotificationType.ReviewAdded,
-            detail:        $"ØªÙ… Ø¥Ø¶Ø§ÙØ© ØªÙ‚ÙŠÙŠÙ… Ø¬Ø¯ÙŠØ¯ ({request.Rating}/5) Ù„Ø¹Ù‚Ø§Ø±Ùƒ.",
-            ct:            ct);
+            type: NotificationType.ReviewAdded,
+            detail: $"ØªÙ… Ø¥Ø¶Ø§ÙØ© ØªÙ‚ÙŠÙŠÙ… Ø¬Ø¯ÙŠØ¯ ({request.Rating}/5) Ù„Ø¹Ù‚Ø§Ø±Ùƒ.",
+            ct: ct);
 
         return new PropertyReviewDto(
-            Id:              review.Id,
-            PropertyId:      review.PropertyId,
-            ReviewerId:      review.ReviewerId,
-            ReviewerName:    "â€”",   // resolved in query handler with navigation
+            Id: review.Id,
+            PropertyId: review.PropertyId,
+            ReviewerId: review.ReviewerId,
+            ReviewerName: "â€”",   // resolved in query handler with navigation
             ReviewerImageUrl: null,
-            Rating:          review.Rating,
-            Comment:         review.Comment,
-            CreatedAt:       review.CreatedAt);
+            Rating: review.Rating,
+            Comment: review.Comment,
+            CreatedAt: review.CreatedAt);
     }
 }

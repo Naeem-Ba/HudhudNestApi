@@ -145,62 +145,62 @@ builder.Services
             ClockSkew = TimeSpan.FromSeconds(30)
         };
 
-            options.Events = new JwtBearerEvents
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
             {
-                OnTokenValidated = async context =>
+                var userIdText = context.Principal?
+                    .FindFirstValue(ClaimTypes.NameIdentifier);
+
+                var tokenSecurityStamp = context.Principal?
+                    .FindFirstValue(CustomClaimTypes.SecurityStamp);
+
+                if (!Guid.TryParse(userIdText, out var userId) ||
+                    string.IsNullOrWhiteSpace(tokenSecurityStamp))
                 {
-                    var userIdText = context.Principal?
-                        .FindFirstValue(ClaimTypes.NameIdentifier);
+                    context.Fail("The token does not contain valid user data.");
+                    return;
+                }
 
-                    var tokenSecurityStamp = context.Principal?
-                        .FindFirstValue(CustomClaimTypes.SecurityStamp);
+                var securityStampValidator = context.HttpContext.RequestServices
+                    .GetRequiredService<IUserSecurityStampValidator>();
 
-                    if (!Guid.TryParse(userIdText, out var userId) ||
-                        string.IsNullOrWhiteSpace(tokenSecurityStamp))
-                    {
-                        context.Fail("The token does not contain valid user data.");
-                        return;
-                    }
+                var validationResult = await securityStampValidator.ValidateAsync(
+                    userId,
+                    tokenSecurityStamp,
+                    context.HttpContext.RequestAborted);
 
-                    var securityStampValidator = context.HttpContext.RequestServices
-                        .GetRequiredService<IUserSecurityStampValidator>();
-
-                    var validationResult = await securityStampValidator.ValidateAsync(
-                        userId,
-                        tokenSecurityStamp,
-                        context.HttpContext.RequestAborted);
-
-                    if (!validationResult.IsValid)
-                    {
-                        context.Fail(validationResult.FailureMessage ?? "The token is no longer valid.");
-                    }
-                },
-
-                OnAuthenticationFailed = context =>
+                if (!validationResult.IsValid)
                 {
-                    if (builder.Environment.IsDevelopment())
-                    {
-                        Console.WriteLine(
-                            $"[JWT] Auth failed: {context.Exception.Message}");
-                    }
+                    context.Fail(validationResult.FailureMessage ?? "The token is no longer valid.");
+                }
+            },
 
-                    return Task.CompletedTask;
-                },
-
-                OnMessageReceived = context =>
+            OnAuthenticationFailed = context =>
+            {
+                if (builder.Environment.IsDevelopment())
                 {
-                    var accessToken = context.Request.Query["access_token"];
-                    var path = context.HttpContext.Request.Path;
+                    Console.WriteLine(
+                        $"[JWT] Auth failed: {context.Exception.Message}");
+                }
 
-                    if (!string.IsNullOrWhiteSpace(accessToken) &&
-                        path.StartsWithSegments("/notificationHub"))
-                    {
-                        context.Token = accessToken;
-                    }
+                return Task.CompletedTask;
+            },
 
-                    return Task.CompletedTask;
-                },
-            };
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+
+                if (!string.IsNullOrWhiteSpace(accessToken) &&
+                    path.StartsWithSegments("/notificationHub"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            },
+        };
     });
 
 builder.Services.AddAuthorization(options =>

@@ -24,9 +24,9 @@ public sealed class VisitRepository : IVisitRepository
         Guid propertyId, Guid requesterId, CancellationToken ct = default)
         => await _db.VisitRequests
             .AnyAsync(v =>
-                v.PropertyId  == propertyId  &&
+                v.PropertyId == propertyId &&
                 v.RequesterId == requesterId &&
-                v.Status      == VisitStatus.Pending, ct);
+                v.Status == VisitStatus.Pending, ct);
 
     public async Task<IReadOnlyList<VisitRequest>> GetByRequesterIdAsync(
         Guid requesterId, CancellationToken ct = default)

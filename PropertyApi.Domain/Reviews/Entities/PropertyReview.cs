@@ -11,14 +11,14 @@ namespace PropertyApi.Domain.Reviews.Entities;
 /// </summary>
 public sealed class PropertyReview : BaseEntity
 {
-    public Guid    PropertyId  { get; private set; }
-    public Guid    ReviewerId  { get; private set; }
-    public int     Rating      { get; private set; }   // 1..5
-    public string? Comment     { get; private set; }
+    public Guid PropertyId { get; private set; }
+    public Guid ReviewerId { get; private set; }
+    public int Rating { get; private set; }   // 1..5
+    public string? Comment { get; private set; }
 
     // EF navigation
     public Property? Property { get; private set; }
-    public User?     Reviewer { get; private set; }
+    public User? Reviewer { get; private set; }
 
     private PropertyReview() { }
 
@@ -33,8 +33,8 @@ public sealed class PropertyReview : BaseEntity
         {
             PropertyId = propertyId,
             ReviewerId = reviewerId,
-            Rating     = rating,
-            Comment    = comment?.Trim(),
+            Rating = rating,
+            Comment = comment?.Trim(),
         };
     }
 }
