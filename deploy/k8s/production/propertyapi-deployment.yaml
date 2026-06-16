@@ -1,0 +1,126 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${KUBE_NAMESPACE}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: propertyapi
+  namespace: ${KUBE_NAMESPACE}
+  labels:
+    app: propertyapi
+    environment: ${ASPNETCORE_ENVIRONMENT}
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: propertyapi
+  template:
+    metadata:
+      labels:
+        app: propertyapi
+        environment: ${ASPNETCORE_ENVIRONMENT}
+    spec:
+      containers:
+        - name: propertyapi
+          image: ${IMAGE_REF}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: ${ASPNETCORE_ENVIRONMENT}
+            - name: ASPNETCORE_URLS
+              value: http://+:8080
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: propertyapi-secrets
+                  key: DefaultConnection
+            - name: ConnectionStrings__Redis
+              valueFrom:
+                secretKeyRef:
+                  name: propertyapi-secrets
+                  key: RedisConnectionString
+            - name: Redis__ConnectionString
+              valueFrom:
+                secretKeyRef:
+                  name: propertyapi-secrets
+                  key: RedisConnectionString
+            - name: Jwt__Issuer
+              valueFrom:
+                secretKeyRef:
+                  name: propertyapi-secrets
+                  key: JwtIssuer
+            - name: Jwt__Audience
+              valueFrom:
+                secretKeyRef:
+                  name: propertyapi-secrets
+                  key: JwtAudience
+            - name: Jwt__Key
+              valueFrom:
+                secretKeyRef:
+                  name: propertyapi-secrets
+                  key: JwtKey
+            - name: OtpSettings__SecretKey
+              valueFrom:
+                secretKeyRef:
+                  name: propertyapi-secrets
+                  key: OtpSecretKey
+            - name: RateLimiting__Redis__Enabled
+              value: "true"
+            - name: ForwardedHeaders__KnownProxies__0
+              valueFrom:
+                secretKeyRef:
+                  name: propertyapi-secrets
+                  key: KnownProxy
+            - name: Cors__AllowedOrigins__0
+              valueFrom:
+                secretKeyRef:
+                  name: propertyapi-secrets
+                  key: CorsOrigin
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: propertyapi
+  namespace: ${KUBE_NAMESPACE}
+spec:
+  type: ClusterIP
+  selector:
+    app: propertyapi
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

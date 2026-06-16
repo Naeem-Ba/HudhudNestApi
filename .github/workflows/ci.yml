@@ -1,25 +1,37 @@
-name: CI - Build, Test, Validate
+﻿name: CI/CD - Secure Build, Scan, Deploy
 
 on:
   push:
     branches: [ main, master, develop ]
   pull_request:
     branches: [ main, master, develop ]
+  workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: read
+  packages: write
+  security-events: write
+
+concurrency:
+  group: propertyapi-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   DOTNET_VERSION: '8.0.x'
   SOLUTION_PATH: 'PropertyApi.sln'
+  API_PROJECT_PATH: 'PropertyApi/PropertyApi.csproj'
+  MIGRATOR_PROJECT_PATH: 'tools/PropertyApi.Migrator/PropertyApi.Migrator.csproj'
+  DOCKERFILE_PATH: 'PropertyApi/Dockerfile'
+  DOCKER_CONTEXT: '.'
+  COVERAGE_THRESHOLD: '20'
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  build-and-test:
-    name: Build + Test + PostGIS Migrations
+  quality-gate:
+    name: Quality Gate - Format, Build, Test, Coverage, NuGet Audit
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
 
     services:
       postgres:
@@ -52,7 +64,7 @@ jobs:
       ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true
       ConnectionStrings__Redis: localhost:6379
       Redis__ConnectionString: localhost:6379
-      RateLimiting__Redis__Enabled: "true"
+      RateLimiting__Redis__Enabled: 'true'
       Jwt__Issuer: PropertyApi
       Jwt__Audience: PropertyApiClient
       Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
@@ -71,12 +83,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
       - name: Restore dependencies
         run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      - name: Ensure Code Format
+        run: dotnet format ${{ env.SOLUTION_PATH }} --verify-no-changes --no-restore
+
+      - name: Scan NuGet Package Vulnerabilities
+        shell: pwsh
+        run: ./ci/check-dotnet-vulnerabilities.ps1 -SolutionPath '${{ env.SOLUTION_PATH }}' -FailOnSeverity High
 
       - name: Build
         run: |
@@ -94,41 +113,63 @@ jobs:
             -d propertyapi_testing \
             -c "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pg_trgm; SELECT postgis_version();"
 
-      - name: Apply EF Core migrations
+      - name: Apply EF Core migrations against CI database
         run: |
           dotnet run \
-            --project tools/PropertyApi.Migrator/PropertyApi.Migrator.csproj \
+            --project ${{ env.MIGRATOR_PROJECT_PATH }} \
             --configuration Release \
             --no-build
-        env:
-          ASPNETCORE_ENVIRONMENT: CI
-          DOTNET_ENVIRONMENT: CI
-          ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true
-          ConnectionStrings__Redis: localhost:6379
-          Redis__ConnectionString: localhost:6379
-          RateLimiting__Redis__Enabled: "true"
-          Jwt__Issuer: PropertyApi
-          Jwt__Audience: PropertyApiClient
-          Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
-          OtpSettings__SecretKey: TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890
 
-      - name: Run all tests
+      - name: Run tests with XPlat Code Coverage
         run: |
           dotnet test ${{ env.SOLUTION_PATH }} \
             --configuration Release \
             --no-build \
-            --verbosity normal
-        env:
-          ASPNETCORE_ENVIRONMENT: CI
-          DOTNET_ENVIRONMENT: CI
-          ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true
-          ConnectionStrings__Redis: localhost:6379
-          Redis__ConnectionString: localhost:6379
-          RateLimiting__Redis__Enabled: "true"
-          Jwt__Issuer: PropertyApi
-          Jwt__Audience: PropertyApiClient
-          Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
-          OtpSettings__SecretKey: TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890
+            --verbosity normal \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./TestResults \
+            --logger "trx;LogFileName=test-results.trx"
+
+      - name: Install ReportGenerator
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+      - name: Generate Coverage Summary
+        run: |
+          reportgenerator \
+            -reports:"TestResults/**/coverage.cobertura.xml" \
+            -targetdir:"coverage-report" \
+            -reporttypes:"JsonSummary;HtmlInline_AzurePipelines"
+
+      - name: Coverage Threshold
+        shell: pwsh
+        run: ./ci/check-coverage.ps1 -SummaryPath './coverage-report/Summary.json' -Threshold ${{ env.COVERAGE_THRESHOLD }}
+
+      - name: Upload test and coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: propertyapi-test-and-coverage-results
+          path: |
+            TestResults/**/*.trx
+            TestResults/**/coverage.cobertura.xml
+            coverage-report/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  dependency-review:
+    name: Dependency Review - Pull Request Supply Chain Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Security Scan - Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
 
   secret-scan:
     name: Secret Scan
@@ -146,7 +187,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  validate-repo-hygiene:
+  repo-hygiene:
     name: Repo Hygiene Check
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -182,3 +223,226 @@ jobs:
           fi
 
           echo "No environment-specific appsettings tracked."
+
+  docker-build-scan-push:
+    name: Docker Build, Trivy Scan, Push Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [ quality-gate, secret-scan, repo-hygiene ]
+    outputs:
+      image-ref: ${{ steps.image.outputs.image_ref }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Compute Docker image reference
+        id: image
+        shell: bash
+        run: |
+          IMAGE_REPOSITORY="ghcr.io/${GITHUB_REPOSITORY,,}/propertyapi"
+          IMAGE_TAG="${GITHUB_SHA}"
+          IMAGE_REF="${IMAGE_REPOSITORY}:${IMAGE_TAG}"
+          echo "image_repository=${IMAGE_REPOSITORY}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=${IMAGE_REF}" >> "$GITHUB_OUTPUT"
+          echo "IMAGE_REF=${IMAGE_REF}" >> "$GITHUB_ENV"
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f ${{ env.DOCKERFILE_PATH }} \
+            -t "${IMAGE_REF}" \
+            ${{ env.DOCKER_CONTEXT }}
+
+      - name: Scan Docker Image with Trivy
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_REF }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Docker image
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        run: docker push "${IMAGE_REF}"
+
+  deploy-staging:
+    name: Deploy to Staging + Smoke Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [ docker-build-scan-push ]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_API_BASE_URL }}
+
+    env:
+      IMAGE_REF: ${{ needs.docker-build-scan-push.outputs.image-ref }}
+      KUBE_NAMESPACE: propertyapi-staging
+      ASPNETCORE_ENVIRONMENT: Staging
+      STAGING_API_BASE_URL: ${{ vars.STAGING_API_BASE_URL }}
+      SMOKE_EMAIL: ${{ secrets.STAGING_SMOKE_EMAIL }}
+      SMOKE_PASSWORD: ${{ secrets.STAGING_SMOKE_PASSWORD }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }} for staging migrations
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies for migrator
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      - name: Apply EF Core migrations to Staging
+        run: |
+          dotnet run \
+            --project ${{ env.MIGRATOR_PROJECT_PATH }} \
+            --configuration Release
+        env:
+          ASPNETCORE_ENVIRONMENT: Staging
+          DOTNET_ENVIRONMENT: Staging
+          ConnectionStrings__DefaultConnection: ${{ secrets.STAGING_DATABASE_CONNECTION_STRING }}
+          ConnectionStrings__Redis: ${{ secrets.STAGING_REDIS_CONNECTION_STRING }}
+          Redis__ConnectionString: ${{ secrets.STAGING_REDIS_CONNECTION_STRING }}
+          RateLimiting__Redis__Enabled: 'true'
+          Jwt__Issuer: ${{ secrets.STAGING_JWT_ISSUER }}
+          Jwt__Audience: ${{ secrets.STAGING_JWT_AUDIENCE }}
+          Jwt__Key: ${{ secrets.STAGING_JWT_KEY }}
+          OtpSettings__SecretKey: ${{ secrets.STAGING_OTP_SECRET_KEY }}
+          ForwardedHeaders__KnownProxies__0: ${{ secrets.STAGING_KNOWN_PROXY }}
+          Cors__AllowedOrigins__0: ${{ vars.STAGING_CORS_ORIGIN }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubectl for Staging
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.STAGING_KUBE_CONFIG_B64 }}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          kubectl version --client
+
+      - name: Deploy to Staging
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext-base
+          envsubst < deploy/k8s/staging/propertyapi-deployment.yaml | kubectl apply -f -
+          kubectl rollout status deployment/propertyapi -n "${KUBE_NAMESPACE}" --timeout=180s
+
+      - name: Smoke Tests
+        shell: bash
+        run: ./ci/smoke-tests.sh
+        env:
+          BASE_URL: ${{ env.STAGING_API_BASE_URL }}
+          SMOKE_EMAIL: ${{ env.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ env.SMOKE_PASSWORD }}
+
+  deploy-production:
+    name: Deploy to Production + Health Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [ deploy-staging, docker-build-scan-push ]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_API_BASE_URL }}
+
+    env:
+      IMAGE_REF: ${{ needs.docker-build-scan-push.outputs.image-ref }}
+      KUBE_NAMESPACE: propertyapi-production
+      ASPNETCORE_ENVIRONMENT: Production
+      PRODUCTION_API_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
+      HEALTH_EMAIL: ${{ secrets.PRODUCTION_HEALTH_EMAIL }}
+      HEALTH_PASSWORD: ${{ secrets.PRODUCTION_HEALTH_PASSWORD }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }} for production migrations
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies for migrator
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      - name: Apply EF Core migrations to Production
+        run: |
+          dotnet run \
+            --project ${{ env.MIGRATOR_PROJECT_PATH }} \
+            --configuration Release
+        env:
+          ASPNETCORE_ENVIRONMENT: Production
+          DOTNET_ENVIRONMENT: Production
+          ConnectionStrings__DefaultConnection: ${{ secrets.PRODUCTION_DATABASE_CONNECTION_STRING }}
+          ConnectionStrings__Redis: ${{ secrets.PRODUCTION_REDIS_CONNECTION_STRING }}
+          Redis__ConnectionString: ${{ secrets.PRODUCTION_REDIS_CONNECTION_STRING }}
+          RateLimiting__Redis__Enabled: 'true'
+          Jwt__Issuer: ${{ secrets.PRODUCTION_JWT_ISSUER }}
+          Jwt__Audience: ${{ secrets.PRODUCTION_JWT_AUDIENCE }}
+          Jwt__Key: ${{ secrets.PRODUCTION_JWT_KEY }}
+          OtpSettings__SecretKey: ${{ secrets.PRODUCTION_OTP_SECRET_KEY }}
+          ForwardedHeaders__KnownProxies__0: ${{ secrets.PRODUCTION_KNOWN_PROXY }}
+          Cors__AllowedOrigins__0: ${{ vars.PRODUCTION_CORS_ORIGIN }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubectl for Production
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.PRODUCTION_KUBE_CONFIG_B64 }}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          kubectl version --client
+
+      - name: Deploy to Production
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext-base
+          envsubst < deploy/k8s/production/propertyapi-deployment.yaml | kubectl apply -f -
+          kubectl rollout status deployment/propertyapi -n "${KUBE_NAMESPACE}" --timeout=180s
+
+      - name: Health Check after Production Deploy
+        shell: bash
+        run: ./ci/health-check.sh
+        env:
+          BASE_URL: ${{ env.PRODUCTION_API_BASE_URL }}
+          HEALTH_EMAIL: ${{ env.HEALTH_EMAIL }}
+          HEALTH_PASSWORD: ${{ env.HEALTH_PASSWORD }}
+
+      - name: Notify when production deploy or health check fails
+        if: failure()
+        shell: bash
+        env:
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+        run: |
+          if [ -z "${ALERT_WEBHOOK_URL:-}" ]; then
+            echo "ALERT_WEBHOOK_URL is not configured. The workflow is already marked as failed."
+            exit 0
+          fi
+
+          curl -fsS -X POST \
+            -H 'Content-Type: application/json' \
+            --data "{\"text\":\"PropertyApi production deployment/health check failed. Repository: ${GITHUB_REPOSITORY}, SHA: ${GITHUB_SHA}\"}" \
+            "${ALERT_WEBHOOK_URL}"
+
+

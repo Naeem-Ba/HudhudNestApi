@@ -1,0 +1,7 @@
+# Replace this example file with .github/CODEOWNERS when your GitHub organization/team names are ready.
+# Production deployment approval should be configured in GitHub Environments, not only in CODEOWNERS.
+
+.github/workflows/* @your-org/technical-leads
+PropertyApi/** @your-org/backend-leads
+PropertyApi.Infrastructure/** @your-org/backend-leads
+PropertyApi.Security/** @your-org/security-leads
