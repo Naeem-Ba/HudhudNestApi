@@ -31,6 +31,7 @@ using PropertyApi.Infrastructure.Admin;
 using IdentityEmailSender = Microsoft.AspNetCore.Identity.UI.Services.IEmailSender;
 using Microsoft.Extensions.Options;
 using PropertyApi.Infrastructure.Health;
+using Npgsql;
 
 
 using PropertyApi.Application.Analytics.Interfaces;
@@ -246,46 +247,172 @@ else
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        if (environment.IsProduction())
+        var rawConnectionString = environment.IsProduction()
+            ? Environment.GetEnvironmentVariable("DATABASE_URL")
+            : configuration.GetConnectionString("DefaultConnection");
+
+        if (string.IsNullOrWhiteSpace(rawConnectionString))
         {
-            var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL")
-                ?? throw new InvalidOperationException(
-                    "DATABASE_URL environment variable is required in Production.");
-
-            if (databaseUrl.StartsWith("postgres://") ||
-                databaseUrl.StartsWith("postgresql://"))
-            {
-                var uri = new Uri(databaseUrl);
-                var db = uri.AbsolutePath.TrimStart('/');
-                var user = uri.UserInfo.Split(':')[0];
-                var pass = uri.UserInfo.Split(':')[1];
-                var port = uri.Port > 0 ? uri.Port : 5432;
-
-                return $"Host={uri.Host};Port={port};Database={db};" +
-                       $"Username={user};Password={pass};" +
-                       $"SSL Mode=Require;";
-            }
-
-            if (databaseUrl.Contains("Trust Server Certificate=true", StringComparison.OrdinalIgnoreCase) ||
-                databaseUrl.Contains("TrustServerCertificate=true", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    "Production database connection must not contain Trust Server Certificate=true.");
-            }
-
-            if (!databaseUrl.Contains("SSL Mode=Require", StringComparison.OrdinalIgnoreCase) &&
-                !databaseUrl.Contains("SSL Mode=VerifyFull", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    "Production database connection must explicitly use SSL Mode=Require or SSL Mode=VerifyFull.");
-            }
-
-            return databaseUrl;
+            throw new InvalidOperationException(
+                environment.IsProduction()
+                    ? "DATABASE_URL environment variable is required in Production."
+                    : "ConnectionStrings:DefaultConnection is missing in appsettings.json.");
         }
 
-        return configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException(
-                "ConnectionStrings:DefaultConnection is missing in appsettings.json.");
+        return NormalizePostgresConnectionString(rawConnectionString, environment);
+    }
+
+    private static string NormalizePostgresConnectionString(
+        string rawConnectionString,
+        IHostEnvironment environment)
+    {
+        var value = rawConnectionString.Trim().Trim('"', '\'');
+
+        if (value.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
+            value.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+        {
+            return ConvertPostgresUriToNpgsqlConnectionString(value, environment);
+        }
+
+        var builder = new NpgsqlConnectionStringBuilder(value);
+
+        if (environment.IsProduction())
+        {
+            ValidateProductionDatabaseConnection(builder);
+        }
+
+        ApplyDefaultPostgresSettings(builder, environment);
+
+        return builder.ConnectionString;
+    }
+
+    private static string ConvertPostgresUriToNpgsqlConnectionString(
+        string databaseUrl,
+        IHostEnvironment environment)
+    {
+        if (!Uri.TryCreate(databaseUrl.Trim(), UriKind.Absolute, out var uri))
+        {
+            throw new InvalidOperationException("DATABASE_URL is not a valid absolute PostgreSQL URI.");
+        }
+
+        if (string.IsNullOrWhiteSpace(uri.Host))
+        {
+            throw new InvalidOperationException("DATABASE_URL is invalid: host is missing.");
+        }
+
+        if (string.IsNullOrWhiteSpace(uri.UserInfo))
+        {
+            throw new InvalidOperationException("DATABASE_URL is invalid: username and password are missing.");
+        }
+
+        var separatorIndex = uri.UserInfo.IndexOf(':');
+
+        if (separatorIndex <= 0 || separatorIndex == uri.UserInfo.Length - 1)
+        {
+            throw new InvalidOperationException(
+                "DATABASE_URL is invalid: expected username:password before host.");
+        }
+
+        var rawUsername = uri.UserInfo[..separatorIndex];
+        var rawPassword = uri.UserInfo[(separatorIndex + 1)..];
+
+        var username = Uri.UnescapeDataString(rawUsername);
+        var password = Uri.UnescapeDataString(rawPassword);
+        var database = Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/'));
+
+        if (string.IsNullOrWhiteSpace(database))
+        {
+            database = "postgres";
+        }
+
+        var builder = new NpgsqlConnectionStringBuilder
+        {
+            Host = uri.Host,
+            Port = uri.Port > 0 ? uri.Port : 5432,
+            Database = database,
+            Username = username,
+            Password = password
+        };
+
+        ApplyDefaultPostgresSettings(builder, environment);
+
+        if (environment.IsProduction())
+        {
+            ValidateProductionDatabaseConnection(builder);
+        }
+
+        return builder.ConnectionString;
+    }
+
+    private static void ApplyDefaultPostgresSettings(
+        NpgsqlConnectionStringBuilder builder,
+        IHostEnvironment environment)
+    {
+        if (builder.Port == 0)
+        {
+            builder.Port = 5432;
+        }
+
+        builder.Pooling = true;
+
+        if (builder.MaxPoolSize <= 0)
+        {
+            builder.MaxPoolSize = 20;
+        }
+
+        if (builder.Timeout <= 0)
+        {
+            builder.Timeout = 30;
+        }
+
+        if (builder.CommandTimeout <= 0)
+        {
+            builder.CommandTimeout = 60;
+        }
+
+        if (environment.IsProduction())
+        {
+            builder.SslMode = SslMode.Require;
+        }
+    }
+
+    private static void ValidateProductionDatabaseConnection(
+        NpgsqlConnectionStringBuilder builder)
+    {
+        if (string.IsNullOrWhiteSpace(builder.Host))
+        {
+            throw new InvalidOperationException("Production database host is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(builder.Database))
+        {
+            throw new InvalidOperationException("Production database name is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(builder.Username))
+        {
+            throw new InvalidOperationException("Production database username is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(builder.Password))
+        {
+            throw new InvalidOperationException("Production database password is required.");
+        }
+
+        if (builder.Host.Contains("pooler.supabase.com", StringComparison.OrdinalIgnoreCase) &&
+            !builder.Username.Contains('.', StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Supabase pooler username must be in the format postgres.<project-ref>, not postgres.");
+        }
+
+
+        if (builder.SslMode != SslMode.Require &&
+            builder.SslMode != SslMode.VerifyFull)
+        {
+            throw new InvalidOperationException(
+                "Production database connection must use SSL Mode=Require or SSL Mode=VerifyFull.");
+        }
     }
 }
 
