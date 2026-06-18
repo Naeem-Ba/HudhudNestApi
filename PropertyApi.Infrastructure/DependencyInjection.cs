@@ -421,6 +421,11 @@ else
         {
             throw new InvalidOperationException("Production database password is required.");
         }
+        if (HasEnabledTrustServerCertificate(builder))
+        {
+            throw new InvalidOperationException(
+                "Production database connection must not contain Trust Server Certificate=true. Use SSL Mode=Require or SSL Mode=VerifyFull without trusting invalid server certificates.");
+        }
 
         if (builder.Password.Contains("[YOUR-PASSWORD]", StringComparison.OrdinalIgnoreCase) ||
             builder.Password.Contains("YOUR_SUPABASE", StringComparison.OrdinalIgnoreCase))
@@ -482,6 +487,28 @@ else
             throw new InvalidOperationException(
                 "Production database connection must use SSL Mode=Require or SSL Mode=VerifyFull.");
         }
+    }
+    private static bool HasEnabledTrustServerCertificate(NpgsqlConnectionStringBuilder builder)
+    {
+        var hasSpacedAlias =
+            builder.TryGetValue("Trust Server Certificate", out var spacedAliasValue) &&
+            IsEnabledBooleanConnectionStringValue(spacedAliasValue);
+
+        var hasCompactAlias =
+            builder.TryGetValue("TrustServerCertificate", out var compactAliasValue) &&
+            IsEnabledBooleanConnectionStringValue(compactAliasValue);
+
+        return hasSpacedAlias || hasCompactAlias;
+    }
+
+    private static bool IsEnabledBooleanConnectionStringValue(object? value)
+    {
+        return value switch
+        {
+            bool boolValue => boolValue,
+            string stringValue => bool.TryParse(stringValue, out var boolValue) && boolValue,
+            _ => false
+        };
     }
 }
 
