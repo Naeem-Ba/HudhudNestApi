@@ -271,96 +271,112 @@ else
     {
         var value = rawConnectionString.Trim().Trim('"', '\'');
 
+        NpgsqlConnectionStringBuilder builder;
+
         if (value.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
             value.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
         {
-            return ConvertPostgresUriToNpgsqlConnectionString(value, environment);
+            builder = ConvertPostgresUriToNpgsqlBuilder(value);
+        }
+        else
+        {
+            builder = new NpgsqlConnectionStringBuilder(value);
         }
 
-        var builder = new NpgsqlConnectionStringBuilder(value);
+        ApplyDefaultPostgresSettings(builder, environment);
 
         if (environment.IsProduction())
         {
             ValidateProductionDatabaseConnection(builder);
         }
 
-        ApplyDefaultPostgresSettings(builder, environment);
-
         return builder.ConnectionString;
     }
 
-    private static string ConvertPostgresUriToNpgsqlConnectionString(
-        string databaseUrl,
-        IHostEnvironment environment)
+    private static NpgsqlConnectionStringBuilder ConvertPostgresUriToNpgsqlBuilder(
+    string postgresUri)
     {
-        if (!Uri.TryCreate(databaseUrl.Trim(), UriKind.Absolute, out var uri))
-        {
-            throw new InvalidOperationException("DATABASE_URL is not a valid absolute PostgreSQL URI.");
-        }
+        var uri = new Uri(postgresUri);
 
-        if (string.IsNullOrWhiteSpace(uri.Host))
-        {
-            throw new InvalidOperationException("DATABASE_URL is invalid: host is missing.");
-        }
+        var userInfoParts = uri.UserInfo.Split(':', 2);
 
-        if (string.IsNullOrWhiteSpace(uri.UserInfo))
-        {
-            throw new InvalidOperationException("DATABASE_URL is invalid: username and password are missing.");
-        }
-
-        var separatorIndex = uri.UserInfo.IndexOf(':');
-
-        if (separatorIndex <= 0 || separatorIndex == uri.UserInfo.Length - 1)
+        if (userInfoParts.Length != 2)
         {
             throw new InvalidOperationException(
-                "DATABASE_URL is invalid: expected username:password before host.");
+                "Postgres URI must contain both username and password.");
         }
 
-        var rawUsername = uri.UserInfo[..separatorIndex];
-        var rawPassword = uri.UserInfo[(separatorIndex + 1)..];
-
-        var username = Uri.UnescapeDataString(rawUsername);
-        var password = Uri.UnescapeDataString(rawPassword);
+        var username = Uri.UnescapeDataString(userInfoParts[0]);
+        var password = Uri.UnescapeDataString(userInfoParts[1]);
         var database = Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/'));
-
-        if (string.IsNullOrWhiteSpace(database))
-        {
-            database = "postgres";
-        }
 
         var builder = new NpgsqlConnectionStringBuilder
         {
             Host = uri.Host,
             Port = uri.Port > 0 ? uri.Port : 5432,
-            Database = database,
+            Database = string.IsNullOrWhiteSpace(database) ? "postgres" : database,
             Username = username,
             Password = password
         };
 
-        ApplyDefaultPostgresSettings(builder, environment);
+        var query = uri.Query.TrimStart('?');
 
-        if (environment.IsProduction())
+        if (!string.IsNullOrWhiteSpace(query))
         {
-            ValidateProductionDatabaseConnection(builder);
+            foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var keyValue = part.Split('=', 2);
+                if (keyValue.Length != 2)
+                {
+                    continue;
+                }
+
+                var key = Uri.UnescapeDataString(keyValue[0]);
+                var value = Uri.UnescapeDataString(keyValue[1]);
+
+                if (key.Equals("sslmode", StringComparison.OrdinalIgnoreCase))
+                {
+                    builder.SslMode = value.Equals("require", StringComparison.OrdinalIgnoreCase)
+                        ? SslMode.Require
+                        : Enum.Parse<SslMode>(value, ignoreCase: true);
+                }
+            }
         }
 
-        return builder.ConnectionString;
+        return builder;
     }
 
     private static void ApplyDefaultPostgresSettings(
-        NpgsqlConnectionStringBuilder builder,
-        IHostEnvironment environment)
+    NpgsqlConnectionStringBuilder builder,
+    IHostEnvironment environment)
     {
-        if (builder.Port == 0)
+        ArgumentNullException.ThrowIfNull(builder);
+
+        var isSupabasePooler =
+            !string.IsNullOrWhiteSpace(builder.Host) &&
+            builder.Host.Contains(".pooler.supabase.com", StringComparison.OrdinalIgnoreCase);
+
+        // Npgsql default port is 5432.
+        // لا نفرض 6543 لأن Supabase Pooler لديه:
+        // - Session mode: 5432
+        // - Transaction mode: 6543
+        if (builder.Port <= 0)
         {
             builder.Port = 5432;
         }
 
         builder.Pooling = true;
 
-        if (builder.MaxPoolSize <= 0)
+        // Npgsql default Maximum Pool Size قد يكون 100.
+        // هذا كبير نسبيًا لمشروع صغير على Render/Supabase.
+        if (isSupabasePooler && builder.MaxPoolSize > 20)
         {
             builder.MaxPoolSize = 20;
+        }
+
+        if (builder.MaxPoolSize <= 0)
+        {
+            builder.MaxPoolSize = isSupabasePooler ? 20 : 50;
         }
 
         if (builder.Timeout <= 0)
@@ -376,11 +392,15 @@ else
         if (environment.IsProduction())
         {
             builder.SslMode = SslMode.Require;
+
+            // لا تستخدم builder.Encrypt هنا؛ غير موجود في Npgsql.
+            // TrustServerCertificate في Npgsql 8 أصبح غير ضروري/obsolete.
+            // اتركه بدون ضبط إلا إذا كنت تستخدم إصدارًا قديمًا وتعرف السبب.
         }
     }
 
     private static void ValidateProductionDatabaseConnection(
-        NpgsqlConnectionStringBuilder builder)
+    NpgsqlConnectionStringBuilder builder)
     {
         if (string.IsNullOrWhiteSpace(builder.Host))
         {
@@ -402,13 +422,59 @@ else
             throw new InvalidOperationException("Production database password is required.");
         }
 
-        if (builder.Host.Contains("pooler.supabase.com", StringComparison.OrdinalIgnoreCase) &&
-            !builder.Username.Contains('.', StringComparison.Ordinal))
+        if (builder.Password.Contains("[YOUR-PASSWORD]", StringComparison.OrdinalIgnoreCase) ||
+            builder.Password.Contains("YOUR_SUPABASE", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                "Supabase pooler username must be in the format postgres.<project-ref>, not postgres.");
+                "Production database password still contains a placeholder value.");
         }
 
+        var isSupabasePooler =
+            builder.Host.Contains(".pooler.supabase.com", StringComparison.OrdinalIgnoreCase);
+
+        var isSupabaseDirect =
+            builder.Host.StartsWith("db.", StringComparison.OrdinalIgnoreCase) &&
+            builder.Host.EndsWith(".supabase.co", StringComparison.OrdinalIgnoreCase);
+
+        if (isSupabasePooler)
+        {
+            if (!builder.Username.Contains('.', StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Supabase Pooler username must be in the format '<db-user>.<project-ref>', for example 'postgres.wevfsshyxmydfiifjzka'.");
+            }
+
+            var usernameParts = builder.Username.Split('.', 2);
+
+            if (usernameParts.Length != 2 ||
+                string.IsNullOrWhiteSpace(usernameParts[0]) ||
+                string.IsNullOrWhiteSpace(usernameParts[1]))
+            {
+                throw new InvalidOperationException(
+                    "Invalid Supabase Pooler username. Expected '<db-user>.<project-ref>'.");
+            }
+
+            if (builder.Port != 5432 && builder.Port != 6543)
+            {
+                throw new InvalidOperationException(
+                    "Supabase Pooler port must be 5432 for Session mode or 6543 for Transaction mode.");
+            }
+        }
+
+        if (isSupabaseDirect)
+        {
+            if (builder.Username.Contains('.', StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Supabase direct database connection usually uses username 'postgres', not 'postgres.<project-ref>'. The '<project-ref>' format is for Pooler.");
+            }
+
+            if (builder.Port != 5432)
+            {
+                throw new InvalidOperationException(
+                    "Supabase direct database connection should use port 5432.");
+            }
+        }
 
         if (builder.SslMode != SslMode.Require &&
             builder.SslMode != SslMode.VerifyFull)
