@@ -88,16 +88,16 @@ public sealed class TwilioSmsService : ISmsService
             // تثبيت: dotnet add package Twilio --project PropertyApi.Infrastructure
             // ثم أزل التعليق عن الكود أدناه:
 
-            /*
+
             Twilio.TwilioClient.Init(_accountSid, _authToken);
 
             var message = await Twilio.Rest.Api.V2010.Account.MessageResource.CreateAsync(
                 body: $"رمز التحقق الخاص بك هو: {otp}\nصالح لمدة 5 دقائق. لا تشاركه مع أحد.",
                 from: new Twilio.Types.PhoneNumber(_fromNumber),
-                to:   new Twilio.Types.PhoneNumber(phoneNumber));
+                to: new Twilio.Types.PhoneNumber(phoneNumber));
 
             return message.Status != Twilio.Rest.Api.V2010.Account.MessageResource.StatusEnum.Failed;
-            */
+
 
             // مؤقتاً — ارجع true حتى تُثبَّت Twilio
             await Task.Delay(100, ct); // محاكاة التأخير

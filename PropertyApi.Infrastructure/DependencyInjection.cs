@@ -140,14 +140,23 @@ else
         services.AddScoped<IEmailVerificationService, EmailVerificationService>();
 
         if (environment.IsDevelopment() ||
-            environment.EnvironmentName == "Testing" ||
-            environment.EnvironmentName == "CI")
+     environment.EnvironmentName == "Testing" ||
+     environment.EnvironmentName == "CI")
         {
             services.AddScoped<ISmsService, ConsoleSmsService>();
         }
         else
         {
-            services.AddHttpClient<ISmsService, HttpSmsService>();
+            var smsProvider = configuration["SmsProvider:Provider"];
+
+            if (string.Equals(smsProvider, "Twilio", StringComparison.OrdinalIgnoreCase))
+            {
+                services.AddScoped<ISmsService, TwilioSmsService>();
+            }
+            else
+            {
+                services.AddHttpClient<ISmsService, HttpSmsService>();
+            }
         }
 
         services.AddDbContext<AppDbContext>(options =>
