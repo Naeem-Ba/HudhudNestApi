@@ -544,6 +544,11 @@ if (swaggerEnabled)
 
 app.UseStaticFiles();
 app.UseRouting();
+
+// CORS must run before rate limiting, CSRF, authentication, and authorization.
+// Otherwise browser preflight requests may be rejected before CORS headers are added.
+app.UseCors("DefaultCors");
+
 if (useRedisRateLimiting)
 {
     app.UseRedisRateLimiting();
@@ -552,12 +557,12 @@ else
 {
     app.UseRateLimiter();
 }
+
 app.UseCookieCsrfProtection();
-// CORS must be between UseRouting() and UseAuthentication()
-app.UseCors("DefaultCors");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
 app.MapHealthChecks("/health");
 app.MapHub<NotificationHub>("/notificationHub");
