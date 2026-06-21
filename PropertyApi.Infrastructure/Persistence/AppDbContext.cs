@@ -10,6 +10,7 @@ using PropertyApi.Domain.Auth.Entities;
 using PropertyApi.Domain.Notifications.Entities;
 using PropertyApi.Domain.Bookings.Entities;
 using PropertyApi.Domain.Reviews.Entities;
+using PropertyApi.Domain.Lookups.Entities;
 
 
 namespace PropertyApi.Infrastructure.Persistence;
@@ -21,7 +22,7 @@ namespace PropertyApi.Infrastructure.Persistence;
 /// Global soft-delete filter applied to all BaseEntity types.
 /// </summary>
 public sealed class AppDbContext
-    : IdentityDbContext<User, IdentityRole<Guid>, Guid>
+    : IdentityDbContext<User, ApplicationRole, Guid>
 {
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options) { }
@@ -39,6 +40,14 @@ public sealed class AppDbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<VisitRequest> VisitRequests => Set<VisitRequest>();
     public DbSet<PropertyReview> PropertyReviews => Set<PropertyReview>();
+    public DbSet<Currency> Currencies => Set<Currency>();
+    public DbSet<Governorate> Governorates => Set<Governorate>();
+    public DbSet<District> Districts => Set<District>();
+    public DbSet<Neighborhood> Neighborhoods => Set<Neighborhood>();
+    public DbSet<PropertyType> PropertyTypes => Set<PropertyType>();
+    public DbSet<SaleDetails> SaleDetails => Set<SaleDetails>();
+    public DbSet<RentalDetails> RentalDetails => Set<RentalDetails>();
+    public DbSet<Transaction> Transactions => Set<Transaction>();
 
     // -- Model Configuration -------------------------------------
     protected override void OnModelCreating(ModelBuilder builder)
@@ -50,7 +59,7 @@ public sealed class AppDbContext
 
         // -- Rename Identity tables to clean English names -------
         builder.Entity<User>().ToTable("Users");
-        builder.Entity<IdentityRole<Guid>>().ToTable("Roles");
+        builder.Entity<ApplicationRole>().ToTable("Roles");
         builder.Entity<IdentityUserRole<Guid>>().ToTable("UserRoles");
         builder.Entity<IdentityUserClaim<Guid>>().ToTable("UserClaims");
         builder.Entity<IdentityUserLogin<Guid>>().ToTable("UserLogins");

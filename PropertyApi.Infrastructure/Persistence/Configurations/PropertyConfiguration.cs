@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Listings.Entities;
+using PropertyApi.Domain.Listings.Enums;
+
 
 namespace PropertyApi.Infrastructure.Persistence.Configurations;
 
@@ -142,5 +144,72 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
         // Composite index for the most common filtered search
         builder.HasIndex(p => new { p.CountryCode, p.City, p.Status, p.IsPublished, p.IsDeleted })
             .HasDatabaseName("IX_Properties_Search");
+
+        // ── الوضع القانوني ─────────────────────────────────────────────
+        builder.Property(p => p.LegalStatus)
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .HasDefaultValue(LegalStatusType.Unknown);
+
+        builder.Property(p => p.ZoningStatus)
+            .HasConversion<string>()
+            .HasMaxLength(30)
+            .HasDefaultValue(ZoningStatusType.Unknown);
+
+        builder.Property(p => p.LegalStatusNotes).HasMaxLength(1000);
+        builder.Property(p => p.ZoningNotes).HasMaxLength(500);
+        builder.Property(p => p.LegalDisputeNotes).HasMaxLength(1000);
+
+        // ── التفاصيل الإضافية ──────────────────────────────────────────
+        builder.Property(p => p.NearestLandmark).HasMaxLength(300);
+        builder.Property(p => p.BuildingNumber).HasMaxLength(50);
+        builder.Property(p => p.GoogleMapsUrl).HasMaxLength(1000);
+        builder.Property(p => p.WaterSource).HasMaxLength(50);
+        builder.Property(p => p.InternetType).HasMaxLength(50);
+        builder.Property(p => p.ViewDescription).HasMaxLength(300);
+
+        builder.Property(p => p.FurnishingStatus)
+            .HasConversion<string>()
+            .HasMaxLength(30)
+            .HasDefaultValue(FurnishingStatus.Unfurnished);
+
+        // ── العلاقات الجديدة ────────────────────────────────────────────
+        builder.HasOne(p => p.Governorate)
+            .WithMany(g => g.Properties)
+            .HasForeignKey(p => p.GovernorateId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(p => p.District)
+            .WithMany(d => d.Properties)
+            .HasForeignKey(p => p.DistrictId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(p => p.Neighborhood)
+            .WithMany(n => n.Properties)
+            .HasForeignKey(p => p.NeighborhoodId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(p => p.PropertyType)
+            .WithMany(pt => pt.Properties)
+            .HasForeignKey(p => p.PropertyTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(p => p.Agent)
+            .WithMany()
+            .HasForeignKey(p => p.AgentId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // ── الفهارس الجديدة ────────────────────────────────────────────
+        builder.HasIndex(p => p.GovernorateId);
+        builder.HasIndex(p => p.PropertyTypeId);
+        builder.HasIndex(p => p.LegalStatus);
+        builder.HasIndex(p => p.FurnishingStatus);
+        builder.HasIndex(p => p.IsFeatured);
+        builder.HasIndex(p => p.IsVerified);
+        builder.HasIndex(p => p.PriceCurrencyId);
+
+        // Composite index للبحث في السوق السوري
+        builder.HasIndex(p => new { p.GovernorateId, p.PropertyTypeId, p.Status, p.IsPublished })
+            .HasDatabaseName("IX_Properties_Syrian_Search");
     }
 }

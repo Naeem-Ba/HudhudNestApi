@@ -19,6 +19,10 @@ using Microsoft.AspNetCore.HttpOverrides;
 using PropertyApi.Security.Csrf;
 using PropertyApi.Security.Headers;
 using PropertyApi.Security.RateLimiting;
+using Microsoft.AspNetCore.Identity;
+using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Infrastructure.Persistence.Seeds;
+using PropertyApi.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 var isTestingOrCi =
@@ -454,6 +458,43 @@ builder.Services.AddRateLimiter(options =>
 // --------------------------------------------------------------
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
+
+    // Seeds بالترتيب (المهم: Currencies و Governorates قبل Properties)
+    await CurrencySeed.SeedAsync(db);
+    await GovernoratesSeed.SeedAsync(db);
+    await PropertyTypesSeed.SeedAsync(db);
+    await ApplicationRolesSeed.SeedAsync(roleManager);
+}
+//// EARLY_PRODUCTION_FORWARDED_HEADERS_REJECTION
+//if (app.Environment.IsProduction())
+//{
+//    app.Use(async (context, next) =>
+//    {
+//        if (RequestHasForwardedHeaders(context.Request))
+//        {
+//            var forwardedHeadersOptions = context.RequestServices
+//                .GetRequiredService<Microsoft.Extensions.Options.IOptions<ForwardedHeadersOptions>>()
+//                .Value;
+
+//            if (!IsKnownForwardingSource(
+//                    context.Connection.RemoteIpAddress,
+//                    forwardedHeadersOptions))
+//            {
+//                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+//                await context.Response.WriteAsync(
+//                    "X-Forwarded-* headers from unknown proxies are not allowed in Production.");
+//                return;
+//            }
+//        }
+
+//        await next();
+//    });
+//}
+// --------------------------------------------------------------
 
 // -- 8. Run DB Migrations --------------------------------------
 
