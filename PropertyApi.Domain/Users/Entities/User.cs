@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Messaging.Entities;
 
@@ -42,6 +42,25 @@ public class User : IdentityUser<Guid>
     // -- Soft Delete --------------------------------------------
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
+
+    // -- حقول جديدة للسوق السوري ---------------------------
+
+    /// <summary>
+    /// رقم واتساب (قد يختلف عن PhoneNumber).
+    /// في سوريا واتساب هو وسيلة التواصل الأساسية للسمسرة.
+    /// </summary>
+    public string? WhatsAppNumber { get; set; }
+
+    /// <summary>هل الحساب محظور من قِبل الإدارة؟</summary>
+    public bool IsBanned { get; set; } = false;
+
+    /// <summary>سبب الحظر (يُعرض للمستخدم عند محاولة تسجيل الدخول)</summary>
+    public string? BanReason { get; set; }
+
+    /// <summary>تاريخ آخر تسجيل دخول — لتتبع النشاط</summary>
+    public DateTime? LastLoginAt { get; set; }
+
+
 
     // -- Navigation ---------------------------------------------
     public ICollection<Property> Properties { get; set; } = new List<Property>();

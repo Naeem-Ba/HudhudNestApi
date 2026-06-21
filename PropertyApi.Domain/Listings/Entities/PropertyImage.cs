@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using PropertyApi.Domain.Common.Entities;
+using PropertyApi.Domain.Listings.Enums;
 
 namespace PropertyApi.Domain.Listings.Entities;
 
@@ -27,8 +28,27 @@ public class PropertyImage : BaseEntity
 
     /// <summary>Display order (0 = first).</summary>
     public int SortOrder { get; set; } = 0;
+    // -- حقول جديدة ------------------------------------------
 
-    // FK
-    public Guid PropertyId { get; set; }
+    /// <summary>
+    /// رابط النسخة المصغرة (thumbnail) من Cloudinary.
+    /// يُستخدم في قوائم العقارات لتحميل أسرع.
+    /// Cloudinary يُنشئه تلقائياً بـ transformation URL.
+    /// </summary>
+    public string? ThumbnailUrl { get; set; }
+
+    /// <summary>وصف الصورة (لـ accessibility والـ SEO)</summary>
+    public string? Caption { get; set; }
+
+    /// <summary>نوع الصورة — يساعد المستخدم في التصفية</summary>
+    public PropertyImageType ImageType { get; set; } = PropertyImageType.General;
+
+
+    public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
+
+
+
+// FK
+public Guid PropertyId { get; set; }
     public Property Property { get; set; } = null!;
 }

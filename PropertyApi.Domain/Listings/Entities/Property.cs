@@ -1,6 +1,8 @@
-using PropertyApi.Domain.Common.Entities;
+﻿using PropertyApi.Domain.Common.Entities;
 using PropertyApi.Domain.Common.Exceptions;
 using PropertyApi.Domain.Enums;
+using PropertyApi.Domain.Listings.Enums;
+using PropertyApi.Domain.Lookups.Entities;
 using PropertyApi.Domain.Messaging.Entities;
 using PropertyApi.Domain.Users.Entities;
 
@@ -16,7 +18,7 @@ public class Property : AuditableEntity
     public string Title { get; private set; } = string.Empty;
     public string Description { get; private set; } = string.Empty;
 
-    // -- Address (flat � no FK to Cities table for now) ---------
+    // -- Address (flat — no FK to Cities table for now) ---------
     // For global support: store free-text city + ISO country code.
     // If you later add a Cities catalog, add a nullable CityId FK here.
     public string Street { get; set; } = string.Empty;
@@ -48,7 +50,7 @@ public class Property : AuditableEntity
 
     // -- Property Details ---------------------------------------
     public int? Rooms { get; set; }
-    /// <summary>Area in m�. Use decimal � not double � for precision.</summary>
+    /// <summary>Area in m². Use decimal — not double — for precision.</summary>
     public decimal? Area { get; set; }
     public int? Floor { get; set; }
     public int? TotalFloors { get; set; }
@@ -74,6 +76,118 @@ public class Property : AuditableEntity
     public DateTime? PublishedAt { get; private set; }
     public DateTime? ExpiresAt { get; set; }
 
+
+    // ── الموقع الجغرافي المنظَّم ──────────────────────────────────────
+
+    /// <summary>
+    /// المحافظة (FK → Governorates).
+    /// nullable للتوافق مع البيانات القديمة.
+    /// الحقل City الموجود يبقى للتوافق مع السجلات السابقة.
+    /// </summary>
+    public int? GovernorateId { get; set; }
+    public int? DistrictId { get; set; }
+    public int? NeighborhoodId { get; set; }
+
+    /// <summary>
+    /// أقرب علامة مميزة — جوهري في سوريا.
+    /// "بجانب جامع السلطان" أوضح من رقم الشارع.
+    /// </summary>
+    public string? NearestLandmark { get; set; }
+
+    public string? BuildingNumber { get; set; }
+    public string? GoogleMapsUrl { get; set; }
+
+    // ── نوع العقار ──────────────────────────────────────────────────────
+
+    /// <summary>FK → PropertyTypes (شقة/فيلا/محل/أرض)</summary>
+    public int? PropertyTypeId { get; set; }
+
+    /// <summary>
+    /// الوسيط المسؤول عن الإعلان (إن وجد).
+    /// FK → Users (نفس جدول المستخدمين، دور Agent)
+    /// </summary>
+    public Guid? AgentId { get; set; }
+
+    // ── الوضع القانوني (Critical للسوق السوري) ──────────────────────
+
+    public LegalStatusType LegalStatus { get; set; } = LegalStatusType.Unknown;
+    public string? LegalStatusNotes { get; set; }
+    public ZoningStatusType ZoningStatus { get; set; } = ZoningStatusType.Unknown;
+    public string? ZoningNotes { get; set; }
+
+    /// <summary>هل يوجد نزاع قانوني على العقار؟</summary>
+    public bool HasLegalDispute { get; set; }
+    public string? LegalDisputeNotes { get; set; }
+
+    // ── مواصفات إضافية ──────────────────────────────────────────────────
+
+    public int? LivingRoomsCount { get; set; }
+    public int? KitchenCount { get; set; }
+    public int? ParkingCount { get; set; }
+    public int? YearBuilt { get; set; }
+    public FurnishingStatus FurnishingStatus { get; set; } = FurnishingStatus.Unfurnished;
+
+    // ── الخدمات والمرافق (خاص بالسوق السوري) ─────────────────────────
+
+    public bool HasElectricity { get; set; }
+
+    /// <summary>ساعات الكهرباء يومياً (0-24) — شائع في سوريا</summary>
+    public byte? ElectricityHoursPerDay { get; set; }
+
+    public bool HasGenerator { get; set; }
+    public bool HasSolarPanels { get; set; }
+    public bool HasWater { get; set; }
+
+    /// <summary>PublicNetwork / Well / Tank / Mixed</summary>
+    public string? WaterSource { get; set; }
+
+    /// <summary>أيام وصول المياه أسبوعياً (1-7)</summary>
+    public byte? WaterDaysPerWeek { get; set; }
+
+    public bool HasGas { get; set; }
+    public bool HasInternet { get; set; }
+
+    /// <summary>ADSL / Fiber / 4G / None</summary>
+    public string? InternetType { get; set; }
+
+    public bool HasAC { get; set; }
+    public bool HasView { get; set; }
+    public string? ViewDescription { get; set; }
+
+    // ── التسعير بالعملة ────────────────────────────────────────────────
+
+    /// <summary>
+    /// FK → Currencies — العملة الأصلية للسعر المُعلَن.
+    /// لا نخزّن BasePriceInUSD هنا — نحسبه عند الاستعلام.
+    /// السبب: سعر الصرف يتغير يومياً، والقيمة المخزونة تصبح خاطئة.
+    /// </summary>
+    public int? PriceCurrencyId { get; set; }
+
+    // ── الميتاداتا ─────────────────────────────────────────────────────
+
+    public int ViewsCount { get; set; }
+    public int FavoritesCount { get; set; }
+
+    /// <summary>تم التحقق من العقار بالمعاينة الفعلية؟</summary>
+    public bool IsVerified { get; set; }
+    public DateTime? VerifiedAt { get; set; }
+    public Guid? VerifiedByUserId { get; set; }
+
+    /// <summary>إعلان مميز (مدفوع)</summary>
+    public bool IsFeatured { get; set; }
+    public DateTime? FeaturedUntil { get; set; }
+
+    // ── Navigation الجديدة ────────────────────────────────────────────
+
+    public Governorate? Governorate { get; set; }
+    public District? District { get; set; }
+    public Neighborhood? Neighborhood { get; set; }
+    public PropertyType? PropertyType { get; set; }
+    public Currency? PriceCurrency { get; set; }
+    public User? Agent { get; set; }
+    public SaleDetails? SaleDetails { get; set; }
+    public RentalDetails? RentalDetails { get; set; }
+
     // -- Navigation ---------------------------------------------
     public ICollection<PropertyImage> Images { get; set; } = new List<PropertyImage>();
     public ICollection<Message> Messages { get; set; } = new List<Message>();
@@ -83,7 +197,7 @@ public class Property : AuditableEntity
     // -- DDD: Private constructor (EF Core needs it too) --------
     private Property() { }
 
-    // -- DDD: Factory method � the only way to create a valid Property
+    // -- DDD: Factory method — the only way to create a valid Property
     public static Property Create(
         string title,
         string description,
