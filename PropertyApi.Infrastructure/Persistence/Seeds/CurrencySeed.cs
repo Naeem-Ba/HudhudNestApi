@@ -68,4 +68,5 @@ public static class CurrencySeed
         await context.Currencies.AddRangeAsync(currencies);
         await context.SaveChangesAsync();
     }
+
 }

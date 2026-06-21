@@ -1,10 +1,11 @@
 ﻿using PropertyApi.Domain.Common.Entities;
 using PropertyApi.Domain.Common.Exceptions;
 using PropertyApi.Domain.Enums;
-using PropertyApi.Domain.Messaging.Entities;
-using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Domain.Listings.Enums;
 using PropertyApi.Domain.Lookups.Entities;
+using PropertyApi.Domain.Messaging.Entities;
+using PropertyApi.Domain.Users.Entities;
+
 
 namespace PropertyApi.Domain.Listings.Entities;
 
@@ -46,7 +47,7 @@ public class Property : AuditableEntity
     public decimal? Deposit { get; set; }   // Security deposit (Kaution)
 
     /// <summary>ISO 4217 currency code (e.g. "EUR", "USD", "SYP").</summary>
-    public string CurrencyCode { get; set; } = "EUR";
+    public string CurrencyCode { get; set; } = "SYP";
 
     // -- Property Details ---------------------------------------
     public int? Rooms { get; set; }
@@ -75,13 +76,6 @@ public class Property : AuditableEntity
     public bool IsPublished { get; private set; }
     public DateTime? PublishedAt { get; private set; }
     public DateTime? ExpiresAt { get; set; }
-
-    // -- Navigation ---------------------------------------------
-    public ICollection<PropertyImage> Images { get; set; } = new List<PropertyImage>();
-    public ICollection<Message> Messages { get; set; } = new List<Message>();
-    public ICollection<PropertyAmenity> PropertyAmenities { get; set; } = new List<PropertyAmenity>();
-    public ICollection<Favorite> Favorites { get; set; } = new List<Favorite>();
-
 
 
     // ── الموقع الجغرافي المنظَّم ──────────────────────────────────────
@@ -195,6 +189,12 @@ public class Property : AuditableEntity
     public SaleDetails? SaleDetails { get; set; }
     public RentalDetails? RentalDetails { get; set; }
 
+    // -- Navigation ---------------------------------------------
+    public ICollection<PropertyImage> Images { get; set; } = new List<PropertyImage>();
+    public ICollection<Message> Messages { get; set; } = new List<Message>();
+    public ICollection<PropertyAmenity> PropertyAmenities { get; set; } = new List<PropertyAmenity>();
+    public ICollection<Favorite> Favorites { get; set; } = new List<Favorite>();
+
     // -- DDD: Private constructor (EF Core needs it too) --------
     private Property() { }
 
@@ -204,8 +204,8 @@ public class Property : AuditableEntity
         string description,
         Guid ownerId,
         ListingType listingType,
-        string countryCode = "DE",
-        string currencyCode = "EUR")
+        string countryCode = "SY",
+        string currencyCode = "SYP")
     {
         if (string.IsNullOrWhiteSpace(title))
             throw new DomainException("Property title is required.");

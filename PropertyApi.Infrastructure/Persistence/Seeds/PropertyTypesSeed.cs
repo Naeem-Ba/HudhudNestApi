@@ -1,10 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Microsoft.EntityFrameworkCore;
 using PropertyApi.Domain.Lookups.Entities;
-using Microsoft.EntityFrameworkCore;
 
 namespace PropertyApi.Infrastructure.Persistence.Seeds;
 
@@ -12,32 +7,49 @@ public static class PropertyTypesSeed
 {
     public static async Task SeedAsync(AppDbContext context)
     {
-        if (await context.PropertyTypes.AnyAsync())
+        await EnsureAsync(context, "apartment", "شقة سكنية", "Apartment", "Residential", "apartment", 1);
+        await EnsureAsync(context, "hotel-apartment", "شقة فندقية", "Hotel Apartment", "Residential", "hotel-apt", 2);
+        await EnsureAsync(context, "villa", "فيلا", "Villa", "Residential", "villa", 3);
+        await EnsureAsync(context, "house", "منزل مستقل", "House", "Residential", "house", 4);
+        await EnsureAsync(context, "studio", "استوديو", "Studio", "Residential", "studio", 5);
+
+        await EnsureAsync(context, "residential-land", "أرض سكنية", "Residential Land", "Land", "land-residential", 10);
+        await EnsureAsync(context, "agricultural-land", "أرض زراعية", "Agricultural Land", "Land", "land-agricultural", 11);
+        await EnsureAsync(context, "industrial-land", "أرض صناعية", "Industrial Land", "Land", "land-industrial", 12);
+        await EnsureAsync(context, "commercial-land", "أرض تجارية", "Commercial Land", "Land", "land-commercial", 13);
+
+        await EnsureAsync(context, "shop", "محل تجاري", "Shop", "Commercial", "shop", 20);
+        await EnsureAsync(context, "office", "مكتب", "Office", "Commercial", "office", 21);
+        await EnsureAsync(context, "warehouse", "مستودع", "Warehouse", "Commercial", "warehouse", 22);
+        await EnsureAsync(context, "hotel", "فندق", "Hotel", "Commercial", "hotel", 23);
+
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task EnsureAsync(
+        AppDbContext context,
+        string code,
+        string nameAr,
+        string nameEn,
+        string category,
+        string? icon,
+        int sortOrder)
+    {
+        var normalizedCode = code.Trim().ToLowerInvariant();
+
+        var exists = await context.PropertyTypes.AnyAsync(pt =>
+            pt.Code == normalizedCode);
+
+        if (exists)
             return;
 
-        var types = new List<PropertyType>
-        {
-            // Residential
-            PropertyType.Create("شقة سكنية",    "Apartment",      "Residential", "apartment",    1),
-            PropertyType.Create("شقة فندقية",   "Hotel Apartment", "Residential", "hotel-apt",   2),
-            PropertyType.Create("فيلا",         "Villa",          "Residential", "villa",        3),
-            PropertyType.Create("منزل مستقل",   "House",          "Residential", "house",        4),
-            PropertyType.Create("استوديو",      "Studio",         "Residential", "studio",       5),
-
-            // Land
-            PropertyType.Create("أرض سكنية",   "Residential Land", "Land", "land-residential", 10),
-            PropertyType.Create("أرض زراعية",   "Agricultural Land","Land", "land-agricultural", 11),
-            PropertyType.Create("أرض صناعية",   "Industrial Land", "Land", "land-industrial",  12),
-            PropertyType.Create("أرض تجارية",   "Commercial Land", "Land", "land-commercial",  13),
-
-            // Commercial
-            PropertyType.Create("محل تجاري",   "Shop",           "Commercial", "shop",          20),
-            PropertyType.Create("مكتب",        "Office",         "Commercial", "office",         21),
-            PropertyType.Create("مستودع",      "Warehouse",      "Commercial", "warehouse",      22),
-            PropertyType.Create("فندق",        "Hotel",          "Commercial", "hotel",          23),
-        };
-
-        await context.PropertyTypes.AddRangeAsync(types);
-        await context.SaveChangesAsync();
+        context.PropertyTypes.Add(
+            PropertyType.Create(
+                code: normalizedCode,
+                nameAr: nameAr,
+                nameEn: nameEn,
+                category: category,
+                icon: icon,
+                sortOrder: sortOrder));
     }
 }

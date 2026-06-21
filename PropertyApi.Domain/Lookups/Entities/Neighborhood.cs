@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using PropertyApi.Domain.Listings.Entities;
 
+
 namespace PropertyApi.Domain.Lookups.Entities;
 
 public class Neighborhood

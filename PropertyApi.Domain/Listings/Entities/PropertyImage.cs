@@ -28,8 +28,8 @@ public class PropertyImage : BaseEntity
 
     /// <summary>Display order (0 = first).</summary>
     public int SortOrder { get; set; } = 0;
-
     // -- حقول جديدة ------------------------------------------
+
 
     /// <summary>
     /// رابط النسخة المصغرة (thumbnail) من Cloudinary.
@@ -44,9 +44,13 @@ public class PropertyImage : BaseEntity
     /// <summary>نوع الصورة — يساعد المستخدم في التصفية</summary>
     public PropertyImageType ImageType { get; set; } = PropertyImageType.General;
 
+
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
 
-    // FK
-    public Guid PropertyId { get; set; }
+
+
+// FK
+public Guid PropertyId { get; set; }
+
     public Property Property { get; set; } = null!;
 }

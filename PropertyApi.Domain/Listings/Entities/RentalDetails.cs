@@ -95,4 +95,6 @@ public class RentalDetails
         IncludesElectricityBill = electricity;
         IncludesInternetBill = internet;
     }
+
 }
+
