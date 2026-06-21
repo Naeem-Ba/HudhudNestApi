@@ -68,9 +68,7 @@ public sealed class AppDbContext
         builder.Entity<IdentityUserLogin<Guid>>().ToTable("UserLogins");
         builder.Entity<IdentityRoleClaim<Guid>>().ToTable("RoleClaims");
         builder.Entity<IdentityUserToken<Guid>>().ToTable("UserTokens");
-        builder.Entity<Notification>().HasQueryFilter(n => !n.IsDeleted);
-        builder.Entity<VisitRequest>().HasQueryFilter(v => !v.IsDeleted);
-        builder.Entity<PropertyReview>().HasQueryFilter(r => !r.IsDeleted);
+
 
         // -- Global soft-delete filter ---------------------------
         // Automatically excludes IsDeleted=true from ALL queries.
@@ -81,6 +79,10 @@ public sealed class AppDbContext
         builder.Entity<Message>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ContactMessage>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<User>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<Notification>().HasQueryFilter(n => !n.IsDeleted);
+        builder.Entity<VisitRequest>().HasQueryFilter(v => !v.IsDeleted);
+        builder.Entity<PropertyReview>().HasQueryFilter(r => !r.IsDeleted);
+        builder.Entity<Transaction>().HasQueryFilter(e => !e.IsDeleted);
 
         builder.Entity<Favorite>().HasQueryFilter(favorite =>!favorite.User.IsDeleted &&!favorite.Property.IsDeleted);
 

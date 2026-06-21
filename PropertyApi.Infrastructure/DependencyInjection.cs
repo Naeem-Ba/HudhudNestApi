@@ -32,10 +32,10 @@ using IdentityEmailSender = Microsoft.AspNetCore.Identity.UI.Services.IEmailSend
 using Microsoft.Extensions.Options;
 using PropertyApi.Infrastructure.Health;
 using Npgsql;
-
-
 using PropertyApi.Application.Analytics.Interfaces;
 using PropertyApi.Infrastructure.Analytics;
+
+
 namespace PropertyApi.Infrastructure;
 
 public static class DependencyInjection
@@ -176,7 +176,7 @@ else
             }
         });
 
-        services.AddIdentity<User, IdentityRole<Guid>>(options =>
+        services.AddIdentity<User, ApplicationRole>(options =>
         {
             options.Password.RequireDigit = true;
             options.Password.RequiredLength = 8;

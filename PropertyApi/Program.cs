@@ -6,7 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using PropertyApi.Application;
 using PropertyApi.Infrastructure;
 using PropertyApi.Middleware;
-using PropertyApi.Seed;
+using PropertyApi.Infrastructure.Persistence.Seeds;
 using System.Security.Claims;
 using PropertyApi.Application.Common.Security;
 using PropertyApi.Domain.Users.Constants;
@@ -19,6 +19,9 @@ using Microsoft.AspNetCore.HttpOverrides;
 using PropertyApi.Security.Csrf;
 using PropertyApi.Security.Headers;
 using PropertyApi.Security.RateLimiting;
+using Microsoft.AspNetCore.Identity;
+using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 var isTestingOrCi =
@@ -458,7 +461,18 @@ var app = builder.Build();
 // -- 8. Run DB Migrations --------------------------------------
 
 
-await IdentitySeeder.SeedRolesAsync(app.Services);
+//await IdentitySeeder.SeedRolesAsync(app.Services);
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
+
+    await CurrencySeed.SeedAsync(db);
+    await GovernoratesSeed.SeedAsync(db);
+    await PropertyTypesSeed.SeedAsync(db);
+    await ApplicationRolesSeed.SeedAsync(roleManager);
+}
 
 // -- 9. Middleware (order is critical) -------------------------
 
