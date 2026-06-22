@@ -1,29 +1,31 @@
 ﻿using System.Globalization;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PropertyApi.Application;
-using PropertyApi.Infrastructure;
-using PropertyApi.Middleware;
-using PropertyApi.Infrastructure.Persistence.Seeds;
-using System.Security.Claims;
+using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Common.Security;
 using PropertyApi.Domain.Users.Constants;
-using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.RateLimiting;
+using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Infrastructure;
 using PropertyApi.Infrastructure.Hubs;
-using PropertyApi.Application.Common.Interfaces;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.HttpOverrides;
+using PropertyApi.Infrastructure.Persistence;
+using PropertyApi.Infrastructure.Persistence.Seeds;
+using PropertyApi.Middleware;
 using PropertyApi.Security.Csrf;
 using PropertyApi.Security.Headers;
 using PropertyApi.Security.RateLimiting;
-using Microsoft.AspNetCore.Identity;
-using PropertyApi.Domain.Users.Entities;
-using PropertyApi.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
+
 var isTestingOrCi =
     builder.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase) ||
     builder.Environment.EnvironmentName.Equals("CI", StringComparison.OrdinalIgnoreCase);
@@ -41,8 +43,10 @@ if (builder.Environment.IsProduction() && !useRedisRateLimiting)
     throw new InvalidOperationException(
         "Redis distributed rate limiting is required in Production. Configure ConnectionStrings:Redis or Redis:ConnectionString.");
 }
+
 var configuredKnownProxies = ReadKnownProxies(builder.Configuration);
 var configuredKnownNetworks = ReadKnownNetworks(builder.Configuration);
+
 var hasConfiguredKnownForwardingSource =
     builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Exists() ||
     builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Exists();
@@ -92,17 +96,16 @@ builder.Services.AddHsts(options =>
     options.Preload = true;
 });
 
-
 // -- 1. Culture -----------------------------------------------
 // Required for Npgsql decimal/timestamp compatibility
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
-// -- 2. Application Layer (MediatR + FluentValidation + Behaviors)
+// -- 2. Application Layer --------------------------------------
 builder.Services.AddApplication();
 
-// -- 3. Infrastructure Layer (DB + Identity + Repos + UoW) ----
+// -- 3. Infrastructure Layer -----------------------------------
 builder.Services.AddInfrastructure(
     builder.Configuration,
     builder.Environment);
@@ -117,7 +120,7 @@ if (useRedisRateLimiting)
         builder.Environment);
 }
 
-// -- 4. JWT Authentication ------------------------------------
+// -- 4. JWT Authentication -------------------------------------
 var jwtSection = builder.Configuration.GetSection("Jwt");
 var jwtKey = jwtSection["Key"]
     ?? throw new InvalidOperationException(
@@ -144,66 +147,65 @@ builder.Services
             ValidIssuer = jwtSection["Issuer"],
             ValidAudience = jwtSection["Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
-                                           Encoding.UTF8.GetBytes(jwtKey)),
+                Encoding.UTF8.GetBytes(jwtKey)),
             ClockSkew = TimeSpan.FromSeconds(30)
         };
 
-            options.Events = new JwtBearerEvents
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
             {
-                OnTokenValidated = async context =>
+                var userIdText = context.Principal?
+                    .FindFirstValue(ClaimTypes.NameIdentifier);
+
+                var tokenSecurityStamp = context.Principal?
+                    .FindFirstValue(CustomClaimTypes.SecurityStamp);
+
+                if (!Guid.TryParse(userIdText, out var userId) ||
+                    string.IsNullOrWhiteSpace(tokenSecurityStamp))
                 {
-                    var userIdText = context.Principal?
-                        .FindFirstValue(ClaimTypes.NameIdentifier);
+                    context.Fail("The token does not contain valid user data.");
+                    return;
+                }
 
-                    var tokenSecurityStamp = context.Principal?
-                        .FindFirstValue(CustomClaimTypes.SecurityStamp);
+                var securityStampValidator = context.HttpContext.RequestServices
+                    .GetRequiredService<IUserSecurityStampValidator>();
 
-                    if (!Guid.TryParse(userIdText, out var userId) ||
-                        string.IsNullOrWhiteSpace(tokenSecurityStamp))
-                    {
-                        context.Fail("The token does not contain valid user data.");
-                        return;
-                    }
+                var validationResult = await securityStampValidator.ValidateAsync(
+                    userId,
+                    tokenSecurityStamp,
+                    context.HttpContext.RequestAborted);
 
-                    var securityStampValidator = context.HttpContext.RequestServices
-                        .GetRequiredService<IUserSecurityStampValidator>();
-
-                    var validationResult = await securityStampValidator.ValidateAsync(
-                        userId,
-                        tokenSecurityStamp,
-                        context.HttpContext.RequestAborted);
-
-                    if (!validationResult.IsValid)
-                    {
-                        context.Fail(validationResult.FailureMessage ?? "The token is no longer valid.");
-                    }
-                },
-
-                OnAuthenticationFailed = context =>
+                if (!validationResult.IsValid)
                 {
-                    if (builder.Environment.IsDevelopment())
-                    {
-                        Console.WriteLine(
-                            $"[JWT] Auth failed: {context.Exception.Message}");
-                    }
+                    context.Fail(validationResult.FailureMessage ?? "The token is no longer valid.");
+                }
+            },
 
-                    return Task.CompletedTask;
-                },
-
-                OnMessageReceived = context =>
+            OnAuthenticationFailed = context =>
+            {
+                if (builder.Environment.IsDevelopment())
                 {
-                    var accessToken = context.Request.Query["access_token"];
-                    var path = context.HttpContext.Request.Path;
+                    Console.WriteLine($"[JWT] Auth failed: {context.Exception.Message}");
+                }
 
-                    if (!string.IsNullOrWhiteSpace(accessToken) &&
-                        path.StartsWithSegments("/notificationHub"))
-                    {
-                        context.Token = accessToken;
-                    }
+                return Task.CompletedTask;
+            },
 
-                    return Task.CompletedTask;
-                },
-            };
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+
+                if (!string.IsNullOrWhiteSpace(accessToken) &&
+                    path.StartsWithSegments("/notificationHub"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            },
+        };
     });
 
 builder.Services.AddAuthorization(options =>
@@ -221,7 +223,8 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("DefaultCors", policy =>
     {
-        if (builder.Environment.IsDevelopment() || builder.Environment.EnvironmentName == "CI")
+        if (builder.Environment.IsDevelopment() ||
+            builder.Environment.EnvironmentName.Equals("CI", StringComparison.OrdinalIgnoreCase))
         {
             policy.AllowAnyOrigin()
                   .AllowAnyHeader()
@@ -241,21 +244,6 @@ builder.Services.AddCors(options =>
         }
     });
 });
-//builder.Services.AddCors(options =>
-//{
-//    options.AddPolicy("DevCors", policy =>
-//        policy.AllowAnyOrigin()
-//              .AllowAnyHeader()
-//              .AllowAnyMethod());
-
-//    options.AddPolicy("ProdCors", policy =>
-//        policy.WithOrigins(
-//                  "https://bizorealestateworld.netlify.app",
-//                  "https://www.bizorealestateworld.com")
-//              .AllowAnyHeader()
-//              .AllowAnyMethod()
-//              .AllowCredentials());
-//});
 
 // -- 6. Controllers + JSON -------------------------------------
 builder.Services
@@ -270,13 +258,11 @@ builder.Services
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = null;
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-        // ReferenceHandler.IgnoreCycles prevents circular nav-property loops
         options.JsonSerializerOptions.ReferenceHandler =
             System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     });
 
-
-
+// -- 7. SignalR ------------------------------------------------
 var signalRBuilder = builder.Services.AddSignalR(options =>
 {
     options.MaximumReceiveMessageSize = 16 * 1024;
@@ -307,14 +293,12 @@ else if (string.Equals(signalRProvider, "AzureSignalR", StringComparison.Ordinal
         "SignalR:Provider=AzureSignalR is configured, but Azure SignalR registration is not implemented in this build.");
 }
 
-
-// -- 7. Swagger ------------------------------------------------
+// -- 8. Swagger ------------------------------------------------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "PropertyApi", Version = "v1" });
 
-    // Allow sending JWT Bearer token from Swagger UI
     c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -322,8 +306,9 @@ builder.Services.AddSwaggerGen(c =>
         Scheme = "bearer",
         BearerFormat = "JWT",
         In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Description = "Enter your JWT token (without 'Bearer ' prefix)"
+        Description = "Enter your JWT token without the 'Bearer ' prefix."
     });
+
     c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
     {
         {
@@ -332,7 +317,7 @@ builder.Services.AddSwaggerGen(c =>
                 Reference = new Microsoft.OpenApi.Models.OpenApiReference
                 {
                     Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                    Id   = "Bearer"
+                    Id = "Bearer"
                 }
             },
             Array.Empty<string>()
@@ -340,6 +325,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+// -- 9. Rate Limiting ------------------------------------------
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -409,6 +395,7 @@ builder.Services.AddRateLimiter(options =>
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             }));
+
     options.AddPolicy("auth-refresh", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: GetClientRateLimitPartitionKey(httpContext),
@@ -457,73 +444,12 @@ builder.Services.AddRateLimiter(options =>
 // --------------------------------------------------------------
 var app = builder.Build();
 
-//// EARLY_PRODUCTION_FORWARDED_HEADERS_REJECTION
-//if (app.Environment.IsProduction())
-//{
-//    app.Use(async (context, next) =>
-//    {
-//        if (RequestHasForwardedHeaders(context.Request))
-//        {
-//            var forwardedHeadersOptions = context.RequestServices
-//                .GetRequiredService<Microsoft.Extensions.Options.IOptions<ForwardedHeadersOptions>>()
-//                .Value;
+// -- 10. Startup Seed ------------------------------------------
+// This seed is protected by PostgreSQL advisory transaction lock to prevent
+// duplicate inserts when multiple WebApplicationFactory instances start in parallel.
+await SeedStartupDataAsync(app.Services);
 
-//            if (!IsKnownForwardingSource(
-//                    context.Connection.RemoteIpAddress,
-//                    forwardedHeadersOptions))
-//            {
-//                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-//                await context.Response.WriteAsync(
-//                    "X-Forwarded-* headers from unknown proxies are not allowed in Production.");
-//                return;
-//            }
-//        }
-
-//        await next();
-//    });
-//}
-// --------------------------------------------------------------
-
-// -- 8. Run DB Migrations --------------------------------------
-
-
-
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
-
-    await CurrencySeed.SeedAsync(db);
-    await GovernoratesSeed.SeedAsync(db);
-    await PropertyTypesSeed.SeedAsync(db);
-    await ApplicationRolesSeed.SeedAsync(roleManager);
-}
-
-// -- 9. Middleware (order is critical) -------------------------
-
-if (app.Environment.IsProduction())
-{
-    app.Use(async (context, next) =>
-    {
-        if (RequestHasForwardedHeaders(context.Request))
-        {
-            var forwardedHeadersOptions = context.RequestServices
-                .GetRequiredService<Microsoft.Extensions.Options.IOptions<ForwardedHeadersOptions>>()
-                .Value;
-
-            if (!IsKnownForwardingSource(
-                    context.Connection.RemoteIpAddress,
-                    forwardedHeadersOptions))
-            {
-                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                return;
-            }
-        }
-
-        await next();
-    });
-}
-
+// -- 11. Middleware order --------------------------------------
 app.UseForwardedHeaders();
 
 if (app.Environment.IsProduction())
@@ -532,16 +458,13 @@ if (app.Environment.IsProduction())
     app.UseHttpsRedirection();
 }
 
-// MUST be first after forwarded headers: catches all unhandled exceptions before CORS headers are set
-// FIX: replaces the inline lambda that had security issues
+// Must be early: catches unhandled exceptions before downstream middleware.
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+
 app.UsePropertyApiSecurityHeaders();
 
-// Swagger / OpenAPI
-// Enabled by default in Development and CI. For Staging, set Swagger:Enabled=true.
-// Do not expose Swagger publicly in Production unless it is protected by network/VPN/auth gateway.
 var swaggerEnabled = app.Environment.IsDevelopment()
-    || app.Environment.EnvironmentName == "CI"
+    || app.Environment.EnvironmentName.Equals("CI", StringComparison.OrdinalIgnoreCase)
     || builder.Configuration.GetValue<bool>("Swagger:Enabled");
 
 if (swaggerEnabled)
@@ -556,10 +479,9 @@ if (swaggerEnabled)
 }
 
 app.UseStaticFiles();
+
 app.UseRouting();
 
-// CORS must run before rate limiting, CSRF, authentication, and authorization.
-// Otherwise browser preflight requests may be rejected before CORS headers are added.
 app.UseCors("DefaultCors");
 
 if (useRedisRateLimiting)
@@ -581,6 +503,51 @@ app.MapHealthChecks("/health");
 app.MapHub<NotificationHub>("/notificationHub");
 
 app.Run();
+
+static async Task SeedStartupDataAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+
+    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
+    var logger = scope.ServiceProvider
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("StartupSeed");
+
+    var providerName = context.Database.ProviderName ?? string.Empty;
+    var isPostgres = providerName.Contains("Npgsql", StringComparison.OrdinalIgnoreCase);
+
+    if (isPostgres)
+    {
+        var strategy = context.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await context.Database.BeginTransactionAsync();
+
+            await context.Database.ExecuteSqlRawAsync(
+                "SELECT pg_advisory_xact_lock(20260621194421::bigint);");
+
+            logger.LogInformation("Startup seed lock acquired.");
+
+            await CurrencySeed.SeedAsync(context);
+            await GovernoratesSeed.SeedAsync(context);
+            await PropertyTypesSeed.SeedAsync(context);
+            await ApplicationRolesSeed.SeedAsync(roleManager);
+
+            await transaction.CommitAsync();
+
+            logger.LogInformation("Startup seed completed.");
+        });
+
+        return;
+    }
+
+    await CurrencySeed.SeedAsync(context);
+    await GovernoratesSeed.SeedAsync(context);
+    await PropertyTypesSeed.SeedAsync(context);
+    await ApplicationRolesSeed.SeedAsync(roleManager);
+}
 
 static string GetClientRateLimitPartitionKey(HttpContext httpContext)
 {
@@ -626,7 +593,10 @@ static IReadOnlyCollection<IPNetwork> ReadKnownNetworks(IConfiguration configura
             continue;
         }
 
-        var cidrParts = value.Split('/', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var cidrParts = value.Split(
+            '/',
+            StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
         var prefixValue = cidrParts[0];
 
         if (!System.Net.IPAddress.TryParse(prefixValue, out var prefix))
@@ -636,6 +606,7 @@ static IReadOnlyCollection<IPNetwork> ReadKnownNetworks(IConfiguration configura
         }
 
         int prefixLength;
+
         if (cidrParts.Length == 2)
         {
             if (!int.TryParse(cidrParts[1], out prefixLength))
@@ -654,7 +625,9 @@ static IReadOnlyCollection<IPNetwork> ReadKnownNetworks(IConfiguration configura
         }
         else
         {
-            prefixLength = prefix.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128;
+            prefixLength = prefix.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+                ? 32
+                : 128;
         }
 
         networks.Add(new IPNetwork(prefix, prefixLength));
@@ -663,34 +636,6 @@ static IReadOnlyCollection<IPNetwork> ReadKnownNetworks(IConfiguration configura
     return networks;
 }
 
-static bool RequestHasForwardedHeaders(HttpRequest request)
-{
-    return request.Headers.ContainsKey("X-Forwarded-For") ||
-           request.Headers.ContainsKey("X-Forwarded-Proto") ||
-           request.Headers.ContainsKey("X-Forwarded-Host");
-}
-
-static bool IsKnownForwardingSource(
-    System.Net.IPAddress? remoteIpAddress,
-    ForwardedHeadersOptions options)
-{
-    if (remoteIpAddress is null)
-    {
-        return false;
-    }
-
-    if (options.KnownProxies.Any(proxy => proxy.Equals(remoteIpAddress)))
-    {
-        return true;
-    }
-
-    return options.KnownNetworks.Any(network => network.Contains(remoteIpAddress));
-}
-
 public partial class Program
 {
 }
-
-
-
-
