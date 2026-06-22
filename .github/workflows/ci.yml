@@ -100,6 +100,20 @@ jobs:
             --project tools/PropertyApi.Migrator/PropertyApi.Migrator.csproj \
             --configuration Release \
             --no-build
+
+      - name: Verify migrated schema
+        run: |
+          PGPASSWORD=postgres psql \
+            -h localhost \
+            -U postgres \
+            -d propertyapi_testing \
+            -c 'select "MigrationId" from "__EFMigrationsHistory" order by "MigrationId" desc limit 5;'
+
+          PGPASSWORD=postgres psql \
+            -h localhost \
+            -U postgres \
+            -d propertyapi_testing \
+            -c "select table_name from information_schema.tables where table_schema = 'public' and table_name in ('Currencies','Governorates','Districts','Neighborhoods','PropertyTypes','Transactions','PropertyReviews','VisitRequests','RentalDetails','SaleDetails') order by table_name;"
         env:
           ASPNETCORE_ENVIRONMENT: CI
           DOTNET_ENVIRONMENT: CI
