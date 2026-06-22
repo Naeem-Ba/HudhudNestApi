@@ -6,6 +6,7 @@ using PropertyApi.Domain.Lookups.Entities;
 using PropertyApi.Domain.Messaging.Entities;
 using PropertyApi.Domain.Users.Entities;
 
+
 namespace PropertyApi.Domain.Listings.Entities;
 
 /// <summary>
@@ -46,7 +47,7 @@ public class Property : AuditableEntity
     public decimal? Deposit { get; set; }   // Security deposit (Kaution)
 
     /// <summary>ISO 4217 currency code (e.g. "EUR", "USD", "SYP").</summary>
-    public string CurrencyCode { get; set; } = "EUR";
+    public string CurrencyCode { get; set; } = "SYP";
 
     // -- Property Details ---------------------------------------
     public int? Rooms { get; set; }
@@ -203,8 +204,8 @@ public class Property : AuditableEntity
         string description,
         Guid ownerId,
         ListingType listingType,
-        string countryCode = "DE",
-        string currencyCode = "EUR")
+        string countryCode = "SY",
+        string currencyCode = "SYP")
     {
         if (string.IsNullOrWhiteSpace(title))
             throw new DomainException("Property title is required.");

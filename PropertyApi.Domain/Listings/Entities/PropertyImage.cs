@@ -30,6 +30,7 @@ public class PropertyImage : BaseEntity
     public int SortOrder { get; set; } = 0;
     // -- حقول جديدة ------------------------------------------
 
+
     /// <summary>
     /// رابط النسخة المصغرة (thumbnail) من Cloudinary.
     /// يُستخدم في قوائم العقارات لتحميل أسرع.
@@ -50,5 +51,6 @@ public class PropertyImage : BaseEntity
 
 // FK
 public Guid PropertyId { get; set; }
+
     public Property Property { get; set; } = null!;
 }

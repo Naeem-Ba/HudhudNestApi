@@ -1,18 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-using PropertyApi.Domain.Users.Entities;
+﻿using Microsoft.AspNetCore.Identity;
 using PropertyApi.Domain.Users.Constants;
-using Microsoft.AspNetCore.Identity;
+using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Infrastructure.Persistence.Seeds;
 
 /// <summary>
-/// يُضيف أدوار النظام بالعربية والإنجليزية.
-/// يستخدم RoleManager<ApplicationRole> ← لا يتعارض مع Identity.
+/// يضيف أدوار النظام بالعربية والإنجليزية.
+/// يستخدم RoleManager<ApplicationRole> حتى لا يتعارض مع Identity.
 /// </summary>
 public static class ApplicationRolesSeed
 {
@@ -20,15 +14,30 @@ public static class ApplicationRolesSeed
     {
         var roles = new[]
         {
-            new ApplicationRole(RoleNames.Admin,  "مدير المنصة"),
-            new ApplicationRole(RoleNames.Agent,  "وسيط عقاري"),
-            new ApplicationRole(RoleNames.User,   "مستخدم"),
+            new ApplicationRole(RoleNames.Admin, "مدير المنصة"),
+            new ApplicationRole(RoleNames.Agent, "وسيط عقاري"),
+            new ApplicationRole(RoleNames.User, "مستخدم"),
         };
 
         foreach (var role in roles)
         {
-            if (!await roleManager.RoleExistsAsync(role.Name!))
-                await roleManager.CreateAsync(role);
+            if (string.IsNullOrWhiteSpace(role.Name))
+                continue;
+
+            if (await roleManager.RoleExistsAsync(role.Name))
+                continue;
+
+            var result = await roleManager.CreateAsync(role);
+
+            if (!result.Succeeded)
+            {
+                var errors = string.Join(
+                    ", ",
+                    result.Errors.Select(e => e.Description));
+
+                throw new InvalidOperationException(
+                    $"Failed to seed role '{role.Name}'. Errors: {errors}");
+            }
         }
     }
 }

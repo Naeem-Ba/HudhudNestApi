@@ -1,10 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Microsoft.EntityFrameworkCore;
 using PropertyApi.Domain.Lookups.Entities;
-using Microsoft.EntityFrameworkCore;
 
 namespace PropertyApi.Infrastructure.Persistence.Seeds;
 
@@ -12,50 +7,84 @@ public static class GovernoratesSeed
 {
     public static async Task SeedAsync(AppDbContext context)
     {
-        if (await context.Governorates.AnyAsync())
+        var damascusId = await EnsureGovernorateAsync(
+            context,
+            nameAr: "دمشق",
+            nameEn: "Damascus",
+            sortOrder: 1);
+
+        await EnsureGovernorateAsync(context, "ريف دمشق", "Rural Damascus", 2);
+        await EnsureGovernorateAsync(context, "حلب", "Aleppo", 3);
+        await EnsureGovernorateAsync(context, "حمص", "Homs", 4);
+        await EnsureGovernorateAsync(context, "حماة", "Hama", 5);
+        await EnsureGovernorateAsync(context, "اللاذقية", "Latakia", 6);
+        await EnsureGovernorateAsync(context, "طرطوس", "Tartus", 7);
+        await EnsureGovernorateAsync(context, "الحسكة", "Al-Hasakah", 8);
+        await EnsureGovernorateAsync(context, "دير الزور", "Deir ez-Zor", 9);
+        await EnsureGovernorateAsync(context, "الرقة", "Raqqa", 10);
+        await EnsureGovernorateAsync(context, "إدلب", "Idlib", 11);
+        await EnsureGovernorateAsync(context, "درعا", "Daraa", 12);
+        await EnsureGovernorateAsync(context, "القنيطرة", "Quneitra", 13);
+        await EnsureGovernorateAsync(context, "السويداء", "As-Suwayda", 14);
+
+        await EnsureDistrictAsync(context, damascusId, "مزة", "Mazzeh", 1);
+        await EnsureDistrictAsync(context, damascusId, "كفر سوسة", "Kafr Sousa", 2);
+        await EnsureDistrictAsync(context, damascusId, "المزرعة", "Al-Mazra'a", 3);
+        await EnsureDistrictAsync(context, damascusId, "الشعلان", "Al-Sha'lan", 4);
+        await EnsureDistrictAsync(context, damascusId, "أبو رمانة", "Abu Rumaneh", 5);
+        await EnsureDistrictAsync(context, damascusId, "المالكي", "Al-Malki", 6);
+        await EnsureDistrictAsync(context, damascusId, "جرمانا", "Jaramana", 7);
+        await EnsureDistrictAsync(context, damascusId, "القدم", "Al-Qadam", 8);
+
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task<int> EnsureGovernorateAsync(
+        AppDbContext context,
+        string nameAr,
+        string nameEn,
+        int sortOrder)
+    {
+        var existingId = await context.Governorates
+            .Where(g => g.NameAr == nameAr && g.CountryCode == "SY")
+            .Select(g => (int?)g.Id)
+            .FirstOrDefaultAsync();
+
+        if (existingId.HasValue)
+            return existingId.Value;
+
+        var governorate = Governorate.Create(
+            nameAr: nameAr,
+            nameEn: nameEn,
+            countryCode: "SY",
+            sortOrder: sortOrder);
+
+        context.Governorates.Add(governorate);
+
+        await context.SaveChangesAsync();
+
+        return governorate.Id;
+    }
+
+    private static async Task EnsureDistrictAsync(
+        AppDbContext context,
+        int governorateId,
+        string nameAr,
+        string nameEn,
+        int sortOrder)
+    {
+        var exists = await context.Districts.AnyAsync(d =>
+            d.GovernorateId == governorateId &&
+            d.NameAr == nameAr);
+
+        if (exists)
             return;
 
-        // 14 محافظة سورية رسمية
-        var governorates = new List<Governorate>
-        {
-            Governorate.Create("دمشق",       "Damascus",     sortOrder: 1),
-            Governorate.Create("ريف دمشق",   "Rural Damascus", sortOrder: 2),
-            Governorate.Create("حلب",        "Aleppo",       sortOrder: 3),
-            Governorate.Create("حمص",        "Homs",         sortOrder: 4),
-            Governorate.Create("حماة",       "Hama",         sortOrder: 5),
-            Governorate.Create("اللاذقية",   "Latakia",      sortOrder: 6),
-            Governorate.Create("طرطوس",      "Tartus",       sortOrder: 7),
-            Governorate.Create("الحسكة",     "Al-Hasakah",   sortOrder: 8),
-            Governorate.Create("دير الزور",  "Deir ez-Zor",  sortOrder: 9),
-            Governorate.Create("الرقة",      "Raqqa",        sortOrder: 10),
-            Governorate.Create("إدلب",       "Idlib",        sortOrder: 11),
-            Governorate.Create("درعا",       "Daraa",        sortOrder: 12),
-            Governorate.Create("القنيطرة",   "Quneitra",     sortOrder: 13),
-            Governorate.Create("السويداء",   "As-Suwayda",   sortOrder: 14),
-        };
-
-        await context.Governorates.AddRangeAsync(governorates);
-        await context.SaveChangesAsync();
-
-        // مثال على بعض المناطق في دمشق (يمكن توسيعه)
-        var damascusId = await context.Governorates
-            .Where(g => g.NameAr == "دمشق")
-            .Select(g => g.Id)
-            .FirstAsync();
-
-        var districts = new List<District>
-        {
-            District.Create(damascusId, "مزة",      "Mazzeh",    sortOrder: 1),
-            District.Create(damascusId, "كفر سوسة",  "Kafr Sousa", sortOrder: 2),
-            District.Create(damascusId, "المزرعة",   "Al-Mazra'a", sortOrder: 3),
-            District.Create(damascusId, "الشعلان",   "Al-Sha'lan", sortOrder: 4),
-            District.Create(damascusId, "أبو رمانة", "Abu Rumaneh", sortOrder: 5),
-            District.Create(damascusId, "المالكي",   "Al-Malki",   sortOrder: 6),
-            District.Create(damascusId, "جرمانا",    "Jaramana",   sortOrder: 7),
-            District.Create(damascusId, "القدم",     "Al-Qadam",   sortOrder: 8),
-        };
-
-        await context.Districts.AddRangeAsync(districts);
-        await context.SaveChangesAsync();
+        context.Districts.Add(
+            District.Create(
+                governorateId: governorateId,
+                nameAr: nameAr,
+                nameEn: nameEn,
+                sortOrder: sortOrder));
     }
 }

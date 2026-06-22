@@ -11,4 +11,5 @@ public enum FurnishingStatus
     Unfurnished,   // غير مفروش
     SemiFurnished, // مفروش جزئياً
     Furnished      // مفروش بالكامل
+
 }

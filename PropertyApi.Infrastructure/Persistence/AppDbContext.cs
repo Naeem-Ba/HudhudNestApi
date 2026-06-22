@@ -14,6 +14,7 @@ using PropertyApi.Domain.Lookups.Entities;
 using PropertyApi.Domain.Transactions.Entities;
 
 
+
 namespace PropertyApi.Infrastructure.Persistence;
 
 /// <summary>
@@ -41,8 +42,6 @@ public sealed class AppDbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<VisitRequest> VisitRequests => Set<VisitRequest>();
     public DbSet<PropertyReview> PropertyReviews => Set<PropertyReview>();
-
-    // ── التغيير #2: إضافة DbSets الجديدة (بعد الـ DbSets الموجودة)
     public DbSet<Currency> Currencies => Set<Currency>();
     public DbSet<Governorate> Governorates => Set<Governorate>();
     public DbSet<District> Districts => Set<District>();

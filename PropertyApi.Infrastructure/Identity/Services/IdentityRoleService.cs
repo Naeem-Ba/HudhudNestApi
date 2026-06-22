@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
+using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Infrastructure.Identity.Services;
 
@@ -11,11 +12,11 @@ namespace PropertyApi.Infrastructure.Identity.Services;
 /// </summary>
 public sealed class IdentityRoleService : IIdentityRoleService
 {
-    private readonly RoleManager<IdentityRole<Guid>> _roleManager;
+    private readonly RoleManager<ApplicationRole> _roleManager;
     private readonly ILogger<IdentityRoleService> _logger;
 
     public IdentityRoleService(
-        RoleManager<IdentityRole<Guid>> roleManager,
+        RoleManager<ApplicationRole> roleManager,
         ILogger<IdentityRoleService> logger)
     {
         _roleManager = roleManager;
@@ -29,7 +30,9 @@ public sealed class IdentityRoleService : IIdentityRoleService
         string role,
         CancellationToken ct = default)
     {
-        var result = await _roleManager.CreateAsync(new IdentityRole<Guid>(role));
+        var result = await _roleManager.CreateAsync(
+            new ApplicationRole(role, role));
+
         return Map(result);
     }
 
@@ -38,8 +41,14 @@ public sealed class IdentityRoleService : IIdentityRoleService
         if (result.Succeeded)
             return IdentityOperationResult.Success();
 
-        var errors = result.Errors.Select(error => error.Description).ToArray();
-        _logger.LogDebug("Identity role operation failed. Errors: {Errors}", string.Join(", ", errors));
+        var errors = result.Errors
+            .Select(error => error.Description)
+            .ToArray();
+
+        _logger.LogDebug(
+            "Identity role operation failed. Errors: {Errors}",
+            string.Join(", ", errors));
+
         return IdentityOperationResult.Failed(errors);
     }
 }

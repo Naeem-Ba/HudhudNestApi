@@ -35,4 +35,6 @@ public enum LegalStatusType
 
     /// <summary>غير معروف — عقارات المناطق النائية أو ما بعد النزاعات</summary>
     Unknown
+
 }
+

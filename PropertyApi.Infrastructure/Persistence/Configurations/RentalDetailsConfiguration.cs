@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using PropertyApi.Domain.Listings.Entities;
 
@@ -15,14 +9,31 @@ public sealed class RentalDetailsConfiguration : IEntityTypeConfiguration<Rental
     public void Configure(EntityTypeBuilder<RentalDetails> builder)
     {
         builder.ToTable("RentalDetails");
+
         builder.HasKey(r => r.Id);
 
-        builder.Property(r => r.MonthlyRent).HasColumnType("decimal(18,2)").IsRequired();
-        builder.Property(r => r.SecurityDepositAmount).HasColumnType("decimal(18,2)");
-        builder.Property(r => r.PaymentFrequency).IsRequired().HasMaxLength(30)
+        // مهم جدًا:
+        // لأن Property عنده Soft Delete Query Filter.
+        // إذا تم حذف العقار منطقيًا، يجب ألا تظهر RentalDetails التابعة له.
+        builder.HasQueryFilter(r => !r.Property!.IsDeleted);
+
+        builder.Property(r => r.MonthlyRent)
+            .HasColumnType("decimal(18,2)")
+            .IsRequired();
+
+        builder.Property(r => r.SecurityDepositAmount)
+            .HasColumnType("decimal(18,2)");
+
+        builder.Property(r => r.PaymentFrequency)
+            .IsRequired()
+            .HasMaxLength(30)
             .HasDefaultValue("Monthly");
-        builder.Property(r => r.AllowedTenantType).HasMaxLength(50);
-        builder.Property(r => r.RenewalPolicy).HasMaxLength(200);
+
+        builder.Property(r => r.AllowedTenantType)
+            .HasMaxLength(50);
+
+        builder.Property(r => r.RenewalPolicy)
+            .HasMaxLength(200);
 
         // One-to-One مع Property
         builder.HasOne(r => r.Property)
@@ -36,6 +47,7 @@ public sealed class RentalDetailsConfiguration : IEntityTypeConfiguration<Rental
             .HasForeignKey(r => r.RentCurrencyId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(r => r.PropertyId).IsUnique();
+        builder.HasIndex(r => r.PropertyId)
+            .IsUnique();
     }
 }

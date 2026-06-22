@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Listings.Entities;
@@ -44,7 +39,7 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
             .IsRequired()
             .HasMaxLength(2)
             .IsFixedLength()
-            .HasDefaultValue("DE");
+            .HasDefaultValue("SY");
 
         builder.Property(p => p.PostalCode)
             .HasMaxLength(20);
@@ -78,7 +73,7 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
             .IsRequired()
             .HasMaxLength(3)
             .IsFixedLength()
-            .HasDefaultValue("EUR");
+            .HasDefaultValue("SYP");
 
         // -- Physical -----------------------------------------
         builder.Property(p => p.Area)
@@ -144,12 +139,12 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
         builder.Property(p => p.LegalStatus)
             .HasConversion<string>()
             .HasMaxLength(50)
-            .HasDefaultValue(LegalStatusType.Unknown);
+            .IsRequired();
 
         builder.Property(p => p.ZoningStatus)
             .HasConversion<string>()
             .HasMaxLength(30)
-            .HasDefaultValue(ZoningStatusType.Unknown);
+            .IsRequired();
 
         builder.Property(p => p.LegalStatusNotes).HasMaxLength(1000);
         builder.Property(p => p.ZoningNotes).HasMaxLength(500);
@@ -194,6 +189,10 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
             .HasForeignKey(p => p.AgentId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        builder.HasOne(p => p.PriceCurrency)
+            .WithMany(c => c.Properties)
+            .HasForeignKey(p => p.PriceCurrencyId)
+            .OnDelete(DeleteBehavior.Restrict);
         // ── الفهارس الجديدة ────────────────────────────────────────────
         builder.HasIndex(p => p.GovernorateId);
         builder.HasIndex(p => p.PropertyTypeId);
@@ -210,7 +209,5 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
         // Composite index for the most common filtered search
         builder.HasIndex(p => new { p.CountryCode, p.City, p.Status, p.IsPublished, p.IsDeleted })
             .HasDatabaseName("IX_Properties_Search");
-
-
     }
 }

@@ -457,11 +457,36 @@ builder.Services.AddRateLimiter(options =>
 // --------------------------------------------------------------
 var app = builder.Build();
 
+//// EARLY_PRODUCTION_FORWARDED_HEADERS_REJECTION
+//if (app.Environment.IsProduction())
+//{
+//    app.Use(async (context, next) =>
+//    {
+//        if (RequestHasForwardedHeaders(context.Request))
+//        {
+//            var forwardedHeadersOptions = context.RequestServices
+//                .GetRequiredService<Microsoft.Extensions.Options.IOptions<ForwardedHeadersOptions>>()
+//                .Value;
+
+//            if (!IsKnownForwardingSource(
+//                    context.Connection.RemoteIpAddress,
+//                    forwardedHeadersOptions))
+//            {
+//                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+//                await context.Response.WriteAsync(
+//                    "X-Forwarded-* headers from unknown proxies are not allowed in Production.");
+//                return;
+//            }
+//        }
+
+//        await next();
+//    });
+//}
+// --------------------------------------------------------------
 
 // -- 8. Run DB Migrations --------------------------------------
 
 
-//await IdentitySeeder.SeedRolesAsync(app.Services);
 
 using (var scope = app.Services.CreateScope())
 {

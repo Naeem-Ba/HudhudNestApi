@@ -60,8 +60,6 @@ public class User : IdentityUser<Guid>
     /// <summary>تاريخ آخر تسجيل دخول — لتتبع النشاط</summary>
     public DateTime? LastLoginAt { get; set; }
 
-
-
     // -- Navigation ---------------------------------------------
     public ICollection<Property> Properties { get; set; } = new List<Property>();
     public ICollection<Message> Messages { get; set; } = new List<Message>();

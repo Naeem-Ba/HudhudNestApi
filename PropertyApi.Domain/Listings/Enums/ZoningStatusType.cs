@@ -15,4 +15,7 @@ public enum ZoningStatusType
     WithinZoning,   // ضمن التنظيم
     OutsideZoning,  // خارج التنظيم (أكثر شيوعاً في المناطق الريفية)
     Unknown
+
 }
+
+
