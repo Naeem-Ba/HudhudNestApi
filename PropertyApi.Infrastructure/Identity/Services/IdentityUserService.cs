@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
@@ -36,7 +36,27 @@ public sealed class IdentityUserService : IIdentityUserService
     public Task<User?> FindByUserNameAsync(string userName, CancellationToken ct = default)
         => _userManager.FindByNameAsync(userName);
 
-    public Task<bool> CheckPasswordAsync(User user, string password, CancellationToken ct = default)
+    
+    public Task<User?> FindByLoginAsync(
+        string loginProvider,
+        string providerKey,
+        CancellationToken ct = default)
+        => _userManager.FindByLoginAsync(loginProvider, providerKey);
+
+    public async Task<IdentityOperationResult> AddLoginAsync(
+        User user,
+        string loginProvider,
+        string providerKey,
+        string providerDisplayName,
+        CancellationToken ct = default)
+    {
+        var result = await _userManager.AddLoginAsync(
+            user,
+            new UserLoginInfo(loginProvider, providerKey, providerDisplayName));
+
+        return Map(result);
+    }
+public Task<bool> CheckPasswordAsync(User user, string password, CancellationToken ct = default)
         => _userManager.CheckPasswordAsync(user, password);
 
     public async Task<IdentityOperationResult> ChangePasswordAsync(
@@ -147,3 +167,4 @@ public sealed class IdentityUserService : IIdentityUserService
         return IdentityOperationResult.Failed(errors);
     }
 }
+

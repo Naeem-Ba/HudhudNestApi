@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,6 +9,7 @@ using PropertyApi.Application.Auth.Commands.Logout;
 using PropertyApi.Application.Auth.Commands.RefreshToken;
 using PropertyApi.Application.Auth.Commands.Register;
 using PropertyApi.Application.Auth.Commands.ResetPassword;
+using PropertyApi.Application.Auth.Commands.SocialLogin;
 
 namespace PropertyApi.Controllers;
 
@@ -180,6 +181,69 @@ public sealed class AuthController : ControllerBase
         return NoContent();
     }
 
+    // POST /api/auth/social/google
+    [HttpPost("social/google")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth-login")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> SocialLoginGoogle(
+        [FromBody] GoogleLoginRequest dto,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(dto.IdToken))
+            return BadRequest(new { message = "idToken is required." });
+
+        var result = await _sender.Send(new SocialLoginCommand(
+            GoogleIdToken: dto.IdToken,
+            AppleIdentityToken: null,
+            AppleAuthorizationCode: null,
+            AppleFirstName: null,
+            AppleLastName: null,
+            IpAddress: GetClientIp()), ct);
+
+        if (!result.Success)
+            return BadRequest(new { message = result.Message });
+
+        return Ok(new
+        {
+            accessToken = result.AccessToken,
+            refreshToken = result.RefreshToken,
+            expiresIn = result.ExpiresIn
+        });
+    }
+
+    // POST /api/auth/social/apple
+    [HttpPost("social/apple")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth-login")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> SocialLoginApple(
+        [FromBody] AppleLoginRequest dto,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(dto.IdentityToken))
+            return BadRequest(new { message = "identityToken is required." });
+
+        var result = await _sender.Send(new SocialLoginCommand(
+            GoogleIdToken: null,
+            AppleIdentityToken: dto.IdentityToken,
+            AppleAuthorizationCode: dto.AuthorizationCode,
+            AppleFirstName: dto.FirstName,
+            AppleLastName: dto.LastName,
+            IpAddress: GetClientIp()), ct);
+
+        if (!result.Success)
+            return BadRequest(new { message = result.Message });
+
+        return Ok(new
+        {
+            accessToken = result.AccessToken,
+            refreshToken = result.RefreshToken,
+            expiresIn = result.ExpiresIn
+        });
+    }
     private string? GetClientIp()
         => HttpContext.Connection.RemoteIpAddress?.ToString();
 }
@@ -195,6 +259,14 @@ public sealed record LoginRequest(
     string Email,
     string Password);
 
+public sealed record GoogleLoginRequest(
+    string IdToken);
+
+public sealed record AppleLoginRequest(
+    string IdentityToken,
+    string? AuthorizationCode,
+    string? FirstName,
+    string? LastName);
 public sealed record RefreshRequest(
     string RefreshToken);
 
@@ -206,3 +278,7 @@ public sealed record ResetPasswordRequest(
     string Token,
     string NewPassword,
     string ConfirmPassword);
+
+
+
+

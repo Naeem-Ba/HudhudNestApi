@@ -16,6 +16,18 @@ public interface IIdentityUserService
 
     Task<User?> FindByUserNameAsync(string userName, CancellationToken ct = default);
 
+    Task<User?> FindByLoginAsync(
+        string loginProvider,
+        string providerKey,
+        CancellationToken ct = default);
+
+    Task<IdentityOperationResult> AddLoginAsync(
+        User user,
+        string loginProvider,
+        string providerKey,
+        string providerDisplayName,
+        CancellationToken ct = default);
+
     Task<bool> CheckPasswordAsync(User user, string password, CancellationToken ct = default);
 
     Task<IdentityOperationResult> ChangePasswordAsync(
@@ -61,4 +73,5 @@ public interface IIdentityUserService
         string token,
         CancellationToken ct = default);
 }
+
 
