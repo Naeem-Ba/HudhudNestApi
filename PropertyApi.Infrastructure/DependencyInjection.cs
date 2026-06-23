@@ -10,6 +10,7 @@ using PropertyApi.Application.Favorites.Interfaces;
 using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Application.Users.Messaging.Interfaces;
 using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Auth.Contracts;
 using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Application.Bookings.Interfaces;
 using PropertyApi.Application.Reviews.Interfaces;
@@ -22,6 +23,7 @@ using PropertyApi.Infrastructure.Services;
 using PropertyApi.Infrastructure.Media;
 using PropertyApi.Infrastructure.Identity.Services;
 using PropertyApi.Infrastructure.Auth.Services;
+using PropertyApi.Infrastructure.Auth;
 using PropertyApi.Infrastructure.Email;
 using PropertyApi.Infrastructure.Auth.Repositories;
 using PropertyApi.Infrastructure.Notifications;
@@ -34,6 +36,7 @@ using PropertyApi.Infrastructure.Health;
 using Npgsql;
 using PropertyApi.Application.Analytics.Interfaces;
 using PropertyApi.Infrastructure.Analytics;
+using PropertyApi.Infrastructure.Settings;
 
 
 namespace PropertyApi.Infrastructure;
@@ -71,6 +74,18 @@ public static class DependencyInjection
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
         services.AddScoped<IIdentityUserService, IdentityUserService>();
         services.AddScoped<IIdentityRoleService, IdentityRoleService>();
+
+        services.AddOptions<SocialAuthSettings>()
+            .Bind(configuration.GetSection(SocialAuthSettings.SectionName));
+
+        services.AddMemoryCache();
+        services.AddScoped<ISocialTokenVerifier, GoogleTokenVerifier>();
+        services.AddHttpClient<AppleTokenVerifier>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
+        services.AddScoped<ISocialTokenVerifier>(sp =>
+            sp.GetRequiredService<AppleTokenVerifier>());
 
         services.AddScoped<IUserSecurityStampReader, IdentitySecurityStampReader>();
         services.AddScoped<IUserSecurityStampValidator, CachedSecurityStampValidator>();
@@ -520,6 +535,10 @@ else
         };
     }
 }
+
+
+
+
 
 
 
