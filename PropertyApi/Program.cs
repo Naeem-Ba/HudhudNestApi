@@ -44,26 +44,7 @@ if (builder.Environment.IsProduction() && !useRedisRateLimiting)
         "Redis distributed rate limiting is required in Production. Configure ConnectionStrings:Redis or Redis:ConnectionString.");
 }
 
-var configuredKnownProxies = ReadKnownProxies(builder.Configuration);
-var configuredKnownNetworks = ReadKnownNetworks(builder.Configuration);
 
-var hasConfiguredKnownForwardingSource =
-    builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Exists() ||
-    builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Exists();
-
-if (builder.Environment.IsProduction() && !hasConfiguredKnownForwardingSource)
-{
-    throw new InvalidOperationException(
-        "ForwardedHeaders:KnownProxies or ForwardedHeaders:KnownNetworks is required in Production.");
-}
-
-if (builder.Environment.IsProduction() &&
-    configuredKnownProxies.Count == 0 &&
-    configuredKnownNetworks.Count == 0)
-{
-    throw new InvalidOperationException(
-        "ForwardedHeaders:KnownProxies or ForwardedHeaders:KnownNetworks must contain at least one valid IP address or CIDR network in Production.");
-}
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -72,22 +53,20 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
         ForwardedHeaders.XForwardedProto |
         ForwardedHeaders.XForwardedHost;
 
-    options.ForwardLimit = 1;
-    options.RequireHeaderSymmetry = true;
+    // Render/Cloudflare can send non-symmetric forwarded headers.
+    // If this remains true, ASP.NET Core may ignore X-Forwarded-Proto
+    // and keep treating external HTTPS requests as internal HTTP.
+    options.RequireHeaderSymmetry = false;
 
+    // Accept forwarded headers from Render's reverse proxy.
+    // Render/Cloudflare proxy IPs can change, so strict KnownProxies is fragile here.
     options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
 
-    foreach (var network in configuredKnownNetworks)
-    {
-        options.KnownNetworks.Add(network);
-    }
-
-    foreach (var proxy in configuredKnownProxies)
-    {
-        options.KnownProxies.Add(proxy);
-    }
+    // Allow processing of the forwarded header chain behind Render/Cloudflare.
+    options.ForwardLimit = null;
 });
+
 
 builder.Services.AddHsts(options =>
 {
@@ -615,87 +594,7 @@ static string GetClientRateLimitPartitionKey(HttpContext httpContext)
     return httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown-client";
 }
 
-static IReadOnlyCollection<System.Net.IPAddress> ReadKnownProxies(IConfiguration configuration)
-{
-    var proxies = new List<System.Net.IPAddress>();
 
-    foreach (var child in configuration.GetSection("ForwardedHeaders:KnownProxies").GetChildren())
-    {
-        var value = child.Value ?? child["Address"] ?? child["IpAddress"];
-
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            continue;
-        }
-
-        if (!System.Net.IPAddress.TryParse(value, out var address))
-        {
-            throw new InvalidOperationException(
-                $"ForwardedHeaders:KnownProxies contains an invalid IP address: {value}.");
-        }
-
-        proxies.Add(address);
-    }
-
-    return proxies;
-}
-
-static IReadOnlyCollection<IPNetwork> ReadKnownNetworks(IConfiguration configuration)
-{
-    var networks = new List<IPNetwork>();
-
-    foreach (var child in configuration.GetSection("ForwardedHeaders:KnownNetworks").GetChildren())
-    {
-        var value = child.Value ?? child["Cidr"] ?? child["Network"];
-        var prefixLengthValue = child["PrefixLength"];
-
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            continue;
-        }
-
-        var cidrParts = value.Split(
-            '/',
-            StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-
-        var prefixValue = cidrParts[0];
-
-        if (!System.Net.IPAddress.TryParse(prefixValue, out var prefix))
-        {
-            throw new InvalidOperationException(
-                $"ForwardedHeaders:KnownNetworks contains an invalid IP network prefix: {value}.");
-        }
-
-        int prefixLength;
-
-        if (cidrParts.Length == 2)
-        {
-            if (!int.TryParse(cidrParts[1], out prefixLength))
-            {
-                throw new InvalidOperationException(
-                    $"ForwardedHeaders:KnownNetworks contains an invalid CIDR prefix length: {value}.");
-            }
-        }
-        else if (!string.IsNullOrWhiteSpace(prefixLengthValue))
-        {
-            if (!int.TryParse(prefixLengthValue, out prefixLength))
-            {
-                throw new InvalidOperationException(
-                    $"ForwardedHeaders:KnownNetworks contains an invalid PrefixLength value: {prefixLengthValue}.");
-            }
-        }
-        else
-        {
-            prefixLength = prefix.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
-                ? 32
-                : 128;
-        }
-
-        networks.Add(new IPNetwork(prefix, prefixLength));
-    }
-
-    return networks;
-}
 
 public partial class Program
 {
