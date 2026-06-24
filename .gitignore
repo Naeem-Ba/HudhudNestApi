@@ -80,3 +80,8 @@ PropertyApi/wwwroot/profile_fotos/
 # Docker local overrides
 compose.override.yml
 docker-compose.override.yml
+# Local Data Protection keys - never commit
+.test-data-protection-keys/
+.prod-migration-keys-temp/
+**/.test-data-protection-keys/
+**/.prod-migration-keys-temp/
