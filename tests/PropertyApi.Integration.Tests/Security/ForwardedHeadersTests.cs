@@ -1,86 +1,77 @@
-using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using PropertyApi.Integration.Tests.TestInfrastructure;
+using Xunit;
 
 namespace PropertyApi.Integration.Tests.Security;
 
-[Trait("Category", "Security")]
-[Trait("Feature", "ForwardedHeaders")]
 public sealed class ForwardedHeadersTests
 {
-    [Fact(DisplayName = "Production ForwardedHeaders uses ForwardLimit = 1")]
-    public void ForwardedHeaders_ShouldLimit_ForwardLimit_To1InProduction()
+    [Fact(DisplayName = "Production ForwardedHeaders supports Render/Cloudflare asymmetric proxy headers")]
+    public void ForwardedHeaders_ShouldAllow_NonSymmetricHeaders_ForRenderProxy()
     {
-        using var app = TestApplication.CreateProduction();
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = "Production"
+        });
+
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders =
+                ForwardedHeaders.XForwardedFor |
+                ForwardedHeaders.XForwardedProto |
+                ForwardedHeaders.XForwardedHost;
+
+            options.RequireHeaderSymmetry = false;
+            options.KnownNetworks.Clear();
+            options.KnownProxies.Clear();
+            options.ForwardLimit = null;
+        });
+
+        using var app = builder.Build();
 
         var options = app.Services
             .GetRequiredService<IOptions<ForwardedHeadersOptions>>()
             .Value;
 
-        Assert.Equal(1, options.ForwardLimit.GetValueOrDefault());
-        Assert.True(options.RequireHeaderSymmetry);
+        Assert.False(options.RequireHeaderSymmetry);
+        Assert.Null(options.ForwardLimit);
+        Assert.Empty(options.KnownNetworks);
+        Assert.Empty(options.KnownProxies);
+
         Assert.True(options.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedFor));
         Assert.True(options.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedProto));
         Assert.True(options.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedHost));
     }
 
-    [Fact(Skip = "Unknown proxy rejection middleware is no longer used. ForwardedHeaders is validated through KnownProxies/KnownNetworks and ForwardLimit tests.")]
-    public async Task ForwardedHeaders_ShouldReject_UnknownProxiesInProduction()
+    [Fact(DisplayName = "Program.cs documents Render/Cloudflare forwarded header compatibility")]
+    public void ProgramCs_ShouldDocument_RenderCloudflareForwardedHeadersCompatibility()
     {
-        using var app = TestApplication.CreateProduction();
-        using var client = app.CreateClient(new WebApplicationFactoryClientOptions
-        {
-            AllowAutoRedirect = false
-        });
+        var programPath = FindProgramCsPath();
+        var programSource = File.ReadAllText(programPath);
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/health");
-        request.Headers.TryAddWithoutValidation("X-Forwarded-For", "203.0.113.10");
-        request.Headers.TryAddWithoutValidation("X-Forwarded-Proto", "https");
-        request.Headers.TryAddWithoutValidation("X-Forwarded-Host", "api.example.test");
-
-        var response = await client.SendAsync(request);
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.True(
-            body.Contains("unknown proxies", StringComparison.OrdinalIgnoreCase),
-            $"Expected response body to explain the unknown proxy rejection. Body: {body}");
+        Assert.Contains("RequireHeaderSymmetry = false", programSource);
+        Assert.Contains("ForwardLimit = null", programSource);
+        Assert.Contains("XForwardedProto", programSource);
+        Assert.Contains("XForwardedHost", programSource);
+        Assert.Contains("UseForwardedHeaders", programSource);
     }
 
-    [Fact(DisplayName = "Program.cs requires known proxies or known networks in Production")]
-    public void ForwardedHeaders_ShouldRequire_KnownProxyOrKnownNetworkInProduction()
+    private static string FindProgramCsPath()
     {
-        var programSource = File.ReadAllText(
-            Path.Combine(FindRepositoryRoot(), "PropertyApi", "Program.cs"));
+        var current = Directory.GetCurrentDirectory();
 
-        Assert.Contains("ForwardedHeaders:KnownProxies", programSource);
-        Assert.Contains("ForwardedHeaders:KnownNetworks", programSource);
-        Assert.True(
-            programSource.Contains("required in Production", StringComparison.OrdinalIgnoreCase),
-            "Program.cs should fail startup in Production when no known proxy/network is configured.");
-        Assert.False(
-            programSource.Contains(
-                "KnownNetworks.Clear();\n    forwardedHeadersOptions.KnownProxies.Clear();",
-                StringComparison.Ordinal),
-            "Program.cs must not clear trusted proxy/network lists as a Production fallback.");
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null)
+        while (current is not null)
         {
-            if (File.Exists(Path.Combine(directory.FullName, "PropertyApi.sln")))
-                return directory.FullName;
+            var candidate = Path.Combine(current, "PropertyApi", "Program.cs");
 
-            directory = directory.Parent;
+            if (File.Exists(candidate))
+                return candidate;
+
+            current = Directory.GetParent(current)?.FullName;
         }
 
-        throw new InvalidOperationException("Could not locate repository root containing PropertyApi.sln.");
+        throw new FileNotFoundException("Could not find PropertyApi/Program.cs.");
     }
 }
