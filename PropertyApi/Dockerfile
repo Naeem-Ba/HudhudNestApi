@@ -1,5 +1,4 @@
-﻿
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+﻿FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 # نسخ ملفات المشروع للاستفادة من Docker layer caching
@@ -10,8 +9,11 @@ COPY PropertyApi.Domain/PropertyApi.Domain.csproj PropertyApi.Domain/
 COPY PropertyApi.Infrastructure/PropertyApi.Infrastructure.csproj PropertyApi.Infrastructure/
 
 RUN dotnet restore "PropertyApi/PropertyApi.csproj"
+
 COPY . .
+
 WORKDIR /src/PropertyApi
+
 RUN dotnet publish -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
@@ -23,4 +25,5 @@ ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
 EXPOSE 8080
 
 COPY --from=build /app/publish .
+
 ENTRYPOINT ["dotnet", "PropertyApi.dll"]

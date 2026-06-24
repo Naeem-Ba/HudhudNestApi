@@ -57,16 +57,11 @@ jobs:
       Jwt__Audience: PropertyApiClient
       Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
       OtpSettings__SecretKey: TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890
-      DATA_PROTECTION_KEYS_PATH: ${{ runner.temp }}/propertyapi-data-protection-keys
+      DataProtection__PersistKeysToDatabase: "true"
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Prepare Data Protection keys directory
-        run: |
-          mkdir -p "$DATA_PROTECTION_KEYS_PATH"
-          echo "DATA_PROTECTION_KEYS_PATH=$DATA_PROTECTION_KEYS_PATH"
 
       - name: Setup .NET ${{ env.DOTNET_VERSION }}
         uses: actions/setup-dotnet@v4
@@ -119,40 +114,14 @@ jobs:
             -h localhost \
             -U postgres \
             -d propertyapi_testing \
-            -c "select table_name from information_schema.tables where table_schema = 'public' and table_name in ('Currencies','Governorates','Districts','Neighborhoods','PropertyTypes','Transactions','PropertyReviews','VisitRequests','RentalDetails','SaleDetails','AuditLogs') order by table_name;"
-        env:
-          ASPNETCORE_ENVIRONMENT: CI
-          DOTNET_ENVIRONMENT: CI
-          ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true
-          ConnectionStrings__Redis: localhost:6379
-          Redis__ConnectionString: localhost:6379
-          RateLimiting__Redis__Enabled: "true"
-          Jwt__Issuer: PropertyApi
-          Jwt__Audience: PropertyApiClient
-          Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
-          OtpSettings__SecretKey: TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890
-          DATA_PROTECTION_KEYS_PATH: ${{ runner.temp }}/propertyapi-data-protection-keys
+            -c "select table_name from information_schema.tables where table_schema = 'public' and table_name in ('Currencies','Governorates','Districts','Neighborhoods','PropertyTypes','Transactions','PropertyReviews','VisitRequests','RentalDetails','SaleDetails','AuditLogs','DataProtectionKeys') order by table_name;"
 
       - name: Run all tests
         run: |
-          mkdir -p "$DATA_PROTECTION_KEYS_PATH"
-
           dotnet test ${{ env.SOLUTION_PATH }} \
             --configuration Release \
             --no-build \
             --verbosity normal
-        env:
-          ASPNETCORE_ENVIRONMENT: CI
-          DOTNET_ENVIRONMENT: CI
-          ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true
-          ConnectionStrings__Redis: localhost:6379
-          Redis__ConnectionString: localhost:6379
-          RateLimiting__Redis__Enabled: "true"
-          Jwt__Issuer: PropertyApi
-          Jwt__Audience: PropertyApiClient
-          Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
-          OtpSettings__SecretKey: TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890
-          DATA_PROTECTION_KEYS_PATH: ${{ runner.temp }}/propertyapi-data-protection-keys
 
   secret-scan:
     name: Secret Scan
