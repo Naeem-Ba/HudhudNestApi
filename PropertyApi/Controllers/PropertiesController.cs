@@ -36,6 +36,7 @@ public sealed class PropertiesController : ControllerBase
 
     // ── GET /api/properties?city=Berlin&minRooms=2&page=1 ───────
     [HttpGet]
+    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] PropertyFilterDto filter,
@@ -47,6 +48,7 @@ public sealed class PropertiesController : ControllerBase
 
     // ── GET /api/properties/geo-search?latitude=51.45&longitude=7.01&radiusKm=5 ──
     [HttpGet("geo-search")]
+    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> SearchNearby(
@@ -59,6 +61,7 @@ public sealed class PropertiesController : ControllerBase
 
     // ── GET /api/properties/{id} ─────────────────────────────────
     [HttpGet("{id:guid}")]
+    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
