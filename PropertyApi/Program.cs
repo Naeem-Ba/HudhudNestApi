@@ -444,10 +444,14 @@ builder.Services.AddRateLimiter(options =>
 // --------------------------------------------------------------
 var app = builder.Build();
 
-// -- 10. Startup Seed ------------------------------------------
+// -- 10. Database startup ---------------------------------------
+// Apply pending EF Core migrations before any seed code runs.
+// Without this, seed queries can fail when newly added tables do not exist yet.
+await ApplyPendingMigrationsAsync(app.Services, app.Configuration, app.Environment);
+
 // This seed is protected by PostgreSQL advisory transaction lock to prevent
-// duplicate inserts when multiple WebApplicationFactory instances start in parallel.
-await SeedStartupDataAsync(app.Services);
+// duplicate inserts when multiple instances start in parallel.
+await SeedStartupDataAsync(app.Services, app.Configuration);
 
 // -- 11. Middleware order --------------------------------------
 app.UseForwardedHeaders();
@@ -504,8 +508,65 @@ app.MapHub<NotificationHub>("/notificationHub");
 
 app.Run();
 
-static async Task SeedStartupDataAsync(IServiceProvider services)
+
+static async Task ApplyPendingMigrationsAsync(
+    IServiceProvider services,
+    IConfiguration configuration,
+    IHostEnvironment environment)
 {
+    var shouldApplyMigrations =
+        configuration.GetValue<bool?>("Database:ApplyMigrationsOnStartup")
+        ?? environment.IsProduction();
+
+    if (!shouldApplyMigrations)
+        return;
+
+    using var scope = services.CreateScope();
+
+    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var logger = scope.ServiceProvider
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("DatabaseMigration");
+
+    var providerName = context.Database.ProviderName ?? string.Empty;
+    var isPostgres = providerName.Contains("Npgsql", StringComparison.OrdinalIgnoreCase);
+
+    if (!isPostgres)
+    {
+        logger.LogInformation(
+            "Skipping startup migrations because database provider is {ProviderName}.",
+            providerName);
+
+        return;
+    }
+
+    var pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToArray();
+
+    if (pendingMigrations.Length == 0)
+    {
+        logger.LogInformation("No pending EF Core migrations found.");
+        return;
+    }
+
+    logger.LogInformation(
+        "Applying {Count} pending EF Core migration(s): {Migrations}",
+        pendingMigrations.Length,
+        string.Join(", ", pendingMigrations));
+
+    await context.Database.MigrateAsync();
+
+    logger.LogInformation("EF Core database migrations completed successfully.");
+}
+
+static async Task SeedStartupDataAsync(
+    IServiceProvider services,
+    IConfiguration configuration)
+{
+    var shouldSeed = configuration.GetValue("Database:SeedOnStartup", true);
+
+    if (!shouldSeed)
+        return;
+
     using var scope = services.CreateScope();
 
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
