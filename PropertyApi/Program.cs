@@ -6,7 +6,6 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -226,13 +225,7 @@ builder.Services.AddCors(options =>
 
 // -- 6. Controllers + JSON -------------------------------------
 builder.Services
-    .AddControllers(options =>
-    {
-        if (builder.Environment.IsProduction())
-        {
-            options.Filters.Add(new RequireHttpsAttribute());
-        }
-    })
+    .AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = null;
@@ -438,6 +431,9 @@ app.UseForwardedHeaders();
 if (app.Environment.IsProduction())
 {
     app.UseHsts();
+}
+else
+{
     app.UseHttpsRedirection();
 }
 

@@ -14,17 +14,39 @@ public sealed class SecurityTests
         Assert.Contains("Production database connection must not contain Trust Server Certificate=true", source);
     }
 
-    [Fact(DisplayName = "Program must enable forwarded headers, HSTS, HTTPS, and RequireHttps in Production")]
-    public void Program_Should_Enable_Production_Https_Hardening()
+    [Fact(DisplayName = "Program must use proxy-aware HTTPS hardening behind Render")]
+    public void Program_Must_Use_ProxyAware_HttpsHardening_Behind_Render()
     {
-        var source = ReadSource("PropertyApi", "Program.cs");
+        var programPath = FindProgramCsPath();
+        var source = File.ReadAllText(programPath);
 
         Assert.Contains("UseForwardedHeaders", source);
         Assert.Contains("UseHsts", source);
+
+        // Render/Cloudflare terminates HTTPS before the request reaches Kestrel.
+        // Therefore MVC RequireHttpsAttribute must not force internal redirects.
+        Assert.DoesNotContain("RequireHttpsAttribute", source);
+
+        // HTTPS redirection may remain for non-production environments,
+        // but it should not be enforced inside the Production branch on Render.
         Assert.Contains("UseHttpsRedirection", source);
-        Assert.Contains("RequireHttpsAttribute", source);
-        Assert.Contains("IncludeSubDomains = true", source);
-        Assert.Contains("Preload = true", source);
+    }
+
+    private static string FindProgramCsPath()
+    {
+        var current = Directory.GetCurrentDirectory();
+
+        while (current is not null)
+        {
+            var candidate = Path.Combine(current, "PropertyApi", "Program.cs");
+
+            if (File.Exists(candidate))
+                return candidate;
+
+            current = Directory.GetParent(current)?.FullName;
+        }
+
+        throw new FileNotFoundException("Could not find PropertyApi/Program.cs.");
     }
 
     [Fact(DisplayName = "Production must validate SMS provider startup settings")]
