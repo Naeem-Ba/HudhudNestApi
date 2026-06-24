@@ -57,10 +57,16 @@ jobs:
       Jwt__Audience: PropertyApiClient
       Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
       OtpSettings__SecretKey: TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890
+      DATA_PROTECTION_KEYS_PATH: ${{ runner.temp }}/propertyapi-data-protection-keys
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Prepare Data Protection keys directory
+        run: |
+          mkdir -p "$DATA_PROTECTION_KEYS_PATH"
+          echo "DATA_PROTECTION_KEYS_PATH=$DATA_PROTECTION_KEYS_PATH"
 
       - name: Setup .NET ${{ env.DOTNET_VERSION }}
         uses: actions/setup-dotnet@v4
@@ -113,7 +119,7 @@ jobs:
             -h localhost \
             -U postgres \
             -d propertyapi_testing \
-            -c "select table_name from information_schema.tables where table_schema = 'public' and table_name in ('Currencies','Governorates','Districts','Neighborhoods','PropertyTypes','Transactions','PropertyReviews','VisitRequests','RentalDetails','SaleDetails') order by table_name;"
+            -c "select table_name from information_schema.tables where table_schema = 'public' and table_name in ('Currencies','Governorates','Districts','Neighborhoods','PropertyTypes','Transactions','PropertyReviews','VisitRequests','RentalDetails','SaleDetails','AuditLogs') order by table_name;"
         env:
           ASPNETCORE_ENVIRONMENT: CI
           DOTNET_ENVIRONMENT: CI
@@ -125,9 +131,12 @@ jobs:
           Jwt__Audience: PropertyApiClient
           Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
           OtpSettings__SecretKey: TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890
+          DATA_PROTECTION_KEYS_PATH: ${{ runner.temp }}/propertyapi-data-protection-keys
 
       - name: Run all tests
         run: |
+          mkdir -p "$DATA_PROTECTION_KEYS_PATH"
+
           dotnet test ${{ env.SOLUTION_PATH }} \
             --configuration Release \
             --no-build \
@@ -143,6 +152,7 @@ jobs:
           Jwt__Audience: PropertyApiClient
           Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
           OtpSettings__SecretKey: TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890
+          DATA_PROTECTION_KEYS_PATH: ${{ runner.temp }}/propertyapi-data-protection-keys
 
   secret-scan:
     name: Secret Scan
@@ -196,3 +206,13 @@ jobs:
           fi
 
           echo "No environment-specific appsettings tracked."
+
+      - name: Check no local Data Protection keys are tracked
+        run: |
+          if git ls-files | grep -E '(^|/)\.test-data-protection-keys/|(^|/)\.prod-migration-keys-temp/|DataProtection-Keys/|key-[0-9a-fA-F-]+\.xml$'; then
+            echo "ERROR: Local Data Protection keys found in repository."
+            echo "Remove them from Git history/commit and keep them only in runtime storage."
+            exit 1
+          fi
+
+          echo "No local Data Protection keys tracked."
