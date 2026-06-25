@@ -45,4 +45,17 @@ public sealed class VisitRepository : IVisitRepository
             .Where(v => v.PropertyId == propertyId)
             .OrderByDescending(v => v.CreatedAt)
             .ToListAsync(ct);
+
+    public async Task<bool> HasCompletedVisitAsync(
+    Guid propertyId,
+    Guid requesterId,
+    CancellationToken cancellationToken = default)
+    {
+        return await _db.VisitRequests
+            .AnyAsync(v =>
+                v.PropertyId == propertyId &&
+                v.RequesterId == requesterId &&
+                v.Status == VisitStatus.Completed,
+                cancellationToken);
+    }
 }

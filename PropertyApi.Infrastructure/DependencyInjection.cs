@@ -119,25 +119,25 @@ public static class DependencyInjection
             configuration.GetSection(EmailOptions.SectionName));
 
         if (environment.IsProduction())
-{
-    services.AddScoped<SmtpEmailSender>();
+        {
+            services.AddScoped<SmtpEmailSender>();
 
-    services.AddScoped<IdentityEmailSender>(
-        sp => sp.GetRequiredService<SmtpEmailSender>());
+            services.AddScoped<IdentityEmailSender>(
+                sp => sp.GetRequiredService<SmtpEmailSender>());
 
-    services.AddScoped<IApplicationEmailSender>(
-        sp => sp.GetRequiredService<SmtpEmailSender>());
-}
-else
-{
-    services.AddScoped<ConsoleEmailSender>();
+            services.AddScoped<IApplicationEmailSender>(
+                sp => sp.GetRequiredService<SmtpEmailSender>());
+        }
+        else
+        {
+            services.AddScoped<ConsoleEmailSender>();
 
-    services.AddScoped<IdentityEmailSender>(
-        sp => sp.GetRequiredService<ConsoleEmailSender>());
+            services.AddScoped<IdentityEmailSender>(
+                sp => sp.GetRequiredService<ConsoleEmailSender>());
 
-    services.AddScoped<IApplicationEmailSender>(
-        sp => sp.GetRequiredService<ConsoleEmailSender>());
-}
+            services.AddScoped<IApplicationEmailSender>(
+                sp => sp.GetRequiredService<ConsoleEmailSender>());
+        }
 
         // Ã¢â€â‚¬Ã¢â€â‚¬ OTP / SMS Auth Services Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         services.AddOptions<SmsProviderOptions>()
@@ -185,9 +185,17 @@ else
         {
             var connectionString = ResolveConnectionString(configuration, environment);
 
-            var safeBuilder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
-            Console.WriteLine(
-                $"DB-CONFIG host={safeBuilder.Host}; database={safeBuilder.Database}; username={safeBuilder.Username}; ssl={safeBuilder.SslMode}");
+            // ✅ إصلاح H-1: حُذف Console.WriteLine الذي كان يُسرِّب بيانات الاتصال بـ DB.
+            //
+            // المشكلة القديمة: كان يطبع Host + Database + Username في stdout، مما يجعلها
+            // مرئية في Azure Log Stream وأي Log Aggregator ويساعد المهاجم في تحديد هدفه.
+            //
+            // القاعدة الذهبية: لا تُسجِّل أي بيانات اتصال في Startup.
+            // إذا أردت التحقق من الاتصال، استخدم Health Check /health بدلاً من ذلك.
+            //
+            // إذا كنت بحاجة لـ Logging أمين هنا، استخدم فقط:
+            //   logger.LogInformation("DB connected: Host={Host}", safeBuilder.Host);
+            // ولا تُسجِّل Username أو Database Name أبداً.
 
             options.UseNpgsql(connectionString);
 
@@ -239,36 +247,36 @@ else
         var redisConnectionString = configuration.GetConnectionString("Redis")
     ?? configuration["Redis:ConnectionString"];
 
-var isTestingOrCi =
-    environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase) ||
-    environment.EnvironmentName.Equals("CI", StringComparison.OrdinalIgnoreCase);
+        var isTestingOrCi =
+            environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase) ||
+            environment.EnvironmentName.Equals("CI", StringComparison.OrdinalIgnoreCase);
 
-if (environment.IsProduction())
-{
-    if (string.IsNullOrWhiteSpace(redisConnectionString))
-    {
-        throw new InvalidOperationException(
-            "Redis is required in Production for distributed security stamp caching. Configure ConnectionStrings:Redis or Redis:ConnectionString.");
-    }
+        if (environment.IsProduction())
+        {
+            if (string.IsNullOrWhiteSpace(redisConnectionString))
+            {
+                throw new InvalidOperationException(
+                    "Redis is required in Production for distributed security stamp caching. Configure ConnectionStrings:Redis or Redis:ConnectionString.");
+            }
 
-    services.AddStackExchangeRedisCache(options =>
-    {
-        options.Configuration = redisConnectionString;
-        options.InstanceName = "PropertyApi:";
-    });
-}
-else if (!isTestingOrCi && !string.IsNullOrWhiteSpace(redisConnectionString))
-{
-    services.AddStackExchangeRedisCache(options =>
-    {
-        options.Configuration = redisConnectionString;
-        options.InstanceName = "PropertyApi:";
-    });
-}
-else
-{
-    services.AddDistributedMemoryCache();
-}
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnectionString;
+                options.InstanceName = "PropertyApi:";
+            });
+        }
+        else if (!isTestingOrCi && !string.IsNullOrWhiteSpace(redisConnectionString))
+        {
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnectionString;
+                options.InstanceName = "PropertyApi:";
+            });
+        }
+        else
+        {
+            services.AddDistributedMemoryCache();
+        }
         services.AddScoped<ICommonLookupService, CommonLookupService>();
 
         services.AddScoped<PostGisHealthCheck>();
@@ -613,10 +621,3 @@ else
         };
     }
 }
-
-
-
-
-
-
-
