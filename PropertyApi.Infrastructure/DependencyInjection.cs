@@ -204,7 +204,7 @@ else
             options.Password.RequiredLength = 8;
             options.Password.RequireNonAlphanumeric = false;
             options.Password.RequireUppercase = true;
-            options.User.RequireUniqueEmail = false;
+            options.User.RequireUniqueEmail = true;
         })
         .AddEntityFrameworkStores<AppDbContext>()
         .AddDefaultTokenProviders();
@@ -610,7 +610,6 @@ else
         };
     }
 }
-
 
 
 

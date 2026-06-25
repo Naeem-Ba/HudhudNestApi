@@ -62,6 +62,7 @@ public sealed class PropertyRepository : IPropertyRepository
         CancellationToken ct = default)
     {
         var query = _db.Properties
+            .AsNoTracking()
             .Include(p => p.Owner)
             .Include(p => p.Images.Where(i => i.IsMain))
             .AsQueryable();
@@ -194,6 +195,7 @@ public sealed class PropertyRepository : IPropertyRepository
         CancellationToken ct = default)
     {
         return await _db.Properties
+            .AsNoTracking()
             .Where(p => p.OwnerId == ownerId)
             .Include(p => p.Images.Where(i => i.IsMain))
             .OrderByDescending(p => p.CreatedAt)

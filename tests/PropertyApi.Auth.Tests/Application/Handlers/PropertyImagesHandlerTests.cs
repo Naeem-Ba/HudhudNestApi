@@ -53,7 +53,7 @@ public sealed class PropertyImagesHandlerTests
             new UploadPropertyImagesCommand(
                 property.Id,
                 ownerId,
-                [new UploadPropertyImageFileDto(new MemoryStream([1, 2, 3]), "image.jpg", "image/jpeg", 3)]),
+                [new UploadPropertyImageFileDto(new MemoryStream([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]), "image.jpg", "image/jpeg", 6)]),
             CancellationToken.None);
 
         Assert.Equal(PropertyImageMutationStatus.Success, result.Status);
