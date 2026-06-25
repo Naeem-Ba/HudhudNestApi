@@ -233,11 +233,44 @@ builder.Services.AddCors(options =>
                     "Cors:AllowedOrigins is required outside Development.");
             }
 
+            // ✅ إصلاح H-2: إضافة AllowCredentials() لـ Production CORS.
+            //
+            // المشكلة القديمة: كان AllowCredentials() مفقوداً في Production،
+            // مما كان يُسبِّب فشل SignalR long-polling وSSE في المتصفح.
+            //
+            // لماذا يحتاج SignalR لـ AllowCredentials؟
+            //   SignalR يُرسل Authorization header في كل طلب.
+            //   المتصفح يرفض إرسال Credentials إلى Origin غير مُصرَّح به.
+            //   بدون AllowCredentials() → المتصفح يمنع الطلب → الإشعارات الفورية تفشل.
+            //
+            // ⚠️ قاعدة مهمة: AllowCredentials() لا تعمل مع AllowAnyOrigin().
+            //   يجب دائماً استخدامها مع WithOrigins() محدد — وهو ما نفعله هنا.
             policy.WithOrigins(allowedOrigins)
                   .AllowAnyHeader()
-                  .AllowAnyMethod();
+                  .AllowAnyMethod()
+                  .AllowCredentials(); // ✅ مطلوب لـ SignalR + Cookies
         }
     });
+});
+
+// -- 5.5 Output Cache (Redis-backed) ──────────────────────────
+// ✅ إصلاح M-2: استبدال ResponseCache المحلي بـ OutputCache الموزَّع.
+//
+// المشكلة القديمة: [ResponseCache(Duration=300)] يخزن في ذاكرة Server واحد.
+// عند تشغيل عدة Instances في Production، كل Instance يُنفِّذ الـ Query المكلفة.
+//
+// الإصلاح: OutputCache يدعم Redis → الـ Cache مشترك بين كل Instances.
+//
+// التعليم:
+//   ResponseCache = يحفظ في RAM للـ Server الحالي فقط ❌
+//   OutputCache   = يحفظ في Redis مشترك بين كل الـ Servers ✅
+builder.Services.AddOutputCache(options =>
+{
+    // سياسة "market-insights": cache لمدة 5 دقائق + يمكن إبطالها بـ Tag
+    options.AddPolicy("market-insights", policy =>
+        policy.Expire(TimeSpan.FromMinutes(5))
+              .Tag("analytics")    // يمكن إبطال الـ cache بـ tag عند تحديث البيانات
+              .SetVaryByQuery()); // يحفظ نسخة مختلفة لكل countryCode مختلف
 });
 
 // -- 6. Controllers + JSON -------------------------------------
@@ -480,6 +513,10 @@ app.UseRouting();
 
 app.UseCors("DefaultCors");
 
+// ✅ إصلاح M-2 (جزء 2): تفعيل OutputCache في الـ Pipeline.
+// يجب أن يأتي بعد UseCors وقبل UseAuthentication.
+app.UseOutputCache();
+
 if (useRedisRateLimiting)
 {
     app.UseRedisRateLimiting();
@@ -602,9 +639,33 @@ static async Task SeedStartupDataAsync(
     await ApplicationRolesSeed.SeedAsync(roleManager);
 }
 
+// ✅ إصلاح M-3: تقسيم Rate Limiting باستخدام UserId للمستخدمين المسجلين.
+//
+// المشكلة القديمة: كان يعتمد على IP فقط، مما يسمح للمستخدم الخبيث
+// بتجاوز الحدود باستخدام VPN أو IPs مختلفة.
+//
+// الإصلاح:
+//   - المستخدم المسجل  → partition بـ "user:{userId}"  (أكثر دقة وأمناً)
+//   - المستخدم الزائر  → partition بـ "ip:{ipAddress}"  (كما كان)
+//
+// التعليم: لماذا هذا أفضل؟
+//   الـ IP يمكن تغييره بسهولة (VPN). لكن الـ UserId ثابت في الـ Token.
+//   حتى لو غيّر المهاجم IP، نفس الـ UserId سيبقى محدود.
 static string GetClientRateLimitPartitionKey(HttpContext httpContext)
 {
-    return httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown-client";
+    // نقرأ UserId من الـ JWT Token إذا كان المستخدم مسجلاً
+    var userId = httpContext.User?
+        .FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+
+    // المستخدم المسجل: نستخدم UserId كـ partition key
+    if (!string.IsNullOrWhiteSpace(userId))
+    {
+        return $"user:{userId}";
+    }
+
+    // الزائر غير المسجل: نستخدم IP كـ partition key (كما كان)
+    var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown-client";
+    return $"ip:{ip}";
 }
 
 static bool TryParseCidr(
