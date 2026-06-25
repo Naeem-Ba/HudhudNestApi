@@ -32,7 +32,7 @@ public sealed class ContactMessageConfiguration : IEntityTypeConfiguration<Conta
             .HasMaxLength(5000);
 
         builder.Property(c => c.IpAddress)
-            .HasMaxLength(45);  // IPv6 max length
+            .HasMaxLength(512);  // IPv6 max length
 
         builder.HasIndex(c => c.IsRead);
         builder.HasIndex(c => c.CreatedAt);
