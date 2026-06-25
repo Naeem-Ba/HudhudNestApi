@@ -270,7 +270,7 @@ builder.Services.AddOutputCache(options =>
     options.AddPolicy("market-insights", policy =>
         policy.Expire(TimeSpan.FromMinutes(5))
               .Tag("analytics")    // يمكن إبطال الـ cache بـ tag عند تحديث البيانات
-              .SetVaryByQuery()); // يحفظ نسخة مختلفة لكل countryCode مختلف
+              .SetVaryByQuery("*")); // يحفظ نسخة مختلفة لكل countryCode مختلف
 });
 
 // -- 6. Controllers + JSON -------------------------------------
