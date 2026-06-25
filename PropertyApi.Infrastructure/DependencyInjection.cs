@@ -204,7 +204,10 @@ else
             options.Password.RequiredLength = 8;
             options.Password.RequireNonAlphanumeric = false;
             options.Password.RequireUppercase = true;
-            options.User.RequireUniqueEmail = true;
+            // Phone-only accounts are valid in this application and start without
+            // an email address. Email uniqueness is enforced explicitly in the
+            // email registration/add-email flows and by the database unique index.
+            options.User.RequireUniqueEmail = false;
         })
         .AddEntityFrameworkStores<AppDbContext>()
         .AddDefaultTokenProviders();
