@@ -6,6 +6,16 @@ namespace PropertyApi.Application.Listings.Validators;
 public sealed class UpdatePropertyCommandValidator
     : AbstractValidator<UpdatePropertyCommand>
 {
+    private static readonly HashSet<string> ValidCountryCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "DE", "SY", "US", "GB", "FR", "AE", "SA", "TR", "EG", "JO", "LB"
+    };
+
+    private static readonly HashSet<string> ValidCurrencyCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "EUR", "USD", "GBP", "SYP", "TRY", "AED", "SAR", "EGP", "JOD", "LBP"
+    };
+
     public UpdatePropertyCommandValidator()
     {
         RuleFor(command => command.PropertyId)
@@ -39,6 +49,8 @@ public sealed class UpdatePropertyCommandValidator
 
         RuleFor(command => command.CountryCode)
             .Length(2)
+            .Must(countryCode => countryCode is not null && ValidCountryCodes.Contains(countryCode))
+            .WithMessage("Invalid ISO 3166-1 country code.")
             .When(command => command.CountryCode is not null);
 
         RuleFor(command => command.PostalCode)
@@ -47,6 +59,8 @@ public sealed class UpdatePropertyCommandValidator
 
         RuleFor(command => command.CurrencyCode)
             .Length(3)
+            .Must(currencyCode => currencyCode is not null && ValidCurrencyCodes.Contains(currencyCode))
+            .WithMessage("Invalid ISO 4217 currency code.")
             .When(command => command.CurrencyCode is not null);
 
         RuleFor(command => command.Latitude)
@@ -56,6 +70,11 @@ public sealed class UpdatePropertyCommandValidator
         RuleFor(command => command.Longitude)
             .InclusiveBetween(-180, 180)
             .When(command => command.Longitude.HasValue);
+
+        RuleFor(command => command)
+            .Must(command => command.Latitude.HasValue == command.Longitude.HasValue)
+            .WithMessage("Both Latitude and Longitude must be provided together, or neither.")
+            .When(command => command.Latitude.HasValue || command.Longitude.HasValue);
 
         RuleFor(command => command.ColdRent)
             .GreaterThan(0)
@@ -68,6 +87,13 @@ public sealed class UpdatePropertyCommandValidator
         RuleFor(command => command.PurchasePrice)
             .GreaterThan(0)
             .When(command => command.PurchasePrice.HasValue);
+
+        RuleFor(command => command)
+            .Must(command =>
+                !command.WarmRent.HasValue ||
+                !command.ColdRent.HasValue ||
+                command.WarmRent >= command.ColdRent)
+            .WithMessage("WarmRent must be greater than or equal to ColdRent.");
 
         RuleFor(command => command.Deposit)
             .GreaterThanOrEqualTo(0)

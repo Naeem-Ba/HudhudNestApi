@@ -1,3 +1,4 @@
+using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,8 +9,8 @@ namespace PropertyApi.Integration.Tests.Security;
 
 public sealed class ForwardedHeadersTests
 {
-    [Fact(DisplayName = "Production ForwardedHeaders supports Render/Cloudflare asymmetric proxy headers")]
-    public void ForwardedHeaders_ShouldAllow_NonSymmetricHeaders_ForRenderProxy()
+    [Fact(DisplayName = "Production ForwardedHeaders should use bounded trusted proxy settings")]
+    public void ForwardedHeaders_ShouldUse_BoundedTrustedProxySettings()
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -24,9 +25,8 @@ public sealed class ForwardedHeadersTests
                 ForwardedHeaders.XForwardedHost;
 
             options.RequireHeaderSymmetry = false;
-            options.KnownNetworks.Clear();
-            options.KnownProxies.Clear();
-            options.ForwardLimit = null;
+            options.ForwardLimit = 1;
+            options.KnownProxies.Add(IPAddress.Parse("203.0.113.1"));
         });
 
         using var app = builder.Build();
@@ -36,23 +36,26 @@ public sealed class ForwardedHeadersTests
             .Value;
 
         Assert.False(options.RequireHeaderSymmetry);
-        Assert.Null(options.ForwardLimit);
-        Assert.Empty(options.KnownNetworks);
-        Assert.Empty(options.KnownProxies);
+        Assert.Equal(1, options.ForwardLimit);
+        Assert.Contains(IPAddress.Parse("203.0.113.1"), options.KnownProxies);
 
         Assert.True(options.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedFor));
         Assert.True(options.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedProto));
         Assert.True(options.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedHost));
     }
 
-    [Fact(DisplayName = "Program.cs documents Render/Cloudflare forwarded header compatibility")]
-    public void ProgramCs_ShouldDocument_RenderCloudflareForwardedHeadersCompatibility()
+    [Fact(DisplayName = "Program.cs keeps forwarded headers configurable and bounded")]
+    public void ProgramCs_ShouldKeepForwardedHeaders_ConfigurableAndBounded()
     {
         var programPath = FindProgramCsPath();
         var programSource = File.ReadAllText(programPath);
 
         Assert.Contains("RequireHeaderSymmetry = false", programSource);
-        Assert.Contains("ForwardLimit = null", programSource);
+        Assert.Contains("ForwardedHeaders", programSource);
+        Assert.Contains("ForwardLimit", programSource);
+        Assert.Contains("KnownProxies", programSource);
+        Assert.Contains("KnownNetworks", programSource);
+        Assert.Contains("TrustAllProxies", programSource);
         Assert.Contains("XForwardedProto", programSource);
         Assert.Contains("XForwardedHost", programSource);
         Assert.Contains("UseForwardedHeaders", programSource);

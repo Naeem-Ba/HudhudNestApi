@@ -16,6 +16,7 @@ namespace PropertyApi.Controllers;
 public sealed class PropertyImagesController : ControllerBase
 {
     private readonly ISender _sender;
+    private const int MaxFilesPerUpload = 10;
 
     public PropertyImagesController(ISender sender)
         => _sender = sender;
@@ -34,6 +35,9 @@ public sealed class PropertyImagesController : ControllerBase
     {
         if (files is null || files.Count == 0)
             return BadRequest(new { message = "No files uploaded." });
+
+        if (files.Count > MaxFilesPerUpload)
+            return BadRequest(new { message = $"Upload at most {MaxFilesPerUpload} files per request." });
 
         var userId = GetCurrentUserId();
         if (userId is null)

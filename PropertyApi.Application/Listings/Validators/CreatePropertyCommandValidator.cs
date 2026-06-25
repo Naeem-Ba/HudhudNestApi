@@ -41,6 +41,18 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
             .NotEmpty()
             .MaximumLength(150);
 
+        RuleFor(x => x.Street)
+            .NotEmpty()
+            .MaximumLength(300);
+
+        RuleFor(x => x.Region)
+            .MaximumLength(150)
+            .When(x => x.Region is not null);
+
+        RuleFor(x => x.PostalCode)
+            .MaximumLength(20)
+            .When(x => x.PostalCode is not null);
+
         RuleFor(x => x.CountryCode)
             .NotEmpty()
             .Length(2)
@@ -70,6 +82,9 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
             .WithMessage("Warm rent must be greater than zero.")
             .When(x => x.ListingType == ListingType.ForRent && x.WarmRent.HasValue);
 
+        RuleFor(x => x)
+            .Must(x => !x.WarmRent.HasValue || !x.ColdRent.HasValue || x.WarmRent >= x.ColdRent)
+            .WithMessage("WarmRent must be greater than or equal to ColdRent.");
 
         RuleFor(x => x.PurchasePrice)
             .NotNull()
@@ -102,6 +117,14 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
             .Must(x => x.Latitude.HasValue == x.Longitude.HasValue)
             .WithMessage("Both Latitude and Longitude must be provided together, or neither.");
 
+        RuleFor(x => x.Deposit)
+            .GreaterThanOrEqualTo(0)
+            .When(x => x.Deposit.HasValue);
+
+        RuleFor(x => x.AdditionalCosts)
+            .GreaterThanOrEqualTo(0)
+            .When(x => x.AdditionalCosts.HasValue);
+
         RuleFor(x => x.Rooms)
             .InclusiveBetween(1, 50)
             .When(x => x.Rooms.HasValue);
@@ -110,6 +133,10 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
             .GreaterThan(10)
             .When(x => x.Area.HasValue)
             .WithMessage("Area must be greater than 10 m\u00B2.");
+
+        RuleFor(x => x.Floor)
+            .GreaterThanOrEqualTo(0)
+            .When(x => x.Floor.HasValue);
     }
 }
 

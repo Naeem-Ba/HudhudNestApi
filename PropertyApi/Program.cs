@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.Security.Claims;
+using System.Net;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
@@ -47,23 +48,39 @@ if (builder.Environment.IsProduction() && !useRedisRateLimiting)
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
+    var forwardedHeadersSection = builder.Configuration.GetSection("ForwardedHeaders");
+
     options.ForwardedHeaders =
         ForwardedHeaders.XForwardedFor |
         ForwardedHeaders.XForwardedProto |
         ForwardedHeaders.XForwardedHost;
 
-    // Render/Cloudflare can send non-symmetric forwarded headers.
-    // If this remains true, ASP.NET Core may ignore X-Forwarded-Proto
-    // and keep treating external HTTPS requests as internal HTTP.
+    // Some managed proxies send non-symmetric forwarded headers. Keep this
+    // relaxed, but only trust configured proxy IPs/networks by default.
     options.RequireHeaderSymmetry = false;
+    options.ForwardLimit = forwardedHeadersSection.GetValue<int?>("ForwardLimit") ?? 1;
 
-    // Accept forwarded headers from Render's reverse proxy.
-    // Render/Cloudflare proxy IPs can change, so strict KnownProxies is fragile here.
-    options.KnownNetworks.Clear();
-    options.KnownProxies.Clear();
+    if (forwardedHeadersSection.GetValue<bool>("TrustAllProxies"))
+    {
+        options.KnownNetworks.Clear();
+        options.KnownProxies.Clear();
+    }
 
-    // Allow processing of the forwarded header chain behind Render/Cloudflare.
-    options.ForwardLimit = null;
+    foreach (var proxy in forwardedHeadersSection.GetSection("KnownProxies").Get<string[]>() ?? [])
+    {
+        if (IPAddress.TryParse(proxy, out var address))
+        {
+            options.KnownProxies.Add(address);
+        }
+    }
+
+    foreach (var network in forwardedHeadersSection.GetSection("KnownNetworks").Get<string[]>() ?? [])
+    {
+        if (TryParseCidr(network, out var ipNetwork))
+        {
+            options.KnownNetworks.Add(ipNetwork);
+        }
+    }
 });
 
 
@@ -588,6 +605,31 @@ static async Task SeedStartupDataAsync(
 static string GetClientRateLimitPartitionKey(HttpContext httpContext)
 {
     return httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown-client";
+}
+
+static bool TryParseCidr(
+    string value,
+    out Microsoft.AspNetCore.HttpOverrides.IPNetwork network)
+{
+    network = default!;
+
+    var parts = value.Split('/', 2, StringSplitOptions.TrimEntries);
+    if (parts.Length != 2 ||
+        !IPAddress.TryParse(parts[0], out var address) ||
+        !int.TryParse(parts[1], out var prefixLength))
+    {
+        return false;
+    }
+
+    try
+    {
+        network = new Microsoft.AspNetCore.HttpOverrides.IPNetwork(address, prefixLength);
+        return true;
+    }
+    catch (ArgumentOutOfRangeException)
+    {
+        return false;
+    }
 }
 
 

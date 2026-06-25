@@ -132,7 +132,7 @@ public sealed class StartupIntegrationTests : IAsyncLifetime
             {
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=propertyapi_startup_tests;Username=postgres;Password=postgres;Trust Server Certificate=true",
+                    ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=27052017;Trust Server Certificate=true",
                     ["Jwt:Issuer"] = "PropertyApi",
                     ["Jwt:Audience"] = "PropertyApiClient",
                     ["Jwt:Key"] = "TEST_ONLY_SECRET_KEY_1234567890_1234567890",
