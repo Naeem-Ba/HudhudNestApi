@@ -3,7 +3,6 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PropertyApi.Application.Users.Commands.ChangePassword;
-using PropertyApi.Application.Users.Commands.RegisterUser;
 using PropertyApi.Application.Users.Commands.DeleteUser;
 using PropertyApi.Application.Users.Commands.UpdateUser;
 using PropertyApi.Application.Users.Queries.GetAllUsers;
@@ -21,19 +20,6 @@ public sealed class UsersController : ControllerBase
 
     public UsersController(ISender sender)
         => _sender = sender;
-
-
-    [HttpPost("register")]
-    [AllowAnonymous]
-    [ProducesResponseType(StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Register(
-        [FromBody] RegisterUserCommand command,
-        CancellationToken ct)
-    {
-        var user = await _sender.Send(command, ct);
-        return CreatedAtAction(nameof(GetById), new { id = user.Id }, user);
-    }
 
     [HttpGet("me")]
     [ProducesResponseType(StatusCodes.Status200OK)]

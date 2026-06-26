@@ -6,27 +6,31 @@ public sealed class RequestVisitCommandValidator : AbstractValidator<RequestVisi
 {
     public RequestVisitCommandValidator()
     {
-        RuleFor(x => x.PropertyId).NotEmpty();
-        RuleFor(x => x.RequesterId).NotEmpty();
+        RuleFor(x => x.PropertyId)
+            .NotEmpty();
+
+        RuleFor(x => x.RequesterId)
+            .NotEmpty();
 
         RuleFor(x => x.ProposedAt)
             .GreaterThan(DateTime.UtcNow.AddHours(2))
-            .WithMessage("ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø§Ù„Ø­Ø¬Ø² Ù‚Ø¨Ù„ Ù…ÙˆØ¹Ø¯ Ø§Ù„Ø²ÙŠØ§Ø±Ø© Ø¨Ø³Ø§Ø¹ØªÙŠÙ† Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„.")
+            .WithMessage("يجب أن يكون الحجز قبل موعد الزيارة بساعتين على الأقل.")
             .LessThan(DateTime.UtcNow.AddDays(90))
-            .WithMessage("Ù„Ø§ ÙŠÙ…ÙƒÙ† Ø§Ù„Ø­Ø¬Ø² Ù„Ø£ÙƒØ«Ø± Ù…Ù† 90 ÙŠÙˆÙ…Ù‹Ø§ Ù…Ù‚Ø¯Ù…Ù‹Ø§.");
+            .WithMessage("لا يمكن الحجز لأكثر من 90 يومًا مقدمًا.");
 
         RuleFor(x => x.VisitorName)
-            .NotEmpty().WithMessage("Ø§Ù„Ø§Ø³Ù… Ù…Ø·Ù„ÙˆØ¨.")
+            .NotEmpty()
+            .WithMessage("الاسم مطلوب.")
             .MaximumLength(150);
 
         RuleFor(x => x.VisitorPhone)
-            .NotEmpty().WithMessage("Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ Ù…Ø·Ù„ÙˆØ¨.")
-            .Matches(@"^\\+?[0-9\\s\\-]{7,20}$")
-            .WithMessage("ØµÙŠØºØ© Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ ØºÙŠØ± ØµØ­ÙŠØ­Ø©.");
+            .NotEmpty()
+            .WithMessage("رقم الهاتف مطلوب.")
+            .Matches(@"^\+?[0-9\s\-]{7,20}$")
+            .WithMessage("صيغة رقم الهاتف غير صحيحة.");
 
         RuleFor(x => x.VisitorNote)
             .MaximumLength(500)
             .When(x => x.VisitorNote is not null);
     }
 }
-
