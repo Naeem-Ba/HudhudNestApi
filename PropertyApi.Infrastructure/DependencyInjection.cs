@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -150,8 +150,8 @@ public static class DependencyInjection
                 .Validate(options => !string.IsNullOrWhiteSpace(options.Provider), "SmsProvider:Provider is required in Production.")
                 .Validate(options => !string.IsNullOrWhiteSpace(options.ApiUrl), "SmsProvider:ApiUrl is required in Production.")
                 .Validate(options => Uri.TryCreate(options.ApiUrl, UriKind.Absolute, out var uri) &&
-                                     (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp),
-                    "SmsProvider:ApiUrl must be a valid absolute HTTP/HTTPS URL in Production.")
+                                     uri.Scheme == Uri.UriSchemeHttps,
+                    "SmsProvider:ApiUrl must be a valid absolute HTTPS URL in Production.")
                 .Validate(options => !string.IsNullOrWhiteSpace(options.ApiKey), "SmsProvider:ApiKey is required in Production.")
                 .Validate(options => !string.IsNullOrWhiteSpace(options.FromNumber), "SmsProvider:FromNumber is required in Production.")
                 .ValidateOnStart();

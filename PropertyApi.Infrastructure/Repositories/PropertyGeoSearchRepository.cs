@@ -1,4 +1,5 @@
 using System.Data;
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Listings.DTOs;
@@ -153,6 +154,8 @@ LIMIT @pageSize OFFSET @offset;
 
         var items = new List<GeoPropertySearchResultDto>();
         var totalCount = 0;
+        var originalPageSize = pageSize;
+        var originalOffset = offset;
 
         try
         {
@@ -204,6 +207,15 @@ LIMIT @pageSize OFFSET @offset;
             throw;
         }
 
+        if (items.Count == 0 && page > 1)
+        {
+            totalCount = await ReadTotalCountFromFirstMatchingRowAsync(
+                command,
+                originalPageSize,
+                originalOffset,
+                ct);
+        }
+
         return new PagedResult<GeoPropertySearchResultDto>
         {
             Items = items.AsReadOnly(),
@@ -211,6 +223,47 @@ LIMIT @pageSize OFFSET @offset;
             Page = page,
             PageSize = pageSize
         };
+    }
+
+
+    private static async Task<int> ReadTotalCountFromFirstMatchingRowAsync(
+        IDbCommand command,
+        int originalPageSize,
+        int originalOffset,
+        CancellationToken ct)
+    {
+        SetParameterValue(command, "pageSize", 1);
+        SetParameterValue(command, "offset", 0);
+
+        try
+        {
+            await using var reader = await ((DbCommand)command).ExecuteReaderAsync(ct);
+            if (await reader.ReadAsync(ct) && !reader.IsDBNull(reader.GetOrdinal("TotalCount")))
+            {
+                return Convert.ToInt32(reader["TotalCount"]);
+            }
+
+            return 0;
+        }
+        finally
+        {
+            SetParameterValue(command, "pageSize", originalPageSize);
+            SetParameterValue(command, "offset", originalOffset);
+        }
+    }
+
+    private static void SetParameterValue(IDbCommand command, string name, object value)
+    {
+        foreach (IDbDataParameter parameter in command.Parameters)
+        {
+            if (string.Equals(parameter.ParameterName, name, StringComparison.OrdinalIgnoreCase))
+            {
+                parameter.Value = value;
+                return;
+            }
+        }
+
+        throw new InvalidOperationException($"SQL parameter '{name}' was not found.");
     }
 
     private static string? NormalizeUpper(string? value)

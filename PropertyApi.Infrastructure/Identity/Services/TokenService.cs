@@ -1,20 +1,15 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using PropertyApi.Application.Common.Interfaces;
-using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Application.Common.Security;
+using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Infrastructure.Identity.Services;
 
-/// <summary>
-/// TODO: تنفيذ خدمة Auth المتقدمة (Refresh Token rotation, Revocation, etc.)
-/// حالياً: Auth مُعالَجة عبر AuthController مباشرة مع RegisterUserCommandHandler.
-/// هذا الكلاس مخصص للمرحلة التالية.
-/// </summary>
 public sealed class TokenService : ITokenService
 {
     private readonly JwtOptions _jwtOptions;
@@ -27,14 +22,12 @@ public sealed class TokenService : ITokenService
     public string GenerateAccessToken(User user, IReadOnlyCollection<string> roles)
     {
         var claims = new List<Claim>
-{
-    new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-    new(ClaimTypes.Email, user.Email ?? string.Empty),
-    new(ClaimTypes.Name, user.UserName ?? user.Email ?? string.Empty),
-    new(
-        CustomClaimTypes.SecurityStamp,
-        user.SecurityStamp ?? string.Empty)
-};
+        {
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(ClaimTypes.Email, user.Email ?? string.Empty),
+            new(ClaimTypes.Name, user.UserName ?? user.Email ?? string.Empty),
+            new(CustomClaimTypes.SecurityStamp, user.SecurityStamp ?? string.Empty)
+        };
 
         foreach (var role in roles)
         {
@@ -48,7 +41,7 @@ public sealed class TokenService : ITokenService
             issuer: _jwtOptions.Issuer,
             audience: _jwtOptions.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenMinutes),
+            expires: GetAccessTokenExpiresAtUtc(),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
@@ -59,4 +52,7 @@ public sealed class TokenService : ITokenService
         var randomBytes = RandomNumberGenerator.GetBytes(64);
         return Convert.ToBase64String(randomBytes);
     }
+
+    public DateTime GetAccessTokenExpiresAtUtc()
+        => DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenMinutes);
 }
