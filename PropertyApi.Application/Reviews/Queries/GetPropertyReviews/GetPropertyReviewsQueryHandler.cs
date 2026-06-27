@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using PropertyApi.Application.Reviews.DTOs;
 using PropertyApi.Application.Reviews.Interfaces;
 
@@ -13,31 +13,36 @@ public sealed class GetPropertyReviewsQueryHandler
         => _reviews = reviews;
 
     public async Task<PropertyReviewSummaryDto> Handle(
-        GetPropertyReviewsQuery request, CancellationToken ct)
+        GetPropertyReviewsQuery request,
+        CancellationToken ct)
     {
-        var (reviews, average) = await _reviews.GetByPropertyIdAsync(request.PropertyId, ct);
+        var page = Math.Max(request.Page, 1);
+        var pageSize = Math.Clamp(request.PageSize, 1, 50);
+
+        var (reviews, average, totalCount) = await _reviews.GetByPropertyIdAsync(
+            request.PropertyId,
+            page,
+            pageSize,
+            ct);
 
         var paged = reviews
-            .OrderByDescending(r => r.CreatedAt)
-            .Skip((request.Page - 1) * request.PageSize)
-            .Take(request.PageSize)
             .Select(r => new PropertyReviewDto(
-                Id:               r.Id,
-                PropertyId:       r.PropertyId,
-                ReviewerId:       r.ReviewerId,
-                ReviewerName:     r.Reviewer != null
+                Id: r.Id,
+                PropertyId: r.PropertyId,
+                ReviewerId: r.ReviewerId,
+                ReviewerName: r.Reviewer != null
                     ? $"{r.Reviewer.FirstName} {r.Reviewer.LastName}".Trim()
-                    : "Ù…Ø¬Ù‡ÙˆÙ„",
+                    : "مجهول",
                 ReviewerImageUrl: r.Reviewer?.ProfileImageUrl,
-                Rating:           r.Rating,
-                Comment:          r.Comment,
-                CreatedAt:        r.CreatedAt))
+                Rating: r.Rating,
+                Comment: r.Comment,
+                CreatedAt: r.CreatedAt))
             .ToList()
             .AsReadOnly();
 
         return new PropertyReviewSummaryDto(
             AverageRating: Math.Round(average, 1),
-            TotalCount:    reviews.Count,
-            Reviews:       paged);
+            TotalCount: totalCount,
+            Reviews: paged);
     }
 }

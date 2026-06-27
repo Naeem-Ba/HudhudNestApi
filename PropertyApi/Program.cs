@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Security.Claims;
 using System.Net;
 using System.Text;
@@ -60,7 +60,15 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.RequireHeaderSymmetry = false;
     options.ForwardLimit = forwardedHeadersSection.GetValue<int?>("ForwardLimit") ?? 1;
 
-    if (forwardedHeadersSection.GetValue<bool>("TrustAllProxies"))
+    var trustAllProxies = forwardedHeadersSection.GetValue<bool>("TrustAllProxies");
+
+    if (trustAllProxies && builder.Environment.IsProduction())
+    {
+        throw new InvalidOperationException(
+            "ForwardedHeaders:TrustAllProxies must not be enabled in Production. Configure KnownProxies or KnownNetworks instead.");
+    }
+
+    if (trustAllProxies)
     {
         options.KnownNetworks.Clear();
         options.KnownProxies.Clear();
@@ -494,7 +502,7 @@ app.UsePropertyApiSecurityHeaders();
 
 var swaggerEnabled = app.Environment.IsDevelopment()
     || app.Environment.EnvironmentName.Equals("CI", StringComparison.OrdinalIgnoreCase)
-    || builder.Configuration.GetValue<bool>("Swagger:Enabled");
+    || (!app.Environment.IsProduction() && builder.Configuration.GetValue<bool>("Swagger:Enabled"));
 
 if (swaggerEnabled)
 {
@@ -517,6 +525,8 @@ app.UseCors("DefaultCors");
 // يجب أن يأتي بعد UseCors وقبل UseAuthentication.
 app.UseOutputCache();
 
+app.UseAuthentication();
+
 if (useRedisRateLimiting)
 {
     app.UseRedisRateLimiting();
@@ -527,8 +537,6 @@ else
 }
 
 app.UseCookieCsrfProtection();
-
-app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
@@ -545,7 +553,7 @@ static async Task ApplyPendingMigrationsAsync(
 {
     var shouldApplyMigrations =
         configuration.GetValue<bool?>("Database:ApplyMigrationsOnStartup")
-        ?? environment.IsProduction();
+        ?? !environment.IsProduction();
 
     if (!shouldApplyMigrations)
         return;

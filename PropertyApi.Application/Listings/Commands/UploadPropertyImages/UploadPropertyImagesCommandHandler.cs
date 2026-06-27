@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.DTOs;
@@ -83,6 +83,15 @@ public sealed class UploadPropertyImagesCommandHandler
                 $"A property can have at most {MaxImagesPerProperty} images.");
         }
 
+        foreach (var file in request.Files)
+        {
+            var validationMessage = await ValidateImageFileAsync(file, cancellationToken);
+            if (validationMessage is not null)
+            {
+                return UploadPropertyImagesResult.ValidationFailed(validationMessage);
+            }
+        }
+
         var uploaded = new List<PropertyImageDto>();
         var uploadedPublicIds = new List<string>();
 
@@ -90,22 +99,12 @@ public sealed class UploadPropertyImagesCommandHandler
         {
             foreach (var file in request.Files)
             {
+                if (file.Content.CanSeek)
+                {
+                    file.Content.Position = 0;
+                }
+
                 await using var content = file.Content;
-
-                if (file.Length == 0)
-                    continue;
-
-                if (file.Length > MaxImageSize)
-                    return UploadPropertyImagesResult.ValidationFailed($"File '{file.FileName}' is larger than 5 MB.");
-
-                if (!AllowedImageTypes.Contains(file.ContentType))
-                    return UploadPropertyImagesResult.ValidationFailed($"File '{file.FileName}' is not a supported image.");
-
-                if (!AllowedImageExtensions.Contains(Path.GetExtension(file.FileName)))
-                    return UploadPropertyImagesResult.ValidationFailed($"File '{file.FileName}' has an unsupported extension.");
-
-                if (!await HasValidImageSignatureAsync(file.Content, file.ContentType, cancellationToken))
-                    return UploadPropertyImagesResult.ValidationFailed($"File '{file.FileName}' is not a valid image file.");
 
                 var result = await _storage.UploadImageAsync(
                     content,
@@ -115,7 +114,10 @@ public sealed class UploadPropertyImagesCommandHandler
                     cancellationToken);
 
                 if (!result.Succeeded)
+                {
+                    await CleanupUploadedImagesAsync(uploadedPublicIds, cancellationToken);
                     return UploadPropertyImagesResult.StorageFailed(result.ErrorMessage);
+                }
 
                 uploadedPublicIds.Add(result.PublicId!);
 
@@ -143,13 +145,43 @@ public sealed class UploadPropertyImagesCommandHandler
         }
         catch
         {
-            foreach (var publicId in uploadedPublicIds)
-            {
-                if (!string.IsNullOrWhiteSpace(publicId))
-                    await _storage.DeleteImageAsync(publicId, cancellationToken);
-            }
-
+            await CleanupUploadedImagesAsync(uploadedPublicIds, CancellationToken.None);
             throw;
+        }
+    }
+
+    private static async Task<string?> ValidateImageFileAsync(
+        UploadPropertyImageFileDto file,
+        CancellationToken cancellationToken)
+    {
+        if (file.Length == 0)
+            return $"File '{file.FileName}' is empty.";
+
+        if (file.Length > MaxImageSize)
+            return $"File '{file.FileName}' is larger than 5 MB.";
+
+        if (!AllowedImageTypes.Contains(file.ContentType))
+            return $"File '{file.FileName}' is not a supported image.";
+
+        if (!AllowedImageExtensions.Contains(Path.GetExtension(file.FileName)))
+            return $"File '{file.FileName}' has an unsupported extension.";
+
+        if (!await HasValidImageSignatureAsync(file.Content, file.ContentType, cancellationToken))
+            return $"File '{file.FileName}' is not a valid image file.";
+
+        return null;
+    }
+
+    private async Task CleanupUploadedImagesAsync(
+        IEnumerable<string> uploadedPublicIds,
+        CancellationToken cancellationToken)
+    {
+        foreach (var publicId in uploadedPublicIds)
+        {
+            if (!string.IsNullOrWhiteSpace(publicId))
+            {
+                await _storage.DeleteImageAsync(publicId, cancellationToken);
+            }
         }
     }
 

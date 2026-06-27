@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.DTOs;
@@ -104,8 +104,8 @@ public sealed class VerifyPhoneOtpCommandHandler
             return VerifyOtpResult.Fail(
                 "OTP_WRONG",
                 remaining > 0
-                    ? $"Ø§Ù„Ø±Ù…Ø² ØºÙŠØ± ØµØ­ÙŠØ­. ØªØ¨Ù‚Ù‰ Ù„Ùƒ {remaining} Ù…Ø­Ø§ÙˆÙ„Ø©."
-                    : "Ø§Ø³ØªÙ†ÙØ¯Øª Ø¬Ù…ÙŠØ¹ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø§Øª. Ø§Ø·Ù„Ø¨ Ø±Ù…Ø²Ø§Ù‹ Ø¬Ø¯ÙŠØ¯Ø§Ù‹.");
+                    ? $"الرمز غير صحيح. تبقى لك {remaining} محاولة."
+                    : "استنفدت جميع المحاولات. اطلب رمزًا جديدًا.");
         }
 
         // â”€â”€ 3. Ø§Ù„Ø±Ù…Ø² ØµØ­ÙŠØ­ â€” Ø¶Ø¹ Ø¹Ù„Ø§Ù…Ø© "ØªÙ… Ø§Ù„Ø§Ø³ØªØ®Ø¯Ø§Ù…" â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -119,7 +119,7 @@ public sealed class VerifyPhoneOtpCommandHandler
         {
             return VerifyOtpResult.Fail(
                 "USER_CREATE_FAILED",
-                "ÙØ´Ù„ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ø­Ø³Ø§Ø¨. Ø­Ø§ÙˆÙ„ Ù…Ø¬Ø¯Ø¯Ø§Ù‹.");
+                "فشل إنشاء الحساب. حاول مجددًا.");
         }
 
         // â”€â”€ 5. Ø£ØµØ¯Ø± JWT + Refresh Token â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -146,7 +146,7 @@ public sealed class VerifyPhoneOtpCommandHandler
             isNewUser: isNewUser,
             accessToken: accessToken,
             refreshToken: refreshToken,
-            expiresAt: DateTime.UtcNow.AddMinutes(15),
+            expiresAt: _tokenService.GetAccessTokenExpiresAtUtc(),
             user: new UserProfileDto
             {
                 Id = user.Id,
@@ -235,31 +235,31 @@ public sealed class VerifyPhoneOtpCommandValidator
     {
         RuleFor(x => x.PhoneNumber)
             .NotEmpty()
-            .WithMessage("Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ Ù…Ø·Ù„ÙˆØ¨.")
+            .WithMessage("رقم الهاتف مطلوب.")
             .Matches(@"^\+[1-9]\d{7,14}$")
-            .WithMessage("Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø¨ØµÙŠØºØ© Ø¯ÙˆÙ„ÙŠØ©.");
+            .WithMessage("رقم الهاتف يجب أن يكون بصيغة دولية مثل +963911234567.");
 
         RuleFor(x => x.Code)
             .NotEmpty()
-            .WithMessage("Ø±Ù…Ø² Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ø·Ù„ÙˆØ¨.")
+            .WithMessage("رمز التحقق مطلوب.")
             .Length(6)
-            .WithMessage("Ø±Ù…Ø² Ø§Ù„ØªØ­Ù‚Ù‚ ÙŠØªÙƒÙˆÙ† Ù…Ù† 6 Ø£Ø±Ù‚Ø§Ù….")
+            .WithMessage("رمز التحقق يتكون من 6 أرقام.")
             .Matches(@"^\d{6}$")
-            .WithMessage("Ø±Ù…Ø² Ø§Ù„ØªØ­Ù‚Ù‚ ÙŠØ¬Ø¨ Ø£Ù† ÙŠØ­ØªÙˆÙŠ Ø¹Ù„Ù‰ Ø£Ø±Ù‚Ø§Ù… ÙÙ‚Ø·.");
+            .WithMessage("رمز التحقق يجب أن يحتوي على أرقام فقط.");
 
         RuleFor(x => x.FirstName)
             .MaximumLength(100)
             .When(x => !string.IsNullOrEmpty(x.FirstName))
-            .WithMessage("Ø§Ù„Ø§Ø³Ù… Ø§Ù„Ø£ÙˆÙ„ ÙŠØ¬Ø¨ Ø£Ù„Ø§ ÙŠØªØ¬Ø§ÙˆØ² 100 Ø­Ø±Ù.");
+            .WithMessage("الاسم الأول يجب ألا يتجاوز 100 حرف.");
 
         RuleFor(x => x.LastName)
             .MaximumLength(100)
             .When(x => !string.IsNullOrEmpty(x.LastName))
-            .WithMessage("Ø§Ø³Ù… Ø§Ù„Ø¹Ø§Ø¦Ù„Ø© ÙŠØ¬Ø¨ Ø£Ù„Ø§ ÙŠØªØ¬Ø§ÙˆØ² 100 Ø­Ø±Ù.");
+            .WithMessage("اسم العائلة يجب ألا يتجاوز 100 حرف.");
 
         RuleFor(x => x.Purpose)
             .IsInEnum()
-            .WithMessage("ØºØ±Ø¶ Ø±Ù…Ø² Ø§Ù„ØªØ­Ù‚Ù‚ ØºÙŠØ± Ù…Ø¯Ø¹ÙˆÙ….");
+            .WithMessage("غرض رمز التحقق غير مدعوم.");
 
     }
 }

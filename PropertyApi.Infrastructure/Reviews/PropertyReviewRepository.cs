@@ -8,6 +8,7 @@ namespace PropertyApi.Infrastructure.Reviews;
 public sealed class PropertyReviewRepository : IPropertyReviewRepository
 {
     private readonly AppDbContext _db;
+
     public PropertyReviewRepository(AppDbContext db) => _db = db;
 
     public async Task AddAsync(PropertyReview review, CancellationToken ct = default)
@@ -17,31 +18,44 @@ public sealed class PropertyReviewRepository : IPropertyReviewRepository
         => await _db.PropertyReviews.FindAsync([id], ct);
 
     public async Task<bool> HasUserReviewedAsync(
-        Guid propertyId, Guid reviewerId, CancellationToken ct = default)
-        => await _db.PropertyReviews
-            .AnyAsync(r =>
-                r.PropertyId == propertyId &&
-                r.ReviewerId == reviewerId, ct);
+        Guid propertyId,
+        Guid reviewerId,
+        CancellationToken ct = default)
+        => await _db.PropertyReviews.AnyAsync(
+            r => r.PropertyId == propertyId && r.ReviewerId == reviewerId,
+            ct);
 
-    public async Task<(IReadOnlyList<PropertyReview> Reviews, double Average)>
-        GetByPropertyIdAsync(Guid propertyId, CancellationToken ct = default)
+    public async Task<(IReadOnlyList<PropertyReview> Reviews, double Average, int TotalCount)> GetByPropertyIdAsync(
+        Guid propertyId,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
     {
-        var reviews = await _db.PropertyReviews
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+
+        var query = _db.PropertyReviews
+            .AsNoTracking()
+            .Where(r => r.PropertyId == propertyId);
+
+        var totalCount = await query.CountAsync(ct);
+        var average = await query
+            .Select(r => (double?)r.Rating)
+            .AverageAsync(ct) ?? 0d;
+
+        var reviews = await query
             .Include(r => r.Reviewer)
-            .Where(r => r.PropertyId == propertyId)
             .OrderByDescending(r => r.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync(ct);
 
-        double avg = reviews.Count > 0
-            ? reviews.Average(r => r.Rating)
-            : 0;
-
-        return (reviews.AsReadOnly(), avg);
+        return (reviews.AsReadOnly(), average, totalCount);
     }
 
-    public async Task DeleteAsync(PropertyReview review, CancellationToken ct = default)
+    public Task DeleteAsync(PropertyReview review, CancellationToken ct = default)
     {
         _db.PropertyReviews.Remove(review);
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 }
