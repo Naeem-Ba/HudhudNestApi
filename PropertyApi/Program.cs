@@ -475,21 +475,6 @@ builder.Services.AddRateLimiter(options =>
 // --------------------------------------------------------------
 var app = builder.Build();
 
-
-//Health Check مؤقت لـ Redis
-app.MapGet("/health/redis", async (IConnectionMultiplexer redis) =>
-{
-    var db = redis.GetDatabase();
-    var ping = await db.PingAsync();
-
-    return Results.Ok(new
-    {
-        status = "ok",
-        redis.IsConnected,
-        pingMs = ping.TotalMilliseconds,
-        endpoints = redis.GetEndPoints().Select(e => e.ToString())
-    });
-});
 // -- 10. Database startup ---------------------------------------
 // Apply pending EF Core migrations before any seed code runs.
 // Without this, seed queries can fail when newly added tables do not exist yet.
