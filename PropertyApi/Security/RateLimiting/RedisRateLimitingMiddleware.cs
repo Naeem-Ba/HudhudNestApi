@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using StackExchange.Redis;
@@ -24,18 +25,18 @@ return current
     };
 
     private readonly RequestDelegate _next;
-    private readonly IConnectionMultiplexer _redis;
+    private readonly IServiceProvider _serviceProvider;
     private readonly IOptions<RedisRateLimitingOptions> _options;
     private readonly ILogger<RedisRateLimitingMiddleware> _logger;
 
     public RedisRateLimitingMiddleware(
         RequestDelegate next,
-        IConnectionMultiplexer redis,
+        IServiceProvider serviceProvider,
         IOptions<RedisRateLimitingOptions> options,
         ILogger<RedisRateLimitingMiddleware> logger)
     {
         _next = next;
-        _redis = redis;
+        _serviceProvider = serviceProvider;
         _options = options;
         _logger = logger;
     }
@@ -79,11 +80,69 @@ return current
         var partitionKey = RedisRateLimitPartitionKeyResolver.Resolve(context);
         var redisKey = BuildRedisKey(options.InstanceName, policyName, partitionKey, bucket);
 
-        var database = _redis.GetDatabase();
-        var count = (long)await database.ScriptEvaluateAsync(
-            FixedWindowScript,
-            new RedisKey[] { redisKey },
-            new RedisValue[] { windowMs + 2_000 });
+        IConnectionMultiplexer redis;
+
+        try
+        {
+            redis = _serviceProvider.GetRequiredService<IConnectionMultiplexer>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Redis rate limiter could not resolve IConnectionMultiplexer.");
+
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                title = "Rate limiter backend is unavailable.",
+                status = StatusCodes.Status503ServiceUnavailable
+            }, context.RequestAborted);
+
+            return;
+        }
+
+        if (!redis.IsConnected)
+        {
+            _logger.LogError(
+                "Redis rate limiter is enabled but Redis is not connected. Policy={PolicyName}",
+                policyName);
+
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                title = "Rate limiter backend is unavailable.",
+                status = StatusCodes.Status503ServiceUnavailable
+            }, context.RequestAborted);
+
+            return;
+        }
+
+        long count;
+
+        try
+        {
+            var database = redis.GetDatabase();
+
+            count = (long)await database.ScriptEvaluateAsync(
+                FixedWindowScript,
+                new RedisKey[] { redisKey },
+                new RedisValue[] { windowMs + 2_000 });
+        }
+        catch (RedisException ex)
+        {
+            _logger.LogError(
+                ex,
+                "Redis rate limiter failed while evaluating policy {PolicyName}.",
+                policyName);
+
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                title = "Rate limiter backend is unavailable.",
+                status = StatusCodes.Status503ServiceUnavailable
+            }, context.RequestAborted);
+
+            return;
+        }
 
         if (count <= policy.PermitLimit)
         {
@@ -100,7 +159,8 @@ return current
 
         context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
         context.Response.ContentType = "application/problem+json";
-        context.Response.Headers[HeaderNames.RetryAfter] = Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+        context.Response.Headers[HeaderNames.RetryAfter] =
+            Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
 
         await context.Response.WriteAsJsonAsync(new
         {

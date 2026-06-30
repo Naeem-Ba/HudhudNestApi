@@ -56,7 +56,7 @@ public sealed class AuthController : ControllerBase
     // POST /api/auth/login
     [HttpPost("login")]
     [AllowAnonymous]
-    //[EnableRateLimiting("auth-login")]
+    [EnableRateLimiting("auth-login")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Login(
