@@ -26,7 +26,7 @@ public sealed class AuthController : ControllerBase
     // POST /api/auth/register
     [HttpPost("register")]
     [AllowAnonymous]
-    //[EnableRateLimiting("auth-register")]
+    [EnableRateLimiting("auth-register")]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
