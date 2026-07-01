@@ -62,9 +62,11 @@ public sealed class StartupIntegrationTests : IAsyncLifetime
         var programSource = File.ReadAllText(
             Path.Combine(FindRepositoryRoot(), "PropertyApi", "Program.cs"));
 
-        Assert.Equal(1, Regex.Matches(programSource, @"AddRateLimiter\s*\(").Count);
+        var addRateLimiterMatches = Regex.Matches(programSource, @"AddRateLimiter\s*\(");
+        Assert.Single(addRateLimiterMatches);
 
         var rateLimiterBlock = ExtractRateLimiterBlock(programSource);
+
         var policyNames = Regex.Matches(
                 rateLimiterBlock,
                 @"Add(?:Policy|FixedWindowLimiter)\s*\(\s*""([^""]+)""")
@@ -132,7 +134,11 @@ public sealed class StartupIntegrationTests : IAsyncLifetime
             {
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=27052017;Trust Server Certificate=true",
+                    ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true",
+                    ["Database:ApplyMigrationsOnStartup"] = "false",
+                    ["Database:SeedOnStartup"] = "false",
+                    ["RateLimiting:Redis:Enabled"] = "false",
+                    ["RedisRateLimiting:Enabled"] = "false",
                     ["Jwt:Issuer"] = "PropertyApi",
                     ["Jwt:Audience"] = "PropertyApiClient",
                     ["Jwt:Key"] = "TEST_ONLY_SECRET_KEY_1234567890_1234567890",

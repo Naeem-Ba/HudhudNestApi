@@ -1,13 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Http.Json;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PropertyApi.Application.Auth.Interfaces;
+using System.Net.Http.Json;
 
 namespace PropertyApi.Infrastructure.Auth.Services;
 
@@ -18,28 +13,28 @@ namespace PropertyApi.Infrastructure.Auth.Services;
 // ──────────────────────
 // في بيئة التطوير لا نريد إرسال رسائل SMS حقيقية.
 // هذا الكلاس يطبع الرمز في الـ Console بدلاً من ذلك.
-// عند الإنتاج، يُستبدل تلقائياً بـ TwilioSmsService.
+// عند الإنتاج، يُستبدل تلقائياً بمزود SMS حقيقي.
 // ══════════════════════════════════════════════════════════════
 public sealed class ConsoleSmsService : ISmsService
 {
     private readonly ILogger<ConsoleSmsService> _logger;
 
     public ConsoleSmsService(ILogger<ConsoleSmsService> logger)
-        => _logger = logger;
+    {
+        _logger = logger;
+    }
 
     public Task<bool> SendOtpAsync(
         string phoneNumber,
         string otp,
         CancellationToken ct = default)
     {
-        // في التطوير: اطبع الرمز بوضوح في السجلات
-        _logger.LogWarning(
-            "═══════════════════════════════════════════════");
+        _logger.LogWarning("═══════════════════════════════════════════════");
         _logger.LogWarning(
             "  [DEV MODE] OTP for {Phone}: {OTP}",
-            phoneNumber, otp);
-        _logger.LogWarning(
-            "═══════════════════════════════════════════════");
+            phoneNumber,
+            otp);
+        _logger.LogWarning("═══════════════════════════════════════════════");
 
         return Task.FromResult(true);
     }
@@ -56,7 +51,7 @@ public sealed class ConsoleSmsService : ISmsService
 //    "Twilio:AccountSid"  : "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 //    "Twilio:AuthToken"   : "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 //    "Twilio:FromNumber"  : "+1234567890"
-// 4. ثبِّت: dotnet add package Twilio
+// 4. تأكد أن حزمة Twilio مثبتة في PropertyApi.Infrastructure.
 // ══════════════════════════════════════════════════════════════
 public sealed class TwilioSmsService : ISmsService
 {
@@ -71,10 +66,13 @@ public sealed class TwilioSmsService : ISmsService
     {
         _accountSid = config["Twilio:AccountSid"]
             ?? throw new InvalidOperationException("Twilio:AccountSid is required");
+
         _authToken = config["Twilio:AuthToken"]
             ?? throw new InvalidOperationException("Twilio:AuthToken is required");
+
         _fromNumber = config["Twilio:FromNumber"]
             ?? throw new InvalidOperationException("Twilio:FromNumber is required");
+
         _logger = logger;
     }
 
@@ -85,9 +83,7 @@ public sealed class TwilioSmsService : ISmsService
     {
         try
         {
-            // تثبيت: dotnet add package Twilio --project PropertyApi.Infrastructure
-            // ثم أزل التعليق عن الكود أدناه:
-
+            ct.ThrowIfCancellationRequested();
 
             Twilio.TwilioClient.Init(_accountSid, _authToken);
 
@@ -96,28 +92,39 @@ public sealed class TwilioSmsService : ISmsService
                 from: new Twilio.Types.PhoneNumber(_fromNumber),
                 to: new Twilio.Types.PhoneNumber(phoneNumber));
 
-            return message.Status != Twilio.Rest.Api.V2010.Account.MessageResource.StatusEnum.Failed;
+            var isFailed =
+                message.Status == Twilio.Rest.Api.V2010.Account.MessageResource.StatusEnum.Failed ||
+                message.Status == Twilio.Rest.Api.V2010.Account.MessageResource.StatusEnum.Undelivered;
 
+            if (isFailed)
+            {
+                _logger.LogWarning(
+                    "Twilio SMS failed for {Phone}. MessageSid={MessageSid}, Status={Status}",
+                    phoneNumber,
+                    message.Sid,
+                    message.Status);
+            }
 
-            // مؤقتاً — ارجع true حتى تُثبَّت Twilio
-            await Task.Delay(100, ct); // محاكاة التأخير
-            _logger.LogInformation(
-                "SMS would be sent to {Phone} (Twilio not yet installed)", phoneNumber);
-            return true;
+            return !isFailed;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("SMS sending was cancelled for {Phone}.", phoneNumber);
+            return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send SMS to {Phone}", phoneNumber);
+            _logger.LogError(ex, "Failed to send SMS to {Phone}.", phoneNumber);
             return false;
         }
     }
 }
 
 // ══════════════════════════════════════════════════════════════
-// AbstractSmsService — لمزودين محليين سوريين أو عرب
+// HttpSmsService — لمزودين محليين سوريين أو عرب
 //
 // يمكنك استبدال Twilio بأي مزود SMS عربي بتغيير هذا الكلاس فقط.
-// مزودون شائعون: Unifonic، Infobip، MSGclub، مزود محلي
+// مزودون شائعون: Unifonic، Infobip، MSGclub، مزود محلي.
 // ══════════════════════════════════════════════════════════════
 public sealed class HttpSmsService : ISmsService
 {
@@ -146,23 +153,36 @@ public sealed class HttpSmsService : ISmsService
         string otp,
         CancellationToken ct = default)
     {
-        // تعديل هذا الكود حسب API المزود الذي تختاره
         var payload = new
         {
             to = phoneNumber,
             from = _fromNumber,
             message = $"رمز التحقق: {otp} — صالح 5 دقائق",
-            apiKey = _apiKey,
+            apiKey = _apiKey
         };
 
         try
         {
             var response = await _httpClient.PostAsJsonAsync(_apiUrl, payload, ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "HTTP SMS provider returned non-success status code {StatusCode} for {Phone}.",
+                    response.StatusCode,
+                    phoneNumber);
+            }
+
             return response.IsSuccessStatusCode;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("HTTP SMS sending was cancelled for {Phone}.", phoneNumber);
+            return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "HTTP SMS failed for {Phone}", phoneNumber);
+            _logger.LogError(ex, "HTTP SMS failed for {Phone}.", phoneNumber);
             return false;
         }
     }
