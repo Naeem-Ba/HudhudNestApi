@@ -1,4 +1,4 @@
-name: CI - Build, Test, Validate
+﻿name: CI - Build, Test, Validate
 
 on:
   push:
@@ -41,25 +41,25 @@ jobs:
         ports:
           - 6379:6379
         options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
 
     env:
       ASPNETCORE_ENVIRONMENT: CI
       DOTNET_ENVIRONMENT: CI
-      ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true
-      ConnectionStrings__Redis: localhost:6379
-      Redis__ConnectionString: localhost:6379
-      RedisRateLimiting__ConnectionString: localhost:6379
-      RateLimiting__Redis__Enabled: "true"
-      RedisRateLimiting__Enabled: "true"
-      Jwt__Issuer: PropertyApi
-      Jwt__Audience: PropertyApiClient
-      Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
-      OtpSettings__SecretKey: TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890
-      DataProtection__PersistKeysToDatabase: "true"
+      ConnectionStrings__DefaultConnection: 'Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true'
+      ConnectionStrings__Redis: 'localhost:6379'
+      Redis__ConnectionString: 'localhost:6379'
+      RedisRateLimiting__ConnectionString: 'localhost:6379'
+      RateLimiting__Redis__Enabled: 'true'
+      RedisRateLimiting__Enabled: 'true'
+      Jwt__Issuer: 'PropertyApi'
+      Jwt__Audience: 'PropertyApiClient'
+      Jwt__Key: 'TEST_ONLY_SECRET_KEY_1234567890_1234567890'
+      OtpSettings__SecretKey: 'TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890'
+      DataProtection__PersistKeysToDatabase: 'true'
 
     steps:
       - name: Checkout code
@@ -87,15 +87,22 @@ jobs:
             --configuration Release \
             --no-restore
 
-      - name: Verify PostGIS and pg_trgm extensions are available
+      - name: Install PostgreSQL and Redis clients
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y postgresql-client redis-tools
+
+      - name: Verify PostGIS and pg_trgm extensions are available
+        run: |
           PGPASSWORD=postgres psql \
             -h localhost \
             -U postgres \
             -d propertyapi_testing \
             -c "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pg_trgm; SELECT postgis_version();"
+
+      - name: Verify Redis
+        run: |
+          redis-cli -h localhost -p 6379 ping
 
       - name: Apply EF Core migrations
         run: |
@@ -117,11 +124,6 @@ jobs:
             -U postgres \
             -d propertyapi_testing \
             -c "select table_name from information_schema.tables where table_schema = 'public' and table_name in ('Currencies','Governorates','Districts','Neighborhoods','PropertyTypes','Transactions','PropertyReviews','VisitRequests','RentalDetails','SaleDetails','AuditLogs','DataProtectionKeys') order by table_name;"
-      - name: Verify Redis
-  run: |
-    sudo apt-get update
-    sudo apt-get install -y redis-tools
-    redis-cli -h localhost -p 6379 ping
 
       - name: Run all tests
         run: |
