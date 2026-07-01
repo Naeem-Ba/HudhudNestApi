@@ -31,18 +31,26 @@ var isTestingOrCi =
     builder.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase) ||
     builder.Environment.EnvironmentName.Equals("CI", StringComparison.OrdinalIgnoreCase);
 
-var redisConnectionString = builder.Configuration.GetConnectionString("Redis")
-    ?? builder.Configuration["Redis:ConnectionString"];
+var redisConnectionString =
+    builder.Configuration.GetConnectionString("Redis")
+    ?? builder.Configuration["Redis:ConnectionString"]
+    ?? builder.Configuration["RedisRateLimiting:ConnectionString"]
+    ?? builder.Configuration["REDIS_CONNECTION_STRING"]
+    ?? builder.Configuration["REDIS_URL"];
+
+var redisRateLimitingEnabled =
+    builder.Configuration.GetValue<bool?>("RateLimiting:Redis:Enabled")
+    ?? builder.Configuration.GetValue<bool?>("RedisRateLimiting:Enabled")
+    ?? builder.Environment.IsProduction();
 
 var useRedisRateLimiting =
-    !isTestingOrCi &&
-    builder.Configuration.GetValue("RateLimiting:Redis:Enabled", true) &&
+    redisRateLimitingEnabled &&
     !string.IsNullOrWhiteSpace(redisConnectionString);
 
 if (builder.Environment.IsProduction() && !useRedisRateLimiting)
 {
     throw new InvalidOperationException(
-        "Redis distributed rate limiting is required in Production. Configure ConnectionStrings:Redis or Redis:ConnectionString.");
+        "Redis distributed rate limiting is required in Production. Configure ConnectionStrings:Redis, Redis:ConnectionString, RedisRateLimiting:ConnectionString, REDIS_CONNECTION_STRING, or REDIS_URL.");
 }
 
 
@@ -475,21 +483,6 @@ builder.Services.AddRateLimiter(options =>
 // --------------------------------------------------------------
 var app = builder.Build();
 
-
-//Health Check مؤقت لـ Redis
-app.MapGet("/health/redis", async (IConnectionMultiplexer redis) =>
-{
-    var db = redis.GetDatabase();
-    var ping = await db.PingAsync();
-
-    return Results.Ok(new
-    {
-        status = "ok",
-        redis.IsConnected,
-        pingMs = ping.TotalMilliseconds,
-        endpoints = redis.GetEndPoints().Select(e => e.ToString())
-    });
-});
 // -- 10. Database startup ---------------------------------------
 // Apply pending EF Core migrations before any seed code runs.
 // Without this, seed queries can fail when newly added tables do not exist yet.
