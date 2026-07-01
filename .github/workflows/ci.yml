@@ -52,7 +52,9 @@ jobs:
       ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true
       ConnectionStrings__Redis: localhost:6379
       Redis__ConnectionString: localhost:6379
+      RedisRateLimiting__ConnectionString: localhost:6379
       RateLimiting__Redis__Enabled: "true"
+      RedisRateLimiting__Enabled: "true"
       Jwt__Issuer: PropertyApi
       Jwt__Audience: PropertyApiClient
       Jwt__Key: TEST_ONLY_SECRET_KEY_1234567890_1234567890
@@ -115,6 +117,11 @@ jobs:
             -U postgres \
             -d propertyapi_testing \
             -c "select table_name from information_schema.tables where table_schema = 'public' and table_name in ('Currencies','Governorates','Districts','Neighborhoods','PropertyTypes','Transactions','PropertyReviews','VisitRequests','RentalDetails','SaleDetails','AuditLogs','DataProtectionKeys') order by table_name;"
+      - name: Verify Redis
+  run: |
+    sudo apt-get update
+    sudo apt-get install -y redis-tools
+    redis-cli -h localhost -p 6379 ping
 
       - name: Run all tests
         run: |
