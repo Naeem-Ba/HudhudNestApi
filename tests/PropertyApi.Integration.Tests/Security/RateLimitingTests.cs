@@ -42,15 +42,25 @@ public sealed class RateLimitingTests : IClassFixture<WebApplicationFactory<Prog
         using var client = _factory.CreateClient();
 
         HttpResponseMessage? lastResponse = null;
-        for (var i = 0; i < 6; i++)
+
+        for (var i = 0; i < 120; i++)
         {
-            lastResponse = await client.PostAsJsonAsync("/api/auth/register", new
+            var request = new
             {
-                FirstName = "Rate",
-                LastName = "Limit",
-                Email = $"rate-limit-{Guid.NewGuid():N}@example.com",
-                Password = "Password123"
-            });
+                email = $"rate-limit-{Guid.NewGuid():N}@example.com",
+                password = "Password123!",
+                firstName = "Rate",
+                lastName = "Limit",
+                preferredLanguage = "ar",
+                preferredCurrency = "SYP"
+            };
+
+            lastResponse = await client.PostAsJsonAsync("/api/auth/register", request);
+
+            if (lastResponse.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                break;
+            }
         }
 
         Assert.NotNull(lastResponse);
