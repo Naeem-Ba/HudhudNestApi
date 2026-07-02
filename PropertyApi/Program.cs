@@ -332,6 +332,18 @@ else if (string.Equals(signalRProvider, "AzureSignalR", StringComparison.Ordinal
         "SignalR:Provider=AzureSignalR is configured, but Azure SignalR registration is not implemented in this build.");
 }
 
+// ✅ فرض backplane في الإنتاج — بنفس نمط useRedisRateLimiting أعلاه (سطر 50-54).
+// بدون هذا الفحص، نسيان الإعداد يؤدي لفقدان صامت للإشعارات بين instances مختلفة
+// خلف load balancer، دون أي خطأ عند الإقلاع.
+if (builder.Environment.IsProduction() &&
+    !string.Equals(signalRProvider, "Redis", StringComparison.OrdinalIgnoreCase) &&
+    !string.Equals(signalRProvider, "AzureSignalR", StringComparison.OrdinalIgnoreCase))
+{
+    throw new InvalidOperationException(
+        "SignalR requires a distributed backplane in Production (SignalR:Provider=Redis or AzureSignalR). " +
+        "Without it, real-time notifications will silently fail to reach users connected to a different instance.");
+}
+
 // -- 8. Swagger ------------------------------------------------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
