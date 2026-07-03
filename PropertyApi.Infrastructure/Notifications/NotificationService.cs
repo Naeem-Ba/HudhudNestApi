@@ -35,13 +35,19 @@ public sealed class NotificationService : INotificationService
         CancellationToken ct = default)
     {
         if (recipientId == Guid.Empty)
+        {
             throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
 
         if (messageId == Guid.Empty)
+        {
             throw new ArgumentException("Message id is required.", nameof(messageId));
+        }
 
         if (propertyId == Guid.Empty)
+        {
             throw new ArgumentException("Property id is required.", nameof(propertyId));
+        }
 
         var safeSenderName = string.IsNullOrWhiteSpace(senderName)
             ? "مستخدم"
@@ -77,10 +83,14 @@ public sealed class NotificationService : INotificationService
         CancellationToken ct = default)
     {
         if (recipientId == Guid.Empty)
+        {
             throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
 
         if (propertyId == Guid.Empty)
+        {
             throw new ArgumentException("Property id is required.", nameof(propertyId));
+        }
 
         var title = string.IsNullOrWhiteSpace(propertyTitle)
             ? "العقار"
@@ -129,7 +139,9 @@ public sealed class NotificationService : INotificationService
         CancellationToken ct = default)
     {
         if (userId == Guid.Empty)
+        {
             return Array.Empty<NotificationDto>();
+        }
 
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
@@ -149,7 +161,9 @@ public sealed class NotificationService : INotificationService
         CancellationToken ct = default)
     {
         if (notificationId == Guid.Empty || userId == Guid.Empty)
+        {
             return;
+        }
 
         var affectedRows = await _notifications.MarkAsReadAsync(
             notificationId,
@@ -170,7 +184,9 @@ public sealed class NotificationService : INotificationService
         CancellationToken ct = default)
     {
         if (userId == Guid.Empty)
+        {
             return;
+        }
 
         var affectedRows = await _notifications.MarkAllAsReadAsync(userId, ct);
 
@@ -185,7 +201,9 @@ public sealed class NotificationService : INotificationService
         CancellationToken ct = default)
     {
         if (userId == Guid.Empty)
+        {
             return 0;
+        }
 
         return await _notifications.GetUnreadCountAsync(userId, ct);
     }
@@ -196,7 +214,9 @@ public sealed class NotificationService : INotificationService
         CancellationToken ct = default)
     {
         if (notificationId == Guid.Empty || userId == Guid.Empty)
+        {
             return false;
+        }
 
         var deleted = await _notifications.DeleteAsync(notificationId, userId, ct);
 
@@ -224,7 +244,9 @@ public sealed class NotificationService : INotificationService
         CancellationToken ct = default)
     {
         if (notificationId == Guid.Empty || userId == Guid.Empty)
+        {
             return false;
+        }
 
         var deleted = await _notifications.SoftDeleteAsync(notificationId, userId, ct);
 
@@ -253,11 +275,11 @@ public sealed class NotificationService : INotificationService
         await _notifications.AddAsync(notification, ct);
 
         var dto = MapToDto(notification);
-        var groupName = NotificationHub.GetGroupName(notification.RecipientId.ToString());
+        var groupName = NotificationHub.GetGroupName(notification.RecipientId);
 
         await SendSafeAsync(
             groupName,
-            "ReceiveNotification",
+            NotificationHub.ReceiveNotificationEvent,
             dto,
             ct);
     }
@@ -265,7 +287,7 @@ public sealed class NotificationService : INotificationService
     private async Task SendSafeAsync(
         string groupName,
         string method,
-        object payload,
+        NotificationDto payload,
         CancellationToken ct)
     {
         try
@@ -274,13 +296,18 @@ public sealed class NotificationService : INotificationService
                 .Group(groupName)
                 .SendAsync(method, payload, ct);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogWarning(
                 ex,
-                "SignalR notification push failed. Group={GroupName}, Method={Method}",
+                "SignalR notification push failed. Group={GroupName}, Method={Method}, NotificationId={NotificationId}, RecipientId={RecipientId}",
                 groupName,
-                method);
+                method,
+                payload.Id);
         }
     }
 

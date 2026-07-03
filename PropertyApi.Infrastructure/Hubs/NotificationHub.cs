@@ -1,18 +1,21 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using PropertyApi.Application.Notifications.Interfaces;
 using Microsoft.Extensions.Logging;
+using PropertyApi.Application.Notifications.Interfaces;
 
 namespace PropertyApi.Infrastructure.Hubs;
 
 /// <summary>
 /// SignalR hub for authenticated real-time notifications.
-/// Each connection joins group: user_{userId}.
+/// Each authenticated connection joins group: user_{userId}.
 /// </summary>
 [Authorize]
 public sealed class NotificationHub : Hub
 {
+    public const string ReceiveNotificationEvent = "ReceiveNotification";
+    public const string UnreadCountChangedEvent = "UnreadCountChanged";
+
     private readonly INotificationService _notifications;
     private readonly ILogger<NotificationHub> _logger;
 
@@ -31,8 +34,9 @@ public sealed class NotificationHub : Hub
         if (string.IsNullOrWhiteSpace(userId))
         {
             _logger.LogWarning(
-                "SignalR notification connection rejected because the user id claim is missing. ConnectionId={ConnectionId}",
-                Context.ConnectionId);
+                "SignalR notification connection rejected because the user id claim is missing. ConnectionId={ConnectionId}, UserIdentifier={UserIdentifier}",
+                Context.ConnectionId,
+                Context.UserIdentifier);
 
             Context.Abort();
             return;
@@ -46,8 +50,9 @@ public sealed class NotificationHub : Hub
             Context.ConnectionAborted);
 
         _logger.LogInformation(
-            "SignalR notification connection established. UserId={UserId}, Group={Group}, ConnectionId={ConnectionId}",
+            "SignalR notification connection established. UserId={UserId}, UserIdentifier={UserIdentifier}, Group={Group}, ConnectionId={ConnectionId}",
             userId,
+            Context.UserIdentifier,
             groupName,
             Context.ConnectionId);
 
@@ -60,10 +65,24 @@ public sealed class NotificationHub : Hub
 
         if (!string.IsNullOrWhiteSpace(userId))
         {
-            await Groups.RemoveFromGroupAsync(
-                Context.ConnectionId,
-                GetGroupName(userId),
-                CancellationToken.None);
+            var groupName = GetGroupName(userId);
+
+            try
+            {
+                await Groups.RemoveFromGroupAsync(
+                    Context.ConnectionId,
+                    groupName,
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Failed to remove SignalR notification connection from group. UserId={UserId}, Group={Group}, ConnectionId={ConnectionId}",
+                    userId,
+                    groupName,
+                    Context.ConnectionId);
+            }
         }
 
         if (exception is not null)
@@ -86,7 +105,9 @@ public sealed class NotificationHub : Hub
         var userId = GetCurrentUserId();
 
         if (userId is null)
+        {
             throw new HubException("Authentication is required.");
+        }
 
         await _notifications.MarkAsReadAsync(
             notificationId,
@@ -98,12 +119,25 @@ public sealed class NotificationHub : Hub
             Context.ConnectionAborted);
 
         await Clients.Caller.SendAsync(
-            "UnreadCountChanged",
+            UnreadCountChangedEvent,
             unreadCount,
             Context.ConnectionAborted);
     }
 
-    public static string GetGroupName(string userId) => $"user_{userId}";
+    public static string GetGroupName(Guid userId)
+    {
+        return GetGroupName(userId.ToString("D"));
+    }
+
+    public static string GetGroupName(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            throw new ArgumentException("User id cannot be empty.", nameof(userId));
+        }
+
+        return $"user_{userId}";
+    }
 
     private string? GetCurrentUserIdText()
     {

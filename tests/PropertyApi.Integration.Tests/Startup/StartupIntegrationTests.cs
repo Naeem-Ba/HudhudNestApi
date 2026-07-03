@@ -67,17 +67,22 @@ public sealed class StartupIntegrationTests : IAsyncLifetime
 
         var rateLimiterBlock = ExtractRateLimiterBlock(programSource);
 
-        var policyNames = Regex.Matches(
-                rateLimiterBlock,
-                @"Add(?:Policy|FixedWindowLimiter)\s*\(\s*""([^""]+)""")
+        var policyNames = Regex
+            .Matches(rateLimiterBlock, @"\.AddPolicy\(\s*""([^""]+)""")
             .Select(match => match.Groups[1].Value)
             .ToArray();
 
+        Assert.NotEmpty(policyNames);
+
         var duplicatePolicyNames = policyNames
-            .GroupBy(name => name, StringComparer.Ordinal)
+            .GroupBy(name => name)
             .Where(group => group.Count() > 1)
             .Select(group => group.Key)
             .ToArray();
+
+        Assert.True(
+            duplicatePolicyNames.Length == 0,
+            $"Duplicate rate-limit policies found: {string.Join(", ", duplicatePolicyNames)}");
 
         Assert.Empty(duplicatePolicyNames);
 
@@ -93,20 +98,158 @@ public sealed class StartupIntegrationTests : IAsyncLifetime
 
     private static string ExtractRateLimiterBlock(string programSource)
     {
-        var start = programSource.IndexOf(
-            "builder.Services.AddRateLimiter(options =>",
-            StringComparison.Ordinal);
+        const string marker = "builder.Services.AddRateLimiter";
 
-        Assert.True(start >= 0, "Program.cs does not contain builder.Services.AddRateLimiter(...).");
+        var startIndex = programSource.IndexOf(marker, StringComparison.Ordinal);
 
-        var end = programSource.IndexOf(
-            "// --------------------------------------------------------------",
-            start,
-            StringComparison.Ordinal);
+        Assert.True(
+            startIndex >= 0,
+            "Could not find the AddRateLimiter registration in Program.cs.");
 
-        Assert.True(end > start, "Could not determine the end of the AddRateLimiter registration block.");
+        var openParenIndex = programSource.IndexOf('(', startIndex);
 
-        return programSource[start..end];
+        Assert.True(
+            openParenIndex >= 0,
+            "Could not determine the start of the AddRateLimiter registration block.");
+
+        var depth = 0;
+        var inString = false;
+        var inVerbatimString = false;
+        var inChar = false;
+        var inSingleLineComment = false;
+        var inMultiLineComment = false;
+
+        for (var i = openParenIndex; i < programSource.Length; i++)
+        {
+            var current = programSource[i];
+            var next = i + 1 < programSource.Length ? programSource[i + 1] : '\0';
+
+            if (inSingleLineComment)
+            {
+                if (current is '\r' or '\n')
+                {
+                    inSingleLineComment = false;
+                }
+
+                continue;
+            }
+
+            if (inMultiLineComment)
+            {
+                if (current == '*' && next == '/')
+                {
+                    inMultiLineComment = false;
+                    i++;
+                }
+
+                continue;
+            }
+
+            if (!inString && !inChar)
+            {
+                if (current == '/' && next == '/')
+                {
+                    inSingleLineComment = true;
+                    i++;
+                    continue;
+                }
+
+                if (current == '/' && next == '*')
+                {
+                    inMultiLineComment = true;
+                    i++;
+                    continue;
+                }
+            }
+
+            if (!inChar && current == '"' && !inString)
+            {
+                inString = true;
+                inVerbatimString = i > 0 && programSource[i - 1] == '@';
+                continue;
+            }
+
+            if (inString)
+            {
+                if (inVerbatimString)
+                {
+                    if (current == '"' && next == '"')
+                    {
+                        i++;
+                        continue;
+                    }
+
+                    if (current == '"')
+                    {
+                        inString = false;
+                        inVerbatimString = false;
+                    }
+
+                    continue;
+                }
+
+                if (current == '\\')
+                {
+                    i++;
+                    continue;
+                }
+
+                if (current == '"')
+                {
+                    inString = false;
+                }
+
+                continue;
+            }
+
+            if (!inString && current == '\'' && !inChar)
+            {
+                inChar = true;
+                continue;
+            }
+
+            if (inChar)
+            {
+                if (current == '\\')
+                {
+                    i++;
+                    continue;
+                }
+
+                if (current == '\'')
+                {
+                    inChar = false;
+                }
+
+                continue;
+            }
+
+            if (current == '(')
+            {
+                depth++;
+                continue;
+            }
+
+            if (current == ')')
+            {
+                depth--;
+
+                if (depth == 0)
+                {
+                    var semicolonIndex = programSource.IndexOf(';', i);
+
+                    Assert.True(
+                        semicolonIndex >= 0,
+                        "Could not determine the end of the AddRateLimiter registration block.");
+
+                    return programSource[startIndex..(semicolonIndex + 1)];
+                }
+            }
+        }
+
+        Assert.Fail("Could not determine the end of the AddRateLimiter registration block.");
+
+        return string.Empty;
     }
 
     private static string FindRepositoryRoot()

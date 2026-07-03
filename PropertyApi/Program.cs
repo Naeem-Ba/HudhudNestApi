@@ -1,6 +1,6 @@
 using System.Globalization;
-using System.Security.Claims;
 using System.Net;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using PropertyApi.Application;
 using PropertyApi.Application.Common.Interfaces;
@@ -23,7 +24,6 @@ using PropertyApi.Middleware;
 using PropertyApi.Security.Csrf;
 using PropertyApi.Security.Headers;
 using PropertyApi.Security.RateLimiting;
-using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,29 +31,35 @@ var isTestingOrCi =
     builder.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase) ||
     builder.Environment.EnvironmentName.Equals("CI", StringComparison.OrdinalIgnoreCase);
 
-var redisConnectionString =
-    builder.Configuration.GetConnectionString("Redis")
-    ?? builder.Configuration["Redis:ConnectionString"]
-    ?? builder.Configuration["RedisRateLimiting:ConnectionString"]
-    ?? builder.Configuration["REDIS_CONNECTION_STRING"]
-    ?? builder.Configuration["REDIS_URL"];
+var rawRedisConnectionString = GetRedisConnectionString(builder.Configuration);
+var redisConnectionString = NormalizeRedisConnectionString(rawRedisConnectionString);
+var hasRedisConnectionString = !string.IsNullOrWhiteSpace(redisConnectionString);
+
+if (hasRedisConnectionString)
+{
+    // Normalize all Redis-related keys so Infrastructure, RateLimiting, SignalR,
+    // and IDistributedCache read the same valid value instead of falling back to localhost:6379.
+    builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+    {
+        ["ConnectionStrings:Redis"] = redisConnectionString,
+        ["Redis:ConnectionString"] = redisConnectionString,
+        ["RedisRateLimiting:ConnectionString"] = redisConnectionString,
+        ["SignalR:Redis:ConnectionString"] = redisConnectionString
+    });
+}
 
 var redisRateLimitingEnabled =
     builder.Configuration.GetValue<bool?>("RateLimiting:Redis:Enabled")
     ?? builder.Configuration.GetValue<bool?>("RedisRateLimiting:Enabled")
     ?? builder.Environment.IsProduction();
 
-var useRedisRateLimiting =
-    redisRateLimitingEnabled &&
-    !string.IsNullOrWhiteSpace(redisConnectionString);
+var useRedisRateLimiting = redisRateLimitingEnabled && hasRedisConnectionString;
 
-if (builder.Environment.IsProduction() && !useRedisRateLimiting)
+if (builder.Environment.IsProduction() && !hasRedisConnectionString)
 {
     throw new InvalidOperationException(
-        "Redis distributed rate limiting is required in Production. Configure ConnectionStrings:Redis, Redis:ConnectionString, RedisRateLimiting:ConnectionString, REDIS_CONNECTION_STRING, or REDIS_URL.");
+        "Redis is required in Production. Configure ConnectionStrings:Redis, Redis:ConnectionString, RedisRateLimiting:ConnectionString, REDIS_CONNECTION_STRING, or REDIS_URL.");
 }
-
-
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -64,21 +70,15 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
         ForwardedHeaders.XForwardedProto |
         ForwardedHeaders.XForwardedHost;
 
-    // Some managed proxies send non-symmetric forwarded headers. Keep this
-    // relaxed, but only trust configured proxy IPs/networks by default.
     options.RequireHeaderSymmetry = false;
     options.ForwardLimit = forwardedHeadersSection.GetValue<int?>("ForwardLimit") ?? 1;
 
     var trustAllProxies = forwardedHeadersSection.GetValue<bool>("TrustAllProxies");
 
-    if (trustAllProxies && builder.Environment.IsProduction())
-    {
-        throw new InvalidOperationException(
-            "ForwardedHeaders:TrustAllProxies must not be enabled in Production. Configure KnownProxies or KnownNetworks instead.");
-    }
-
     if (trustAllProxies)
     {
+        // Use this only when the app is behind a trusted managed proxy such as Render.
+        // Prefer KnownProxies/KnownNetworks when the proxy IP range is stable.
         options.KnownNetworks.Clear();
         options.KnownProxies.Clear();
     }
@@ -100,7 +100,6 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     }
 });
 
-
 builder.Services.AddHsts(options =>
 {
     options.MaxAge = TimeSpan.FromDays(365);
@@ -108,8 +107,7 @@ builder.Services.AddHsts(options =>
     options.Preload = true;
 });
 
-// -- 1. Culture -----------------------------------------------
-// Required for Npgsql decimal/timestamp compatibility
+// -- 1. Culture ------------------------------------------------
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
@@ -121,6 +119,22 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(
     builder.Configuration,
     builder.Environment);
+
+// Force the application cache to use the same Redis value resolved above.
+// This prevents CachedSecurityStampValidator from using localhost:6379 in Production.
+if (hasRedisConnectionString)
+{
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnectionString;
+        options.InstanceName = "PropertyApi:";
+    });
+}
+else
+{
+    // Development/Testing fallback only. Production is guarded above.
+    builder.Services.AddDistributedMemoryCache();
+}
 
 builder.Services.AddPropertyApiSecurityHeaders(builder.Configuration);
 builder.Services.AddPropertyApiAntiforgery(builder.Configuration, builder.Environment);
@@ -136,8 +150,7 @@ if (useRedisRateLimiting)
 var jwtSection = builder.Configuration.GetSection("Jwt");
 var jwtKey = jwtSection["Key"]
     ?? throw new InvalidOperationException(
-        "Jwt:Key is missing. Set it via User Secrets in Development " +
-        "or as an environment variable in Production.");
+        "Jwt:Key is missing. Set it via User Secrets in Development or as an environment variable in Production.");
 
 builder.Services
     .AddAuthentication(options =>
@@ -158,8 +171,7 @@ builder.Services
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSection["Issuer"],
             ValidAudience = jwtSection["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtKey)),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
             ClockSkew = TimeSpan.FromSeconds(30)
         };
 
@@ -180,27 +192,45 @@ builder.Services
                     return;
                 }
 
-                var securityStampValidator = context.HttpContext.RequestServices
-                    .GetRequiredService<IUserSecurityStampValidator>();
+                var logger = context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("JwtSecurityStampValidation");
 
-                var validationResult = await securityStampValidator.ValidateAsync(
-                    userId,
-                    tokenSecurityStamp,
-                    context.HttpContext.RequestAborted);
-
-                if (!validationResult.IsValid)
+                try
                 {
-                    context.Fail(validationResult.FailureMessage ?? "The token is no longer valid.");
+                    var securityStampValidator = context.HttpContext.RequestServices
+                        .GetRequiredService<IUserSecurityStampValidator>();
+
+                    var validationResult = await securityStampValidator.ValidateAsync(
+                        userId,
+                        tokenSecurityStamp,
+                        context.HttpContext.RequestAborted);
+
+                    if (!validationResult.IsValid)
+                    {
+                        context.Fail(validationResult.FailureMessage ?? "The token is no longer valid.");
+                    }
+                }
+                catch (OperationCanceledException) when (context.HttpContext.RequestAborted.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // Do not let authentication infrastructure convert Redis/cache failures into HTTP 500.
+                    // The validator itself should fall back to DB; this is the final safety net.
+                    logger.LogError(ex, "Security stamp validation failed during JWT authentication.");
+                    context.Fail("Token validation failed.");
                 }
             },
 
             OnAuthenticationFailed = context =>
             {
-                if (builder.Environment.IsDevelopment())
-                {
-                    Console.WriteLine($"[JWT] Auth failed: {context.Exception.Message}");
-                }
+                var logger = context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("JwtAuthentication");
 
+                logger.LogWarning(context.Exception, "JWT authentication failed.");
                 return Task.CompletedTask;
             },
 
@@ -216,7 +246,7 @@ builder.Services
                 }
 
                 return Task.CompletedTask;
-            },
+            }
         };
     });
 
@@ -235,8 +265,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("DefaultCors", policy =>
     {
-        if (builder.Environment.IsDevelopment() ||
-            builder.Environment.EnvironmentName.Equals("CI", StringComparison.OrdinalIgnoreCase))
+        if (builder.Environment.IsDevelopment() || isTestingOrCi)
         {
             policy.AllowAnyOrigin()
                   .AllowAnyHeader()
@@ -246,48 +275,24 @@ builder.Services.AddCors(options =>
         {
             if (allowedOrigins.Length == 0)
             {
-                throw new InvalidOperationException(
-                    "Cors:AllowedOrigins is required outside Development.");
+                throw new InvalidOperationException("Cors:AllowedOrigins is required outside Development.");
             }
 
-            // ✅ إصلاح H-2: إضافة AllowCredentials() لـ Production CORS.
-            //
-            // المشكلة القديمة: كان AllowCredentials() مفقوداً في Production،
-            // مما كان يُسبِّب فشل SignalR long-polling وSSE في المتصفح.
-            //
-            // لماذا يحتاج SignalR لـ AllowCredentials؟
-            //   SignalR يُرسل Authorization header في كل طلب.
-            //   المتصفح يرفض إرسال Credentials إلى Origin غير مُصرَّح به.
-            //   بدون AllowCredentials() → المتصفح يمنع الطلب → الإشعارات الفورية تفشل.
-            //
-            // ⚠️ قاعدة مهمة: AllowCredentials() لا تعمل مع AllowAnyOrigin().
-            //   يجب دائماً استخدامها مع WithOrigins() محدد — وهو ما نفعله هنا.
             policy.WithOrigins(allowedOrigins)
                   .AllowAnyHeader()
                   .AllowAnyMethod()
-                  .AllowCredentials(); // ✅ مطلوب لـ SignalR + Cookies
+                  .AllowCredentials();
         }
     });
 });
 
-// -- 5.5 Output Cache (Redis-backed) ──────────────────────────
-// ✅ إصلاح M-2: استبدال ResponseCache المحلي بـ OutputCache الموزَّع.
-//
-// المشكلة القديمة: [ResponseCache(Duration=300)] يخزن في ذاكرة Server واحد.
-// عند تشغيل عدة Instances في Production، كل Instance يُنفِّذ الـ Query المكلفة.
-//
-// الإصلاح: OutputCache يدعم Redis → الـ Cache مشترك بين كل Instances.
-//
-// التعليم:
-//   ResponseCache = يحفظ في RAM للـ Server الحالي فقط ❌
-//   OutputCache   = يحفظ في Redis مشترك بين كل الـ Servers ✅
+// -- 5.5 Output Cache -----------------------------------------
 builder.Services.AddOutputCache(options =>
 {
-    // سياسة "market-insights": cache لمدة 5 دقائق + يمكن إبطالها بـ Tag
     options.AddPolicy("market-insights", policy =>
         policy.Expire(TimeSpan.FromMinutes(5))
-              .Tag("analytics")    // يمكن إبطال الـ cache بـ tag عند تحديث البيانات
-              .SetVaryByQuery("*")); // يحفظ نسخة مختلفة لكل countryCode مختلف
+              .Tag("analytics")
+              .SetVaryByQuery("*"));
 });
 
 // -- 6. Controllers + JSON -------------------------------------
@@ -297,8 +302,7 @@ builder.Services
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = null;
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-        options.JsonSerializerOptions.ReferenceHandler =
-            System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
 
 // -- 7. SignalR ------------------------------------------------
@@ -309,39 +313,27 @@ var signalRBuilder = builder.Services.AddSignalR(options =>
 });
 
 var signalRProvider = builder.Configuration["SignalR:Provider"];
+var requireSignalRBackplane = builder.Configuration.GetValue<bool?>("SignalR:RequireBackplane") ?? false;
 
 if (string.Equals(signalRProvider, "Redis", StringComparison.OrdinalIgnoreCase))
 {
-    var signalRRedisConnectionString =
-        builder.Configuration.GetConnectionString("SignalRRedis")
-        ?? builder.Configuration["SignalR:Redis:ConnectionString"]
-        ?? builder.Configuration.GetConnectionString("Redis")
-        ?? builder.Configuration["Redis:ConnectionString"];
-
-    if (string.IsNullOrWhiteSpace(signalRRedisConnectionString))
+    if (!hasRedisConnectionString)
     {
         throw new InvalidOperationException(
             "SignalR Redis backplane is enabled, but no Redis connection string is configured.");
     }
 
-    signalRBuilder.AddStackExchangeRedis(signalRRedisConnectionString);
+    signalRBuilder.AddStackExchangeRedis(redisConnectionString!);
 }
 else if (string.Equals(signalRProvider, "AzureSignalR", StringComparison.OrdinalIgnoreCase))
 {
     throw new InvalidOperationException(
         "SignalR:Provider=AzureSignalR is configured, but Azure SignalR registration is not implemented in this build.");
 }
-
-// ✅ فرض backplane في الإنتاج — بنفس نمط useRedisRateLimiting أعلاه (سطر 50-54).
-// بدون هذا الفحص، نسيان الإعداد يؤدي لفقدان صامت للإشعارات بين instances مختلفة
-// خلف load balancer، دون أي خطأ عند الإقلاع.
-if (builder.Environment.IsProduction() &&
-    !string.Equals(signalRProvider, "Redis", StringComparison.OrdinalIgnoreCase) &&
-    !string.Equals(signalRProvider, "AzureSignalR", StringComparison.OrdinalIgnoreCase))
+else if (builder.Environment.IsProduction() && requireSignalRBackplane)
 {
     throw new InvalidOperationException(
-        "SignalR requires a distributed backplane in Production (SignalR:Provider=Redis or AzureSignalR). " +
-        "Without it, real-time notifications will silently fail to reach users connected to a different instance.");
+        "SignalR backplane is required because SignalR:RequireBackplane=true. Configure SignalR:Provider=Redis or AzureSignalR.");
 }
 
 // -- 8. Swagger ------------------------------------------------
@@ -492,16 +484,10 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
-// --------------------------------------------------------------
 var app = builder.Build();
 
-// -- 10. Database startup ---------------------------------------
-// Apply pending EF Core migrations before any seed code runs.
-// Without this, seed queries can fail when newly added tables do not exist yet.
+// -- 10. Database startup --------------------------------------
 await ApplyPendingMigrationsAsync(app.Services, app.Configuration, app.Environment);
-
-// This seed is protected by PostgreSQL advisory transaction lock to prevent
-// duplicate inserts when multiple instances start in parallel.
 await SeedStartupDataAsync(app.Services, app.Configuration);
 
 // -- 11. Middleware order --------------------------------------
@@ -516,13 +502,11 @@ else
     app.UseHttpsRedirection();
 }
 
-// Must be early: catches unhandled exceptions before downstream middleware.
 app.UseMiddleware<ExceptionHandlingMiddleware>();
-
 app.UsePropertyApiSecurityHeaders();
 
 var swaggerEnabled = app.Environment.IsDevelopment()
-    || app.Environment.EnvironmentName.Equals("CI", StringComparison.OrdinalIgnoreCase)
+    || isTestingOrCi
     || (!app.Environment.IsProduction() && builder.Configuration.GetValue<bool>("Swagger:Enabled"));
 
 if (swaggerEnabled)
@@ -537,15 +521,9 @@ if (swaggerEnabled)
 }
 
 app.UseStaticFiles();
-
 app.UseRouting();
-
 app.UseCors("DefaultCors");
-
-// ✅ إصلاح M-2 (جزء 2): تفعيل OutputCache في الـ Pipeline.
-// يجب أن يأتي بعد UseCors وقبل UseAuthentication.
 app.UseOutputCache();
-
 app.UseAuthentication();
 
 if (useRedisRateLimiting)
@@ -566,6 +544,69 @@ app.MapHub<NotificationHub>("/notificationHub");
 
 app.Run();
 
+static string? GetRedisConnectionString(IConfiguration configuration)
+{
+    return configuration.GetConnectionString("Redis")
+        ?? configuration["Redis:ConnectionString"]
+        ?? configuration["RedisRateLimiting:ConnectionString"]
+        ?? configuration["REDIS_CONNECTION_STRING"]
+        ?? configuration["REDIS_URL"];
+}
+
+static string? NormalizeRedisConnectionString(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value))
+        return null;
+
+    var trimmed = value.Trim();
+
+    if (!trimmed.StartsWith("redis://", StringComparison.OrdinalIgnoreCase) &&
+        !trimmed.StartsWith("rediss://", StringComparison.OrdinalIgnoreCase))
+    {
+        return trimmed;
+    }
+
+    if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
+    {
+        return trimmed;
+    }
+
+    var parts = new List<string>
+    {
+        $"{uri.Host}:{uri.Port}",
+        "abortConnect=false",
+        "connectRetry=3",
+        "connectTimeout=5000",
+        "syncTimeout=5000"
+    };
+
+    if (!string.IsNullOrWhiteSpace(uri.UserInfo))
+    {
+        var userInfo = Uri.UnescapeDataString(uri.UserInfo);
+        var separatorIndex = userInfo.IndexOf(':');
+        var password = separatorIndex >= 0
+            ? userInfo[(separatorIndex + 1)..]
+            : userInfo;
+
+        if (!string.IsNullOrWhiteSpace(password))
+        {
+            parts.Add($"password={password}");
+        }
+    }
+
+    if (uri.Scheme.Equals("rediss", StringComparison.OrdinalIgnoreCase))
+    {
+        parts.Add("ssl=true");
+    }
+
+    var databaseText = uri.AbsolutePath.Trim('/');
+    if (int.TryParse(databaseText, out var database))
+    {
+        parts.Add($"defaultDatabase={database}");
+    }
+
+    return string.Join(',', parts);
+}
 
 static async Task ApplyPendingMigrationsAsync(
     IServiceProvider services,
@@ -668,31 +709,16 @@ static async Task SeedStartupDataAsync(
     await ApplicationRolesSeed.SeedAsync(roleManager);
 }
 
-// ✅ إصلاح M-3: تقسيم Rate Limiting باستخدام UserId للمستخدمين المسجلين.
-//
-// المشكلة القديمة: كان يعتمد على IP فقط، مما يسمح للمستخدم الخبيث
-// بتجاوز الحدود باستخدام VPN أو IPs مختلفة.
-//
-// الإصلاح:
-//   - المستخدم المسجل  → partition بـ "user:{userId}"  (أكثر دقة وأمناً)
-//   - المستخدم الزائر  → partition بـ "ip:{ipAddress}"  (كما كان)
-//
-// التعليم: لماذا هذا أفضل؟
-//   الـ IP يمكن تغييره بسهولة (VPN). لكن الـ UserId ثابت في الـ Token.
-//   حتى لو غيّر المهاجم IP، نفس الـ UserId سيبقى محدود.
 static string GetClientRateLimitPartitionKey(HttpContext httpContext)
 {
-    // نقرأ UserId من الـ JWT Token إذا كان المستخدم مسجلاً
     var userId = httpContext.User?
-        .FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+        .FindFirstValue(ClaimTypes.NameIdentifier);
 
-    // المستخدم المسجل: نستخدم UserId كـ partition key
     if (!string.IsNullOrWhiteSpace(userId))
     {
         return $"user:{userId}";
     }
 
-    // الزائر غير المسجل: نستخدم IP كـ partition key (كما كان)
     var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown-client";
     return $"ip:{ip}";
 }
@@ -721,8 +747,6 @@ static bool TryParseCidr(
         return false;
     }
 }
-
-
 
 public partial class Program
 {
