@@ -24,6 +24,7 @@ using PropertyApi.Infrastructure.Repositories;
 using PropertyApi.Infrastructure.Services;
 using PropertyApi.Infrastructure.Media;
 using PropertyApi.Infrastructure.Identity.Services;
+using InfrastructureApplicationRole = PropertyApi.Infrastructure.Identity.Entities.ApplicationRole;
 using PropertyApi.Infrastructure.Auth.Services;
 using PropertyApi.Infrastructure.Auth;
 using PropertyApi.Infrastructure.Email;
@@ -79,6 +80,7 @@ public static class DependencyInjection
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
         services.AddScoped<IIdentityUserService, IdentityUserService>();
+        services.AddScoped<IPureIdentityService, PureIdentityService>();
         services.AddScoped<IIdentityRoleService, IdentityRoleService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
 
@@ -206,7 +208,7 @@ public static class DependencyInjection
             }
         });
 
-        services.AddIdentity<User, ApplicationRole>(options =>
+        services.AddIdentity<User, InfrastructureApplicationRole>(options =>
         {
             options.Password.RequireDigit = true;
             options.Password.RequiredLength = 8;

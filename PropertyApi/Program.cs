@@ -20,6 +20,7 @@ using PropertyApi.Infrastructure;
 using PropertyApi.Infrastructure.Hubs;
 using PropertyApi.Infrastructure.Persistence;
 using PropertyApi.Infrastructure.Persistence.Seeds;
+using ApplicationRole = PropertyApi.Infrastructure.Identity.Entities.ApplicationRole;
 using PropertyApi.Middleware;
 using PropertyApi.Security.Csrf;
 using PropertyApi.Security.Headers;

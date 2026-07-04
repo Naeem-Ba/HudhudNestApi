@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using PropertyApi.Domain.Users.Constants;
-using PropertyApi.Domain.Users.Entities;
+using ApplicationRole = PropertyApi.Infrastructure.Identity.Entities.ApplicationRole;
 
 namespace PropertyApi.Infrastructure.Persistence.Seeds;
 

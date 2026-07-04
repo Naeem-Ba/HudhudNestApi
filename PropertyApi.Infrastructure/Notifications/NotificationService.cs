@@ -304,7 +304,7 @@ public sealed class NotificationService : INotificationService
         {
             _logger.LogWarning(
                 ex,
-                "SignalR notification push failed. Group={GroupName}, Method={Method}, NotificationId={NotificationId}, RecipientId={RecipientId}",
+                "SignalR notification push failed. Group={GroupName}, Method={Method}, NotificationId={NotificationId}",
                 groupName,
                 method,
                 payload.Id);

@@ -1427,7 +1427,7 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.ToTable("Transactions", (string)null);
                 });
 
-            modelBuilder.Entity("PropertyApi.Domain.Users.Entities.ApplicationRole", b =>
+            modelBuilder.Entity("PropertyApi.Infrastructure.Identity.Entities.ApplicationRole", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1654,7 +1654,7 @@ namespace PropertyApi.Infrastructure.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
-                    b.HasOne("PropertyApi.Domain.Users.Entities.ApplicationRole", null)
+                    b.HasOne("PropertyApi.Infrastructure.Identity.Entities.ApplicationRole", null)
                         .WithMany()
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1681,7 +1681,7 @@ namespace PropertyApi.Infrastructure.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<System.Guid>", b =>
                 {
-                    b.HasOne("PropertyApi.Domain.Users.Entities.ApplicationRole", null)
+                    b.HasOne("PropertyApi.Infrastructure.Identity.Entities.ApplicationRole", null)
                         .WithMany()
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)

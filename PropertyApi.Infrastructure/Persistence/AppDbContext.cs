@@ -9,7 +9,7 @@ using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Messaging.Entities;
 using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Infrastructure.Identity.Entities;
-using LegacyApplicationRole = PropertyApi.Domain.Users.Entities.ApplicationRole;
+using IdentityApplicationRole = PropertyApi.Infrastructure.Identity.Entities.ApplicationRole;
 using PropertyApi.Domain.Auth.Entities;
 using PropertyApi.Domain.Notifications.Entities;
 using PropertyApi.Domain.Bookings.Entities;
@@ -29,7 +29,7 @@ namespace PropertyApi.Infrastructure.Persistence;
 /// Global soft-delete filter applied to all BaseEntity types.
 /// </summary>
 public sealed class AppDbContext
-    : IdentityDbContext<User, LegacyApplicationRole, Guid>
+    : IdentityDbContext<User, IdentityApplicationRole, Guid>
 {
     private readonly IDataProtectionProvider _dataProtectionProvider;
 
@@ -80,7 +80,7 @@ public sealed class AppDbContext
 
         // -- Rename Identity tables to clean English names -------
         builder.Entity<User>().ToTable("Users");
-        builder.Entity<LegacyApplicationRole>().ToTable("Roles");
+        builder.Entity<IdentityApplicationRole>().ToTable("Roles");
         builder.Entity<IdentityUserRole<Guid>>().ToTable("UserRoles");
         builder.Entity<IdentityUserClaim<Guid>>().ToTable("UserClaims");
         builder.Entity<IdentityUserLogin<Guid>>().ToTable("UserLogins");
