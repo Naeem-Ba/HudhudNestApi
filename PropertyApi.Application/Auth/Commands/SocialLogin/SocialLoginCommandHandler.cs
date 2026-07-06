@@ -87,17 +87,56 @@ public sealed class SocialLoginCommandHandler
             return await SignInExistingUserAsync(user, request.IpAddress, ct);
         }
 
+        var hasExternalEmail =
+            !string.IsNullOrWhiteSpace(socialUser.Email);
+
         var isPrivateRelay = socialUser.Email?.EndsWith(
             "@privaterelay.appleid.com",
             StringComparison.OrdinalIgnoreCase) == true;
 
-        if (!string.IsNullOrWhiteSpace(socialUser.Email) && !isPrivateRelay)
+        // A valid provider token proves control of ProviderId, but it does not
+        // prove ownership of the supplied email unless email_verified is true.
+        if (hasExternalEmail && !socialUser.IsEmailVerified)
         {
-            var normalizedEmail = NormalizeEmail(socialUser.Email);
-            user = await _identityUsers.FindByEmailAsync(normalizedEmail, ct);
+            _logger.LogWarning(
+                "Social login rejected because the provider email is not verified. Provider={Provider}",
+                providerName);
 
-            if (user is not null && !user.IsDeleted)
+            return SocialLoginResult.Failed(
+                "The social provider did not verify the supplied email address.");
+        }
+
+        // Automatic email-based linking is deliberately disabled for Apple
+        // private relay addresses. ProviderId login still works above.
+        if (hasExternalEmail && !isPrivateRelay)
+        {
+            var normalizedEmail = NormalizeEmail(socialUser.Email!);
+
+            user = await _identityUsers.FindByEmailAsync(
+                normalizedEmail,
+                ct);
+
+            if (user is not null)
             {
+                if (user.IsDeleted)
+                {
+                    return SocialLoginResult.Failed(
+                        "The account is not available.");
+                }
+
+                // Prevent account pre-hijacking: an attacker may have created
+                // a local account with the victim's email without confirming it.
+                if (!user.EmailConfirmed)
+                {
+                    _logger.LogWarning(
+                        "Automatic social linking rejected because the local email is not confirmed. Provider={Provider}, UserId={UserId}",
+                        providerName,
+                        user.Id);
+
+                    return SocialLoginResult.Failed(
+                        "An account already uses this email. Sign in to that account and link the social provider from account settings.");
+                }
+
                 var linkResult = await _identityUsers.AddLoginAsync(
                     user,
                     providerName,
@@ -113,10 +152,14 @@ public sealed class SocialLoginCommandHandler
                         user.Id,
                         string.Join(", ", linkResult.Errors));
 
-                    return SocialLoginResult.Failed("Could not link the social login to the existing account.");
+                    return SocialLoginResult.Failed(
+                        "Could not link the social login to the existing account.");
                 }
 
-                return await SignInExistingUserAsync(user, request.IpAddress, ct);
+                return await SignInExistingUserAsync(
+                    user,
+                    request.IpAddress,
+                    ct);
             }
         }
 
@@ -163,6 +206,16 @@ public sealed class SocialLoginCommandHandler
         SocialLoginCommand request,
         CancellationToken ct)
     {
+        if (!string.IsNullOrWhiteSpace(socialUser.Email) &&
+            !socialUser.IsEmailVerified)
+        {
+            _logger.LogWarning(
+                "Social user creation rejected because provider email is not verified. Provider={Provider}",
+                socialUser.ProviderName);
+
+            return null;
+        }
+
         var now = DateTime.UtcNow;
         var email = !string.IsNullOrWhiteSpace(socialUser.Email)
             ? NormalizeEmail(socialUser.Email)
