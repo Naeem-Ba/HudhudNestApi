@@ -2,6 +2,7 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Domain.Users.Entities;
 
@@ -47,12 +48,15 @@ public sealed class RegisterCommandHandler
 {
     private readonly IIdentityUserService _identityUsers;
     private readonly ILogger<RegisterCommandHandler> _logger;
+    private readonly IUnitOfWork _unitOfWork;
 
     public RegisterCommandHandler(
         IIdentityUserService identityUsers,
+        IUnitOfWork unitOfWork,
         ILogger<RegisterCommandHandler> logger)
     {
         _identityUsers = identityUsers;
+        _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
@@ -75,30 +79,63 @@ public sealed class RegisterCommandHandler
             UpdatedAt = DateTime.UtcNow
         };
 
-        var createResult = await _identityUsers.CreateAsync(user, request.Password, ct);
-        if (!createResult.Succeeded)
+        await _unitOfWork.BeginTransactionAsync(ct);
+
+        try
         {
-            _logger.LogWarning(
-                "Registration failed for email {Email}. Errors: {Errors}",
-                email,
-                string.Join(", ", createResult.Errors));
+            var createResult = await _identityUsers.CreateAsync(
+                user,
+                request.Password,
+                ct);
 
-            return RegisterResult.Fail(createResult.Errors);
+            if (!createResult.Succeeded)
+            {
+                await _unitOfWork.RollbackTransactionAsync(ct);
+
+                _logger.LogWarning(
+                    "Registration failed for email {Email}. Errors: {Errors}",
+                    email,
+                    string.Join(", ", createResult.Errors));
+
+                return RegisterResult.Fail(createResult.Errors);
+            }
+
+            var roleResult = await _identityUsers.AddToRoleAsync(
+                user,
+                RoleNames.User,
+                ct);
+
+            if (!roleResult.Succeeded)
+            {
+                await _unitOfWork.RollbackTransactionAsync(ct);
+
+                _logger.LogWarning(
+                    "Adding default role failed for user {UserId}. Errors: {Errors}",
+                    user.Id,
+                    string.Join(", ", roleResult.Errors));
+
+                return RegisterResult.Fail(roleResult.Errors);
+            }
+
+            await _unitOfWork.CommitTransactionAsync(ct);
+
+            _logger.LogInformation(
+                "User {UserId} registered successfully.",
+                user.Id);
+
+            return RegisterResult.Ok(user.Id);
         }
-
-        var roleResult = await _identityUsers.AddToRoleAsync(user, RoleNames.User, ct);
-        if (!roleResult.Succeeded)
+        catch (Exception ex)
         {
-            _logger.LogWarning(
-                "Adding default role failed for user {UserId}. Errors: {Errors}",
-                user.Id,
-                string.Join(", ", roleResult.Errors));
+            await _unitOfWork.RollbackTransactionAsync(
+                CancellationToken.None);
 
-            return RegisterResult.Fail(roleResult.Errors);
+            _logger.LogError(
+                ex,
+                "Atomic registration failed.");
+
+            throw;
         }
-
-        _logger.LogInformation("User {UserId} registered with email {Email}.", user.Id, email);
-        return RegisterResult.Ok(user.Id);
     }
 
     private static string NormalizeEmail(string email)

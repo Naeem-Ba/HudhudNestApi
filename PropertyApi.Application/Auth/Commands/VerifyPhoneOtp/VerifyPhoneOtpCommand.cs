@@ -10,14 +10,6 @@ using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Auth.Commands.VerifyPhoneOtp;
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// Ø§Ù„Ø®Ø·ÙˆØ© 2: Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø±Ù…Ø² OTP (Ø§Ù„ØªØ³Ø¬ÙŠÙ„ + Ø§Ù„Ø¯Ø®ÙˆÙ„ ÙÙŠ Ø¢Ù†Ù Ù…Ø¹Ø§Ù‹)
-//
-// Clean Architecture:
-// Ù‡Ø°Ø§ Ø§Ù„Ù€ Handler Ù„Ø§ ÙŠØ¹ØªÙ…Ø¯ Ø¹Ù„Ù‰ concrete identity user service Ù…Ø¨Ø§Ø´Ø±Ø©.
-// ÙŠØ³ØªØ®Ø¯Ù… IIdentityUserService ÙÙ‚Ø·ØŒ ÙˆØ§Ù„ØªÙ†ÙÙŠØ° Ø§Ù„Ø­Ù‚ÙŠÙ‚ÙŠ ÙÙŠ Infrastructure.
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-
 public sealed record VerifyPhoneOtpCommand(
     string PhoneNumber,
     string Code,
@@ -35,6 +27,7 @@ public sealed class VerifyPhoneOtpCommandHandler
     private readonly IIdentityUserService _identityUsers;
     private readonly ITokenService _tokenService;
     private readonly IRefreshTokenStore _refreshTokenStore;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<VerifyPhoneOtpCommandHandler> _logger;
 
     public VerifyPhoneOtpCommandHandler(
@@ -43,6 +36,7 @@ public sealed class VerifyPhoneOtpCommandHandler
         IIdentityUserService identityUsers,
         ITokenService tokenService,
         IRefreshTokenStore refreshTokenStore,
+        IUnitOfWork unitOfWork,
         ILogger<VerifyPhoneOtpCommandHandler> logger)
     {
         _otpRepo = otpRepo;
@@ -50,6 +44,7 @@ public sealed class VerifyPhoneOtpCommandHandler
         _identityUsers = identityUsers;
         _tokenService = tokenService;
         _refreshTokenStore = refreshTokenStore;
+        _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
@@ -60,7 +55,6 @@ public sealed class VerifyPhoneOtpCommandHandler
         var phone = request.PhoneNumber.Trim();
         var code = request.Code.Trim();
 
-        // â”€â”€ 1. Ø§Ø¨Ø­Ø« Ø¹Ù† Ø¢Ø®Ø± Ø±Ù…Ø² ØµØ§Ù„Ø­ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         var otpCode = await _otpRepo.GetLatestValidAsync(
             phone,
             request.Purpose,
@@ -70,125 +64,234 @@ public sealed class VerifyPhoneOtpCommandHandler
         {
             return VerifyOtpResult.Fail(
                 "OTP_NOT_FOUND",
-                "Ù„Ø§ ÙŠÙˆØ¬Ø¯ Ø±Ù…Ø² ØµØ§Ù„Ø­ Ù„Ù‡Ø°Ø§ Ø§Ù„Ø±Ù‚Ù…. Ø§Ø·Ù„Ø¨ Ø±Ù…Ø²Ø§Ù‹ Ø¬Ø¯ÙŠØ¯Ø§Ù‹.");
+                "No valid verification code was found. Request a new code.");
         }
 
         if (!otpCode.IsValid())
         {
             var reason = otpCode.IsExpired()
-                ? "Ø§Ù†ØªÙ‡Øª ØµÙ„Ø§Ø­ÙŠØ© Ø§Ù„Ø±Ù…Ø²."
+                ? "The verification code has expired."
                 : otpCode.IsUsed
-                    ? "Ø§Ù„Ø±Ù…Ø² Ù…ÙØ³ØªØ®Ø¯ÙŽÙ… Ù…Ø³Ø¨Ù‚Ø§Ù‹."
+                    ? "The verification code has already been used."
                     : otpCode.IsExhausted()
-                        ? "ØªØ¬Ø§ÙˆØ²Øª Ø¹Ø¯Ø¯ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø§Øª."
-                        : "Ø§Ù„Ø±Ù…Ø² ØºÙŠØ± ØµØ§Ù„Ø­.";
+                        ? "The maximum number of attempts has been exceeded."
+                        : "The verification code is invalid.";
 
-            return VerifyOtpResult.Fail("OTP_INVALID", reason);
+            return VerifyOtpResult.Fail(
+                "OTP_INVALID",
+                reason);
         }
 
-        // â”€â”€ 2. ØªØ­Ù‚Ù‚ Ù…Ù† ØªØ·Ø§Ø¨Ù‚ Ø§Ù„Ø±Ù…Ø² â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        var isMatch = _otpService.Verify(code, otpCode.CodeHash);
+        var isMatch = _otpService.Verify(
+            code,
+            otpCode.CodeHash);
 
         if (!isMatch)
         {
             otpCode.IncrementAttempts();
             await _otpRepo.SaveChangesAsync(ct);
 
-            var remaining = Math.Max(0, 3 - otpCode.AttemptCount);
+            var remaining = Math.Max(
+                0,
+                3 - otpCode.AttemptCount);
 
             _logger.LogWarning(
-                "Wrong OTP attempt for {Phone}. Remaining: {Remaining}",
+                "Wrong OTP attempt for {Phone}. Remaining attempts: {Remaining}",
                 phone,
                 remaining);
 
             return VerifyOtpResult.Fail(
                 "OTP_WRONG",
                 remaining > 0
-                    ? $"الرمز غير صحيح. تبقى لك {remaining} محاولة."
-                    : "استنفدت جميع المحاولات. اطلب رمزًا جديدًا.");
+                    ? $"The verification code is incorrect. {remaining} attempt(s) remain."
+                    : "The maximum number of attempts has been exceeded. Request a new code.");
         }
 
-        // â”€â”€ 3. Ø§Ù„Ø±Ù…Ø² ØµØ­ÙŠØ­ â€” Ø¶Ø¹ Ø¹Ù„Ø§Ù…Ø© "ØªÙ… Ø§Ù„Ø§Ø³ØªØ®Ø¯Ø§Ù…" â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        otpCode.MarkAsUsed();
-        await _otpRepo.SaveChangesAsync(ct);
+        await _unitOfWork.BeginTransactionAsync(ct);
 
-        // â”€â”€ 4. Ø§Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ø£Ùˆ Ø£Ù†Ø´Ø¦Ù‡ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        var (user, isNewUser) = await GetOrCreateUserAsync(request, phone, ct);
-
-        if (user is null)
+        try
         {
-            return VerifyOtpResult.Fail(
-                "USER_CREATE_FAILED",
-                "فشل إنشاء الحساب. حاول مجددًا.");
-        }
+            /*
+             * This is an atomic conditional update.
+             * Only one concurrent request can consume the OTP.
+             */
+            var consumed = await _otpRepo.TryConsumeAsync(
+                otpCode.Id,
+                DateTime.UtcNow,
+                ct);
 
-        // â”€â”€ 5. Ø£ØµØ¯Ø± JWT + Refresh Token â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        var roles = await _identityUsers.GetRolesAsync(user, ct);
-
-        var accessToken = _tokenService.GenerateAccessToken(
-            user,
-            roles.ToArray());
-
-        var refreshToken = _tokenService.GenerateRefreshToken();
-
-        await _refreshTokenStore.StoreAsync(
-            user.Id,
-            refreshToken,
-            request.IpAddress,
-            ct);
-
-        _logger.LogInformation(
-            "Phone auth successful for {Phone}. IsNewUser: {IsNewUser}",
-            phone,
-            isNewUser);
-
-        return VerifyOtpResult.Ok(
-            isNewUser: isNewUser,
-            accessToken: accessToken,
-            refreshToken: refreshToken,
-            expiresAt: _tokenService.GetAccessTokenExpiresAtUtc(),
-            user: new UserProfileDto
+            if (!consumed)
             {
-                Id = user.Id,
-                PhoneNumber = user.PhoneNumber ?? phone,
-                Email = user.Email,
-                DisplayName = user.DisplayName,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                HasEmail = !string.IsNullOrEmpty(user.Email),
-                HasPassword = !string.IsNullOrEmpty(user.PasswordHash),
-                EmailVerified = user.EmailConfirmed
-            });
+                await _unitOfWork.RollbackTransactionAsync(ct);
+
+                return VerifyOtpResult.Fail(
+                    "OTP_ALREADY_USED",
+                    "The verification code has already been used.");
+            }
+
+            var (user, isNewUser) =
+                await GetOrCreateUserAsync(
+                    request,
+                    phone,
+                    ct);
+
+            if (user is null)
+            {
+                await _unitOfWork.RollbackTransactionAsync(ct);
+
+                return VerifyOtpResult.Fail(
+                    "USER_CREATE_FAILED",
+                    "Could not create or initialize the account.");
+            }
+
+            var roles = await _identityUsers.GetRolesAsync(
+                user,
+                ct);
+
+            /*
+             * A newly-created account must always have the default role.
+             * Do not issue tokens for a partially initialized account.
+             */
+            if (isNewUser &&
+                !roles.Contains(
+                    RoleNames.User,
+                    StringComparer.OrdinalIgnoreCase))
+            {
+                await _unitOfWork.RollbackTransactionAsync(ct);
+
+                _logger.LogError(
+                    "New phone user {UserId} does not have the required default role.",
+                    user.Id);
+
+                return VerifyOtpResult.Fail(
+                    "ROLE_ASSIGNMENT_FAILED",
+                    "Could not initialize the account.");
+            }
+
+            var accessToken =
+                _tokenService.GenerateAccessToken(
+                    user,
+                    roles.ToArray());
+
+            var refreshToken =
+                _tokenService.GenerateRefreshToken();
+
+            await _refreshTokenStore.StoreAsync(
+                user.Id,
+                refreshToken,
+                request.IpAddress,
+                ct);
+
+            /*
+             * Commit only after:
+             * - OTP consumption
+             * - user creation/update
+             * - role assignment
+             * - refresh-token persistence
+             */
+            await _unitOfWork.CommitTransactionAsync(ct);
+
+            _logger.LogInformation(
+                "Phone authentication completed successfully. UserId={UserId}, IsNewUser={IsNewUser}",
+                user.Id,
+                isNewUser);
+
+            return VerifyOtpResult.Ok(
+                isNewUser: isNewUser,
+                accessToken: accessToken,
+                refreshToken: refreshToken,
+                expiresAt:
+                    _tokenService.GetAccessTokenExpiresAtUtc(),
+                user: new UserProfileDto
+                {
+                    Id = user.Id,
+                    PhoneNumber =
+                        user.PhoneNumber ?? phone,
+                    Email = user.Email,
+                    DisplayName = user.DisplayName,
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    HasEmail =
+                        !string.IsNullOrWhiteSpace(user.Email),
+                    HasPassword =
+                        !string.IsNullOrWhiteSpace(user.PasswordHash),
+                    EmailVerified =
+                        user.EmailConfirmed
+                });
+        }
+        catch (OperationCanceledException)
+        {
+            await _unitOfWork.RollbackTransactionAsync(
+                CancellationToken.None);
+
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await _unitOfWork.RollbackTransactionAsync(
+                CancellationToken.None);
+
+            _logger.LogError(
+                ex,
+                "Atomic phone authentication failed.");
+
+            return VerifyOtpResult.Fail(
+                "PHONE_AUTH_FAILED",
+                "Could not complete phone authentication.");
+        }
     }
 
-    private async Task<(User? user, bool isNewUser)> GetOrCreateUserAsync(
-        VerifyPhoneOtpCommand request,
-        string phone,
-        CancellationToken ct)
+    private async Task<(User? user, bool isNewUser)>
+        GetOrCreateUserAsync(
+            VerifyPhoneOtpCommand request,
+            string phone,
+            CancellationToken ct)
     {
-        // Ø­Ø§Ù„ÙŠÙ‹Ø§ Ù†Ø³ØªØ®Ø¯Ù… UserName = phone Ù„Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ† Ø§Ù„Ù…Ø³Ø¬Ù„ÙŠÙ† Ø¨Ø§Ù„Ù‡Ø§ØªÙ.
-        var existingUser = await _identityUsers.FindByUserNameAsync(phone, ct);
+        var existingUser =
+            await _identityUsers.FindByUserNameAsync(
+                phone,
+                ct);
 
         if (existingUser is not null)
         {
+            if (existingUser.IsDeleted)
+            {
+                _logger.LogWarning(
+                    "Phone authentication rejected for deleted user {UserId}.",
+                    existingUser.Id);
+
+                return (null, isNewUser: false);
+            }
+
             if (!existingUser.PhoneNumberConfirmed)
             {
                 existingUser.PhoneNumberConfirmed = true;
-                var updateResult = await _identityUsers.UpdateAsync(existingUser, ct);
+                existingUser.UpdatedAt = DateTime.UtcNow;
+
+                var updateResult =
+                    await _identityUsers.UpdateAsync(
+                        existingUser,
+                        ct);
 
                 if (!updateResult.Succeeded)
                 {
                     _logger.LogError(
-                        "Failed to update phone confirmation for user {UserId}: {Errors}",
+                        "Failed to confirm phone for user {UserId}. Errors: {Errors}",
                         existingUser.Id,
-                        string.Join(", ", updateResult.Errors));
+                        string.Join(
+                            ", ",
+                            updateResult.Errors));
 
                     return (null, isNewUser: false);
                 }
             }
 
-            return (existingUser, isNewUser: false);
+            return (
+                existingUser,
+                isNewUser: false);
         }
+
+        var now = DateTime.UtcNow;
 
         var newUser = new User
         {
@@ -197,34 +300,57 @@ public sealed class VerifyPhoneOtpCommandHandler
             PhoneNumberConfirmed = true,
             Email = null,
             EmailConfirmed = false,
-            FirstName = request.FirstName?.Trim() ?? string.Empty,
-            LastName = request.LastName?.Trim() ?? string.Empty,
-            CreatedAt = DateTime.UtcNow,
+            FirstName =
+                request.FirstName?.Trim() ?? string.Empty,
+            LastName =
+                request.LastName?.Trim() ?? string.Empty,
+            CreatedAt = now,
+            UpdatedAt = now,
             IsDeleted = false
         };
 
-        var createResult = await _identityUsers.CreateAsync(newUser, ct);
+        var createResult =
+            await _identityUsers.CreateAsync(
+                newUser,
+                ct);
 
         if (!createResult.Succeeded)
         {
             _logger.LogError(
-                "Failed to create phone user: {Errors}",
-                string.Join(", ", createResult.Errors));
+                "Failed to create phone user. Errors: {Errors}",
+                string.Join(
+                    ", ",
+                    createResult.Errors));
 
             return (null, isNewUser: false);
         }
 
-        var roleResult = await _identityUsers.AddToRoleAsync(newUser, RoleNames.User, ct);
+        var roleResult =
+            await _identityUsers.AddToRoleAsync(
+                newUser,
+                RoleNames.User,
+                ct);
 
         if (!roleResult.Succeeded)
         {
             _logger.LogError(
-                "Failed to add default role to phone user {UserId}: {Errors}",
+                "Failed to add the default role to phone user {UserId}. Errors: {Errors}",
                 newUser.Id,
-                string.Join(", ", roleResult.Errors));
+                string.Join(
+                    ", ",
+                    roleResult.Errors));
+
+            /*
+             * Returning null causes Handle() to roll back:
+             * - user creation
+             * - OTP consumption
+             */
+            return (null, isNewUser: false);
         }
 
-        return (newUser, isNewUser: true);
+        return (
+            newUser,
+            isNewUser: true);
     }
 }
 
@@ -235,32 +361,38 @@ public sealed class VerifyPhoneOtpCommandValidator
     {
         RuleFor(x => x.PhoneNumber)
             .NotEmpty()
-            .WithMessage("رقم الهاتف مطلوب.")
+            .WithMessage("Phone number is required.")
             .Matches(@"^\+[1-9]\d{7,14}$")
-            .WithMessage("رقم الهاتف يجب أن يكون بصيغة دولية مثل +963911234567.");
+            .WithMessage(
+                "Phone number must use international E.164 format, for example +963911234567.");
 
         RuleFor(x => x.Code)
             .NotEmpty()
-            .WithMessage("رمز التحقق مطلوب.")
+            .WithMessage("Verification code is required.")
             .Length(6)
-            .WithMessage("رمز التحقق يتكون من 6 أرقام.")
+            .WithMessage(
+                "Verification code must contain exactly six digits.")
             .Matches(@"^\d{6}$")
-            .WithMessage("رمز التحقق يجب أن يحتوي على أرقام فقط.");
+            .WithMessage(
+                "Verification code must contain digits only.");
 
         RuleFor(x => x.FirstName)
             .MaximumLength(100)
-            .When(x => !string.IsNullOrEmpty(x.FirstName))
-            .WithMessage("الاسم الأول يجب ألا يتجاوز 100 حرف.");
+            .When(x =>
+                !string.IsNullOrWhiteSpace(x.FirstName))
+            .WithMessage(
+                "First name must not exceed 100 characters.");
 
         RuleFor(x => x.LastName)
             .MaximumLength(100)
-            .When(x => !string.IsNullOrEmpty(x.LastName))
-            .WithMessage("اسم العائلة يجب ألا يتجاوز 100 حرف.");
+            .When(x =>
+                !string.IsNullOrWhiteSpace(x.LastName))
+            .WithMessage(
+                "Last name must not exceed 100 characters.");
 
         RuleFor(x => x.Purpose)
             .IsInEnum()
-            .WithMessage("غرض رمز التحقق غير مدعوم.");
-
+            .WithMessage(
+                "The OTP purpose is not supported.");
     }
 }
-

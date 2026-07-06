@@ -20,6 +20,7 @@ public sealed class SocialLoginCommandHandler
     private readonly IJwtTokenSettings _jwtSettings;
     private readonly IAuditLogService _auditLogs;
     private readonly ILogger<SocialLoginCommandHandler> _logger;
+    private readonly IUnitOfWork _unitOfWork;
 
     public SocialLoginCommandHandler(
         IEnumerable<ISocialTokenVerifier> verifiers,
@@ -28,6 +29,7 @@ public sealed class SocialLoginCommandHandler
         IRefreshTokenRepository refreshTokens,
         IJwtTokenSettings jwtSettings,
         IAuditLogService auditLogs,
+        IUnitOfWork unitOfWork,
         ILogger<SocialLoginCommandHandler> logger)
     {
         _verifiers = verifiers;
@@ -163,42 +165,69 @@ public sealed class SocialLoginCommandHandler
             }
         }
 
-        user = await CreateUserAsync(socialUser, request, ct);
-        if (user is null)
-        {
-            return SocialLoginResult.Failed("Could not create the social login account.");
-        }
+        await _unitOfWork.BeginTransactionAsync(ct);
 
-        var addLoginResult = await _identityUsers.AddLoginAsync(
-            user,
-            providerName,
-            socialUser.ProviderId,
-            providerName,
-            ct);
-
-        if (!addLoginResult.Succeeded)
+        try
         {
-            _logger.LogWarning(
-                "Failed adding {Provider} login to new user {UserId}. Errors: {Errors}",
+            user = await CreateUserAsync(socialUser, request, ct);
+
+            if (user is null)
+            {
+                await _unitOfWork.RollbackTransactionAsync(ct);
+
+                return SocialLoginResult.Failed(
+                    "Could not create the social login account.");
+            }
+
+            var addLoginResult = await _identityUsers.AddLoginAsync(
+                user,
                 providerName,
-                user.Id,
-                string.Join(", ", addLoginResult.Errors));
+                socialUser.ProviderId,
+                providerName,
+                ct);
 
-            return SocialLoginResult.Failed("Could not link the social login to the created account.");
+            if (!addLoginResult.Succeeded)
+            {
+                await _unitOfWork.RollbackTransactionAsync(ct);
+
+                return SocialLoginResult.Failed(
+                    "Could not link the social login to the created account.");
+            }
+
+            var roleResult = await _identityUsers.AddToRoleAsync(
+                user,
+                RoleNames.User,
+                ct);
+
+            if (!roleResult.Succeeded)
+            {
+                await _unitOfWork.RollbackTransactionAsync(ct);
+
+                return SocialLoginResult.Failed(
+                    "Could not assign the default user role.");
+            }
+
+            var signInResult = await SignInExistingUserAsync(
+                user,
+                request.IpAddress,
+                ct);
+
+            if (!signInResult.Success)
+            {
+                await _unitOfWork.RollbackTransactionAsync(ct);
+                return signInResult;
+            }
+
+            await _unitOfWork.CommitTransactionAsync(ct);
+            return signInResult;
         }
-
-        var roleResult = await _identityUsers.AddToRoleAsync(user, RoleNames.User, ct);
-        if (!roleResult.Succeeded)
+        catch
         {
-            _logger.LogWarning(
-                "Failed assigning default role to social user {UserId}. Errors: {Errors}",
-                user.Id,
-                string.Join(", ", roleResult.Errors));
+            await _unitOfWork.RollbackTransactionAsync(
+                CancellationToken.None);
 
-            return SocialLoginResult.Failed("Could not assign the default user role.");
+            throw;
         }
-
-        return await SignInExistingUserAsync(user, request.IpAddress, ct);
     }
 
     private async Task<User?> CreateUserAsync(

@@ -140,6 +140,7 @@ public sealed class RegisterCommandHandlerTests
 
         var handler = new RegisterCommandHandler(
             identityUsers.Object,
+            Mock.Of<IUnitOfWork>(),
             NullLogger<RegisterCommandHandler>.Instance);
 
         var result = await handler.Handle(
@@ -175,6 +176,7 @@ public sealed class RegisterCommandHandlerTests
 
         var handler = new RegisterCommandHandler(
             identityUsers.Object,
+            Mock.Of<IUnitOfWork>(),
             NullLogger<RegisterCommandHandler>.Instance);
 
         var result = await handler.Handle(
@@ -384,4 +386,5 @@ public sealed class ResetPasswordCommandHandlerTests
             "127.0.0.1",
             It.IsAny<CancellationToken>()), Times.Once);
     }
+
 }

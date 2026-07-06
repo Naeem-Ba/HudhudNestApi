@@ -227,6 +227,27 @@ public sealed class InMemoryOtpCodeRepository : IOtpCodeRepository
         }
     }
 
+    public Task<bool> TryConsumeAsync(
+        Guid otpCodeId,
+        DateTime utcNow,
+        CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            var otpCode = _items.FirstOrDefault(o =>
+                o.Id == otpCodeId &&
+                !o.IsUsed &&
+                o.ExpiresAt > utcNow &&
+                o.AttemptCount < 3);
+
+            if (otpCode is null)
+                return Task.FromResult(false);
+
+            otpCode.MarkAsUsed();
+            return Task.FromResult(true);
+        }
+    }
+
     public Task SaveChangesAsync(CancellationToken ct = default)
         => Task.CompletedTask;
 

@@ -25,6 +25,7 @@ public sealed class SocialLoginSecurityTests
     private readonly Mock<ITokenService> _tokenService = new(MockBehavior.Loose);
     private readonly Mock<IRefreshTokenRepository> _refreshTokens = new(MockBehavior.Loose);
     private readonly Mock<IJwtTokenSettings> _jwtSettings = new(MockBehavior.Loose);
+    private readonly Mock<IUnitOfWork> _unitOfWork = new(MockBehavior.Loose);
     private readonly Mock<IAuditLogService> _auditLogs = new(MockBehavior.Loose);
     private readonly Mock<ILogger<SocialLoginCommandHandler>> _logger = new(MockBehavior.Loose);
 
@@ -350,7 +351,9 @@ public sealed class SocialLoginSecurityTests
             _refreshTokens.Object,
             _jwtSettings.Object,
             _auditLogs.Object,
+            _unitOfWork.Object,
             _logger.Object);
+
 
     private void SetupVerifiedSocialUser(SocialUserInfo socialUser)
     {
