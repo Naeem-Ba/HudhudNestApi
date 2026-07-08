@@ -1,225 +1,627 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using PropertyApi.Application.Auth.Commands.AddEmail;
 using PropertyApi.Application.Auth.Commands.VerifyEmail;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
-using PropertyApi.Domain.Users.Constants;
-using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Auth.Tests.Application.Commands;
 
-[Trait("Category", "AuthIdentityIsolation")]
+[Trait("Category", "AuthCQRS")]
 public sealed class AddEmailCommandHandlerTests
 {
-    [Fact(DisplayName = "AddEmail returns USER_NOT_FOUND when user does not exist")]
-    public async Task UserNotFound_ReturnsFail()
+    [Fact(
+        DisplayName =
+            "AddEmail returns USER_NOT_FOUND when identity does not exist")]
+    public async Task MissingIdentity_ReturnsFailure()
     {
-        var identityUsers = new Mock<IIdentityUserService>();
-        identityUsers.Setup(x => x.FindByIdAsync(
+        // Arrange
+        var userId =
+            Guid.NewGuid();
+
+        var identity =
+            new Mock<IPureIdentityService>();
+
+        identity
+            .Setup(
+                x => x.FindByIdAsync(
+                    userId,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                (IdentityAccountSnapshot?)null);
+
+        var emailService =
+            new Mock<IEmailVerificationService>();
+
+        var handler =
+            new AddEmailCommandHandler(
+                identity.Object,
+                emailService.Object,
+                NullLogger<AddEmailCommandHandler>.Instance);
+
+        // Act
+        var result =
+            await handler.Handle(
+                new AddEmailCommand(
+                    userId,
+                    "user@example.com"),
+                CancellationToken.None);
+
+        // Assert
+        Assert.False(result.Success);
+
+        identity.Verify(
+            x => x.SetEmailAsync(
                 It.IsAny<Guid>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync((User?)null);
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
 
-        var handler = new AddEmailCommandHandler(
-            identityUsers.Object,
-            Mock.Of<IEmailVerificationService>(),
-            NullLogger<AddEmailCommandHandler>.Instance);
+        identity.Verify(
+            x => x.GenerateEmailConfirmationTokenAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
 
-        var result = await handler.Handle(
-            new AddEmailCommand(Guid.NewGuid(), "naeem@example.com"),
-            CancellationToken.None);
-
-        Assert.False(result.Success);
-        Assert.Equal("USER_NOT_FOUND", result.ErrorCode);
+        emailService.Verify(
+            x => x.SendVerificationLinkAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
-    [Fact(DisplayName = "AddEmail returns EMAIL_TAKEN when another user owns the email")]
-    public async Task EmailTaken_ReturnsFail()
+    [Fact(
+        DisplayName =
+            "AddEmail rejects email owned by another identity")]
+    public async Task EmailOwnedByAnotherIdentity_ReturnsFailure()
     {
-        var currentUser = UserBuilder.Valid(id: Guid.NewGuid(), phone: "+491701111111");
-        var otherUser = UserBuilder.WithVerifiedEmail("naeem@example.com");
+        // Arrange
+        var userId =
+            Guid.NewGuid();
 
-        var identityUsers = new Mock<IIdentityUserService>();
-        identityUsers.Setup(x => x.FindByIdAsync(
-                currentUser.Id,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(currentUser);
+        var otherIdentityId =
+            Guid.NewGuid();
 
-        identityUsers.Setup(x => x.FindByEmailAsync(
-                "naeem@example.com",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(otherUser);
+        var currentIdentity =
+            CreateIdentitySnapshot(
+                identityId: userId,
+                email: null,
+                emailConfirmed: false);
 
-        var handler = new AddEmailCommandHandler(
-            identityUsers.Object,
-            Mock.Of<IEmailVerificationService>(),
-            NullLogger<AddEmailCommandHandler>.Instance);
+        var existingIdentity =
+            CreateIdentitySnapshot(
+                identityId: otherIdentityId,
+                email: "taken@example.com",
+                emailConfirmed: true);
 
-        var result = await handler.Handle(
-            new AddEmailCommand(currentUser.Id, "Naeem@Example.com"),
-            CancellationToken.None);
+        var identity =
+            new Mock<IPureIdentityService>();
 
+        identity
+            .Setup(
+                x => x.FindByIdAsync(
+                    userId,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                currentIdentity);
+
+        identity
+            .Setup(
+                x => x.FindByEmailAsync(
+                    "taken@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                existingIdentity);
+
+        var emailService =
+            new Mock<IEmailVerificationService>();
+
+        var handler =
+            new AddEmailCommandHandler(
+                identity.Object,
+                emailService.Object,
+                NullLogger<AddEmailCommandHandler>.Instance);
+
+        // Act
+        var result =
+            await handler.Handle(
+                new AddEmailCommand(
+                    userId,
+                    "Taken@Example.com"),
+                CancellationToken.None);
+
+        // Assert
         Assert.False(result.Success);
-        Assert.Equal("EMAIL_TAKEN", result.ErrorCode);
+
+        identity.Verify(
+            x => x.FindByEmailAsync(
+                "taken@example.com",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        identity.Verify(
+            x => x.SetEmailAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        identity.Verify(
+            x => x.GenerateEmailConfirmationTokenAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        emailService.Verify(
+            x => x.SendVerificationLinkAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
-    [Fact(DisplayName = "AddEmail sets normalized email and sends verification link")]
-    public async Task ValidRequest_SetsEmail_AndSendsVerificationLink()
+    [Fact(
+        DisplayName =
+            "AddEmail sets normalized email, generates token, and sends verification link")]
+    public async Task ValidRequest_SetsEmail_GeneratesToken_AndSendsLink()
     {
-        var user = UserBuilder.Valid(id: Guid.NewGuid(), phone: "+491701111111");
+        // Arrange
+        var userId =
+            Guid.NewGuid();
 
-        var identityUsers = new Mock<IIdentityUserService>();
-        identityUsers.Setup(x => x.FindByIdAsync(
-                user.Id,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
+        var currentIdentity =
+            CreateIdentitySnapshot(
+                identityId: userId,
+                email: null,
+                emailConfirmed: false);
 
-        identityUsers.Setup(x => x.FindByEmailAsync(
-                "naeem@example.com",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync((User?)null);
+        var identity =
+            new Mock<IPureIdentityService>();
 
-        identityUsers.Setup(x => x.SetEmailAsync(
-                user,
-                "naeem@example.com",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(IdentityOperationResult.Success());
+        identity
+            .Setup(
+                x => x.FindByIdAsync(
+                    userId,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                currentIdentity);
 
-        identityUsers.Setup(x => x.GenerateEmailConfirmationTokenAsync(
-                user,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync("email-token");
+        identity
+            .Setup(
+                x => x.FindByEmailAsync(
+                    "user@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                (IdentityAccountSnapshot?)null);
 
-        var emailVerification = new Mock<IEmailVerificationService>();
+        identity
+            .Setup(
+                x => x.SetEmailAsync(
+                    userId,
+                    "user@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                IdentityOperationResult.Success());
 
-        var handler = new AddEmailCommandHandler(
-            identityUsers.Object,
-            emailVerification.Object,
-            NullLogger<AddEmailCommandHandler>.Instance);
+        identity
+            .Setup(
+                x => x.GenerateEmailConfirmationTokenAsync(
+                    userId,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                "confirmation-token");
 
-        var result = await handler.Handle(
-            new AddEmailCommand(user.Id, "Naeem@Example.com"),
-            CancellationToken.None);
+        var emailService =
+            new Mock<IEmailVerificationService>();
 
+        emailService
+            .Setup(
+                x => x.SendVerificationLinkAsync(
+                    "user@example.com",
+                    "confirmation-token",
+                    It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var handler =
+            new AddEmailCommandHandler(
+                identity.Object,
+                emailService.Object,
+                NullLogger<AddEmailCommandHandler>.Instance);
+
+        // Act
+        var result =
+            await handler.Handle(
+                new AddEmailCommand(
+                    userId,
+                    " User@Example.com "),
+                CancellationToken.None);
+
+        // Assert
         Assert.True(result.Success);
-        Assert.True(result.VerificationSent);
 
-        identityUsers.Verify(x => x.SetEmailAsync(
-            user,
-            "naeem@example.com",
-            It.IsAny<CancellationToken>()), Times.Once);
+        identity.Verify(
+            x => x.FindByEmailAsync(
+                "user@example.com",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
 
-        emailVerification.Verify(x => x.SendVerificationLinkAsync(
-            "naeem@example.com",
-            "email-token",
-            It.IsAny<CancellationToken>()), Times.Once);
+        identity.Verify(
+            x => x.SetEmailAsync(
+                userId,
+                "user@example.com",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        identity.Verify(
+            x => x.GenerateEmailConfirmationTokenAsync(
+                userId,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        emailService.Verify(
+            x => x.SendVerificationLinkAsync(
+                "user@example.com",
+                "confirmation-token",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
+
+    private static IdentityAccountSnapshot
+        CreateIdentitySnapshot(
+            Guid identityId,
+            string? email,
+            bool emailConfirmed,
+            bool isDeleted = false)
+        => new(
+            IdentityId:
+                identityId,
+
+            UserAccountId:
+                identityId,
+
+            Email:
+                email,
+
+            PhoneNumber:
+                null,
+
+            EmailConfirmed:
+                emailConfirmed,
+
+            PhoneConfirmed:
+                false,
+
+            HasPassword:
+                false,
+
+            IsDeleted:
+                isDeleted,
+
+            UserName:
+                email,
+
+            SecurityStamp:
+                "security-stamp");
 }
 
-[Trait("Category", "AuthIdentityIsolation")]
+[Trait("Category", "AuthCQRS")]
 public sealed class VerifyEmailCommandHandlerTests
 {
-    [Fact(DisplayName = "VerifyEmail returns generic invalid token when user is missing")]
-    public async Task MissingUser_ReturnsInvalidToken()
+    [Fact(
+        DisplayName =
+            "VerifyEmail returns INVALID_TOKEN when identity does not exist")]
+    public async Task MissingIdentity_ReturnsInvalidToken()
     {
-        var identityUsers = new Mock<IIdentityUserService>();
-        identityUsers.Setup(x => x.FindByIdAsync(
-                It.IsAny<Guid>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync((User?)null);
+        // Arrange
+        var userId =
+            Guid.NewGuid();
 
-        var handler = new VerifyEmailCommandHandler(
-            identityUsers.Object,
-            NullLogger<VerifyEmailCommandHandler>.Instance);
+        var identity =
+            new Mock<IPureIdentityService>();
 
-        var result = await handler.Handle(
-            new VerifyEmailCommand(Guid.NewGuid(), "valid-looking-token"),
-            CancellationToken.None);
+        identity
+            .Setup(
+                x => x.FindByIdAsync(
+                    userId,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                (IdentityAccountSnapshot?)null);
 
+        var handler =
+            new VerifyEmailCommandHandler(
+                identity.Object,
+                NullLogger<VerifyEmailCommandHandler>.Instance);
+
+        // Act
+        var result =
+            await handler.Handle(
+                new VerifyEmailCommand(
+                    userId,
+                    "confirmation-token"),
+                CancellationToken.None);
+
+        // Assert
         Assert.False(result.Success);
-        Assert.Equal("INVALID_TOKEN", result.ErrorCode);
+
+        Assert.Equal(
+            "INVALID_TOKEN",
+            result.ErrorCode);
+
+        identity.Verify(
+            x => x.ConfirmEmailAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
-    [Fact(DisplayName = "VerifyEmail returns OK when email is already confirmed")]
-    public async Task AlreadyConfirmed_ReturnsOk()
+    [Fact(
+        DisplayName =
+            "VerifyEmail returns success when email is already confirmed")]
+    public async Task AlreadyConfirmed_ReturnsSuccess_WithoutConfirmCall()
     {
-        var user = UserBuilder.WithVerifiedEmail("naeem@example.com");
+        // Arrange
+        var userId =
+            Guid.NewGuid();
 
-        var identityUsers = new Mock<IIdentityUserService>();
-        identityUsers.Setup(x => x.FindByIdAsync(
-                user.Id,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
+        var snapshot =
+            CreateIdentitySnapshot(
+                identityId: userId,
+                email: "user@example.com",
+                emailConfirmed: true);
 
-        var handler = new VerifyEmailCommandHandler(
-            identityUsers.Object,
-            NullLogger<VerifyEmailCommandHandler>.Instance);
+        var identity =
+            new Mock<IPureIdentityService>();
 
-        var result = await handler.Handle(
-            new VerifyEmailCommand(user.Id, "valid-looking-token"),
-            CancellationToken.None);
+        identity
+            .Setup(
+                x => x.FindByIdAsync(
+                    userId,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(snapshot);
 
+        var handler =
+            new VerifyEmailCommandHandler(
+                identity.Object,
+                NullLogger<VerifyEmailCommandHandler>.Instance);
+
+        // Act
+        var result =
+            await handler.Handle(
+                new VerifyEmailCommand(
+                    userId,
+                    "confirmation-token"),
+                CancellationToken.None);
+
+        // Assert
         Assert.True(result.Success);
 
-        identityUsers.Verify(x => x.ConfirmEmailAsync(
-            It.IsAny<User>(),
-            It.IsAny<string>(),
-            It.IsAny<CancellationToken>()), Times.Never);
+        identity.Verify(
+            x => x.ConfirmEmailAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
-    [Fact(DisplayName = "VerifyEmail confirms valid token through identity abstraction")]
-    public async Task ValidToken_ConfirmsEmail()
+    [Fact(
+        DisplayName =
+            "VerifyEmail returns NO_EMAIL when identity has no email")]
+    public async Task IdentityWithoutEmail_ReturnsNoEmail()
     {
-        var user = UserBuilder.Valid(
-            id: Guid.NewGuid(),
-            phone: "+491701111111",
-            email: "naeem@example.com",
-            emailConfirmed: false);
+        // Arrange
+        var userId =
+            Guid.NewGuid();
 
-        var identityUsers = new Mock<IIdentityUserService>();
-        identityUsers.Setup(x => x.FindByIdAsync(
-                user.Id,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
+        var snapshot =
+            CreateIdentitySnapshot(
+                identityId: userId,
+                email: null,
+                emailConfirmed: false);
 
-        identityUsers.Setup(x => x.ConfirmEmailAsync(
-                user,
-                "valid-looking-token",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(IdentityOperationResult.Success());
+        var identity =
+            new Mock<IPureIdentityService>();
 
-        var handler = new VerifyEmailCommandHandler(
-            identityUsers.Object,
-            NullLogger<VerifyEmailCommandHandler>.Instance);
+        identity
+            .Setup(
+                x => x.FindByIdAsync(
+                    userId,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(snapshot);
 
-        var result = await handler.Handle(
-            new VerifyEmailCommand(user.Id, "valid-looking-token"),
-            CancellationToken.None);
+        var handler =
+            new VerifyEmailCommandHandler(
+                identity.Object,
+                NullLogger<VerifyEmailCommandHandler>.Instance);
 
+        // Act
+        var result =
+            await handler.Handle(
+                new VerifyEmailCommand(
+                    userId,
+                    "confirmation-token"),
+                CancellationToken.None);
+
+        // Assert
+        Assert.False(result.Success);
+
+        Assert.Equal(
+            "NO_EMAIL",
+            result.ErrorCode);
+
+        identity.Verify(
+            x => x.ConfirmEmailAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact(
+        DisplayName =
+            "VerifyEmail returns INVALID_TOKEN when confirmation fails")]
+    public async Task InvalidToken_ReturnsFailure()
+    {
+        // Arrange
+        var userId =
+            Guid.NewGuid();
+
+        var snapshot =
+            CreateIdentitySnapshot(
+                identityId: userId,
+                email: "user@example.com",
+                emailConfirmed: false);
+
+        var identity =
+            new Mock<IPureIdentityService>();
+
+        identity
+            .Setup(
+                x => x.FindByIdAsync(
+                    userId,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(snapshot);
+
+        identity
+            .Setup(
+                x => x.ConfirmEmailAsync(
+                    userId,
+                    "invalid-token",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                IdentityOperationResult.Failed(
+                    new[]
+                    {
+                        "Invalid token."
+                    }));
+
+        var handler =
+            new VerifyEmailCommandHandler(
+                identity.Object,
+                NullLogger<VerifyEmailCommandHandler>.Instance);
+
+        // Act
+        var result =
+            await handler.Handle(
+                new VerifyEmailCommand(
+                    userId,
+                    "invalid-token"),
+                CancellationToken.None);
+
+        // Assert
+        Assert.False(result.Success);
+
+        Assert.Equal(
+            "INVALID_TOKEN",
+            result.ErrorCode);
+
+        identity.Verify(
+            x => x.ConfirmEmailAsync(
+                userId,
+                "invalid-token",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact(
+        DisplayName =
+            "VerifyEmail confirms email successfully for valid token")]
+    public async Task ValidToken_ConfirmsEmail_AndReturnsSuccess()
+    {
+        // Arrange
+        var userId =
+            Guid.NewGuid();
+
+        var snapshot =
+            CreateIdentitySnapshot(
+                identityId: userId,
+                email: "user@example.com",
+                emailConfirmed: false);
+
+        var identity =
+            new Mock<IPureIdentityService>();
+
+        identity
+            .Setup(
+                x => x.FindByIdAsync(
+                    userId,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(snapshot);
+
+        identity
+            .Setup(
+                x => x.ConfirmEmailAsync(
+                    userId,
+                    "valid-confirmation-token",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                IdentityOperationResult.Success());
+
+        var handler =
+            new VerifyEmailCommandHandler(
+                identity.Object,
+                NullLogger<VerifyEmailCommandHandler>.Instance);
+
+        // Act
+        var result =
+            await handler.Handle(
+                new VerifyEmailCommand(
+                    userId,
+                    "valid-confirmation-token"),
+                CancellationToken.None);
+
+        // Assert
         Assert.True(result.Success);
 
-        identityUsers.Verify(x => x.ConfirmEmailAsync(
-            user,
-            "valid-looking-token",
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-}
+        Assert.Null(
+            result.ErrorCode);
 
-[Trait("Category", "AuthIdentityIsolation")]
-public sealed class VerifyPhoneOtpIdentityIsolationTests
-{
-    [Fact(DisplayName = "IIdentityUserService exposes phone registration operations without UserManager dependency")]
-    public void IdentityAbstraction_ContainsPhoneRegistrationOperations()
-    {
-        var methods = typeof(IIdentityUserService)
-            .GetMethods()
-            .Select(m => m.Name)
-            .ToArray();
+        Assert.Null(
+            result.ErrorMessage);
 
-        Assert.Contains(nameof(IIdentityUserService.FindByUserNameAsync), methods);
-        Assert.Contains(nameof(IIdentityUserService.CreateAsync), methods);
-        Assert.Contains(nameof(IIdentityUserService.UpdateAsync), methods);
-        Assert.Contains(nameof(IIdentityUserService.AddToRoleAsync), methods);
-        Assert.Contains(nameof(IIdentityUserService.GetRolesAsync), methods);
+        identity.Verify(
+            x => x.ConfirmEmailAsync(
+                userId,
+                "valid-confirmation-token",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
+
+    private static IdentityAccountSnapshot
+        CreateIdentitySnapshot(
+            Guid identityId,
+            string? email,
+            bool emailConfirmed,
+            bool isDeleted = false)
+        => new(
+            IdentityId:
+                identityId,
+
+            UserAccountId:
+                identityId,
+
+            Email:
+                email,
+
+            PhoneNumber:
+                null,
+
+            EmailConfirmed:
+                emailConfirmed,
+
+            PhoneConfirmed:
+                false,
+
+            HasPassword:
+                false,
+
+            IsDeleted:
+                isDeleted,
+
+            UserName:
+                email,
+
+            SecurityStamp:
+                "security-stamp");
 }

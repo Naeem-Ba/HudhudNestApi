@@ -9,96 +9,422 @@ namespace PropertyApi.Application.Tests.Users;
 public sealed class GetCurrentUserQueryHandlerTests
 {
     [Fact]
-    public async Task Handle_CombinesDomainProfileWithIdentitySnapshot()
+    public async Task Handle_CombinesUserAccountProfileWithIdentitySnapshot()
     {
-        var id = Guid.NewGuid();
-        var user = CreateUser(id);
-        var identity = new IdentityAccountSnapshot(
-            id, id, "user@example.com", "+491234", true, true, true);
-        var sut = new GetCurrentUserQueryHandler(
-            new StubIdentityService(identity, ["User"]),
-            new StubUserRepository(user));
+        // Arrange
+        var id =
+            Guid.NewGuid();
 
-        var result = await sut.Handle(new GetCurrentUserQuery(id), default);
+        var account =
+            CreateUserAccount(id);
 
+        var identity =
+            new IdentityAccountSnapshot(
+                IdentityId: id,
+                UserAccountId: id,
+                Email: "user@example.com",
+                PhoneNumber: "+49123456789",
+                EmailConfirmed: true,
+                PhoneConfirmed: true,
+                HasPassword: true,
+                IsDeleted: false);
+
+        var sut =
+            new GetCurrentUserQueryHandler(
+                new StubIdentityService(
+                    identity,
+                    ["User"]),
+                new StubUserAccountRepository(
+                    account));
+
+        // Act
+        var result =
+            await sut.Handle(
+                new GetCurrentUserQuery(id),
+                CancellationToken.None);
+
+        // Assert
         Assert.NotNull(result);
-        Assert.Equal("user@example.com", result!.Email);
-        Assert.Equal("Naeem", result.FirstName);
-        Assert.True(result.EmailConfirmed);
-        Assert.Contains("User", result.Roles);
+
+        Assert.Equal(
+            id,
+            result!.Id);
+
+        Assert.Equal(
+            "user@example.com",
+            result.Email);
+
+        Assert.Equal(
+            "Naeem",
+            result.FirstName);
+
+        Assert.Equal(
+            "User",
+            result.LastName);
+
+        Assert.Equal(
+            "Naeem User",
+            result.DisplayName);
+
+        Assert.Equal(
+            "+49123456789",
+            result.PhoneNumber);
+
+        Assert.True(
+            result.EmailConfirmed);
+
+        Assert.Contains(
+            "User",
+            result.Roles);
     }
 
     [Fact]
-    public async Task Handle_ReturnsNull_WhenDomainUserIsDeleted()
+    public async Task Handle_ReturnsNull_WhenIdentityAccountIsDeleted()
     {
-        var id = Guid.NewGuid();
-        var user = CreateUser(id);
-        user.IsDeleted = true;
-        var sut = new GetCurrentUserQueryHandler(
-            new StubIdentityService(null, []),
-            new StubUserRepository(user));
+        // Arrange
+        var id =
+            Guid.NewGuid();
 
-        var result = await sut.Handle(new GetCurrentUserQuery(id), default);
+        var identity =
+            new IdentityAccountSnapshot(
+                IdentityId: id,
+                UserAccountId: id,
+                Email: "deleted@example.com",
+                PhoneNumber: null,
+                EmailConfirmed: true,
+                PhoneConfirmed: false,
+                HasPassword: true,
+                IsDeleted: true);
 
+        var sut =
+            new GetCurrentUserQueryHandler(
+                new StubIdentityService(
+                    identity,
+                    ["User"]),
+                new StubUserAccountRepository(
+                    CreateUserAccount(id)));
+
+        // Act
+        var result =
+            await sut.Handle(
+                new GetCurrentUserQuery(id),
+                CancellationToken.None);
+
+        // Assert
         Assert.Null(result);
     }
 
     [Fact]
     public async Task Handle_ReturnsNull_WhenIdentityAccountIsMissing()
     {
-        var id = Guid.NewGuid();
-        var sut = new GetCurrentUserQueryHandler(
-            new StubIdentityService(null, []),
-            new StubUserRepository(CreateUser(id)));
+        // Arrange
+        var id =
+            Guid.NewGuid();
 
-        var result = await sut.Handle(new GetCurrentUserQuery(id), default);
+        var sut =
+            new GetCurrentUserQueryHandler(
+                new StubIdentityService(
+                    account: null,
+                    roles: []),
+                new StubUserAccountRepository(
+                    CreateUserAccount(id)));
 
+        // Act
+        var result =
+            await sut.Handle(
+                new GetCurrentUserQuery(id),
+                CancellationToken.None);
+
+        // Assert
         Assert.Null(result);
     }
 
-    private static User CreateUser(Guid id) => new()
+    [Fact]
+    public async Task Handle_ReturnsNull_WhenUserAccountIsMissing()
     {
-        Id = id,
-        FirstName = "Naeem",
-        LastName = "User",
-        CreatedAt = DateTime.UtcNow
-    };
+        // Arrange
+        var id =
+            Guid.NewGuid();
+
+        var identity =
+            new IdentityAccountSnapshot(
+                IdentityId: id,
+                UserAccountId: id,
+                Email: "user@example.com",
+                PhoneNumber: null,
+                EmailConfirmed: true,
+                PhoneConfirmed: false,
+                HasPassword: true,
+                IsDeleted: false);
+
+        var sut =
+            new GetCurrentUserQueryHandler(
+                new StubIdentityService(
+                    identity,
+                    ["User"]),
+                new StubUserAccountRepository(
+                    null));
+
+        // Act
+        var result =
+            await sut.Handle(
+                new GetCurrentUserQuery(id),
+                CancellationToken.None);
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    private static UserAccount CreateUserAccount(
+        Guid id)
+    {
+        var now =
+            DateTime.UtcNow;
+
+        var account =
+            UserAccount.Create(
+                id,
+                "Naeem",
+                "User",
+                now);
+
+        account.UpdateProfile(
+            "Naeem",
+            "User",
+            "Naeem User",
+            now);
+
+        return account;
+    }
 
     private sealed class StubIdentityService(
         IdentityAccountSnapshot? account,
-        IReadOnlyList<string> roles) : IPureIdentityService
+        IReadOnlyList<string> roles)
+        : IPureIdentityService
     {
-        public Task<IdentityAccountSnapshot?> FindByIdAsync(Guid identityId, CancellationToken ct = default)
-            => Task.FromResult(account);
+        public Task<IdentityOperationResult>
+    SetEmailAsync(
+        Guid identityId,
+        string email,
+        CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task<IReadOnlyList<string>> GetRolesAsync(Guid identityId, CancellationToken ct = default)
-            => Task.FromResult(roles);
+        public Task<string>
+            GenerateEmailConfirmationTokenAsync(
+                Guid identityId,
+                CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task<IdentityAccountSnapshot?> FindByEmailAsync(string email, CancellationToken ct = default)
-            => throw new NotSupportedException();
+        public Task<IdentityOperationResult>
+            ConfirmEmailAsync(
+                Guid identityId,
+                string token,
+                CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task<IdentityOperationResult> CreateAsync(CreateIdentityAccount request, CancellationToken ct = default)
-            => throw new NotSupportedException();
+        public Task<IdentityOperationResult>
+    ChangePasswordAsync(
+        Guid identityId,
+        string currentPassword,
+        string newPassword,
+        CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task<bool> CheckPasswordAsync(Guid identityId, string password, CancellationToken ct = default)
-            => throw new NotSupportedException();
+        public Task<string>
+    GeneratePasswordResetTokenAsync(
+        Guid identityId,
+        CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task<IdentityOperationResult> AddToRoleAsync(Guid identityId, string role, CancellationToken ct = default)
-            => throw new NotSupportedException();
+        public Task<IdentityOperationResult>
+            ResetPasswordAsync(
+                Guid identityId,
+                string token,
+                string newPassword,
+                CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IdentityOperationResult>
+            RecordCredentialChangeAsync(
+                Guid identityId,
+                DateTime changedAtUtc,
+                CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+        public Task<IdentityAccountSnapshot?>
+            FindByIdAsync(
+                Guid identityId,
+                CancellationToken ct = default)
+        {
+            if (account is null ||
+                account.IdentityId != identityId)
+            {
+                return Task.FromResult<
+                    IdentityAccountSnapshot?>(
+                        null);
+            }
+
+            return Task.FromResult<
+                IdentityAccountSnapshot?>(
+                    account);
+        }
+
+        public Task<IReadOnlyList<string>>
+            GetRolesAsync(
+                Guid identityId,
+                CancellationToken ct = default)
+        {
+            return Task.FromResult(
+                roles);
+        }
+
+        public Task<IdentityAccountSnapshot?>
+            FindByEmailAsync(
+                string email,
+                CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+        public Task<IdentityAccountSnapshot?>
+    FindByLoginAsync(
+        string loginProvider,
+        string providerKey,
+        CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IdentityAccountSnapshot?>
+    FindByPhoneNumberAsync(
+        string phoneNumber,
+        CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IdentityOperationResult>
+            ConfirmPhoneNumberAsync(
+                Guid identityId,
+                DateTime confirmedAtUtc,
+                CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IdentityOperationResult>
+    SetPhoneNumberAsync(
+        Guid identityId,
+        string? phoneNumber,
+        DateTime changedAtUtc,
+        CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+        public Task<IdentityOperationResult>
+            AddLoginAsync(
+                Guid identityId,
+                string loginProvider,
+                string providerKey,
+                string providerDisplayName,
+                CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IdentityOperationResult>
+            CreateAsync(
+                CreateIdentityAccount request,
+                CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IdentityOperationResult>
+    SoftDeleteAsync(
+        Guid identityId,
+        DateTime deletedAtUtc,
+        CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<bool> CheckPasswordAsync(
+            Guid identityId,
+            string password,
+            CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IdentityOperationResult>
+            AddToRoleAsync(
+                Guid identityId,
+                string role,
+                CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IdentityOperationResult>
+            UpdateSecurityStampAsync(
+                Guid identityId,
+                CancellationToken ct = default)
+        {
+            return Task.FromResult(
+                IdentityOperationResult.Success());
+        }
+
+        public Task<IdentityOperationResult>
+            RecordSuccessfulLoginAsync(
+                Guid identityId,
+                DateTime loginAtUtc,
+                CancellationToken ct = default)
+        {
+            return Task.FromResult(
+                IdentityOperationResult.Success());
+        }
     }
 
-    private sealed class StubUserRepository(User? user) : IUserRepository
+    private sealed class StubUserAccountRepository(
+        UserAccount? account)
+        : IUserAccountRepository
     {
-        public Task<User?> GetByIdAsync(Guid id, CancellationToken ct = default)
-            => Task.FromResult(user);
+        public Task<UserAccount?> GetByIdAsync(
+            Guid id,
+            CancellationToken ct = default)
+        {
+            if (account is null ||
+                account.Id != id)
+            {
+                return Task.FromResult<
+                    UserAccount?>(
+                        null);
+            }
 
-        public Task<User?> GetByEmailAsync(string email, CancellationToken ct = default)
-            => throw new NotSupportedException();
+            return Task.FromResult<
+                UserAccount?>(
+                    account);
+        }
 
-        public Task<IReadOnlyList<User>> GetAllActiveAsync(CancellationToken ct = default)
-            => throw new NotSupportedException();
-
-        public Task<bool> ExistsAsync(Guid id, CancellationToken ct = default)
-            => throw new NotSupportedException();
+        public Task AddAsync(
+            UserAccount newAccount,
+            CancellationToken ct = default)
+        {
+            throw new NotSupportedException(
+                "This test repository is read-only.");
+        }
     }
 }

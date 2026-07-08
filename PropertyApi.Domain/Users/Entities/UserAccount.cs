@@ -1,77 +1,179 @@
-﻿
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿namespace PropertyApi.Domain.Users.Entities;
 
-namespace PropertyApi.Domain.Users.Entities;
-
-/// <summary>Business profile of a platform user. Contains no authentication state.</summary>
+/// <summary>
+/// Business profile of a platform user.
+///
+/// Contains profile, localization, and business information only.
+/// Authentication and account-security state belong to the Identity layer.
+/// </summary>
 public sealed class UserAccount
 {
-    private UserAccount() { }
+    private UserAccount()
+    {
+    }
 
     public Guid Id { get; private set; }
-    public string FirstName { get; private set; } = string.Empty;
-    public string LastName { get; private set; } = string.Empty;
+
+    public string FirstName { get; private set; } =
+        string.Empty;
+
+    public string LastName { get; private set; } =
+        string.Empty;
+
     public string? DisplayName { get; private set; }
+
     public string? TaxNumber { get; private set; }
+
     public string? ProfileImageUrl { get; private set; }
+
     public string? WhatsAppNumber { get; private set; }
-    public string PreferredLanguage { get; private set; } = "en";
-    public string PreferredCurrency { get; private set; } = "EUR";
+
+    public string PreferredLanguage { get; private set; } =
+        "en";
+
+    public string PreferredCurrency { get; private set; } =
+        "EUR";
+
     public string? CountryCode { get; private set; }
-    public bool IsBanned { get; private set; }
-    public string? BanReason { get; private set; }
-    public DateTime? LastLoginAt { get; private set; }
+
     public DateTime CreatedAt { get; private set; }
+
     public DateTime UpdatedAt { get; private set; }
 
-    public static UserAccount Create(Guid id, string firstName, string lastName, DateTime utcNow)
+    public static UserAccount Create(
+        Guid id,
+        string firstName,
+        string lastName,
+        DateTime utcNow)
     {
-        if (id == Guid.Empty) throw new ArgumentException("User id is required.", nameof(id));
-        if (string.IsNullOrWhiteSpace(firstName)) throw new ArgumentException("First name is required.", nameof(firstName));
-        if (string.IsNullOrWhiteSpace(lastName)) throw new ArgumentException("Last name is required.", nameof(lastName));
+        if (id == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "User account id is required.",
+                nameof(id));
+        }
+
+        if (string.IsNullOrWhiteSpace(firstName))
+        {
+            throw new ArgumentException(
+                "First name is required.",
+                nameof(firstName));
+        }
+
+        if (string.IsNullOrWhiteSpace(lastName))
+        {
+            throw new ArgumentException(
+                "Last name is required.",
+                nameof(lastName));
+        }
 
         return new UserAccount
         {
-            Id = id,
-            FirstName = firstName.Trim(),
-            LastName = lastName.Trim(),
-            CreatedAt = utcNow,
-            UpdatedAt = utcNow
+            Id =
+                id,
+
+            FirstName =
+                firstName.Trim(),
+
+            LastName =
+                lastName.Trim(),
+
+            CreatedAt =
+                utcNow,
+
+            UpdatedAt =
+                utcNow
         };
     }
 
-    public void UpdateProfile(string firstName, string lastName, string? displayName, DateTime utcNow)
+    public void UpdateProfile(
+        string firstName,
+        string lastName,
+        string? displayName,
+        DateTime utcNow)
     {
-        if (string.IsNullOrWhiteSpace(firstName)) throw new ArgumentException("First name is required.", nameof(firstName));
-        if (string.IsNullOrWhiteSpace(lastName)) throw new ArgumentException("Last name is required.", nameof(lastName));
-        FirstName = firstName.Trim();
-        LastName = lastName.Trim();
-        DisplayName = string.IsNullOrWhiteSpace(displayName) ? null : displayName.Trim();
-        UpdatedAt = utcNow;
+        if (string.IsNullOrWhiteSpace(firstName))
+        {
+            throw new ArgumentException(
+                "First name is required.",
+                nameof(firstName));
+        }
+
+        if (string.IsNullOrWhiteSpace(lastName))
+        {
+            throw new ArgumentException(
+                "Last name is required.",
+                nameof(lastName));
+        }
+
+        FirstName =
+            firstName.Trim();
+
+        LastName =
+            lastName.Trim();
+
+        DisplayName =
+            string.IsNullOrWhiteSpace(displayName)
+                ? null
+                : displayName.Trim();
+
+        UpdatedAt =
+            utcNow;
     }
 
-    public void Ban(string reason, DateTime utcNow)
+    public void UpdateProfileImage(
+        string? profileImageUrl,
+        DateTime utcNow)
     {
-        if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("Ban reason is required.", nameof(reason));
-        IsBanned = true;
-        BanReason = reason.Trim();
-        UpdatedAt = utcNow;
+        ProfileImageUrl =
+            string.IsNullOrWhiteSpace(profileImageUrl)
+                ? null
+                : profileImageUrl.Trim();
+
+        UpdatedAt =
+            utcNow;
     }
 
-    public void Unban(DateTime utcNow)
+    public void UpdatePreferences(
+        string preferredLanguage,
+        string preferredCurrency,
+        string? countryCode,
+        DateTime utcNow)
     {
-        IsBanned = false;
-        BanReason = null;
-        UpdatedAt = utcNow;
-    }
+        if (string.IsNullOrWhiteSpace(
+                preferredLanguage))
+        {
+            throw new ArgumentException(
+                "Preferred language is required.",
+                nameof(preferredLanguage));
+        }
 
-    public void RecordSuccessfulLogin(DateTime utcNow)
-    {
-        LastLoginAt = utcNow;
-        UpdatedAt = utcNow;
+        if (string.IsNullOrWhiteSpace(
+                preferredCurrency))
+        {
+            throw new ArgumentException(
+                "Preferred currency is required.",
+                nameof(preferredCurrency));
+        }
+
+        PreferredLanguage =
+            preferredLanguage
+                .Trim()
+                .ToLowerInvariant();
+
+        PreferredCurrency =
+            preferredCurrency
+                .Trim()
+                .ToUpperInvariant();
+
+        CountryCode =
+            string.IsNullOrWhiteSpace(countryCode)
+                ? null
+                : countryCode
+                    .Trim()
+                    .ToUpperInvariant();
+
+        UpdatedAt =
+            utcNow;
     }
 }

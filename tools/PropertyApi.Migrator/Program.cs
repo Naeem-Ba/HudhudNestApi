@@ -7,11 +7,16 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Infrastructure;
 using PropertyApi.Infrastructure.Persistence;
+using PropertyApi.Infrastructure.Persistence.Backfills;
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder =
+    Host.CreateApplicationBuilder(args);
 
 builder.Configuration
-    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+    .AddJsonFile(
+        "appsettings.json",
+        optional: true,
+        reloadOnChange: false)
     .AddJsonFile(
         $"appsettings.{builder.Environment.EnvironmentName}.json",
         optional: true,
@@ -19,63 +24,118 @@ builder.Configuration
     .AddEnvironmentVariables()
     .AddCommandLine(args);
 
+var runPhoneLookupHashBackfill =
+    string.Equals(
+        builder.Configuration[
+            "backfill-phone-lookup-hash"],
+        "true",
+        StringComparison.OrdinalIgnoreCase);
+
 builder.Services.AddInfrastructure(
     builder.Configuration,
     builder.Environment);
 
-using var host = builder.Build();
+using var host =
+    builder.Build();
 
-var logger = host.Services
-    .GetRequiredService<ILoggerFactory>()
-    .CreateLogger("PropertyApi.Migrator");
+var logger =
+    host.Services
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger(
+            "PropertyApi.Migrator");
 
-await using var scope = host.Services.CreateAsyncScope();
+await using var scope =
+    host.Services.CreateAsyncScope();
 
-var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+var services =
+    scope.ServiceProvider;
+
+var db =
+    services.GetRequiredService<AppDbContext>();
 
 try
 {
-    logger.LogInformation("Starting database migration...");
+    logger.LogInformation(
+        "Starting database migration process.");
 
-    var pendingMigrations = await db.Database
-        .GetPendingMigrationsAsync();
+    var pendingMigrations =
+        await db.Database
+            .GetPendingMigrationsAsync();
 
-    var pendingMigrationList = pendingMigrations.ToList();
+    var pendingMigrationList =
+        pendingMigrations.ToList();
 
     if (pendingMigrationList.Count == 0)
     {
-        logger.LogInformation("No pending migrations found. Database is already up to date.");
-        return 0;
+        logger.LogInformation(
+            "No pending migrations found. Database schema is already up to date.");
+    }
+    else
+    {
+        logger.LogInformation(
+            "Found {Count} pending migration(s): {Migrations}",
+            pendingMigrationList.Count,
+            string.Join(
+                ", ",
+                pendingMigrationList));
+
+        var migrator =
+            db.Database
+                .GetInfrastructure()
+                .GetRequiredService<IMigrator>();
+
+        await migrator.MigrateAsync();
+
+        logger.LogInformation(
+            "Database schema migration completed successfully.");
+    }
+
+    if (runPhoneLookupHashBackfill)
+    {
+        logger.LogInformation(
+            "PhoneNumberLookupHash backfill was explicitly requested.");
+
+        var backfill =
+            services.GetRequiredService<
+                PhoneNumberLookupHashBackfill>();
+
+        var result =
+            await backfill.RunAsync();
+
+        logger.LogInformation(
+            "Phone lookup backfill result: " +
+            "UsersWithPhone={UsersWithPhone}, " +
+            "MissingBefore={MissingBefore}, " +
+            "Updated={Updated}, " +
+            "MissingAfter={MissingAfter}",
+            result.UsersWithPhone,
+            result.MissingBefore,
+            result.Updated,
+            result.MissingAfter);
+    }
+    else
+    {
+        logger.LogInformation(
+            "PhoneNumberLookupHash backfill was not requested. Skipping.");
     }
 
     logger.LogInformation(
-        "Found {Count} pending migration(s): {Migrations}",
-        pendingMigrationList.Count,
-        string.Join(", ", pendingMigrationList));
+        "Migration process completed successfully.");
 
-    var migrator = db.Database
-        .GetInfrastructure()
-        .GetRequiredService<IMigrator>();
-
-    await migrator.MigrateAsync();
-
-    logger.LogInformation("Database migration completed successfully.");
     return 0;
+}
+catch (OperationCanceledException)
+{
+    logger.LogWarning(
+        "Migration process was cancelled.");
+
+    return 2;
 }
 catch (Exception ex)
 {
-    logger.LogError(ex, "Database migration failed.");
-
-    /*
-     * Rollback policy:
-     * EF Core migrations should not be automatically rolled back here.
-     * In production, rollback should be handled by deployment tooling:
-     *
-     * 1. Stop deployment / mark release as failed.
-     * 2. Restore database backup if schema migration is destructive.
-     * 3. Redeploy previous application version.
-     * 4. Run explicit rollback migration only if it was reviewed.
-     */
+    logger.LogError(
+        ex,
+        "Database migration or backfill process failed.");
 
     return 1;
 }

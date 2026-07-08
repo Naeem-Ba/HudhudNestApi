@@ -51,6 +51,12 @@ public class User : IdentityUser<Guid>
     /// </summary>
     public string? WhatsAppNumber { get; set; }
 
+    public string? PhoneNumberLookupHash
+    {
+        get;
+        set;
+    }
+
     /// <summary>هل الحساب محظور من قِبل الإدارة؟</summary>
     public bool IsBanned { get; set; } = false;
 

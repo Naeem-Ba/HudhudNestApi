@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Auth.Commands.ForgotPassword;
@@ -11,41 +12,58 @@ namespace PropertyApi.Application.Auth.Commands.ForgotPassword;
 public sealed record ForgotPasswordCommand(
     string Email,
     string? RequestScheme,
-    string? RequestHost) : IRequest<ForgotPasswordResult>;
+    string? RequestHost)
+    : IRequest<ForgotPasswordResult>;
 
 public sealed record ForgotPasswordResult
 {
     public bool Success { get; init; }
-    public string Message { get; init; } = string.Empty;
 
-    public static ForgotPasswordResult Ok() => new()
-    {
-        Success = true,
-        Message = "If the email is registered, a password reset link has been sent."
-    };
+    public string Message { get; init; } =
+        string.Empty;
 
-    public static ForgotPasswordResult BadRequest(string message) => new()
-    {
-        Success = false,
-        Message = message
-    };
+    public static ForgotPasswordResult Ok()
+        => new()
+        {
+            Success = true,
+            Message =
+                "If the email is registered, a password reset link has been sent."
+        };
+
+    public static ForgotPasswordResult BadRequest(
+        string message)
+        => new()
+        {
+            Success = false,
+            Message = message
+        };
 }
 
 public sealed class ForgotPasswordCommandHandler
-    : IRequestHandler<ForgotPasswordCommand, ForgotPasswordResult>
+    : IRequestHandler<
+        ForgotPasswordCommand,
+        ForgotPasswordResult>
 {
-    private readonly IIdentityUserService _identityUsers;
+    private readonly IPureIdentityService _identity;
+
+    private readonly IUserAccountRepository _userAccounts;
+
     private readonly IApplicationEmailSender _emailSender;
+
     private readonly IPasswordResetUrlBuilder _urlBuilder;
-    private readonly ILogger<ForgotPasswordCommandHandler> _logger;
+
+    private readonly ILogger<ForgotPasswordCommandHandler>
+        _logger;
 
     public ForgotPasswordCommandHandler(
-        IIdentityUserService identityUsers,
+        IPureIdentityService identity,
+        IUserAccountRepository userAccounts,
         IApplicationEmailSender emailSender,
         IPasswordResetUrlBuilder urlBuilder,
         ILogger<ForgotPasswordCommandHandler> logger)
     {
-        _identityUsers = identityUsers;
+        _identity = identity;
+        _userAccounts = userAccounts;
         _emailSender = emailSender;
         _urlBuilder = urlBuilder;
         _logger = logger;
@@ -55,32 +73,60 @@ public sealed class ForgotPasswordCommandHandler
         ForgotPasswordCommand request,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(request.Email))
-            return ForgotPasswordResult.BadRequest("Email is required.");
-
-        var email = NormalizeEmail(request.Email);
-        var user = await _identityUsers.FindByEmailAsync(email, ct);
-
-        if (user is not null && !user.IsDeleted && !string.IsNullOrWhiteSpace(user.Email))
+        if (string.IsNullOrWhiteSpace(
+                request.Email))
         {
-            var token = await _identityUsers.GeneratePasswordResetTokenAsync(user, ct);
+            return ForgotPasswordResult.BadRequest(
+                "Email is required.");
+        }
 
-            var resetUrl = _urlBuilder.Build(
+        var email =
+            NormalizeEmail(request.Email);
+
+        var identity =
+            await _identity.FindByEmailAsync(
                 email,
-                token,
-                request.RequestScheme,
-                request.RequestHost);
+                ct);
 
-            var emailBody = BuildPasswordResetEmailBody(user, resetUrl);
+        if (identity is not null &&
+            !identity.IsDeleted &&
+            !string.IsNullOrWhiteSpace(
+                identity.Email))
+        {
+            var token =
+                await _identity
+                    .GeneratePasswordResetTokenAsync(
+                        identity.IdentityId,
+                        ct);
+
+            var resetUrl =
+                _urlBuilder.Build(
+                    email,
+                    token,
+                    request.RequestScheme,
+                    request.RequestHost);
+
+            var account =
+                await _userAccounts.GetByIdAsync(
+                    identity.UserAccountId,
+                    ct);
+
+            var displayName =
+                BuildDisplayName(account);
+
+            var emailBody =
+                BuildPasswordResetEmailBody(
+                    displayName,
+                    resetUrl);
 
             await _emailSender.SendEmailAsync(
-                user.Email!,
+                identity.Email,
                 "Reset your password",
                 emailBody);
 
             _logger.LogInformation(
-                "Password reset email sent for user {UserId}.",
-                user.Id);
+                "Password reset email sent for identity {IdentityId}.",
+                identity.IdentityId);
         }
         else
         {
@@ -93,19 +139,37 @@ public sealed class ForgotPasswordCommandHandler
         return ForgotPasswordResult.Ok();
     }
 
-    private static string BuildPasswordResetEmailBody(User user, string resetUrl)
+    private static string BuildDisplayName(
+        UserAccount? account)
     {
-        var name = !string.IsNullOrWhiteSpace(user.DisplayName)
-            ? user.DisplayName
-            : $"{user.FirstName} {user.LastName}".Trim();
+        if (account is null)
+        {
+            return "there";
+        }
 
-        if (string.IsNullOrWhiteSpace(name))
-            name = "there";
+        if (!string.IsNullOrWhiteSpace(
+                account.DisplayName))
+        {
+            return account.DisplayName;
+        }
 
+        var name =
+            $"{account.FirstName} {account.LastName}"
+                .Trim();
+
+        return string.IsNullOrWhiteSpace(name)
+            ? "there"
+            : name;
+    }
+
+    private static string BuildPasswordResetEmailBody(
+        string displayName,
+        string resetUrl)
+    {
         return $"""
             <html>
             <body style="font-family:Arial,sans-serif;line-height:1.6">
-                <p>Hello {WebUtility.HtmlEncode(name)},</p>
+                <p>Hello {WebUtility.HtmlEncode(displayName)},</p>
                 <p>We received a request to reset your PropertyApi password.</p>
                 <p><a href="{WebUtility.HtmlEncode(resetUrl)}">Reset your password</a></p>
                 <p>If you did not request this, you can safely ignore this email.</p>
@@ -114,8 +178,11 @@ public sealed class ForgotPasswordCommandHandler
             """;
     }
 
-    private static string NormalizeEmail(string email)
-        => email.Trim().ToLowerInvariant();
+    private static string NormalizeEmail(
+        string email)
+        => email
+            .Trim()
+            .ToLowerInvariant();
 }
 
 public sealed class ForgotPasswordCommandValidator
@@ -129,4 +196,3 @@ public sealed class ForgotPasswordCommandValidator
             .EmailAddress();
     }
 }
-

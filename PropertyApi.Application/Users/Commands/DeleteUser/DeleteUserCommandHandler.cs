@@ -7,14 +7,14 @@ namespace PropertyApi.Application.Users.Commands.DeleteUser;
 public sealed class DeleteUserCommandHandler
     : IRequestHandler<DeleteUserCommand, DeleteUserResult>
 {
-    private readonly IIdentityUserService _identityUsers;
+    private readonly IPureIdentityService _identity;
     private readonly ILogger<DeleteUserCommandHandler> _logger;
 
     public DeleteUserCommandHandler(
-        IIdentityUserService identityUsers,
+        IPureIdentityService identity,
         ILogger<DeleteUserCommandHandler> logger)
     {
-        _identityUsers = identityUsers;
+        _identity = identity;
         _logger = logger;
     }
 
@@ -22,35 +22,62 @@ public sealed class DeleteUserCommandHandler
         DeleteUserCommand request,
         CancellationToken cancellationToken)
     {
-        var user = await _identityUsers.FindByIdAsync(request.UserId, cancellationToken);
-        if (user is null || user.IsDeleted)
+        var identity =
+            await _identity.FindByIdAsync(
+                request.UserId,
+                cancellationToken);
+
+        if (identity is null ||
+            identity.IsDeleted)
+        {
             return DeleteUserResult.UserNotFound();
+        }
 
-        user.IsDeleted = true;
-        user.DeletedAt = DateTime.UtcNow;
-        user.UpdatedAt = DateTime.UtcNow;
+        var now =
+            DateTime.UtcNow;
 
-        var stampResult = await _identityUsers.UpdateSecurityStampAsync(user, cancellationToken);
+        /*
+         * Rotate the security stamp first so existing access tokens
+         * can no longer rely on the previous authentication stamp.
+         *
+         * Preserve the existing behavior:
+         * a stamp-update failure is logged but does not prevent
+         * the soft-delete attempt.
+         */
+        var stampResult =
+            await _identity.UpdateSecurityStampAsync(
+                identity.IdentityId,
+                cancellationToken);
+
         if (!stampResult.Succeeded)
         {
             _logger.LogWarning(
-                "Security stamp update failed while deleting user {UserId}. Errors: {Errors}",
-                request.UserId,
-                string.Join(", ", stampResult.Errors));
+                "Security stamp update failed while deleting identity {IdentityId}. Errors: {Errors}",
+                identity.IdentityId,
+                string.Join(
+                    ", ",
+                    stampResult.Errors));
         }
 
-        var result = await _identityUsers.UpdateAsync(user, cancellationToken);
-        if (!result.Succeeded)
+        var deleteResult =
+            await _identity.SoftDeleteAsync(
+                identity.IdentityId,
+                now,
+                cancellationToken);
+
+        if (!deleteResult.Succeeded)
         {
             _logger.LogWarning(
-                "Soft delete failed for user {UserId}. Errors: {Errors}",
-                request.UserId,
-                string.Join(", ", result.Errors));
+                "Soft delete failed for identity {IdentityId}. Errors: {Errors}",
+                identity.IdentityId,
+                string.Join(
+                    ", ",
+                    deleteResult.Errors));
 
-            return DeleteUserResult.Fail(result.Errors);
+            return DeleteUserResult.Fail(
+                deleteResult.Errors);
         }
 
         return DeleteUserResult.Ok();
     }
 }
-

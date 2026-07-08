@@ -47,6 +47,7 @@ public sealed class AppDbContext
     }
 
     // -- DbSets --------------------------------------------------
+    public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
     public DbSet<Property> Properties => Set<Property>();
     public DbSet<PropertyImage> PropertyImages => Set<PropertyImage>();
     public DbSet<Amenity> Amenities => Set<Amenity>();
@@ -88,6 +89,7 @@ public sealed class AppDbContext
         builder.Entity<IdentityUserToken<Guid>>().ToTable("UserTokens");
 
         ConfigureEncryptedUserFields(builder);
+        ConfigureEncryptedUserAccountFields(builder);
 
         // -- Global soft-delete filter ---------------------------
         // Automatically excludes IsDeleted=true from ALL queries.
@@ -123,6 +125,14 @@ public sealed class AppDbContext
                 _dataProtectionProvider,
                 SensitiveDataProtectionPurposes.UserPhoneNumber));
 
+        user.Property(
+                u => u.PhoneNumberLookupHash)
+            .HasMaxLength(64);
+
+        user.HasIndex(
+                u => u.PhoneNumberLookupHash)
+            .IsUnique();
+
         user.Property(u => u.WhatsAppNumber)
             .HasMaxLength(1024)
             .HasConversion(new DataProtectionStringConverter(
@@ -136,6 +146,23 @@ public sealed class AppDbContext
                 SensitiveDataProtectionPurposes.UserTaxNumber));
     }
 
+    private void ConfigureEncryptedUserAccountFields(
+    ModelBuilder builder)
+    {
+        var account = builder.Entity<UserAccount>();
+
+        account.Property(u => u.WhatsAppNumber)
+            .HasMaxLength(1024)
+            .HasConversion(new DataProtectionStringConverter(
+                _dataProtectionProvider,
+                SensitiveDataProtectionPurposes.UserWhatsAppNumber));
+
+        account.Property(u => u.TaxNumber)
+            .HasMaxLength(1024)
+            .HasConversion(new DataProtectionStringConverter(
+                _dataProtectionProvider,
+                SensitiveDataProtectionPurposes.UserTaxNumber));
+    }
     // -- Auto-stamp UpdatedAt on every save ----------------------
     public override async Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default)

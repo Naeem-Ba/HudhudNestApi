@@ -11,50 +11,65 @@ public sealed class GetCurrentUserQueryHandler
     : IRequestHandler<GetCurrentUserQuery, UserDto?>
 {
     private readonly IPureIdentityService _identity;
-    private readonly IUserRepository _users;
+    private readonly IUserAccountRepository _accounts;
 
     public GetCurrentUserQueryHandler(
         IPureIdentityService identity,
-        IUserRepository users)
+        IUserAccountRepository accounts)
     {
         _identity = identity;
-        _users = users;
+        _accounts = accounts;
     }
 
     public async Task<UserDto?> Handle(
         GetCurrentUserQuery request,
         CancellationToken cancellationToken)
     {
-        var user = await _users.GetByIdAsync(request.UserId, cancellationToken);
-        if (user is null || user.IsDeleted)
-            return null;
+        var identity = await _identity.FindByIdAsync(
+            request.UserId,
+            cancellationToken);
 
-        var identity = await _identity.FindByIdAsync(request.UserId, cancellationToken);
-        if (identity is null)
+        if (identity is null || identity.IsDeleted)
+        {
             return null;
+        }
 
-        var roles = await _identity.GetRolesAsync(identity.IdentityId, cancellationToken);
-        return MapToDto(user, identity, roles);
+        var account = await _accounts.GetByIdAsync(
+            identity.UserAccountId,
+            cancellationToken);
+
+        if (account is null)
+        {
+            return null;
+        }
+
+        var roles = await _identity.GetRolesAsync(
+            identity.IdentityId,
+            cancellationToken);
+
+        return MapToDto(account, identity, roles);
     }
 
     private static UserDto MapToDto(
-        User user,
+        UserAccount account,
         IdentityAccountSnapshot identity,
-        IReadOnlyList<string> roles) => new()
+        IReadOnlyList<string> roles)
     {
-        Id = user.Id,
-        Email = identity.Email ?? string.Empty,
-        FirstName = user.FirstName,
-        LastName = user.LastName,
-        DisplayName = user.DisplayName,
-        PhoneNumber = identity.PhoneNumber,
-        ProfileImageUrl = user.ProfileImageUrl,
-        PreferredLanguage = user.PreferredLanguage,
-        PreferredCurrency = user.PreferredCurrency,
-        CountryCode = user.CountryCode,
-        EmailConfirmed = identity.EmailConfirmed,
-        CreatedAt = user.CreatedAt,
-        Roles = roles.ToList().AsReadOnly()
-    };
+        return new UserDto
+        {
+            Id = account.Id,
+            Email = identity.Email ?? string.Empty,
+            FirstName = account.FirstName,
+            LastName = account.LastName,
+            DisplayName = account.DisplayName,
+            PhoneNumber = identity.PhoneNumber,
+            ProfileImageUrl = account.ProfileImageUrl,
+            PreferredLanguage = account.PreferredLanguage,
+            PreferredCurrency = account.PreferredCurrency,
+            CountryCode = account.CountryCode,
+            EmailConfirmed = identity.EmailConfirmed,
+            CreatedAt = account.CreatedAt,
+            Roles = roles.ToList().AsReadOnly()
+        };
+    }
 }
-

@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Notifications.DTOs;
+using PropertyApi.Application.Auth.Models;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Notifications.Entities;
 using PropertyApi.Domain.Notifications.Enums;
@@ -614,7 +615,22 @@ public sealed class NotificationIntegrationTests
         Assert.NotNull(user);
 
         var roles = await userManager.GetRolesAsync(user!);
-        return tokenService.GenerateAccessToken(user!, roles.ToArray());
+        var identityUser =
+            user
+            ?? throw new InvalidOperationException(
+                "Test identity user was not found.");
+
+        var tokenSubject =
+            new AccessTokenSubject(
+                IdentityId: identityUser.Id,
+                Email: identityUser.Email,
+                UserName: identityUser.UserName,
+                SecurityStamp:
+                    identityUser.SecurityStamp);
+
+        return tokenService.GenerateAccessToken(
+            tokenSubject,
+            roles.ToArray());
     }
 
     private async Task<User> CreateUserAsync(string prefix)

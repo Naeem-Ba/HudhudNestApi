@@ -1,13 +1,16 @@
-﻿using PropertyApi.Domain.Users.Entities;
+﻿namespace PropertyApi.Application.Auth.Interfaces;
 
-namespace PropertyApi.Application.Auth.Interfaces;
-
+/// <summary>
+/// Persistence-neutral refresh-token state.
+///
+/// The repository exposes only token metadata and the owning identity Id.
+/// It deliberately does not expose a User or ApplicationUser entity.
+/// </summary>
 public sealed record RefreshTokenRecord(
     Guid Id,
     Guid UserId,
     DateTime ExpiresAt,
-    bool IsRevoked,
-    User? User);
+    bool IsRevoked);
 
 public interface IRefreshTokenRepository
 {
@@ -45,4 +48,3 @@ public interface IRefreshTokenRepository
         Func<CancellationToken, Task<T>> action,
         CancellationToken ct = default);
 }
-

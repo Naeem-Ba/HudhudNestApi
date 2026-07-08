@@ -6,385 +6,915 @@ using PropertyApi.Application.Auth.Commands.ResetPassword;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Auth.Tests.TestHelpers;
 using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Auth.Tests.Application.Commands;
-
 [Trait("Category", "AuthCQRS")]
 public sealed class LoginCommandHandlerTests
 {
-    [Fact(DisplayName = "Login succeeds and stores refresh token for valid credentials")]
-    public async Task ValidCredentials_ReturnsTokens_AndStoresRefreshToken()
+    [Fact(
+        DisplayName =
+            "Login succeeds and stores refresh token for valid credentials")]
+    public async Task
+        ValidCredentials_ReturnsTokens_AndStoresRefreshToken()
     {
-        var user = UserBuilder.WithVerifiedEmail("naeem@example.com");
+        // Arrange
+        var user =
+            UserBuilder.WithVerifiedEmail(
+                "naeem@example.com");
 
-        var identityUsers = new Mock<IIdentityUserService>();
-        identityUsers.Setup(x => x.FindByEmailAsync(
-                "naeem@example.com",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
+        var identity =
+            new IdentityAccountSnapshot(
+                IdentityId:
+                    user.Id,
 
-        identityUsers.Setup(x => x.CheckPasswordAsync(
-                user,
-                "Password123",
-                It.IsAny<CancellationToken>()))
+                UserAccountId:
+                    user.Id,
+
+                Email:
+                    user.Email,
+
+                PhoneNumber:
+                    user.PhoneNumber,
+
+                EmailConfirmed:
+                    user.EmailConfirmed,
+
+                PhoneConfirmed:
+                    user.PhoneNumberConfirmed,
+
+                HasPassword:
+                    !string.IsNullOrWhiteSpace(
+                        user.PasswordHash),
+
+                IsDeleted:
+                    user.IsDeleted,
+
+                UserName:
+                    user.UserName,
+
+                SecurityStamp:
+                    user.SecurityStamp);
+
+        var identityService =
+            new Mock<IPureIdentityService>();
+
+        identityService
+            .Setup(
+                x => x.FindByEmailAsync(
+                    "naeem@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(identity);
+
+        identityService
+            .Setup(
+                x => x.CheckPasswordAsync(
+                    user.Id,
+                    "Password123",
+                    It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        identityUsers.Setup(x => x.GetRolesAsync(
-                user,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[] { RoleNames.User });
+        identityService
+            .Setup(
+                x => x.GetRolesAsync(
+                    user.Id,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                new[]
+                {
+                    RoleNames.User
+                });
 
-        identityUsers.Setup(x => x.UpdateAsync(
-                user,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(IdentityOperationResult.Success());
+        identityService
+            .Setup(
+                x => x.RecordSuccessfulLoginAsync(
+                    user.Id,
+                    It.IsAny<DateTime>(),
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                IdentityOperationResult.Success());
 
-        var tokenService = new Mock<ITokenService>();
-        tokenService.Setup(x => x.GenerateAccessToken(
-                user,
-                It.IsAny<IReadOnlyCollection<string>>()))
+        var tokenService =
+            new Mock<ITokenService>();
+
+        tokenService
+            .Setup(
+                x => x.GenerateAccessToken(
+                    It.Is<AccessTokenSubject>(
+                        subject =>
+                            subject.IdentityId ==
+                                user.Id &&
+                            subject.Email ==
+                                user.Email &&
+                            subject.UserName ==
+                                user.UserName &&
+                            subject.SecurityStamp ==
+                                user.SecurityStamp),
+                    It.Is<
+                        IReadOnlyCollection<string>>(
+                            roles =>
+                                roles.Contains(
+                                    RoleNames.User))))
             .Returns("access-token");
 
-        tokenService.Setup(x => x.GenerateRefreshToken())
+        tokenService
+            .Setup(
+                x => x.GenerateRefreshToken())
             .Returns("refresh-token");
 
-        var refreshRepo = new Mock<IRefreshTokenRepository>();
+        var refreshRepo =
+            new Mock<IRefreshTokenRepository>();
 
-        var jwt = new Mock<IJwtTokenSettings>();
-        jwt.SetupGet(x => x.AccessTokenMinutes).Returns(30);
-
-        var auditLogs = new Mock<IAuditLogService>();
-        auditLogs.Setup(x => x.LogAsync(
-                It.IsAny<Guid?>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
+        refreshRepo
+            .Setup(
+                x => x.AddAsync(
+                    user.Id,
+                    "refresh-token",
+                    "127.0.0.1",
+                    It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var handler = new LoginCommandHandler(
-            identityUsers.Object,
-            tokenService.Object,
-            refreshRepo.Object,
-            jwt.Object,
-            auditLogs.Object,
-            NullLogger<LoginCommandHandler>.Instance);
+        var jwt =
+            new Mock<IJwtTokenSettings>();
 
-        var result = await handler.Handle(
-            new LoginCommand("Naeem@Example.com", "Password123", "127.0.0.1"),
-            CancellationToken.None);
+        jwt.SetupGet(
+                x => x.AccessTokenMinutes)
+            .Returns(30);
 
+        var auditLogs =
+            new Mock<IAuditLogService>();
+
+        auditLogs
+            .Setup(
+                x => x.LogAsync(
+                    It.IsAny<Guid?>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string?>(),
+                    It.IsAny<string?>(),
+                    It.IsAny<string?>(),
+                    It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var handler =
+            new LoginCommandHandler(
+                identityService.Object,
+                tokenService.Object,
+                refreshRepo.Object,
+                jwt.Object,
+                auditLogs.Object,
+                NullLogger<LoginCommandHandler>
+                    .Instance);
+
+        // Act
+        var result =
+            await handler.Handle(
+                new LoginCommand(
+                    "Naeem@Example.com",
+                    "Password123",
+                    "127.0.0.1"),
+                CancellationToken.None);
+
+        // Assert
         Assert.True(result.Success);
-        Assert.Equal("access-token", result.AccessToken);
-        Assert.Equal("refresh-token", result.RefreshToken);
-        Assert.Equal(1800, result.ExpiresIn);
 
-        refreshRepo.Verify(x => x.AddAsync(
-            user.Id,
+        Assert.Equal(
+            "access-token",
+            result.AccessToken);
+
+        Assert.Equal(
             "refresh-token",
-            "127.0.0.1",
-            It.IsAny<CancellationToken>()), Times.Once);
+            result.RefreshToken);
+
+        Assert.Equal(
+            1800,
+            result.ExpiresIn);
+
+        identityService.Verify(
+            x => x.FindByEmailAsync(
+                "naeem@example.com",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        identityService.Verify(
+            x => x.CheckPasswordAsync(
+                user.Id,
+                "Password123",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        identityService.Verify(
+            x => x.GetRolesAsync(
+                user.Id,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        refreshRepo.Verify(
+            x => x.AddAsync(
+                user.Id,
+                "refresh-token",
+                "127.0.0.1",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        identityService.Verify(
+            x => x.RecordSuccessfulLoginAsync(
+                user.Id,
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        tokenService.Verify(
+            x => x.GenerateAccessToken(
+                It.IsAny<AccessTokenSubject>(),
+                It.IsAny<
+                    IReadOnlyCollection<string>>()),
+            Times.Once);
     }
 
-    [Fact(DisplayName = "Login fails for invalid password and does not store refresh token")]
-    public async Task InvalidPassword_ReturnsUnauthorizedResult()
+    [Fact(
+        DisplayName =
+            "Login fails for invalid password and does not store refresh token")]
+    public async Task
+        InvalidPassword_ReturnsUnauthorizedResult()
     {
-        var user = UserBuilder.WithVerifiedEmail("naeem@example.com");
+        // Arrange
+        var user =
+            UserBuilder.WithVerifiedEmail(
+                "naeem@example.com");
 
-        var identityUsers = new Mock<IIdentityUserService>();
-        identityUsers.Setup(x => x.FindByEmailAsync(
-                "naeem@example.com",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
+        var identity =
+            new IdentityAccountSnapshot(
+                IdentityId:
+                    user.Id,
 
-        identityUsers.Setup(x => x.CheckPasswordAsync(
-                user,
-                "wrong",
-                It.IsAny<CancellationToken>()))
+                UserAccountId:
+                    user.Id,
+
+                Email:
+                    user.Email,
+
+                PhoneNumber:
+                    user.PhoneNumber,
+
+                EmailConfirmed:
+                    user.EmailConfirmed,
+
+                PhoneConfirmed:
+                    user.PhoneNumberConfirmed,
+
+                HasPassword:
+                    !string.IsNullOrWhiteSpace(
+                        user.PasswordHash),
+
+                IsDeleted:
+                    user.IsDeleted,
+
+                UserName:
+                    user.UserName,
+
+                SecurityStamp:
+                    user.SecurityStamp);
+
+        var identityService =
+            new Mock<IPureIdentityService>();
+
+        identityService
+            .Setup(
+                x => x.FindByEmailAsync(
+                    "naeem@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(identity);
+
+        identityService
+            .Setup(
+                x => x.CheckPasswordAsync(
+                    user.Id,
+                    "wrong",
+                    It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
-        var handler = new LoginCommandHandler(
-            identityUsers.Object,
-            Mock.Of<ITokenService>(),
-            Mock.Of<IRefreshTokenRepository>(),
-            Mock.Of<IJwtTokenSettings>(),
-            Mock.Of<IAuditLogService>(),
-            NullLogger<LoginCommandHandler>.Instance);
+        var tokenService =
+            new Mock<ITokenService>();
 
-        var result = await handler.Handle(
-            new LoginCommand("naeem@example.com", "wrong"),
-            CancellationToken.None);
+        var refreshRepo =
+            new Mock<IRefreshTokenRepository>();
 
+        var handler =
+            new LoginCommandHandler(
+                identityService.Object,
+                tokenService.Object,
+                refreshRepo.Object,
+                Mock.Of<IJwtTokenSettings>(),
+                Mock.Of<IAuditLogService>(),
+                NullLogger<LoginCommandHandler>
+                    .Instance);
+
+        // Act
+        var result =
+            await handler.Handle(
+                new LoginCommand(
+                    "naeem@example.com",
+                    "wrong"),
+                CancellationToken.None);
+
+        // Assert
         Assert.False(result.Success);
-        Assert.Equal("Invalid credentials.", result.Message);
+
+        Assert.Equal(
+            "Invalid credentials.",
+            result.Message);
+
+        identityService.Verify(
+            x => x.CheckPasswordAsync(
+                user.Id,
+                "wrong",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        identityService.Verify(
+            x => x.GetRolesAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        identityService.Verify(
+            x => x.RecordSuccessfulLoginAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        refreshRepo.Verify(
+            x => x.AddAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        tokenService.Verify(
+            x => x.GenerateAccessToken(
+                It.IsAny<AccessTokenSubject>(),
+                It.IsAny<
+                    IReadOnlyCollection<string>>()),
+            Times.Never);
     }
 }
 
 [Trait("Category", "AuthCQRS")]
 public sealed class RegisterCommandHandlerTests
 {
-    [Fact(DisplayName = "Register returns conflict when email already exists")]
+    [Fact(
+        DisplayName =
+            "Register returns conflict when email already exists")]
     public async Task ExistingEmail_ReturnsConflict()
     {
-        var existing = UserBuilder.WithVerifiedEmail("naeem@example.com");
+        // Arrange
+        var existingIdentityId =
+            Guid.NewGuid();
 
-        var identityUsers = new Mock<IIdentityUserService>();
-        identityUsers.Setup(x => x.FindByEmailAsync(
-                "naeem@example.com",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(existing);
+        var existingIdentity =
+            new IdentityAccountSnapshot(
+                IdentityId:
+                    existingIdentityId,
 
-        var handler = new RegisterCommandHandler(
-            identityUsers.Object,
-            Mock.Of<IUnitOfWork>(),
-            NullLogger<RegisterCommandHandler>.Instance);
+                UserAccountId:
+                    existingIdentityId,
 
-        var result = await handler.Handle(
-            new RegisterCommand("Naeem", "Bazzazeh", "naeem@example.com", "Password123"),
-            CancellationToken.None);
+                Email:
+                    "naeem@example.com",
 
+                PhoneNumber:
+                    null,
+
+                EmailConfirmed:
+                    true,
+
+                PhoneConfirmed:
+                    false,
+
+                HasPassword:
+                    true,
+
+                IsDeleted:
+                    false,
+
+                UserName:
+                    "naeem@example.com",
+
+                SecurityStamp:
+                    "security-stamp");
+
+        var identity =
+            new Mock<IPureIdentityService>();
+
+        identity
+            .Setup(
+                x => x.FindByEmailAsync(
+                    "naeem@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                existingIdentity);
+
+        var accounts =
+            new Mock<IUserAccountRepository>();
+
+        var unitOfWork =
+            Mock.Of<IUnitOfWork>();
+
+        var handler =
+            new RegisterCommandHandler(
+                identity.Object,
+                accounts.Object,
+                unitOfWork,
+                NullLogger<RegisterCommandHandler>.Instance);
+
+        // Act
+        var result =
+            await handler.Handle(
+                new RegisterCommand(
+                    "Naeem",
+                    "Bazzazeh",
+                    "naeem@example.com",
+                    "Password123"),
+                CancellationToken.None);
+
+        // Assert
         Assert.False(result.Success);
         Assert.True(result.Conflict);
-        Assert.Equal("Email already registered.", result.Message);
+
+        Assert.Equal(
+            "Email already registered.",
+            result.Message);
+
+        Assert.Null(result.UserId);
+
+        identity.Verify(
+            x => x.CreateAsync(
+                It.IsAny<CreateIdentityAccount>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        identity.Verify(
+            x => x.AddToRoleAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
-    [Fact(DisplayName = "Register creates user and assigns User role")]
-    public async Task NewEmail_CreatesUser_AndAssignsRole()
+    [Fact(
+        DisplayName =
+            "Register creates identity and assigns User role")]
+    public async Task NewEmail_CreatesIdentity_AndAssignsRole()
     {
-        var identityUsers = new Mock<IIdentityUserService>();
+        // Arrange
+        var identity =
+            new Mock<IPureIdentityService>();
 
-        identityUsers.Setup(x => x.FindByEmailAsync(
-                "naeem@example.com",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync((User?)null);
+        identity
+            .Setup(
+                x => x.FindByEmailAsync(
+                    "naeem@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                (IdentityAccountSnapshot?)null);
 
-        identityUsers.Setup(x => x.CreateAsync(
-                It.IsAny<User>(),
-                "Password123",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(IdentityOperationResult.Success());
+        identity
+            .Setup(
+                x => x.CreateAsync(
+                    It.IsAny<CreateIdentityAccount>(),
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                IdentityOperationResult.Success());
 
-        identityUsers.Setup(x => x.AddToRoleAsync(
-                It.IsAny<User>(),
-                RoleNames.User,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(IdentityOperationResult.Success());
+        identity
+            .Setup(
+                x => x.AddToRoleAsync(
+                    It.IsAny<Guid>(),
+                    RoleNames.User,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                IdentityOperationResult.Success());
 
-        var handler = new RegisterCommandHandler(
-            identityUsers.Object,
-            Mock.Of<IUnitOfWork>(),
-            NullLogger<RegisterCommandHandler>.Instance);
+        var accounts =
+            new Mock<IUserAccountRepository>();
 
-        var result = await handler.Handle(
-            new RegisterCommand("Naeem", "Bazzazeh", "Naeem@Example.com", "Password123"),
-            CancellationToken.None);
+        var unitOfWork =
+            Mock.Of<IUnitOfWork>();
 
+        var handler =
+            new RegisterCommandHandler(
+                identity.Object,
+                accounts.Object,
+                unitOfWork,
+                NullLogger<RegisterCommandHandler>.Instance);
+
+        // Act
+        var result =
+            await handler.Handle(
+                new RegisterCommand(
+                    "Naeem",
+                    "Bazzazeh",
+                    "Naeem@Example.com",
+                    "Password123"),
+                CancellationToken.None);
+
+        // Assert
         Assert.True(result.Success);
+        Assert.False(result.Conflict);
         Assert.NotNull(result.UserId);
 
-        identityUsers.Verify(x => x.CreateAsync(
-            It.Is<User>(u =>
-                u.Email == "naeem@example.com" &&
-                u.UserName == "naeem@example.com"),
-            "Password123",
-            It.IsAny<CancellationToken>()), Times.Once);
+        var createdUserId =
+            result.UserId!.Value;
 
-        identityUsers.Verify(x => x.AddToRoleAsync(
-            It.IsAny<User>(),
-            RoleNames.User,
-            It.IsAny<CancellationToken>()), Times.Once);
+        identity.Verify(
+            x => x.FindByEmailAsync(
+                "naeem@example.com",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        identity.Verify(
+            x => x.CreateAsync(
+                It.Is<CreateIdentityAccount>(
+                    request =>
+                        request.UserAccountId ==
+                            createdUserId &&
+
+                        request.Email ==
+                            "naeem@example.com" &&
+
+                        request.PhoneNumber ==
+                            null &&
+
+                        request.Password ==
+                            "Password123" &&
+
+                        request.LegacyFirstName ==
+                            "Naeem" &&
+
+                        request.LegacyLastName ==
+                            "Bazzazeh" &&
+
+                        request.LegacyCreatedAtUtc
+                            != null),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        identity.Verify(
+            x => x.AddToRoleAsync(
+                createdUserId,
+                RoleNames.User,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 }
 
 [Trait("Category", "AuthCQRS")]
 public sealed class ForgotPasswordCommandHandlerTests
 {
-    [Fact(DisplayName = "ForgotPassword does not reveal whether unknown email exists")]
-    public async Task UnknownEmail_ReturnsGenericSuccess_AndDoesNotSendEmail()
+    [Fact(
+        DisplayName =
+            "ForgotPassword does not reveal whether unknown email exists")]
+    public async Task
+        UnknownEmail_ReturnsGenericSuccess_AndDoesNotSendEmail()
     {
-        var identityUsers = new Mock<IIdentityUserService>();
-        identityUsers.Setup(x => x.FindByEmailAsync(
-                "missing@example.com",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync((User?)null);
+        var identityService =
+            new Mock<IPureIdentityService>();
 
-        var emailSender = new Mock<IApplicationEmailSender>();
-        var urlBuilder = Mock.Of<IPasswordResetUrlBuilder>();
+        identityService
+            .Setup(
+                x => x.FindByEmailAsync(
+                    "missing@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                (IdentityAccountSnapshot?)null);
 
-        var handler = new ForgotPasswordCommandHandler(
-            identityUsers.Object,
-            emailSender.Object,
-            urlBuilder,
-            NullLogger<ForgotPasswordCommandHandler>.Instance);
+        var emailSender =
+            new Mock<IApplicationEmailSender>();
 
-        var result = await handler.Handle(
-            new ForgotPasswordCommand("missing@example.com", "https", "localhost"),
-            CancellationToken.None);
+        var handler =
+            new ForgotPasswordCommandHandler(
+                identityService.Object,
+                Mock.Of<IUserAccountRepository>(),
+                emailSender.Object,
+                Mock.Of<IPasswordResetUrlBuilder>(),
+                NullLogger<ForgotPasswordCommandHandler>
+                    .Instance);
+
+        var result =
+            await handler.Handle(
+                new ForgotPasswordCommand(
+                    "missing@example.com",
+                    "https",
+                    "localhost"),
+                CancellationToken.None);
 
         Assert.True(result.Success);
-        Assert.Contains("If the email is registered", result.Message);
 
-        emailSender.Verify(x => x.SendEmailAsync(
-            It.IsAny<string>(),
-            It.IsAny<string>(),
-            It.IsAny<string>()), Times.Never);
+        Assert.Contains(
+            "If the email is registered",
+            result.Message);
+
+        emailSender.Verify(
+            x => x.SendEmailAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()),
+            Times.Never);
     }
 
-    [Fact(DisplayName = "ForgotPassword sends reset email for valid active user")]
-    public async Task ExistingActiveUser_SendsEmail()
+    [Fact(
+        DisplayName =
+            "ForgotPassword sends reset email for valid active identity")]
+    public async Task ExistingActiveIdentity_SendsEmail()
     {
-        var user = UserBuilder.WithVerifiedEmail("naeem@example.com");
+        var id =
+            Guid.NewGuid();
 
-        var identityUsers = new Mock<IIdentityUserService>();
-        identityUsers.Setup(x => x.FindByEmailAsync(
-                "naeem@example.com",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
+        var identity =
+            new IdentityAccountSnapshot(
+                IdentityId: id,
+                UserAccountId: id,
+                Email: "naeem@example.com",
+                PhoneNumber: null,
+                EmailConfirmed: true,
+                PhoneConfirmed: false,
+                HasPassword: true,
+                IsDeleted: false,
+                UserName: "naeem@example.com",
+                SecurityStamp: "stamp");
 
-        identityUsers.Setup(x => x.GeneratePasswordResetTokenAsync(
-                user,
-                It.IsAny<CancellationToken>()))
+        var identityService =
+            new Mock<IPureIdentityService>();
+
+        identityService
+            .Setup(
+                x => x.FindByEmailAsync(
+                    "naeem@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(identity);
+
+        identityService
+            .Setup(
+                x => x.GeneratePasswordResetTokenAsync(
+                    id,
+                    It.IsAny<CancellationToken>()))
             .ReturnsAsync("reset-token");
 
-        var emailSender = new Mock<IApplicationEmailSender>();
+        var userAccounts =
+            new Mock<IUserAccountRepository>();
 
-        var urlBuilder = new Mock<IPasswordResetUrlBuilder>();
-        urlBuilder.Setup(x => x.Build(
-                "naeem@example.com",
-                "reset-token",
-                "https",
-                "localhost"))
-            .Returns("https://localhost/reset-password?email=naeem%40example.com&token=reset-token");
+        userAccounts
+            .Setup(
+                x => x.GetByIdAsync(
+                    id,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                (UserAccount?)null);
 
-        var handler = new ForgotPasswordCommandHandler(
-            identityUsers.Object,
-            emailSender.Object,
-            urlBuilder.Object,
-            NullLogger<ForgotPasswordCommandHandler>.Instance);
+        var emailSender =
+            new Mock<IApplicationEmailSender>();
 
-        var result = await handler.Handle(
-            new ForgotPasswordCommand("naeem@example.com", "https", "localhost"),
-            CancellationToken.None);
+        var urlBuilder =
+            new Mock<IPasswordResetUrlBuilder>();
+
+        urlBuilder
+            .Setup(
+                x => x.Build(
+                    "naeem@example.com",
+                    "reset-token",
+                    "https",
+                    "localhost"))
+            .Returns(
+                "https://localhost/reset-password?email=naeem%40example.com&token=reset-token");
+
+        var handler =
+            new ForgotPasswordCommandHandler(
+                identityService.Object,
+                userAccounts.Object,
+                emailSender.Object,
+                urlBuilder.Object,
+                NullLogger<ForgotPasswordCommandHandler>
+                    .Instance);
+
+        var result =
+            await handler.Handle(
+                new ForgotPasswordCommand(
+                    "naeem@example.com",
+                    "https",
+                    "localhost"),
+                CancellationToken.None);
 
         Assert.True(result.Success);
 
-        emailSender.Verify(x => x.SendEmailAsync(
-            "naeem@example.com",
-            "Reset your password",
-            It.Is<string>(body => body.Contains("Reset your password"))), Times.Once);
+        identityService.Verify(
+            x => x.GeneratePasswordResetTokenAsync(
+                id,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        emailSender.Verify(
+            x => x.SendEmailAsync(
+                "naeem@example.com",
+                "Reset your password",
+                It.Is<string>(
+                    body =>
+                        body.Contains(
+                            "Reset your password"))),
+            Times.Once);
     }
 }
 
 [Trait("Category", "AuthCQRS")]
 public sealed class ResetPasswordCommandHandlerTests
 {
-    [Fact(DisplayName = "ResetPassword rejects same password")]
+    [Fact(
+        DisplayName =
+            "ResetPassword rejects same password")]
     public async Task SamePassword_ReturnsConflict()
     {
-        var user = UserBuilder.WithVerifiedEmail("naeem@example.com");
+        var id =
+            Guid.NewGuid();
 
-        var identityUsers = new Mock<IIdentityUserService>();
-        identityUsers.Setup(x => x.FindByEmailAsync(
-                "naeem@example.com",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
+        var identity =
+            CreateIdentitySnapshot(id);
 
-        identityUsers.Setup(x => x.CheckPasswordAsync(
-                user,
-                "Password123",
-                It.IsAny<CancellationToken>()))
+        var identityService =
+            new Mock<IPureIdentityService>();
+
+        identityService
+            .Setup(
+                x => x.FindByEmailAsync(
+                    "naeem@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(identity);
+
+        identityService
+            .Setup(
+                x => x.CheckPasswordAsync(
+                    id,
+                    "Password123",
+                    It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var handler = new ResetPasswordCommandHandler(
-            identityUsers.Object,
-            Mock.Of<IRefreshTokenRepository>(),
-            NullLogger<ResetPasswordCommandHandler>.Instance);
+        var handler =
+            new ResetPasswordCommandHandler(
+                identityService.Object,
+                Mock.Of<IRefreshTokenRepository>(),
+                NullLogger<ResetPasswordCommandHandler>
+                    .Instance);
 
-        var result = await handler.Handle(
-            new ResetPasswordCommand(
-                "naeem@example.com",
-                "token",
-                "Password123",
-                "Password123",
-                "127.0.0.1"),
-            CancellationToken.None);
+        var result =
+            await handler.Handle(
+                new ResetPasswordCommand(
+                    "naeem@example.com",
+                    "token",
+                    "Password123",
+                    "Password123",
+                    "127.0.0.1"),
+                CancellationToken.None);
 
         Assert.False(result.Success);
         Assert.True(result.Conflict);
-        Assert.Equal("New password must be different from the current password.", result.Message);
+
+        Assert.Equal(
+            "New password must be different from the current password.",
+            result.Message);
+
+        identityService.Verify(
+            x => x.ResetPasswordAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
-    [Fact(DisplayName = "ResetPassword resets password, updates security stamp, and revokes active tokens")]
-    public async Task ValidRequest_ResetsPassword_AndRevokesTokens()
+    [Fact(
+        DisplayName =
+            "ResetPassword resets password, updates security stamp, records credential change, and revokes active tokens")]
+    public async Task
+        ValidRequest_ResetsPassword_AndRevokesTokens()
     {
-        var user = UserBuilder.WithVerifiedEmail("naeem@example.com");
+        var id =
+            Guid.NewGuid();
 
-        var identityUsers = new Mock<IIdentityUserService>();
-        identityUsers.Setup(x => x.FindByEmailAsync(
-                "naeem@example.com",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(user);
+        var identity =
+            CreateIdentitySnapshot(id);
 
-        identityUsers.Setup(x => x.CheckPasswordAsync(
-                user,
-                "NewPassword123",
-                It.IsAny<CancellationToken>()))
+        var identityService =
+            new Mock<IPureIdentityService>();
+
+        identityService
+            .Setup(
+                x => x.FindByEmailAsync(
+                    "naeem@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(identity);
+
+        identityService
+            .Setup(
+                x => x.CheckPasswordAsync(
+                    id,
+                    "NewPassword123",
+                    It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
-        identityUsers.Setup(x => x.ResetPasswordAsync(
-                user,
-                "token",
-                "NewPassword123",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(IdentityOperationResult.Success());
+        identityService
+            .Setup(
+                x => x.ResetPasswordAsync(
+                    id,
+                    "token",
+                    "NewPassword123",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                IdentityOperationResult.Success());
 
-        identityUsers.Setup(x => x.UpdateSecurityStampAsync(
-                user,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(IdentityOperationResult.Success());
+        identityService
+            .Setup(
+                x => x.UpdateSecurityStampAsync(
+                    id,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                IdentityOperationResult.Success());
 
-        identityUsers.Setup(x => x.UpdateAsync(
-                user,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(IdentityOperationResult.Success());
+        identityService
+            .Setup(
+                x => x.RecordCredentialChangeAsync(
+                    id,
+                    It.IsAny<DateTime>(),
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                IdentityOperationResult.Success());
 
-        var refreshRepo = new Mock<IRefreshTokenRepository>();
+        var refreshRepo =
+            new Mock<IRefreshTokenRepository>();
 
-        var handler = new ResetPasswordCommandHandler(
-            identityUsers.Object,
-            refreshRepo.Object,
-            NullLogger<ResetPasswordCommandHandler>.Instance);
+        var handler =
+            new ResetPasswordCommandHandler(
+                identityService.Object,
+                refreshRepo.Object,
+                NullLogger<ResetPasswordCommandHandler>
+                    .Instance);
 
-        var result = await handler.Handle(
-            new ResetPasswordCommand(
-                "naeem@example.com",
-                "token",
-                "NewPassword123",
-                "NewPassword123",
-                "127.0.0.1"),
-            CancellationToken.None);
+        var result =
+            await handler.Handle(
+                new ResetPasswordCommand(
+                    "naeem@example.com",
+                    "token",
+                    "NewPassword123",
+                    "NewPassword123",
+                    "127.0.0.1"),
+                CancellationToken.None);
 
         Assert.True(result.Success);
 
-        identityUsers.Verify(x => x.ResetPasswordAsync(
-            user,
-            "token",
-            "NewPassword123",
-            It.IsAny<CancellationToken>()), Times.Once);
+        identityService.Verify(
+            x => x.ResetPasswordAsync(
+                id,
+                "token",
+                "NewPassword123",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
 
-        identityUsers.Verify(x => x.UpdateSecurityStampAsync(
-            user,
-            It.IsAny<CancellationToken>()), Times.Once);
+        identityService.Verify(
+            x => x.UpdateSecurityStampAsync(
+                id,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
 
-        refreshRepo.Verify(x => x.RevokeActiveTokensForUserAsync(
-            user.Id,
-            It.IsAny<DateTime>(),
-            "127.0.0.1",
-            It.IsAny<CancellationToken>()), Times.Once);
+        identityService.Verify(
+            x => x.RecordCredentialChangeAsync(
+                id,
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        refreshRepo.Verify(
+            x => x.RevokeActiveTokensForUserAsync(
+                id,
+                It.IsAny<DateTime>(),
+                "127.0.0.1",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
+    private static IdentityAccountSnapshot
+        CreateIdentitySnapshot(
+            Guid id)
+        => new(
+            IdentityId: id,
+            UserAccountId: id,
+            Email: "naeem@example.com",
+            PhoneNumber: null,
+            EmailConfirmed: true,
+            PhoneConfirmed: false,
+            HasPassword: true,
+            IsDeleted: false,
+            UserName: "naeem@example.com",
+            SecurityStamp: "stamp");
 }
