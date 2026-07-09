@@ -203,7 +203,7 @@ public sealed class PhoneNumberLookupHashBackfill
                     .IgnoreQueryFilters()
                     .Where(
                         user =>
-                            batchIds.Contains(user.Id) &&
+                            Enumerable.Contains(batchIds, user.Id) &&
                             user.PhoneNumberLookupHash == null)
                     .ToListAsync(ct);
 
