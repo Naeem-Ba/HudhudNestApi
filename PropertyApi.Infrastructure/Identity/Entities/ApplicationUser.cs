@@ -1,31 +1,46 @@
 ﻿using Microsoft.AspNetCore.Identity;
-using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Infrastructure.Identity.Entities;
 
 /// <summary>
-/// Authentication and account-security representation of a platform user.
+/// Authentication and account-security representation
+/// of a platform user.
 ///
-/// Contains Identity credentials, verification state, administrative access state,
-/// and the reference to the corresponding domain UserAccount.
+/// Contains Identity credentials, verification state,
+/// security state, administrative access state,
+/// and authentication lifecycle timestamps.
 ///
-/// Business profile data does not belong here.
+/// Business profile data belongs to UserAccount.
 /// </summary>
-public sealed class ApplicationUser : IdentityUser<Guid>
+public sealed class ApplicationUser
+    : IdentityUser<Guid>
 {
     /// <summary>
-    /// Foreign key to the domain/business profile.
+    /// Deterministic HMAC lookup value used to find
+    /// identities by encrypted phone number.
     /// </summary>
-    public Guid UserAccountId { get; set; }
+    public string? PhoneNumberLookupHash { get; set; }
+
+    /// <summary>
+    /// Identity creation timestamp.
+    /// </summary>
+    public DateTime CreatedAt { get; set; }
+        = DateTime.UtcNow;
+
+    /// <summary>
+    /// Latest identity/security-state update timestamp.
+    /// </summary>
+    public DateTime UpdatedAt { get; set; }
+        = DateTime.UtcNow;
 
     /// <summary>
     /// Administrative account ban.
-    /// This is different from temporary ASP.NET Identity lockout.
+    /// Separate from ASP.NET Identity lockout.
     /// </summary>
     public bool IsBanned { get; set; }
 
     /// <summary>
-    /// Administrative reason for banning the account.
+    /// Administrative reason for banning the identity.
     /// </summary>
     public string? BanReason { get; set; }
 
@@ -36,11 +51,8 @@ public sealed class ApplicationUser : IdentityUser<Guid>
 
     /// <summary>
     /// Soft-delete flag for authentication access.
-    /// A deleted identity must not be able to authenticate or refresh tokens.
     /// </summary>
     public bool IsDeleted { get; set; }
 
     public DateTime? DeletedAt { get; set; }
-
-    public UserAccount UserAccount { get; set; } = null!;
 }
