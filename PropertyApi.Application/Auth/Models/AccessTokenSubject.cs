@@ -6,10 +6,9 @@
 /// This contract deliberately avoids depending on:
 /// - ASP.NET Core Identity types
 /// - Infrastructure.ApplicationUser
-/// - Domain.Users.Entities.User
 ///
 /// During the migration period, IdentityId is populated from legacy User.Id.
-/// After the final Identity cutover, it will be populated from ApplicationUser.Id.
+/// The subject identifier corresponds to the authenticated identity account ID.
 /// </summary>
 public sealed record AccessTokenSubject(
     Guid IdentityId,

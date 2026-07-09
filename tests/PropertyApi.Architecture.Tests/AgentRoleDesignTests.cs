@@ -1,10 +1,10 @@
+using PropertyApi.Infrastructure.Identity.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
 using PropertyApi.Application.Admin.DTOs;
 using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Application.Users.DTOs;
 using PropertyApi.Domain.Users.Constants;
-using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Architecture.Tests;
 
@@ -13,7 +13,7 @@ public sealed class AgentRoleDesignTests
     [Fact]
     public void UserEntity_Should_Not_Contain_IsAgent_BooleanFlag()
     {
-        var property = typeof(User).GetProperty("IsAgent");
+        var property = typeof(ApplicationUser).GetProperty("IsAgent");
 
         Assert.Null(property);
     }

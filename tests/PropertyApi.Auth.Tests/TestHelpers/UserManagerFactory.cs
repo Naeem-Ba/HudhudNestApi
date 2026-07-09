@@ -13,9 +13,9 @@ public static class UserManagerFactory
     {
         var store = new Mock<IUserStore<ApplicationUser>>();
         var options = Options.Create(new IdentityOptions());
-        var passwordHasher = new PasswordHasher<User>();
-        var userValidators = Array.Empty<IUserValidator<User>>();
-        var passwordValidators = Array.Empty<IPasswordValidator<User>>();
+        var passwordHasher = new PasswordHasher<ApplicationUser>();
+        var userValidators = Array.Empty<IUserValidator<ApplicationUser>>();
+        var passwordValidators = Array.Empty<IPasswordValidator<ApplicationUser>>();
         var normalizer = new Mock<ILookupNormalizer>();
         var describer = new IdentityErrorDescriber();
         var services = Mock.Of<IServiceProvider>();
@@ -69,7 +69,7 @@ public static class UserManagerFactory
 
         manager
             .Setup(m => m.GetRolesAsync(It.IsAny<ApplicationUser>()))
-            .ReturnsAsync(new[] { "User" });
+            .ReturnsAsync(new[] { "ApplicationUser" });
 
         return manager;
     }
@@ -77,7 +77,7 @@ public static class UserManagerFactory
 
 public static class UserBuilder
 {
-    public static User Valid(
+    public static ApplicationUser Valid(
         Guid? id = null,
         string phone = "+963911234567",
         string? email = null,
@@ -95,18 +95,16 @@ public static class UserBuilder
             Email = email,
             NormalizedEmail = email?.ToUpperInvariant(),
             EmailConfirmed = emailConfirmed,
-            FirstName = "Naeem",
-            LastName = "Bazzazeh",
             CreatedAt = DateTime.UtcNow.AddDays(-7),
             UpdatedAt = DateTime.UtcNow.AddDays(-1),
             IsDeleted = isDeleted,
             PasswordHash = passwordHash
         };
 
-    public static User WithVerifiedEmail(string email = "naeem@example.com") =>
+    public static ApplicationUser WithVerifiedEmail(string email = "naeem@example.com") =>
         Valid(email: email, emailConfirmed: true);
 
-    public static User Deleted() => Valid(isDeleted: true);
+    public static ApplicationUser Deleted() => Valid(isDeleted: true);
 }
 
 public static class OtpCodeBuilder
