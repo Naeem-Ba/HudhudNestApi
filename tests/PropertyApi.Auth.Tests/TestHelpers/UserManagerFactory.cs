@@ -1,13 +1,17 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Moq;
+using PropertyApi.Infrastructure.Identity.Entities;
+
 
 namespace PropertyApi.Auth.Tests.TestHelpers;
 
 public static class UserManagerFactory
 {
-    public static Mock<UserManager<User>> Create()
+    public static Mock<UserManager<ApplicationUser>> Create()
     {
-        var store = new Mock<IUserStore<User>>();
+        var store = new Mock<IUserStore<ApplicationUser>>();
         var options = Options.Create(new IdentityOptions());
         var passwordHasher = new PasswordHasher<User>();
         var userValidators = Array.Empty<IUserValidator<User>>();
@@ -15,9 +19,9 @@ public static class UserManagerFactory
         var normalizer = new Mock<ILookupNormalizer>();
         var describer = new IdentityErrorDescriber();
         var services = Mock.Of<IServiceProvider>();
-        var logger = NullLogger<UserManager<User>>.Instance;
+        var logger = NullLogger<UserManager<ApplicationUser>>.Instance;
 
-        return new Mock<UserManager<User>>(
+        return new Mock<UserManager<ApplicationUser>>(
             store.Object,
             options,
             passwordHasher,
@@ -29,8 +33,8 @@ public static class UserManagerFactory
             logger);
     }
 
-    public static Mock<UserManager<User>> CreateWithDefaults(
-        User? userToReturn = null,
+    public static Mock<UserManager<ApplicationUser>> CreateWithDefaults(
+        ApplicationUser? userToReturn = null,
         bool createSucceeds = true)
     {
         var manager = Create();
@@ -50,7 +54,7 @@ public static class UserManagerFactory
         }
 
         manager
-            .Setup(m => m.CreateAsync(It.IsAny<User>()))
+            .Setup(m => m.CreateAsync(It.IsAny<ApplicationUser>()))
             .ReturnsAsync(createSucceeds
                 ? IdentityResult.Success
                 : IdentityResult.Failed(new IdentityError
@@ -60,11 +64,11 @@ public static class UserManagerFactory
                 }));
 
         manager
-            .Setup(m => m.AddToRoleAsync(It.IsAny<User>(), It.IsAny<string>()))
+            .Setup(m => m.AddToRoleAsync(It.IsAny<ApplicationUser>(), It.IsAny<string>()))
             .ReturnsAsync(IdentityResult.Success);
 
         manager
-            .Setup(m => m.GetRolesAsync(It.IsAny<User>()))
+            .Setup(m => m.GetRolesAsync(It.IsAny<ApplicationUser>()))
             .ReturnsAsync(new[] { "User" });
 
         return manager;

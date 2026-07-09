@@ -14,10 +14,11 @@ using PropertyApi.Application.Auth.Models;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Notifications.Entities;
 using PropertyApi.Domain.Notifications.Enums;
-using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Infrastructure.Identity.Entities;
 using PropertyApi.Infrastructure.Persistence;
 using PropertyApi.Integration.Tests.TestInfrastructure;
 using Property = PropertyApi.Domain.Listings.Entities.Property;
+using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Integration.Tests.Notifications;
 
@@ -608,7 +609,7 @@ public sealed class NotificationIntegrationTests
     private async Task<string> CreateAccessTokenAsync(Guid userId)
     {
         await using var scope = _factory.Services.CreateAsyncScope();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var tokenService = scope.ServiceProvider.GetRequiredService<ITokenService>();
 
         var user = await userManager.FindByIdAsync(userId.ToString());
@@ -633,7 +634,7 @@ public sealed class NotificationIntegrationTests
             roles.ToArray());
     }
 
-    private async Task<User> CreateUserAsync(
+    private async Task<ApplicationUser> CreateUserAsync(
         string prefix)
     {
         await using var scope =
@@ -641,7 +642,8 @@ public sealed class NotificationIntegrationTests
 
         var userManager =
             scope.ServiceProvider
-                .GetRequiredService<UserManager<User>>();
+                .GetRequiredService<
+                    UserManager<ApplicationUser>>();
 
         var db =
             scope.ServiceProvider
@@ -657,20 +659,25 @@ public sealed class NotificationIntegrationTests
             DateTime.UtcNow;
 
         var user =
-            new User
+            new ApplicationUser
             {
-                Id = Guid.NewGuid(),
+                Id =
+                    Guid.NewGuid(),
 
-                UserName = email,
-                Email = email,
-                EmailConfirmed = true,
+                UserName =
+                    email,
 
-                FirstName = prefix,
-                LastName = "Tester",
-                DisplayName = $"{prefix} Tester",
+                Email =
+                    email,
 
-                CreatedAt = now,
-                UpdatedAt = now
+                EmailConfirmed =
+                    true,
+
+                CreatedAt =
+                    now,
+
+                UpdatedAt =
+                    now
             };
 
         var result =
@@ -685,8 +692,14 @@ public sealed class NotificationIntegrationTests
             string.Join(
                 " | ",
                 result.Errors.Select(
-                    error => error.Description)));
+                    error =>
+                        error.Description)));
 
+        /*
+         * Identity / business-profile invariant:
+         *
+         * ApplicationUser.Id == UserAccount.Id
+         */
         var account =
             UserAccount.Create(
                 user.Id,
@@ -700,7 +713,7 @@ public sealed class NotificationIntegrationTests
             $"{prefix} Tester",
             now);
 
-        await db.UserAccounts.AddAsync(
+        db.UserAccounts.Add(
             account);
 
         await db.SaveChangesAsync();

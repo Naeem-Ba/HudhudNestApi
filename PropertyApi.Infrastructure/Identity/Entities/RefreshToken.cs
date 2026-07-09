@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using PropertyApi.Domain.Users.Entities;
+
 
 namespace PropertyApi.Infrastructure.Identity.Entities;
 
@@ -36,7 +31,7 @@ public class RefreshToken
 
     // FK
     public Guid UserId { get; set; }
-    public User User { get; set; } = null!;
+    public ApplicationUser User { get; set; } = null!;
 
     // Helper
     public bool IsExpired => DateTime.UtcNow >= ExpiresAt;

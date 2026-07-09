@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
-using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Infrastructure.Identity.Entities;
 
 namespace PropertyApi.Infrastructure.Identity.Services;
 
@@ -25,11 +25,11 @@ namespace PropertyApi.Infrastructure.Identity.Services;
 public sealed class PureIdentityService
     : IPureIdentityService
 {
-    private readonly UserManager<User> _userManager;
+    private readonly UserManager<ApplicationUser> _userManager;
     private readonly IPhoneNumberLookupHasher _phoneLookupHasher;
 
     public PureIdentityService(
-        UserManager<User> userManager,
+         UserManager<ApplicationUser> userManager,
         IPhoneNumberLookupHasher phoneLookupHasher)
     {
         _userManager = userManager;
@@ -144,7 +144,7 @@ public sealed class PureIdentityService
                     request.PhoneNumber);
 
         var user =
-            new User
+            new ApplicationUser
             {
                 Id =
                     request.UserAccountId,
@@ -169,17 +169,6 @@ public sealed class PureIdentityService
 
                 PhoneNumberConfirmed =
                     request.PhoneConfirmed,
-
-                FirstName =
-                    request.LegacyFirstName?.Trim()
-                    ?? string.Empty,
-
-                LastName =
-                    request.LegacyLastName?.Trim()
-                    ?? string.Empty,
-
-                ProfileImageUrl =
-                    request.LegacyProfileImageUrl,
 
                 CreatedAt =
                     now,
@@ -513,7 +502,7 @@ public sealed class PureIdentityService
         return Map(result);
     }
 
-    private async Task<User>
+    private async Task<ApplicationUser>
         RequireUserAsync(
             Guid identityId,
             CancellationToken ct)
@@ -527,7 +516,7 @@ public sealed class PureIdentityService
     }
 
     private static IdentityAccountSnapshot Map(
-        User user)
+        ApplicationUser user)
         => new(
             IdentityId:
                 user.Id,

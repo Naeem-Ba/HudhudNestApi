@@ -18,7 +18,7 @@ using PropertyApi.Application.Bookings.Interfaces;
 using PropertyApi.Application.Reviews.Interfaces;
 using PropertyApi.Infrastructure.Bookings;
 using PropertyApi.Infrastructure.Reviews;
-using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Infrastructure.Identity.Entities;
 using PropertyApi.Infrastructure.Persistence;
 using PropertyApi.Infrastructure.Repositories;
 using PropertyApi.Infrastructure.Services;
@@ -214,7 +214,7 @@ public static class DependencyInjection
             }
         });
 
-        services.AddIdentity<User, InfrastructureApplicationRole>(options =>
+        services.AddIdentity<ApplicationUser, InfrastructureApplicationRole>(options =>
         {
             options.Password.RequireDigit = true;
             options.Password.RequiredLength = 8;
