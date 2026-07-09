@@ -6,36 +6,35 @@ using PropertyApi.Application.Auth.Interfaces;
 
 namespace PropertyApi.Application.Auth.Commands.AddEmail;
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ Ù„Ø­Ø³Ø§Ø¨ Ù…ÙˆØ¬ÙˆØ¯
-//
-// Ø§Ù„Ø³ÙŠÙ†Ø§Ø±ÙŠÙˆ:
-// Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ø³Ø¬Ù‘Ù„ Ø¨Ù‡Ø§ØªÙÙ‡ ÙÙ‚Ø·. Ø¨Ø¹Ø¯ Ø£Ø³Ø¨ÙˆØ¹ ÙŠØ±ÙŠØ¯ Ø¥Ø¶Ø§ÙØ© Ø¨Ø±ÙŠØ¯Ù‡
-// Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ Ù„ÙŠØªÙ…ÙƒÙ† Ù…Ù† Ø§Ù„Ø¯Ø®ÙˆÙ„ Ø¨Ø·Ø±ÙŠÙ‚ØªÙŠÙ†.
-//
-// Clean Architecture:
-// Ù‡Ø°Ø§ Ø§Ù„Ù€ Handler Ù„Ø§ ÙŠØ¹ØªÙ…Ø¯ Ø¹Ù„Ù‰ concrete identity user service Ù…Ø¨Ø§Ø´Ø±Ø©.
-// ÙŠØ³ØªØ®Ø¯Ù… IIdentityUserService ÙÙ‚Ø·ØŒ ÙˆØ§Ù„ØªÙ†ÙÙŠØ° Ø§Ù„Ø­Ù‚ÙŠÙ‚ÙŠ ÙÙŠ Infrastructure.
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-
+/// <summary>
+/// Adds an email address to an existing identity account and sends
+/// an email-confirmation token.
+///
+/// Application depends only on the framework-neutral Identity boundary.
+/// </summary>
 public sealed record AddEmailCommand(
     Guid UserId,
-    string Email
-) : IRequest<AddEmailResult>;
+    string Email)
+    : IRequest<AddEmailResult>;
 
 public sealed class AddEmailCommandHandler
-    : IRequestHandler<AddEmailCommand, AddEmailResult>
+    : IRequestHandler<
+        AddEmailCommand,
+        AddEmailResult>
 {
-    private readonly IIdentityUserService _identityUsers;
+    private readonly IPureIdentityService _identity;
+
     private readonly IEmailVerificationService _emailService;
-    private readonly ILogger<AddEmailCommandHandler> _logger;
+
+    private readonly ILogger<AddEmailCommandHandler>
+        _logger;
 
     public AddEmailCommandHandler(
-        IIdentityUserService identityUsers,
+        IPureIdentityService identity,
         IEmailVerificationService emailService,
         ILogger<AddEmailCommandHandler> logger)
     {
-        _identityUsers = identityUsers;
+        _identity = identity;
         _emailService = emailService;
         _logger = logger;
     }
@@ -44,57 +43,109 @@ public sealed class AddEmailCommandHandler
         AddEmailCommand request,
         CancellationToken ct)
     {
-        var email = NormalizeEmail(request.Email);
+        var email =
+            NormalizeEmail(
+                request.Email);
 
-        // â”€â”€ 1. ØªØ­Ù‚Ù‚ Ù…Ù† ÙˆØ¬ÙˆØ¯ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        var user = await _identityUsers.FindByIdAsync(request.UserId, ct);
+        /*
+         * 1. Resolve the current identity account.
+         */
+        var identity =
+            await _identity.FindByIdAsync(
+                request.UserId,
+                ct);
 
-        if (user is null || user.IsDeleted)
-            return AddEmailResult.Fail("USER_NOT_FOUND", "Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯.");
+        if (identity is null ||
+            identity.IsDeleted)
+        {
+            return AddEmailResult.Fail(
+                "USER_NOT_FOUND",
+                "المستخدم غير موجود.");
+        }
 
-        // â”€â”€ 2. Ù‡Ù„ Ø§Ù„Ø¨Ø±ÙŠØ¯ Ù…ÙØ¶Ø§Ù Ø¨Ø§Ù„ÙØ¹Ù„ØŸ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        if (!string.IsNullOrWhiteSpace(user.Email) && user.EmailConfirmed)
+        /*
+         * 2. Reject accounts that already have a confirmed email.
+         */
+        if (!string.IsNullOrWhiteSpace(
+                identity.Email) &&
+            identity.EmailConfirmed)
+        {
             return AddEmailResult.Fail(
                 "EMAIL_ALREADY_SET",
-                "Ù„Ø¯ÙŠÙƒ Ø¨Ø±ÙŠØ¯ Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ Ù…ÙÙØ¹ÙŽÙ‘Ù„ Ø¨Ø§Ù„ÙØ¹Ù„.");
+                "لديك بريد إلكتروني مفعّل بالفعل.");
+        }
 
-        // â”€â”€ 3. Ù‡Ù„ Ø§Ù„Ø¨Ø±ÙŠØ¯ Ù…Ø³ØªØ®Ø¯Ù… Ù…Ù† Ù‚Ø¨Ù„ Ø´Ø®Øµ Ø¢Ø®Ø±ØŸ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        var existingWithEmail = await _identityUsers.FindByEmailAsync(email, ct);
+        /*
+         * 3. Check whether another identity already owns the email.
+         */
+        var existingWithEmail =
+            await _identity.FindByEmailAsync(
+                email,
+                ct);
 
-        if (existingWithEmail is not null && existingWithEmail.Id != user.Id)
+        if (existingWithEmail is not null &&
+            existingWithEmail.IdentityId !=
+            identity.IdentityId)
+        {
             return AddEmailResult.Fail(
                 "EMAIL_TAKEN",
-                "Ù‡Ø°Ø§ Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ Ù…Ø³ØªØ®Ø¯Ù… Ù…Ù† Ù‚Ø¨Ù„ Ø­Ø³Ø§Ø¨ Ø¢Ø®Ø±.");
+                "هذا البريد الإلكتروني مستخدم من قبل حساب آخر.");
+        }
 
-        // â”€â”€ 4. Ø£Ø¶Ù Ø§Ù„Ø¨Ø±ÙŠØ¯ (ØºÙŠØ± Ù…ÙÙØ¹ÙŽÙ‘Ù„ Ø¨Ø¹Ø¯) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        var setEmailResult = await _identityUsers.SetEmailAsync(user, email, ct);
+        /*
+         * 4. Persist the unconfirmed email.
+         */
+        var setEmailResult =
+            await _identity.SetEmailAsync(
+                identity.IdentityId,
+                email,
+                ct);
 
         if (!setEmailResult.Succeeded)
         {
             _logger.LogError(
-                "Failed to set email for user {UserId}: {Errors}",
-                request.UserId,
-                string.Join(", ", setEmailResult.Errors));
+                "Failed to set email for identity {IdentityId}: {Errors}",
+                identity.IdentityId,
+                string.Join(
+                    ", ",
+                    setEmailResult.Errors));
 
-            return AddEmailResult.Fail("EMAIL_SET_FAILED", "ÙØ´Ù„ Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ø¨Ø±ÙŠØ¯.");
+            return AddEmailResult.Fail(
+                "EMAIL_SET_FAILED",
+                "فشل إضافة البريد.");
         }
 
-        // â”€â”€ 5. Ø£Ù†Ø´Ø¦ Ø±Ù…Ø² Ø§Ù„ØªØ­Ù‚Ù‚ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        var token = await _identityUsers.GenerateEmailConfirmationTokenAsync(user, ct);
+        /*
+         * 5. Generate a confirmation token for the identity.
+         */
+        var token =
+            await _identity
+                .GenerateEmailConfirmationTokenAsync(
+                    identity.IdentityId,
+                    ct);
 
-        // â”€â”€ 6. Ø£Ø±Ø³Ù„ Ø±Ø³Ø§Ù„Ø© Ø§Ù„ØªØ­Ù‚Ù‚ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        await _emailService.SendVerificationLinkAsync(email, token, ct);
+        /*
+         * 6. Send the verification link.
+         */
+        await _emailService
+            .SendVerificationLinkAsync(
+                email,
+                token,
+                ct);
 
         _logger.LogInformation(
-            "Email verification sent to {Email} for user {UserId}",
+            "Email verification sent to {Email} for identity {IdentityId}.",
             email,
-            request.UserId);
+            identity.IdentityId);
 
         return AddEmailResult.Ok();
     }
 
-    private static string NormalizeEmail(string email)
-        => email.Trim().ToLowerInvariant();
+    private static string NormalizeEmail(
+        string email)
+        => email
+            .Trim()
+            .ToLowerInvariant();
 }
 
 public sealed class AddEmailCommandValidator
@@ -104,14 +155,19 @@ public sealed class AddEmailCommandValidator
     {
         RuleFor(x => x.UserId)
             .NotEmpty()
-            .WithMessage("Ù…Ø¹Ø±Ù‘Ù Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ù…Ø·Ù„ÙˆØ¨.");
+            .WithMessage(
+                "معرّف المستخدم مطلوب.");
 
         RuleFor(x => x.Email)
             .NotEmpty()
             .MaximumLength(320)
             .EmailAddress()
-            .Must(email => email is not null && !email.Any(char.IsWhiteSpace))
-            .WithMessage("Email must not contain whitespace.");
+            .Must(
+                email =>
+                    email != null &&
+                    !email.Any(
+                        char.IsWhiteSpace))
+            .WithMessage(
+                "Email must not contain whitespace.");
     }
 }
-

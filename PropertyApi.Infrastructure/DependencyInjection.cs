@@ -18,13 +18,15 @@ using PropertyApi.Application.Bookings.Interfaces;
 using PropertyApi.Application.Reviews.Interfaces;
 using PropertyApi.Infrastructure.Bookings;
 using PropertyApi.Infrastructure.Reviews;
-using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Infrastructure.Identity.Entities;
 using PropertyApi.Infrastructure.Persistence;
 using PropertyApi.Infrastructure.Repositories;
 using PropertyApi.Infrastructure.Services;
 using PropertyApi.Infrastructure.Media;
 using PropertyApi.Infrastructure.Identity.Services;
+using InfrastructureApplicationRole = PropertyApi.Infrastructure.Identity.Entities.ApplicationRole;
 using PropertyApi.Infrastructure.Auth.Services;
+using PropertyApi.Infrastructure.Auth.Security;
 using PropertyApi.Infrastructure.Auth;
 using PropertyApi.Infrastructure.Email;
 using PropertyApi.Infrastructure.Auth.Repositories;
@@ -40,6 +42,7 @@ using PropertyApi.Application.Analytics.Interfaces;
 using PropertyApi.Infrastructure.Analytics;
 using PropertyApi.Infrastructure.Audit;
 using PropertyApi.Infrastructure.Settings;
+using PropertyApi.Infrastructure.Persistence.Backfills;
 
 
 namespace PropertyApi.Infrastructure;
@@ -78,7 +81,11 @@ public static class DependencyInjection
 
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
-        services.AddScoped<IIdentityUserService, IdentityUserService>();
+
+        services.AddSingleton<
+            IPhoneNumberLookupHasher,
+            HmacPhoneNumberLookupHasher>();
+        services.AddScoped<IPureIdentityService, PureIdentityService>();
         services.AddScoped<IIdentityRoleService, IdentityRoleService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
 
@@ -113,6 +120,7 @@ public static class DependencyInjection
         services.AddScoped<IPropertyReviewRepository, PropertyReviewRepository>();
 
         services.AddHostedService<OtpCleanupHostedService>();
+        services.AddScoped<PhoneNumberLookupHashBackfill>();
 
         // Email
         services.Configure<EmailOptions>(
@@ -206,7 +214,7 @@ public static class DependencyInjection
             }
         });
 
-        services.AddIdentity<User, ApplicationRole>(options =>
+        services.AddIdentity<ApplicationUser, InfrastructureApplicationRole>(options =>
         {
             options.Password.RequireDigit = true;
             options.Password.RequiredLength = 8;
@@ -225,7 +233,8 @@ public static class DependencyInjection
         services.AddScoped<IPropertyImageRepository, PropertyImageRepository>();
         services.AddScoped<IFavoriteRepository, FavoriteRepository>();
         services.AddScoped<IContactMessageRepository, ContactMessageRepository>();
-        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IUserDirectoryReadService,UserDirectoryReadService>();
+        services.AddScoped<IUserAccountRepository, UserAccountRepository>();
         services.AddScoped<IMessageRepository, MessageRepository>();  // ADDED
 
         // Unit of Work

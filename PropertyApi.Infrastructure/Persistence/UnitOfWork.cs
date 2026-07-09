@@ -23,24 +23,50 @@ public sealed class UnitOfWork : IUnitOfWork
     public async Task<int> SaveChangesAsync(CancellationToken ct = default)
         => await _db.SaveChangesAsync(ct);
 
-    public async Task BeginTransactionAsync()
-        => _transaction = await _db.Database.BeginTransactionAsync();
-
-    public async Task CommitTransactionAsync()
+    public async Task BeginTransactionAsync(
+        CancellationToken ct = default)
     {
-        if (_transaction is null)
-            throw new InvalidOperationException("No active transaction.");
-        await _transaction.CommitAsync();
-        await _transaction.DisposeAsync();
-        _transaction = null;
+        if (_transaction is not null)
+            throw new InvalidOperationException(
+                "A transaction is already active.");
+
+        _transaction = await _db.Database
+            .BeginTransactionAsync(ct);
     }
 
-    public async Task RollbackTransactionAsync()
+    public async Task CommitTransactionAsync(
+        CancellationToken ct = default)
     {
-        if (_transaction is null) return;
-        await _transaction.RollbackAsync();
-        await _transaction.DisposeAsync();
-        _transaction = null;
+        if (_transaction is null)
+            throw new InvalidOperationException(
+                "No active transaction.");
+
+        try
+        {
+            await _transaction.CommitAsync(ct);
+        }
+        finally
+        {
+            await _transaction.DisposeAsync();
+            _transaction = null;
+        }
+    }
+
+    public async Task RollbackTransactionAsync(
+        CancellationToken ct = default)
+    {
+        if (_transaction is null)
+            return;
+
+        try
+        {
+            await _transaction.RollbackAsync(ct);
+        }
+        finally
+        {
+            await _transaction.DisposeAsync();
+            _transaction = null;
+        }
     }
 
     public void Dispose() => _transaction?.Dispose();

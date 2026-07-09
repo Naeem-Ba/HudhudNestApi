@@ -5,20 +5,28 @@ using PropertyApi.Application.Auth.Interfaces;
 namespace PropertyApi.Application.Auth.Commands.VerifyEmail;
 
 /// <summary>
-/// Ù…Ø¹Ø§Ù„Ø¬ ØªÙØ¹ÙŠÙ„ Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ.
-/// ÙŠØ¹ØªÙ…Ø¯ Ø¹Ù„Ù‰ IIdentityUserService Ø¨Ø¯Ù„Ø§Ù‹ Ù…Ù† concrete identity user service Ø­ØªÙ‰ Ù„Ø§ ØªØ¹Ø±Ù Application ØªÙØ§ØµÙŠÙ„ ASP.NET Identity.
+/// Confirms an identity email address through the framework-neutral
+/// Identity boundary.
+///
+/// The Application layer works only with identity identifiers and
+/// neutral snapshots. ASP.NET Core Identity entities remain hidden
+/// inside Infrastructure.
 /// </summary>
 public sealed class VerifyEmailCommandHandler
-    : IRequestHandler<VerifyEmailCommand, VerifyEmailResult>
+    : IRequestHandler<
+        VerifyEmailCommand,
+        VerifyEmailResult>
 {
-    private readonly IIdentityUserService _identityUsers;
-    private readonly ILogger<VerifyEmailCommandHandler> _logger;
+    private readonly IPureIdentityService _identity;
+
+    private readonly ILogger<VerifyEmailCommandHandler>
+        _logger;
 
     public VerifyEmailCommandHandler(
-        IIdentityUserService identityUsers,
+        IPureIdentityService identity,
         ILogger<VerifyEmailCommandHandler> logger)
     {
-        _identityUsers = identityUsers;
+        _identity = identity;
         _logger = logger;
     }
 
@@ -26,66 +34,82 @@ public sealed class VerifyEmailCommandHandler
         VerifyEmailCommand command,
         CancellationToken ct)
     {
-        // â”€â”€ 1. Ø§Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        var user = await _identityUsers.FindByIdAsync(command.UserId, ct);
+        /*
+         * 1. Resolve the identity account.
+         */
+        var identity =
+            await _identity.FindByIdAsync(
+                command.UserId,
+                ct);
 
-        if (user is null || user.IsDeleted)
+        if (identity is null ||
+            identity.IsDeleted)
         {
             _logger.LogWarning(
-                "VerifyEmail: User not found [{UserId}]",
+                "VerifyEmail: Identity not found [{IdentityId}].",
                 command.UserId);
 
             return VerifyEmailResult.Fail(
                 "INVALID_TOKEN",
-                "Ø±Ø§Ø¨Ø· Ø§Ù„ØªØ­Ù‚Ù‚ ØºÙŠØ± ØµØ§Ù„Ø­ Ø£Ùˆ Ù…Ù†ØªÙ‡ÙŠ Ø§Ù„ØµÙ„Ø§Ø­ÙŠØ©.");
+                "رابط التحقق غير صالح أو منتهي الصلاحية.");
         }
 
-        // â”€â”€ 2. Ù‡Ù„ Ø§Ù„Ø¨Ø±ÙŠØ¯ Ù…ÙÙØ¹ÙŽÙ‘Ù„ Ø¨Ø§Ù„ÙØ¹Ù„ØŸ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        if (user.EmailConfirmed)
+        /*
+         * 2. Email confirmation is idempotent.
+         */
+        if (identity.EmailConfirmed)
         {
             _logger.LogInformation(
-                "VerifyEmail: Email already confirmed for {UserId}",
-                command.UserId);
+                "VerifyEmail: Email already confirmed for identity {IdentityId}.",
+                identity.IdentityId);
 
             return VerifyEmailResult.Ok();
         }
 
-        // â”€â”€ 3. ØªØ£ÙƒØ¯ Ù…Ù† ÙˆØ¬ÙˆØ¯ Ø¨Ø±ÙŠØ¯ Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        if (string.IsNullOrWhiteSpace(user.Email))
+        /*
+         * 3. An identity without an email cannot be confirmed.
+         */
+        if (string.IsNullOrWhiteSpace(
+                identity.Email))
         {
             _logger.LogWarning(
-                "VerifyEmail: No email set for user {UserId}",
-                command.UserId);
+                "VerifyEmail: No email set for identity {IdentityId}.",
+                identity.IdentityId);
 
             return VerifyEmailResult.Fail(
                 "NO_EMAIL",
-                "Ù„Ø§ ÙŠÙˆØ¬Ø¯ Ø¨Ø±ÙŠØ¯ Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ Ù…ÙØ¶Ø§Ù Ù„Ù‡Ø°Ø§ Ø§Ù„Ø­Ø³Ø§Ø¨.");
+                "لا يوجد بريد إلكتروني مضاف لهذا الحساب.");
         }
 
-        // â”€â”€ 4. Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ø±Ù…Ø² Ø¹Ø¨Ø± Infrastructure Identity â”€â”€â”€â”€â”€
-        var confirmResult = await _identityUsers.ConfirmEmailAsync(
-            user,
-            command.Token,
-            ct);
+        /*
+         * 4. Validate and consume the confirmation token through
+         * the framework-neutral Identity boundary.
+         */
+        var confirmResult =
+            await _identity.ConfirmEmailAsync(
+                identity.IdentityId,
+                command.Token,
+                ct);
 
         if (!confirmResult.Succeeded)
         {
             _logger.LogWarning(
-                "VerifyEmail: Confirmation failed for {UserId}. Errors: {Errors}",
-                command.UserId,
-                string.Join(", ", confirmResult.Errors));
+                "VerifyEmail: Confirmation failed for identity {IdentityId}. Errors: {Errors}",
+                identity.IdentityId,
+                string.Join(
+                    ", ",
+                    confirmResult.Errors));
 
             return VerifyEmailResult.Fail(
                 "INVALID_TOKEN",
-                "Ø±Ø§Ø¨Ø· Ø§Ù„ØªØ­Ù‚Ù‚ ØºÙŠØ± ØµØ§Ù„Ø­ Ø£Ùˆ Ù…Ù†ØªÙ‡ÙŠ Ø§Ù„ØµÙ„Ø§Ø­ÙŠØ©. Ø§Ø·Ù„Ø¨ Ø±Ø§Ø¨Ø·Ø§Ù‹ Ø¬Ø¯ÙŠØ¯Ø§Ù‹.");
+                "رابط التحقق غير صالح أو منتهي الصلاحية. اطلب رابطًا جديدًا.");
         }
 
         _logger.LogInformation(
-            "VerifyEmail: Email {Email} confirmed for user {UserId}",
-            user.Email,
-            command.UserId);
+            "VerifyEmail: Email {Email} confirmed for identity {IdentityId}.",
+            identity.Email,
+            identity.IdentityId);
 
         return VerifyEmailResult.Ok();
     }
 }
-

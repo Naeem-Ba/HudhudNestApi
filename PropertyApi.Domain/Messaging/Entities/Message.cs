@@ -20,9 +20,9 @@ public class Message : BaseEntity
 
     // -- Read Status --------------------------------------------
     public bool IsRead { get; set; } = false;     
-    public DateTime? ReadAt { get; set; }               
+    public DateTime? ReadAt { get; set; }
 
     // -- Navigation ---------------------------------------------
-    public User? Sender { get; set; }
+    public UserAccount? Sender { get; set; }
     public Property? Property { get; set; }
 }

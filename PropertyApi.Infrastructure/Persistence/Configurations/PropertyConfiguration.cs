@@ -104,7 +104,7 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
 
         // -- Relationships -------------------------------------
         builder.HasOne(p => p.Owner)
-            .WithMany(u => u.Properties)
+            .WithMany()
             .HasForeignKey(p => p.OwnerId)
             .OnDelete(DeleteBehavior.Restrict);  // Don't cascade-delete listings on user delete
 

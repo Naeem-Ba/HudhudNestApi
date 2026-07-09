@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.DataProtection;
+﻿using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -8,13 +8,14 @@ using PropertyApi.Domain.Audit.Entities;
 using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Messaging.Entities;
 using PropertyApi.Domain.Users.Entities;
-using PropertyApi.Infrastructure.Identity.Entities;
+using IdentityApplicationRole = PropertyApi.Infrastructure.Identity.Entities.ApplicationRole;
 using PropertyApi.Domain.Auth.Entities;
 using PropertyApi.Domain.Notifications.Entities;
 using PropertyApi.Domain.Bookings.Entities;
 using PropertyApi.Domain.Reviews.Entities;
 using PropertyApi.Domain.Lookups.Entities;
 using PropertyApi.Domain.Transactions.Entities;
+using PropertyApi.Infrastructure.Identity.Entities;
 using PropertyApi.Infrastructure.Security.DataProtection;
 
 
@@ -28,7 +29,7 @@ namespace PropertyApi.Infrastructure.Persistence;
 /// Global soft-delete filter applied to all BaseEntity types.
 /// </summary>
 public sealed class AppDbContext
-    : IdentityDbContext<User, ApplicationRole, Guid>
+    : IdentityDbContext<ApplicationUser, IdentityApplicationRole, Guid>
 {
     private readonly IDataProtectionProvider _dataProtectionProvider;
 
@@ -46,6 +47,7 @@ public sealed class AppDbContext
     }
 
     // -- DbSets --------------------------------------------------
+    public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
     public DbSet<Property> Properties => Set<Property>();
     public DbSet<PropertyImage> PropertyImages => Set<PropertyImage>();
     public DbSet<Amenity> Amenities => Set<Amenity>();
@@ -78,8 +80,8 @@ public sealed class AppDbContext
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
         // -- Rename Identity tables to clean English names -------
-        builder.Entity<User>().ToTable("Users");
-        builder.Entity<ApplicationRole>().ToTable("Roles");
+        builder.Entity<ApplicationUser>().ToTable("Users");
+        builder.Entity<IdentityApplicationRole>().ToTable("Roles");
         builder.Entity<IdentityUserRole<Guid>>().ToTable("UserRoles");
         builder.Entity<IdentityUserClaim<Guid>>().ToTable("UserClaims");
         builder.Entity<IdentityUserLogin<Guid>>().ToTable("UserLogins");
@@ -87,6 +89,7 @@ public sealed class AppDbContext
         builder.Entity<IdentityUserToken<Guid>>().ToTable("UserTokens");
 
         ConfigureEncryptedUserFields(builder);
+        ConfigureEncryptedUserAccountFields(builder);
 
         // -- Global soft-delete filter ---------------------------
         // Automatically excludes IsDeleted=true from ALL queries.
@@ -96,13 +99,13 @@ public sealed class AppDbContext
         builder.Entity<Amenity>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<Message>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ContactMessage>().HasQueryFilter(e => !e.IsDeleted);
-        builder.Entity<User>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<ApplicationUser>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<Notification>().HasQueryFilter(n => !n.IsDeleted);
         builder.Entity<VisitRequest>().HasQueryFilter(v => !v.IsDeleted);
         builder.Entity<PropertyReview>().HasQueryFilter(r => !r.IsDeleted);
         builder.Entity<Transaction>().HasQueryFilter(e => !e.IsDeleted);
 
-        builder.Entity<Favorite>().HasQueryFilter(favorite =>!favorite.User.IsDeleted &&!favorite.Property.IsDeleted);
+        builder.Entity<Favorite>().HasQueryFilter(favorite =>!favorite.Property.IsDeleted);
 
         builder.Entity<PropertyAmenity>().HasQueryFilter(propertyAmenity =>!propertyAmenity.Property.IsDeleted &&!propertyAmenity.Amenity.IsDeleted);
 
@@ -114,7 +117,7 @@ public sealed class AppDbContext
 
     private void ConfigureEncryptedUserFields(ModelBuilder builder)
     {
-        var user = builder.Entity<User>();
+        var user = builder.Entity<ApplicationUser>();
 
         user.Property(u => u.PhoneNumber)
             .HasMaxLength(1024)
@@ -122,19 +125,33 @@ public sealed class AppDbContext
                 _dataProtectionProvider,
                 SensitiveDataProtectionPurposes.UserPhoneNumber));
 
-        user.Property(u => u.WhatsAppNumber)
+        user.Property(
+                u => u.PhoneNumberLookupHash)
+            .HasMaxLength(64);
+
+        user.HasIndex(
+                u => u.PhoneNumberLookupHash)
+            .IsUnique();
+
+    }
+
+    private void ConfigureEncryptedUserAccountFields(
+    ModelBuilder builder)
+    {
+        var account = builder.Entity<UserAccount>();
+
+        account.Property(u => u.WhatsAppNumber)
             .HasMaxLength(1024)
             .HasConversion(new DataProtectionStringConverter(
                 _dataProtectionProvider,
                 SensitiveDataProtectionPurposes.UserWhatsAppNumber));
 
-        user.Property(u => u.TaxNumber)
+        account.Property(u => u.TaxNumber)
             .HasMaxLength(1024)
             .HasConversion(new DataProtectionStringConverter(
                 _dataProtectionProvider,
                 SensitiveDataProtectionPurposes.UserTaxNumber));
     }
-
     // -- Auto-stamp UpdatedAt on every save ----------------------
     public override async Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default)
@@ -173,3 +190,4 @@ public sealed class AppDbContext
         return await base.SaveChangesAsync(cancellationToken);
     }
 }
+

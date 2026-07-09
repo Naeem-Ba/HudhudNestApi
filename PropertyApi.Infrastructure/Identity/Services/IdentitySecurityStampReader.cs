@@ -1,15 +1,15 @@
 using Microsoft.AspNetCore.Identity;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Common.Security;
-using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Infrastructure.Identity.Entities;
 
 namespace PropertyApi.Infrastructure.Identity.Services;
 
 public sealed class IdentitySecurityStampReader : IUserSecurityStampReader
 {
-    private readonly UserManager<User> _userManager;
+    private readonly UserManager<ApplicationUser> _userManager;
 
-    public IdentitySecurityStampReader(UserManager<User> userManager)
+    public IdentitySecurityStampReader(UserManager<ApplicationUser> userManager)
     {
         _userManager = userManager;
     }

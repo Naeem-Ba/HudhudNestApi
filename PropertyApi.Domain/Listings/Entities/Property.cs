@@ -70,7 +70,7 @@ public class Property : AuditableEntity
 
     // -- Ownership ----------------------------------------------
     public Guid OwnerId { get; set; }
-    public User? Owner { get; set; }
+    public UserAccount? Owner { get; set; }
 
     // -- Publishing ---------------------------------------------
     public bool IsPublished { get; private set; }
@@ -185,7 +185,7 @@ public class Property : AuditableEntity
     public Neighborhood? Neighborhood { get; set; }
     public PropertyType? PropertyType { get; set; }
     public Currency? PriceCurrency { get; set; }
-    public User? Agent { get; set; }
+    public UserAccount? Agent { get; set; }
     public SaleDetails? SaleDetails { get; set; }
     public RentalDetails? RentalDetails { get; set; }
 

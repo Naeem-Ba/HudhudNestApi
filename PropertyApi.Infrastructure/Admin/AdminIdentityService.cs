@@ -1,25 +1,24 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Admin.DTOs;
 using PropertyApi.Application.Admin.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Domain.Audit.Constants;
-using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Infrastructure.Persistence;
+using PropertyApi.Infrastructure.Identity.Entities;
 
 namespace PropertyApi.Infrastructure.Admin;
 
 public sealed class AdminIdentityService : IAdminIdentityService
 {
-    private readonly UserManager<User> _userManager;
+    private readonly UserManager<ApplicationUser> _userManager;
     private readonly AppDbContext _db;
     private readonly IAuditLogService _auditLogs;
     private readonly ILogger<AdminIdentityService> _logger;
 
     public AdminIdentityService(
-        UserManager<User> userManager,
+        UserManager<ApplicationUser> userManager,
         AppDbContext db,
         IAuditLogService auditLogs,
         ILogger<AdminIdentityService> logger)
@@ -181,10 +180,10 @@ public sealed class AdminIdentityService : IAdminIdentityService
         return AdminOperationResult.Ok("User disabled.");
     }
 
-    private Task<User?> FindActiveUserAsync(Guid userId)
+    private Task<ApplicationUser?> FindActiveUserAsync(Guid userId)
         => _userManager.FindByIdAsync(userId.ToString());
 
-    private async Task<AdminOperationResult> TouchUserAfterRoleChangeAsync(User user)
+    private async Task<AdminOperationResult> TouchUserAfterRoleChangeAsync(ApplicationUser user)
     {
         user.SecurityStamp = Guid.NewGuid().ToString("N");
         user.UpdatedAt = DateTime.UtcNow;

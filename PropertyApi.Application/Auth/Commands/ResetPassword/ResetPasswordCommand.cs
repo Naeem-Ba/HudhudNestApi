@@ -10,54 +10,73 @@ public sealed record ResetPasswordCommand(
     string Token,
     string NewPassword,
     string ConfirmPassword,
-    string? IpAddress = null) : IRequest<ResetPasswordResult>;
+    string? IpAddress = null)
+    : IRequest<ResetPasswordResult>;
 
 public sealed record ResetPasswordResult
 {
     public bool Success { get; init; }
+
     public bool Conflict { get; init; }
-    public string Message { get; init; } = string.Empty;
-    public IReadOnlyList<string> Errors { get; init; } = Array.Empty<string>();
 
-    public static ResetPasswordResult Ok() => new()
-    {
-        Success = true,
-        Message = "Password has been reset successfully."
-    };
+    public string Message { get; init; } =
+        string.Empty;
 
-    public static ResetPasswordResult BadRequest(string message) => new()
-    {
-        Success = false,
-        Message = message
-    };
+    public IReadOnlyList<string> Errors { get; init; } =
+        Array.Empty<string>();
 
-    public static ResetPasswordResult ConflictResult(string message) => new()
-    {
-        Success = false,
-        Conflict = true,
-        Message = message
-    };
+    public static ResetPasswordResult Ok()
+        => new()
+        {
+            Success = true,
+            Message =
+                "Password has been reset successfully."
+        };
 
-    public static ResetPasswordResult Fail(IEnumerable<string> errors) => new()
-    {
-        Success = false,
-        Errors = errors.ToArray()
-    };
+    public static ResetPasswordResult BadRequest(
+        string message)
+        => new()
+        {
+            Success = false,
+            Message = message
+        };
+
+    public static ResetPasswordResult ConflictResult(
+        string message)
+        => new()
+        {
+            Success = false,
+            Conflict = true,
+            Message = message
+        };
+
+    public static ResetPasswordResult Fail(
+        IEnumerable<string> errors)
+        => new()
+        {
+            Success = false,
+            Errors = errors.ToArray()
+        };
 }
 
 public sealed class ResetPasswordCommandHandler
-    : IRequestHandler<ResetPasswordCommand, ResetPasswordResult>
+    : IRequestHandler<
+        ResetPasswordCommand,
+        ResetPasswordResult>
 {
-    private readonly IIdentityUserService _identityUsers;
+    private readonly IPureIdentityService _identity;
+
     private readonly IRefreshTokenRepository _refreshTokens;
-    private readonly ILogger<ResetPasswordCommandHandler> _logger;
+
+    private readonly ILogger<ResetPasswordCommandHandler>
+        _logger;
 
     public ResetPasswordCommandHandler(
-        IIdentityUserService identityUsers,
+        IPureIdentityService identity,
         IRefreshTokenRepository refreshTokens,
         ILogger<ResetPasswordCommandHandler> logger)
     {
-        _identityUsers = identityUsers;
+        _identity = identity;
         _refreshTokens = refreshTokens;
         _logger = logger;
     }
@@ -66,73 +85,154 @@ public sealed class ResetPasswordCommandHandler
         ResetPasswordCommand request,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(request.Email) ||
-            string.IsNullOrWhiteSpace(request.Token) ||
-            string.IsNullOrWhiteSpace(request.NewPassword))
+        if (string.IsNullOrWhiteSpace(
+                request.Email) ||
+            string.IsNullOrWhiteSpace(
+                request.Token) ||
+            string.IsNullOrWhiteSpace(
+                request.NewPassword))
         {
-            return ResetPasswordResult.BadRequest("Email, token, and new password are required.");
+            return ResetPasswordResult.BadRequest(
+                "Email, token, and new password are required.");
         }
 
-        if (!string.Equals(request.NewPassword, request.ConfirmPassword, StringComparison.Ordinal))
-            return ResetPasswordResult.BadRequest("New password and confirmation password do not match.");
+        if (!string.Equals(
+                request.NewPassword,
+                request.ConfirmPassword,
+                StringComparison.Ordinal))
+        {
+            return ResetPasswordResult.BadRequest(
+                "New password and confirmation password do not match.");
+        }
 
-        var email = NormalizeEmail(request.Email);
-        var user = await _identityUsers.FindByEmailAsync(email, ct);
+        var email =
+            NormalizeEmail(request.Email);
 
-        if (user is null || user.IsDeleted)
-            return ResetPasswordResult.BadRequest("Invalid password reset request.");
+        var identity =
+            await _identity.FindByEmailAsync(
+                email,
+                ct);
 
-        var isSamePassword = await _identityUsers.CheckPasswordAsync(user, request.NewPassword, ct);
+        if (identity is null ||
+            identity.IsDeleted)
+        {
+            return ResetPasswordResult.BadRequest(
+                "Invalid password reset request.");
+        }
+
+        var isSamePassword =
+            await _identity.CheckPasswordAsync(
+                identity.IdentityId,
+                request.NewPassword,
+                ct);
+
         if (isSamePassword)
-            return ResetPasswordResult.ConflictResult("New password must be different from the current password.");
+        {
+            return ResetPasswordResult.ConflictResult(
+                "New password must be different from the current password.");
+        }
 
-        var token = Uri.UnescapeDataString(request.Token);
-        var result = await _identityUsers.ResetPasswordAsync(user, token, request.NewPassword, ct);
+        var token =
+            Uri.UnescapeDataString(
+                request.Token);
+
+        var result =
+            await _identity.ResetPasswordAsync(
+                identity.IdentityId,
+                token,
+                request.NewPassword,
+                ct);
 
         if (!result.Succeeded)
         {
             _logger.LogWarning(
-                "Password reset failed for user {UserId}. Errors: {Errors}",
-                user.Id,
-                string.Join(", ", result.Errors));
+                "Password reset failed for identity {IdentityId}. Errors: {Errors}",
+                identity.IdentityId,
+                string.Join(
+                    ", ",
+                    result.Errors));
 
-            return ResetPasswordResult.Fail(result.Errors);
+            return ResetPasswordResult.Fail(
+                result.Errors);
         }
 
-        var securityStampResult = await _identityUsers.UpdateSecurityStampAsync(user, ct);
+        /*
+         * Preserve the previous behavior:
+         * explicitly rotate the security stamp after successful reset.
+         */
+        var securityStampResult =
+            await _identity.UpdateSecurityStampAsync(
+                identity.IdentityId,
+                ct);
+
         if (!securityStampResult.Succeeded)
         {
             _logger.LogWarning(
-                "Security stamp update failed for user {UserId}. Errors: {Errors}",
-                user.Id,
-                string.Join(", ", securityStampResult.Errors));
+                "Security stamp update failed for identity {IdentityId}. Errors: {Errors}",
+                identity.IdentityId,
+                string.Join(
+                    ", ",
+                    securityStampResult.Errors));
         }
 
-        user.UpdatedAt = DateTime.UtcNow;
-        await _identityUsers.UpdateAsync(user, ct);
+        var changedAtUtc =
+            DateTime.UtcNow;
 
-        await _refreshTokens.RevokeActiveTokensForUserAsync(
-            user.Id,
-            DateTime.UtcNow,
-            request.IpAddress,
-            ct);
+        var touchResult =
+            await _identity.RecordCredentialChangeAsync(
+                identity.IdentityId,
+                changedAtUtc,
+                ct);
 
-        _logger.LogInformation("Password reset succeeded for user {UserId}.", user.Id);
+        if (!touchResult.Succeeded)
+        {
+            _logger.LogWarning(
+                "Credential change timestamp update failed for identity {IdentityId}. Errors: {Errors}",
+                identity.IdentityId,
+                string.Join(
+                    ", ",
+                    touchResult.Errors));
+        }
+
+        await _refreshTokens
+            .RevokeActiveTokensForUserAsync(
+                identity.IdentityId,
+                changedAtUtc,
+                request.IpAddress,
+                ct);
+
+        _logger.LogInformation(
+            "Password reset succeeded for identity {IdentityId}.",
+            identity.IdentityId);
+
         return ResetPasswordResult.Ok();
     }
 
-    private static string NormalizeEmail(string email)
-        => email.Trim().ToLowerInvariant();
+    private static string NormalizeEmail(
+        string email)
+        => email
+            .Trim()
+            .ToLowerInvariant();
 }
 
-public sealed class ResetPasswordCommandValidator : AbstractValidator<ResetPasswordCommand>
+public sealed class ResetPasswordCommandValidator
+    : AbstractValidator<ResetPasswordCommand>
 {
     public ResetPasswordCommandValidator()
     {
-        RuleFor(x => x.Email).NotEmpty().MaximumLength(320).EmailAddress();
-        RuleFor(x => x.Token).NotEmpty();
-        RuleFor(x => x.NewPassword).NotEmpty().MinimumLength(8);
-        RuleFor(x => x.ConfirmPassword).Equal(x => x.NewPassword);
+        RuleFor(x => x.Email)
+            .NotEmpty()
+            .MaximumLength(320)
+            .EmailAddress();
+
+        RuleFor(x => x.Token)
+            .NotEmpty();
+
+        RuleFor(x => x.NewPassword)
+            .NotEmpty()
+            .MinimumLength(8);
+
+        RuleFor(x => x.ConfirmPassword)
+            .Equal(x => x.NewPassword);
     }
 }
-

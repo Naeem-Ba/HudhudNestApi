@@ -36,7 +36,7 @@ public sealed class VisitRequest : BaseEntity
 
     // ── Navigation (EF) ───────────────────────────────────────────
     public Property? Property  { get; private set; }
-    public User?     Requester { get; private set; }
+    public UserAccount? Requester { get; private set; }
 
     // ── EF Core private constructor ───────────────────────────────
     private VisitRequest() { }

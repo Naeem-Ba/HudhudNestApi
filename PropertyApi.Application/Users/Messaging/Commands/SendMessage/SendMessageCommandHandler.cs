@@ -8,7 +8,6 @@ using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Application.Users.Messaging.DTOs;
 using PropertyApi.Application.Users.Messaging.Interfaces;
 using PropertyApi.Domain.Messaging.Entities;
-using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Users.Messaging.Commands.SendMessage;
 
@@ -17,7 +16,7 @@ public sealed class SendMessageCommandHandler
 {
     private readonly ICurrentUserService _currentUser;
     private readonly IPropertyRepository _properties;
-    private readonly IUserRepository _users;
+    private readonly IUserDirectoryReadService _userDirectory;
     private readonly IMessageRepository _messages;
     private readonly IUnitOfWork _uow;
     private readonly INotificationService _notifications;
@@ -26,7 +25,7 @@ public sealed class SendMessageCommandHandler
     public SendMessageCommandHandler(
         ICurrentUserService currentUser,
         IPropertyRepository properties,
-        IUserRepository users,
+        IUserDirectoryReadService userDirectory,
         IMessageRepository messages,
         IUnitOfWork uow,
         INotificationService notifications,
@@ -34,7 +33,7 @@ public sealed class SendMessageCommandHandler
     {
         _currentUser = currentUser;
         _properties = properties;
-        _users = users;
+        _userDirectory = userDirectory;
         _messages = messages;
         _uow = uow;
         _notifications = notifications;
@@ -45,26 +44,38 @@ public sealed class SendMessageCommandHandler
         SendMessageCommand request,
         CancellationToken cancellationToken)
     {
-        var senderId = _currentUser.UserId
-            ?? throw new UnauthorizedAccessException("Authentication is required to send messages.");
+        var senderId =
+            _currentUser.UserId
+            ?? throw new UnauthorizedAccessException(
+                "Authentication is required to send messages.");
 
-        var property = await _properties.GetByIdWithDetailsAsync(
-            request.PropertyId,
-            cancellationToken);
+        var property =
+            await _properties.GetByIdWithDetailsAsync(
+                request.PropertyId,
+                cancellationToken);
 
         if (property is null)
-            throw new KeyNotFoundException("Property was not found.");
+        {
+            throw new KeyNotFoundException(
+                "Property was not found.");
+        }
 
         Guid receiverId;
 
         if (senderId != property.OwnerId)
         {
-            // A visitor can only contact the property owner.
-            receiverId = property.OwnerId;
+            /*
+             * A visitor can only contact the property owner.
+             */
+            receiverId =
+                property.OwnerId;
         }
         else
         {
-            // The owner must explicitly select the user being answered.
+            /*
+             * The owner must explicitly select the user
+             * being answered.
+             */
             if (!request.ReceiverId.HasValue ||
                 request.ReceiverId.Value == Guid.Empty)
             {
@@ -76,7 +87,8 @@ public sealed class SendMessageCommandHandler
                 ]);
             }
 
-            receiverId = request.ReceiverId.Value;
+            receiverId =
+                request.ReceiverId.Value;
 
             var conversationExists =
                 await _messages.ConversationExistsAsync(
@@ -102,44 +114,99 @@ public sealed class SendMessageCommandHandler
             ]);
         }
 
-        if (!await _users.ExistsAsync(receiverId, cancellationToken))
+        /*
+         * The read boundary guarantees that the receiver
+         * represents an active, non-deleted identity.
+         */
+        var receiver =
+            await _userDirectory.GetActiveByIdAsync(
+                receiverId,
+                cancellationToken);
+
+        if (receiver is null)
         {
-            throw new NotFoundException("Receiver was not found.");
+            throw new NotFoundException(
+                "Receiver was not found.");
         }
 
-        var message = new Message
-        {
-            Content = request.Content.Trim(),
-            PropertyId = property.Id,
-            SenderId = senderId,
-            ReceiverId = receiverId,
-            IsRead = false,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
+        var now =
+            DateTime.UtcNow;
 
-        await _messages.AddAsync(message, cancellationToken);
-        await _uow.SaveChangesAsync(cancellationToken);
+        var message =
+            new Message
+            {
+                Content =
+                    request.Content.Trim(),
 
-        var sender = await _users.GetByIdAsync(senderId, cancellationToken);
-        var senderDisplayName = BuildSenderDisplayName(sender);
+                PropertyId =
+                    property.Id,
 
-        // Notification is non-critical: message persistence has already succeeded.
+                SenderId =
+                    senderId,
+
+                ReceiverId =
+                    receiverId,
+
+                IsRead =
+                    false,
+
+                CreatedAt =
+                    now,
+
+                UpdatedAt =
+                    now
+            };
+
+        await _messages.AddAsync(
+            message,
+            cancellationToken);
+
+        await _uow.SaveChangesAsync(
+            cancellationToken);
+
+        var sender =
+            await _userDirectory.GetActiveByIdAsync(
+                senderId,
+                cancellationToken);
+
+        var senderDisplayName =
+            sender?.DisplayName
+            ?? "مستخدم";
+
+        /*
+         * Notification delivery is non-critical:
+         * message persistence has already succeeded.
+         */
         try
         {
             await _notifications.NotifyNewMessageAsync(
-                recipientId: receiverId,
-                senderId: senderId,
-                senderName: senderDisplayName,
-                messageId: message.Id,
-                propertyId: property.Id,
-                ct: cancellationToken);
+                recipientId:
+                    receiverId,
+
+                senderId:
+                    senderId,
+
+                senderName:
+                    senderDisplayName,
+
+                messageId:
+                    message.Id,
+
+                propertyId:
+                    property.Id,
+
+                ct:
+                    cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(
                 ex,
-                "Failed to create/send message notification. MessageId={MessageId}, PropertyId={PropertyId}, SenderId={SenderId}, ReceiverId={ReceiverId}",
+
+                "Failed to create/send message notification. " +
+                "MessageId={MessageId}, PropertyId={PropertyId}, " +
+                "SenderId={SenderId}, ReceiverId={ReceiverId}",
+
                 message.Id,
                 property.Id,
                 senderId,
@@ -148,31 +215,32 @@ public sealed class SendMessageCommandHandler
 
         return new MessageDto
         {
-            Id = message.Id,
-            PropertyId = message.PropertyId,
-            SenderId = message.SenderId,
-            ReceiverId = message.ReceiverId,
-            SenderDisplayName = senderDisplayName,
-            Content = message.Content,
-            IsRead = message.IsRead,
-            ReadAt = message.ReadAt,
-            CreatedAt = message.CreatedAt
+            Id =
+                message.Id,
+
+            PropertyId =
+                message.PropertyId,
+
+            SenderId =
+                message.SenderId,
+
+            ReceiverId =
+                message.ReceiverId,
+
+            SenderDisplayName =
+                senderDisplayName,
+
+            Content =
+                message.Content,
+
+            IsRead =
+                message.IsRead,
+
+            ReadAt =
+                message.ReadAt,
+
+            CreatedAt =
+                message.CreatedAt
         };
     }
-
-    private static string BuildSenderDisplayName(User? sender)
-    {
-        if (sender is null)
-            return string.Empty;
-
-        if (!string.IsNullOrWhiteSpace(sender.DisplayName))
-            return sender.DisplayName;
-
-        var fullName = $"{sender.FirstName} {sender.LastName}".Trim();
-
-        return string.IsNullOrWhiteSpace(fullName)
-            ? "Ù…Ø³ØªØ®Ø¯Ù…"
-            : fullName;
-    }
 }
-

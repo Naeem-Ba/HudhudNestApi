@@ -17,14 +17,7 @@ public sealed record SendPhoneOtpCommand(
     string? IpAddress = null
 ) : IRequest<SendOtpResult>;
 
-/// <summary>
-/// Ù…Ø¹Ø§Ù„Ø¬ Ø¥Ø±Ø³Ø§Ù„ OTP.
-///
-/// Ø§Ù„Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ù…Ù‡Ù…Ø© Ù‡Ù†Ø§:
-/// Ù„Ø§ Ù†Ø­ÙØ¸ OTP ÙÙŠ Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø¥Ù„Ø§ Ø¨Ø¹Ø¯ Ù†Ø¬Ø§Ø­ Ø¥Ø±Ø³Ø§Ù„ SMS.
-/// Ø§Ù„Ø³Ø¨Ø¨: CountRecentAsync ÙŠØ¹ØªÙ…Ø¯ Ø¹Ù„Ù‰ Ø§Ù„Ø³Ø¬Ù„Ø§Øª Ø§Ù„Ù…Ø­ÙÙˆØ¸Ø©ØŒ ÙˆÙ„Ø°Ù„Ùƒ Ø­ÙØ¸ OTP Ù‚Ø¨Ù„ Ø§Ù„Ø¥Ø±Ø³Ø§Ù„
-/// ÙŠØ¬Ø¹Ù„ ÙØ´Ù„ Ù…Ø²ÙˆØ¯ SMS ÙŠÙØ­Ø³Ø¨ Ø¶Ø¯ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… ÙÙŠ rate limiting.
-/// </summary>
+
 public sealed class SendPhoneOtpCommandHandler
     : IRequestHandler<SendPhoneOtpCommand, SendOtpResult>
 {

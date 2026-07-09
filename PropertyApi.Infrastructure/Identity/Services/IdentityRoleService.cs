@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
-using PropertyApi.Domain.Users.Entities;
+using ApplicationRole = PropertyApi.Infrastructure.Identity.Entities.ApplicationRole;
 
 namespace PropertyApi.Infrastructure.Identity.Services;
 

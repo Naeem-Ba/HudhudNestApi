@@ -24,7 +24,7 @@ public sealed class Notification : BaseEntity
 
     public DateTime? ReadAt { get; set; }
 
-    public User? Recipient { get; set; }
+    public UserAccount? Recipient { get; set; }
 
     public void MarkAsRead()
     {

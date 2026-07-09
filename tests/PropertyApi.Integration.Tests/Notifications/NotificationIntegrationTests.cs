@@ -10,13 +10,15 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Notifications.DTOs;
+using PropertyApi.Application.Auth.Models;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Notifications.Entities;
 using PropertyApi.Domain.Notifications.Enums;
-using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Infrastructure.Identity.Entities;
 using PropertyApi.Infrastructure.Persistence;
 using PropertyApi.Integration.Tests.TestInfrastructure;
 using Property = PropertyApi.Domain.Listings.Entities.Property;
+using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Integration.Tests.Notifications;
 
@@ -607,41 +609,114 @@ public sealed class NotificationIntegrationTests
     private async Task<string> CreateAccessTokenAsync(Guid userId)
     {
         await using var scope = _factory.Services.CreateAsyncScope();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var tokenService = scope.ServiceProvider.GetRequiredService<ITokenService>();
 
         var user = await userManager.FindByIdAsync(userId.ToString());
         Assert.NotNull(user);
 
         var roles = await userManager.GetRolesAsync(user!);
-        return tokenService.GenerateAccessToken(user!, roles.ToArray());
+        var identityUser =
+            user
+            ?? throw new InvalidOperationException(
+                "Test identity user was not found.");
+
+        var tokenSubject =
+            new AccessTokenSubject(
+                IdentityId: identityUser.Id,
+                Email: identityUser.Email,
+                UserName: identityUser.UserName,
+                SecurityStamp:
+                    identityUser.SecurityStamp);
+
+        return tokenService.GenerateAccessToken(
+            tokenSubject,
+            roles.ToArray());
     }
 
-    private async Task<User> CreateUserAsync(string prefix)
+    private async Task<ApplicationUser> CreateUserAsync(
+        string prefix)
     {
-        await using var scope = _factory.Services.CreateAsyncScope();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+        await using var scope =
+            _factory.Services.CreateAsyncScope();
 
-        var unique = Guid.NewGuid().ToString("N");
-        var email = $"{prefix}.{unique}@tests.local";
+        var userManager =
+            scope.ServiceProvider
+                .GetRequiredService<
+                    UserManager<ApplicationUser>>();
 
-        var user = new User
-        {
-            UserName = email,
-            Email = email,
-            EmailConfirmed = true,
-            FirstName = prefix,
-            LastName = "Tester",
-            DisplayName = $"{prefix} Tester",
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
+        var db =
+            scope.ServiceProvider
+                .GetRequiredService<AppDbContext>();
 
-        var result = await userManager.CreateAsync(user, "Password123");
+        var unique =
+            Guid.NewGuid().ToString("N");
+
+        var email =
+            $"{prefix}.{unique}@tests.local";
+
+        var now =
+            DateTime.UtcNow;
+
+        var user =
+            new ApplicationUser
+            {
+                Id =
+                    Guid.NewGuid(),
+
+                UserName =
+                    email,
+
+                Email =
+                    email,
+
+                EmailConfirmed =
+                    true,
+
+                CreatedAt =
+                    now,
+
+                UpdatedAt =
+                    now
+            };
+
+        var result =
+            await userManager.CreateAsync(
+                user,
+                "Password123");
 
         Assert.True(
             result.Succeeded,
-            "Failed to create test user: " + string.Join(" | ", result.Errors.Select(e => e.Description)));
+
+            "Failed to create test user: " +
+            string.Join(
+                " | ",
+                result.Errors.Select(
+                    error =>
+                        error.Description)));
+
+        /*
+         * Identity / business-profile invariant:
+         *
+         * ApplicationUser.Id == UserAccount.Id
+         */
+        var account =
+            UserAccount.Create(
+                user.Id,
+                prefix,
+                "Tester",
+                now);
+
+        account.UpdateProfile(
+            prefix,
+            "Tester",
+            $"{prefix} Tester",
+            now);
+
+        db.UserAccounts.Add(
+            account);
+
+        await db.SaveChangesAsync();
 
         return user;
     }

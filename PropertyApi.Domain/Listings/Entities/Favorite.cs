@@ -18,7 +18,7 @@ public class Favorite
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;  // ? UTC
 
-    public User User { get; set; } = null!;
+    public UserAccount User { get; set; } = null!;
     public Property Property { get; set; } = null!;
 }
 

@@ -1,6 +1,8 @@
 ﻿using MediatR;
 using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Auth.Models;
 using PropertyApi.Application.Users.DTOs;
+using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Domain.Users.Entities;
 
@@ -9,45 +11,106 @@ namespace PropertyApi.Application.Users.Queries.GetUserById;
 public sealed class GetUserByIdQueryHandler
     : IRequestHandler<GetUserByIdQuery, UserSummaryDto?>
 {
-    private readonly IIdentityUserService _identityUsers;
+    private readonly IPureIdentityService _identity;
+    private readonly IUserAccountRepository _accounts;
 
-    public GetUserByIdQueryHandler(IIdentityUserService identityUsers)
-        => _identityUsers = identityUsers;
+    public GetUserByIdQueryHandler(
+        IPureIdentityService identity,
+        IUserAccountRepository accounts)
+    {
+        _identity = identity;
+        _accounts = accounts;
+    }
 
     public async Task<UserSummaryDto?> Handle(
         GetUserByIdQuery request,
         CancellationToken cancellationToken)
     {
-        var user = await _identityUsers.FindByIdAsync(request.UserId, cancellationToken);
-        if (user is null || user.IsDeleted)
-            return null;
+        var identity =
+            await _identity.FindByIdAsync(
+                request.UserId,
+                cancellationToken);
 
-        var roles = await _identityUsers.GetRolesAsync(user, cancellationToken);
-        return MapToSummaryDto(user, roles);
+        if (identity is null ||
+            identity.IsDeleted)
+        {
+            return null;
+        }
+
+        var account =
+            await _accounts.GetByIdAsync(
+                identity.UserAccountId,
+                cancellationToken);
+
+        var roles =
+            await _identity.GetRolesAsync(
+                identity.IdentityId,
+                cancellationToken);
+
+        return MapToSummaryDto(
+            identity,
+            account,
+            roles);
     }
 
-    private static UserSummaryDto MapToSummaryDto(User user, IReadOnlyList<string> roles)
+    private static UserSummaryDto MapToSummaryDto(
+        IdentityAccountSnapshot identity,
+        UserAccount? account,
+        IReadOnlyList<string> roles)
     {
-        var isAgent = roles.Any(role =>
-            string.Equals(role, RoleNames.Agent, StringComparison.OrdinalIgnoreCase));
+        var isAgent =
+            roles.Any(
+                role =>
+                    string.Equals(
+                        role,
+                        RoleNames.Agent,
+                        StringComparison.OrdinalIgnoreCase));
 
         return new UserSummaryDto
         {
-            Id = user.Id,
-            DisplayName = BuildDisplayName(user),
-            ProfileImageUrl = user.ProfileImageUrl,
-            PhoneNumber = isAgent ? user.PhoneNumber : null,
-            Roles = roles.ToList().AsReadOnly()
+            Id =
+                identity.UserAccountId,
+
+            DisplayName =
+                BuildDisplayName(
+                    account),
+
+            ProfileImageUrl =
+                account?.ProfileImageUrl,
+
+            PhoneNumber =
+                isAgent
+                    ? identity.PhoneNumber
+                    : null,
+
+            Roles =
+                roles
+                    .ToList()
+                    .AsReadOnly()
         };
     }
 
-    private static string BuildDisplayName(User user)
+    private static string BuildDisplayName(
+        UserAccount? account)
     {
-        if (!string.IsNullOrWhiteSpace(user.DisplayName))
-            return user.DisplayName;
+        if (account is null)
+        {
+            return "User";
+        }
 
-        var fullName = $"{user.FirstName} {user.LastName}".Trim();
-        return string.IsNullOrWhiteSpace(fullName) ? "User" : fullName;
+        if (!string.IsNullOrWhiteSpace(
+                account.DisplayName))
+        {
+            return account.DisplayName;
+        }
+
+        var fullName =
+            $"{account.FirstName} {account.LastName}"
+                .Trim();
+
+        return string.IsNullOrWhiteSpace(
+            fullName)
+                ? "User"
+                : fullName;
     }
 }
-

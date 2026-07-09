@@ -4,19 +4,19 @@ using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
-using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Infrastructure.Identity.Entities;
 
 namespace PropertyApi.Infrastructure.Auth.Services;
 
 public sealed class EmailVerificationService : IEmailVerificationService
 {
-    private readonly UserManager<User> _userManager;
+    private readonly UserManager<ApplicationUser> _userManager;
     private readonly IEmailSender _emailSender;
     private readonly IConfiguration _configuration;
     private readonly ILogger<EmailVerificationService> _logger;
 
     public EmailVerificationService(
-        UserManager<User> userManager,
+        UserManager<ApplicationUser> userManager,
         IEmailSender emailSender,
         IConfiguration configuration,
         ILogger<EmailVerificationService> logger)

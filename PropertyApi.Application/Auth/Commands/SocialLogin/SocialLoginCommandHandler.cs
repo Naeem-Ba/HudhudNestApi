@@ -3,7 +3,9 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Contracts;
 using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Auth.Models;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Domain.Audit.Constants;
 using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Domain.Users.Entities;
@@ -14,28 +16,34 @@ public sealed class SocialLoginCommandHandler
     : IRequestHandler<SocialLoginCommand, SocialLoginResult>
 {
     private readonly IEnumerable<ISocialTokenVerifier> _verifiers;
-    private readonly IIdentityUserService _identityUsers;
+    private readonly IPureIdentityService _identity;
+    private readonly IUserAccountRepository _accounts;
     private readonly ITokenService _tokenService;
     private readonly IRefreshTokenRepository _refreshTokens;
     private readonly IJwtTokenSettings _jwtSettings;
     private readonly IAuditLogService _auditLogs;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<SocialLoginCommandHandler> _logger;
 
     public SocialLoginCommandHandler(
         IEnumerable<ISocialTokenVerifier> verifiers,
-        IIdentityUserService identityUsers,
+        IPureIdentityService identity,
+        IUserAccountRepository accounts,
         ITokenService tokenService,
         IRefreshTokenRepository refreshTokens,
         IJwtTokenSettings jwtSettings,
         IAuditLogService auditLogs,
+        IUnitOfWork unitOfWork,
         ILogger<SocialLoginCommandHandler> logger)
     {
         _verifiers = verifiers;
-        _identityUsers = identityUsers;
+        _identity = identity;
+        _accounts = accounts;
         _tokenService = tokenService;
         _refreshTokens = refreshTokens;
         _jwtSettings = jwtSettings;
         _auditLogs = auditLogs;
+        _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
@@ -43,193 +51,580 @@ public sealed class SocialLoginCommandHandler
         SocialLoginCommand request,
         CancellationToken ct)
     {
-        var providerName = !string.IsNullOrWhiteSpace(request.GoogleIdToken)
-            ? "Google"
-            : !string.IsNullOrWhiteSpace(request.AppleIdentityToken)
-                ? "Apple"
-                : null;
+        var providerName =
+            !string.IsNullOrWhiteSpace(
+                request.GoogleIdToken)
+                ? "Google"
+                : !string.IsNullOrWhiteSpace(
+                    request.AppleIdentityToken)
+                    ? "Apple"
+                    : null;
 
-        var rawToken = providerName switch
-        {
-            "Google" => request.GoogleIdToken,
-            "Apple" => request.AppleIdentityToken,
-            _ => null
-        };
+        var rawToken =
+            providerName switch
+            {
+                "Google" =>
+                    request.GoogleIdToken,
 
-        if (string.IsNullOrWhiteSpace(providerName) || string.IsNullOrWhiteSpace(rawToken))
+                "Apple" =>
+                    request.AppleIdentityToken,
+
+                _ =>
+                    null
+            };
+
+        if (string.IsNullOrWhiteSpace(providerName) ||
+            string.IsNullOrWhiteSpace(rawToken))
         {
-            return SocialLoginResult.Failed("A Google or Apple identity token is required.");
+            return SocialLoginResult.Failed(
+                "A Google or Apple identity token is required.");
         }
 
-        var verifier = _verifiers.FirstOrDefault(v =>
-            v.ProviderName.Equals(providerName, StringComparison.OrdinalIgnoreCase));
+        var verifier =
+            _verifiers.FirstOrDefault(
+                candidate =>
+                    candidate.ProviderName.Equals(
+                        providerName,
+                        StringComparison.OrdinalIgnoreCase));
 
         if (verifier is null)
         {
-            _logger.LogError("No social token verifier is registered for provider {Provider}.", providerName);
-            return SocialLoginResult.Failed("Social login is not configured for this provider.");
+            _logger.LogError(
+                "No social token verifier is registered for provider {Provider}.",
+                providerName);
+
+            return SocialLoginResult.Failed(
+                "Social login is not configured for this provider.");
         }
 
-        var socialUser = await verifier.VerifyAsync(rawToken, ct);
+        var socialUser =
+            await verifier.VerifyAsync(
+                rawToken,
+                ct);
+
         if (socialUser is null)
         {
-            _logger.LogWarning("Social token verification failed for provider {Provider}.", providerName);
-            return SocialLoginResult.Failed("The social identity token is invalid or expired.");
+            _logger.LogWarning(
+                "Social token verification failed for provider {Provider}.",
+                providerName);
+
+            return SocialLoginResult.Failed(
+                "The social identity token is invalid or expired.");
         }
 
-        var user = await _identityUsers.FindByLoginAsync(
+        var identity =
+            await _identity.FindByLoginAsync(
+                providerName,
+                socialUser.ProviderId,
+                ct);
+
+        /*
+         * Provider identity already linked.
+         *
+         * No linking transaction is required.
+         */
+        if (identity is not null)
+        {
+            return await SignInExistingIdentityAsync(
+                identity,
+                request.IpAddress,
+                ct);
+        }
+
+        var hasExternalEmail =
+            !string.IsNullOrWhiteSpace(
+                socialUser.Email);
+
+        var isPrivateRelay =
+            socialUser.Email?.EndsWith(
+                "@privaterelay.appleid.com",
+                StringComparison.OrdinalIgnoreCase)
+            == true;
+
+        /*
+         * ProviderId ownership does not automatically prove
+         * ownership of the external email.
+         *
+         * Email-based linking is permitted only when the
+         * provider explicitly confirms the email.
+         */
+        if (hasExternalEmail &&
+            !socialUser.IsEmailVerified)
+        {
+            _logger.LogWarning(
+                "Social login rejected because the provider email is not verified. Provider={Provider}",
+                providerName);
+
+            return SocialLoginResult.Failed(
+                "The social provider did not verify the supplied email address.");
+        }
+
+        /*
+         * Apple private relay addresses must not be used for
+         * automatic email-based account linking.
+         */
+        if (hasExternalEmail &&
+            !isPrivateRelay)
+        {
+            var normalizedEmail =
+                NormalizeEmail(
+                    socialUser.Email!);
+
+            identity =
+                await _identity.FindByEmailAsync(
+                    normalizedEmail,
+                    ct);
+
+            if (identity is not null)
+            {
+                if (identity.IsDeleted)
+                {
+                    return SocialLoginResult.Failed(
+                        "The account is not available.");
+                }
+
+                /*
+                 * Account pre-hijacking protection:
+                 *
+                 * Never automatically link a social identity
+                 * to a local account whose email has not been
+                 * confirmed.
+                 */
+                if (!identity.EmailConfirmed)
+                {
+                    _logger.LogWarning(
+                        "Automatic social linking rejected because the local email is not confirmed. Provider={Provider}, UserId={UserId}",
+                        providerName,
+                        identity.IdentityId);
+
+                    return SocialLoginResult.Failed(
+                        "An account already uses this email. " +
+                        "Sign in to that account and link the social provider " +
+                        "from account settings.");
+                }
+
+                return await LinkAndSignInExistingIdentityAsync(
+                    identity,
+                    providerName,
+                    socialUser.ProviderId,
+                    request.IpAddress,
+                    ct);
+            }
+        }
+
+        return await CreateAndSignInNewSocialIdentityAsync(
+            socialUser,
+            request,
             providerName,
-            socialUser.ProviderId,
+            ct);
+    }
+
+    private async Task<SocialLoginResult>
+        LinkAndSignInExistingIdentityAsync(
+            IdentityAccountSnapshot identity,
+            string providerName,
+            string providerId,
+            string? ipAddress,
+            CancellationToken ct)
+    {
+        await _unitOfWork.BeginTransactionAsync(
             ct);
 
-        if (user is not null)
+        try
         {
-            return await SignInExistingUserAsync(user, request.IpAddress, ct);
-        }
+            var linkResult =
+                await _identity.AddLoginAsync(
+                    identity.IdentityId,
+                    providerName,
+                    providerId,
+                    providerName,
+                    ct);
 
-        var isPrivateRelay = socialUser.Email?.EndsWith(
-            "@privaterelay.appleid.com",
-            StringComparison.OrdinalIgnoreCase) == true;
-
-        if (!string.IsNullOrWhiteSpace(socialUser.Email) && !isPrivateRelay)
-        {
-            var normalizedEmail = NormalizeEmail(socialUser.Email);
-            user = await _identityUsers.FindByEmailAsync(normalizedEmail, ct);
-
-            if (user is not null && !user.IsDeleted)
+            if (!linkResult.Succeeded)
             {
-                var linkResult = await _identityUsers.AddLoginAsync(
-                    user,
+                _logger.LogWarning(
+                    "Failed linking {Provider} login to identity {IdentityId}. Errors: {Errors}",
+                    providerName,
+                    identity.IdentityId,
+                    string.Join(
+                        ", ",
+                        linkResult.Errors));
+
+                await _unitOfWork.RollbackTransactionAsync(
+                    ct);
+
+                return SocialLoginResult.Failed(
+                    "Could not link the social login to the existing account.");
+            }
+
+            var signInResult =
+                await SignInExistingIdentityAsync(
+                    identity,
+                    ipAddress,
+                    ct);
+
+            if (!signInResult.Success)
+            {
+                await _unitOfWork.RollbackTransactionAsync(
+                    ct);
+
+                return signInResult;
+            }
+
+            await _unitOfWork.CommitTransactionAsync(
+                ct);
+
+            return signInResult;
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(
+                CancellationToken.None);
+
+            throw;
+        }
+    }
+
+    private async Task<SocialLoginResult>
+        CreateAndSignInNewSocialIdentityAsync(
+            SocialUserInfo socialUser,
+            SocialLoginCommand request,
+            string providerName,
+            CancellationToken ct)
+    {
+        await _unitOfWork.BeginTransactionAsync(
+            ct);
+
+        try
+        {
+            var created =
+                await CreateIdentityAsync(
+                    socialUser,
+                    request,
+                    ct);
+
+            if (created is null)
+            {
+                await _unitOfWork.RollbackTransactionAsync(
+                    ct);
+
+                return SocialLoginResult.Failed(
+                    "Could not create the social login account.");
+            }
+
+            var addLoginResult =
+                await _identity.AddLoginAsync(
+                    created.Identity.IdentityId,
                     providerName,
                     socialUser.ProviderId,
                     providerName,
                     ct);
 
-                if (!linkResult.Succeeded)
-                {
-                    _logger.LogWarning(
-                        "Failed linking {Provider} login to user {UserId}. Errors: {Errors}",
-                        providerName,
-                        user.Id,
-                        string.Join(", ", linkResult.Errors));
+            if (!addLoginResult.Succeeded)
+            {
+                _logger.LogWarning(
+                    "Failed adding {Provider} login to new identity {IdentityId}. Errors: {Errors}",
+                    providerName,
+                    created.Identity.IdentityId,
+                    string.Join(
+                        ", ",
+                        addLoginResult.Errors));
 
-                    return SocialLoginResult.Failed("Could not link the social login to the existing account.");
-                }
+                await _unitOfWork.RollbackTransactionAsync(
+                    ct);
 
-                return await SignInExistingUserAsync(user, request.IpAddress, ct);
+                return SocialLoginResult.Failed(
+                    "Could not link the social login to the created account.");
             }
-        }
 
-        user = await CreateUserAsync(socialUser, request, ct);
-        if (user is null)
+            var roleResult =
+                await _identity.AddToRoleAsync(
+                    created.Identity.IdentityId,
+                    RoleNames.User,
+                    ct);
+
+            if (!roleResult.Succeeded)
+            {
+                _logger.LogWarning(
+                    "Failed assigning default role to social identity {IdentityId}. Errors: {Errors}",
+                    created.Identity.IdentityId,
+                    string.Join(
+                        ", ",
+                        roleResult.Errors));
+
+                await _unitOfWork.RollbackTransactionAsync(
+                    ct);
+
+                return SocialLoginResult.Failed(
+                    "Could not assign the default user role.");
+            }
+
+            var account =
+                UserAccount.Create(
+                    created.Identity.IdentityId,
+                    created.FirstName,
+                    created.LastName,
+                    created.CreatedAtUtc);
+
+            await _accounts.AddAsync(
+                account,
+                ct);
+
+            await _unitOfWork.SaveChangesAsync(
+                ct);
+
+            var signInResult =
+                await SignInExistingIdentityAsync(
+                    created.Identity,
+                    request.IpAddress,
+                    ct);
+
+            if (!signInResult.Success)
+            {
+                await _unitOfWork.RollbackTransactionAsync(
+                    ct);
+
+                return signInResult;
+            }
+
+            await _unitOfWork.CommitTransactionAsync(
+                ct);
+
+            return signInResult;
+        }
+        catch
         {
-            return SocialLoginResult.Failed("Could not create the social login account.");
+            await _unitOfWork.RollbackTransactionAsync(
+                CancellationToken.None);
+
+            throw;
+        }
+    }
+
+    private async Task<CreatedSocialIdentity?>
+        CreateIdentityAsync(
+            SocialUserInfo socialUser,
+            SocialLoginCommand request,
+            CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(
+                socialUser.Email) &&
+            !socialUser.IsEmailVerified)
+        {
+            _logger.LogWarning(
+                "Social user creation rejected because provider email is not verified. Provider={Provider}",
+                socialUser.ProviderName);
+
+            return null;
         }
 
-        var addLoginResult = await _identityUsers.AddLoginAsync(
-            user,
-            providerName,
-            socialUser.ProviderId,
-            providerName,
+        var now =
+            DateTime.UtcNow;
+
+        var identityId =
+            Guid.NewGuid();
+
+        var email =
+            !string.IsNullOrWhiteSpace(
+                socialUser.Email)
+                ? NormalizeEmail(
+                    socialUser.Email)
+
+                : $"social_{socialUser.ProviderName.ToLowerInvariant()}_" +
+                  $"{socialUser.ProviderId}@noemail.local";
+
+        var firstName =
+            FirstNonEmpty(
+                socialUser.FirstName,
+                request.AppleFirstName,
+                "User");
+
+        var lastName =
+            FirstNonEmpty(
+                socialUser.LastName,
+                request.AppleLastName,
+                "Social");
+
+        var createRequest =
+            new CreateIdentityAccount(
+                UserAccountId:
+                    identityId,
+
+                Email:
+                    email,
+
+                PhoneNumber:
+                    null,
+
+                Password:
+                    null,
+
+                LegacyFirstName:
+                    firstName,
+
+                LegacyLastName:
+                    lastName,
+
+                LegacyCreatedAtUtc:
+                    now,
+
+                EmailConfirmed:
+                    socialUser.IsEmailVerified,
+
+                LegacyProfileImageUrl:
+                    socialUser.AvatarUrl);
+
+        var createResult =
+            await _identity.CreateAsync(
+                createRequest,
+                ct);
+
+        if (!createResult.Succeeded)
+        {
+            _logger.LogWarning(
+                "Failed creating social identity for provider {Provider}. Errors: {Errors}",
+                socialUser.ProviderName,
+                string.Join(
+                    ", ",
+                    createResult.Errors));
+
+            return null;
+        }
+
+        /*
+         * Re-read the neutral identity snapshot because token issuance
+         * requires UserName and SecurityStamp.
+         */
+        var identity =
+            await _identity.FindByIdAsync(
+                identityId,
+                ct);
+
+        if (identity is null)
+        {
+            _logger.LogError(
+                "Social identity {IdentityId} was created but could not be reloaded.",
+                identityId);
+
+            return null;
+        }
+
+        return new CreatedSocialIdentity(
+            Identity:
+                identity,
+
+            FirstName:
+                firstName,
+
+            LastName:
+                lastName,
+
+            CreatedAtUtc:
+                now);
+    }
+
+    private async Task<SocialLoginResult>
+        SignInExistingIdentityAsync(
+            IdentityAccountSnapshot identity,
+            string? ipAddress,
+            CancellationToken ct)
+    {
+        if (identity.IsDeleted)
+        {
+            return SocialLoginResult.Failed(
+                "The account is not available.");
+        }
+
+        var now =
+            DateTime.UtcNow;
+
+        var updateResult =
+            await _identity.RecordSuccessfulLoginAsync(
+                identity.IdentityId,
+                now,
+                ct);
+
+        if (!updateResult.Succeeded)
+        {
+            _logger.LogWarning(
+                "Failed updating social-login identity {IdentityId}. Errors: {Errors}",
+                identity.IdentityId,
+                string.Join(
+                    ", ",
+                    updateResult.Errors));
+
+            return SocialLoginResult.Failed(
+                "Could not update the account state.");
+        }
+
+        var roles =
+            await _identity.GetRolesAsync(
+                identity.IdentityId,
+                ct);
+
+        var tokenSubject =
+            new AccessTokenSubject(
+                IdentityId:
+                    identity.IdentityId,
+
+                Email:
+                    identity.Email,
+
+                UserName:
+                    identity.UserName,
+
+                SecurityStamp:
+                    identity.SecurityStamp);
+
+        var accessToken =
+            _tokenService.GenerateAccessToken(
+                tokenSubject,
+                roles);
+
+        var refreshToken =
+            _tokenService.GenerateRefreshToken();
+
+        await _refreshTokens.AddAsync(
+            identity.IdentityId,
+            refreshToken,
+            ipAddress,
             ct);
 
-        if (!addLoginResult.Succeeded)
-        {
-            _logger.LogWarning(
-                "Failed adding {Provider} login to new user {UserId}. Errors: {Errors}",
-                providerName,
-                user.Id,
-                string.Join(", ", addLoginResult.Errors));
-
-            return SocialLoginResult.Failed("Could not link the social login to the created account.");
-        }
-
-        var roleResult = await _identityUsers.AddToRoleAsync(user, RoleNames.User, ct);
-        if (!roleResult.Succeeded)
-        {
-            _logger.LogWarning(
-                "Failed assigning default role to social user {UserId}. Errors: {Errors}",
-                user.Id,
-                string.Join(", ", roleResult.Errors));
-
-            return SocialLoginResult.Failed("Could not assign the default user role.");
-        }
-
-        return await SignInExistingUserAsync(user, request.IpAddress, ct);
-    }
-
-    private async Task<User?> CreateUserAsync(
-        SocialUserInfo socialUser,
-        SocialLoginCommand request,
-        CancellationToken ct)
-    {
-        var now = DateTime.UtcNow;
-        var email = !string.IsNullOrWhiteSpace(socialUser.Email)
-            ? NormalizeEmail(socialUser.Email)
-            : $"social_{socialUser.ProviderName.ToLowerInvariant()}_{socialUser.ProviderId}@noemail.local";
-
-        var user = new User
-        {
-            UserName = email,
-            Email = email,
-            EmailConfirmed = socialUser.IsEmailVerified,
-            FirstName = FirstNonEmpty(socialUser.FirstName, request.AppleFirstName, "User"),
-            LastName = FirstNonEmpty(socialUser.LastName, request.AppleLastName, "Social"),
-            ProfileImageUrl = socialUser.AvatarUrl,
-            CreatedAt = now,
-            UpdatedAt = now,
-            LastLoginAt = now
-        };
-
-        var createResult = await _identityUsers.CreateAsync(user, ct);
-        if (createResult.Succeeded)
-        {
-            return user;
-        }
-
-        _logger.LogWarning(
-            "Failed creating social user for provider {Provider}. Errors: {Errors}",
-            socialUser.ProviderName,
-            string.Join(", ", createResult.Errors));
-
-        return null;
-    }
-
-    private async Task<SocialLoginResult> SignInExistingUserAsync(
-        User user,
-        string? ipAddress,
-        CancellationToken ct)
-    {
-        if (user.IsDeleted)
-        {
-            return SocialLoginResult.Failed("The account is not available.");
-        }
-
-        var now = DateTime.UtcNow;
-        user.LastLoginAt = now;
-        user.UpdatedAt = now;
-        await _identityUsers.UpdateAsync(user, ct);
-
-        var roles = await _identityUsers.GetRolesAsync(user, ct);
-        var accessToken = _tokenService.GenerateAccessToken(user, roles);
-        var refreshToken = _tokenService.GenerateRefreshToken();
-
-        await _refreshTokens.AddAsync(user.Id, refreshToken, ipAddress, ct);
-
         await _auditLogs.LogAsync(
-            userId: user.Id,
-            action: AuditActions.Login,
-            ipAddress: ipAddress,
-            oldValue: null,
-            newValue: JsonSerializer.Serialize(new
-            {
-                userId = user.Id,
-                email = user.Email,
-                provider = "Social",
-                success = true,
-                timestamp = DateTime.UtcNow
-            }),
-            ct: ct);
+            userId:
+                identity.IdentityId,
+
+            action:
+                AuditActions.Login,
+
+            ipAddress:
+                ipAddress,
+
+            oldValue:
+                null,
+
+            newValue:
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        userId =
+                            identity.IdentityId,
+
+                        email =
+                            identity.Email,
+
+                        provider =
+                            "Social",
+
+                        success =
+                            true,
+
+                        timestamp =
+                            DateTime.UtcNow
+                    }),
+
+            ct:
+                ct);
 
         return SocialLoginResult.Ok(
             accessToken,
@@ -237,14 +632,19 @@ public sealed class SocialLoginCommandHandler
             _jwtSettings.AccessTokenMinutes * 60);
     }
 
-    private static string NormalizeEmail(string email)
-        => email.Trim().ToLowerInvariant();
+    private static string NormalizeEmail(
+        string email)
+        => email
+            .Trim()
+            .ToLowerInvariant();
 
-    private static string FirstNonEmpty(params string?[] values)
+    private static string FirstNonEmpty(
+        params string?[] values)
     {
         foreach (var value in values)
         {
-            if (!string.IsNullOrWhiteSpace(value))
+            if (!string.IsNullOrWhiteSpace(
+                    value))
             {
                 return value.Trim();
             }
@@ -252,4 +652,10 @@ public sealed class SocialLoginCommandHandler
 
         return string.Empty;
     }
+
+    private sealed record CreatedSocialIdentity(
+        IdentityAccountSnapshot Identity,
+        string FirstName,
+        string LastName,
+        DateTime CreatedAtUtc);
 }

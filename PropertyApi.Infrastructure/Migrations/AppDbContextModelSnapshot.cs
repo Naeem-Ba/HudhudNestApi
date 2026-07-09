@@ -1427,7 +1427,68 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.ToTable("Transactions", (string)null);
                 });
 
-            modelBuilder.Entity("PropertyApi.Domain.Users.Entities.ApplicationRole", b =>
+            modelBuilder.Entity("PropertyApi.Domain.Users.Entities.UserAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CountryCode")
+                        .HasMaxLength(2)
+                        .HasColumnType("character(2)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("LastName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PreferredCurrency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .IsFixedLength();
+
+                    b.Property<string>("PreferredLanguage")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("ProfileImageUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("TaxNumber")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("WhatsAppNumber")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CountryCode");
+
+                    b.ToTable("UserAccounts", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Infrastructure.Identity.Entities.ApplicationRole", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1458,7 +1519,7 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.ToTable("Roles", (string)null);
                 });
 
-            modelBuilder.Entity("PropertyApi.Domain.Users.Entities.User", b =>
+            modelBuilder.Entity("PropertyApi.Infrastructure.Identity.Entities.ApplicationUser", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -1474,20 +1535,11 @@ namespace PropertyApi.Infrastructure.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("text");
 
-                    b.Property<string>("CountryCode")
-                        .HasMaxLength(2)
-                        .HasColumnType("character(2)")
-                        .IsFixedLength();
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp without time zone");
-
-                    b.Property<string>("DisplayName")
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
@@ -1495,11 +1547,6 @@ namespace PropertyApi.Infrastructure.Migrations
 
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean");
-
-                    b.Property<string>("FirstName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
 
                     b.Property<bool>("IsBanned")
                         .HasColumnType("boolean");
@@ -1509,11 +1556,6 @@ namespace PropertyApi.Infrastructure.Migrations
 
                     b.Property<DateTime?>("LastLoginAt")
                         .HasColumnType("timestamp without time zone");
-
-                    b.Property<string>("LastName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
 
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("boolean");
@@ -1539,31 +1581,12 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("PreferredCurrency")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(3)
-                        .HasColumnType("character(3)")
-                        .HasDefaultValue("EUR")
-                        .IsFixedLength();
-
-                    b.Property<string>("PreferredLanguage")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)")
-                        .HasDefaultValue("en");
-
-                    b.Property<string>("ProfileImageUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
+                    b.Property<string>("PhoneNumberLookupHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
-
-                    b.Property<string>("TaxNumber")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
 
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("boolean");
@@ -1575,13 +1598,7 @@ namespace PropertyApi.Infrastructure.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<string>("WhatsAppNumber")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("CountryCode");
 
                     b.HasIndex("Email")
                         .IsUnique();
@@ -1594,6 +1611,9 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
+
+                    b.HasIndex("PhoneNumberLookupHash")
+                        .IsUnique();
 
                     b.ToTable("Users", (string)null);
                 });
@@ -1654,7 +1674,7 @@ namespace PropertyApi.Infrastructure.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
-                    b.HasOne("PropertyApi.Domain.Users.Entities.ApplicationRole", null)
+                    b.HasOne("PropertyApi.Infrastructure.Identity.Entities.ApplicationRole", null)
                         .WithMany()
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1663,7 +1683,7 @@ namespace PropertyApi.Infrastructure.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<System.Guid>", b =>
                 {
-                    b.HasOne("PropertyApi.Domain.Users.Entities.User", null)
+                    b.HasOne("PropertyApi.Infrastructure.Identity.Entities.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1672,7 +1692,7 @@ namespace PropertyApi.Infrastructure.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<System.Guid>", b =>
                 {
-                    b.HasOne("PropertyApi.Domain.Users.Entities.User", null)
+                    b.HasOne("PropertyApi.Infrastructure.Identity.Entities.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1681,13 +1701,13 @@ namespace PropertyApi.Infrastructure.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<System.Guid>", b =>
                 {
-                    b.HasOne("PropertyApi.Domain.Users.Entities.ApplicationRole", null)
+                    b.HasOne("PropertyApi.Infrastructure.Identity.Entities.ApplicationRole", null)
                         .WithMany()
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("PropertyApi.Domain.Users.Entities.User", null)
+                    b.HasOne("PropertyApi.Infrastructure.Identity.Entities.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1696,7 +1716,7 @@ namespace PropertyApi.Infrastructure.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<System.Guid>", b =>
                 {
-                    b.HasOne("PropertyApi.Domain.Users.Entities.User", null)
+                    b.HasOne("PropertyApi.Infrastructure.Identity.Entities.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1705,7 +1725,7 @@ namespace PropertyApi.Infrastructure.Migrations
 
             modelBuilder.Entity("PropertyApi.Domain.Audit.Entities.AuditLog", b =>
                 {
-                    b.HasOne("PropertyApi.Domain.Users.Entities.User", "User")
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull);
@@ -1721,7 +1741,7 @@ namespace PropertyApi.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("PropertyApi.Domain.Users.Entities.User", "Requester")
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", "Requester")
                         .WithMany()
                         .HasForeignKey("RequesterId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -1740,8 +1760,8 @@ namespace PropertyApi.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("PropertyApi.Domain.Users.Entities.User", "User")
-                        .WithMany("Favorites")
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", "User")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1753,7 +1773,7 @@ namespace PropertyApi.Infrastructure.Migrations
 
             modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.Property", b =>
                 {
-                    b.HasOne("PropertyApi.Domain.Users.Entities.User", "Agent")
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", "Agent")
                         .WithMany()
                         .HasForeignKey("AgentId")
                         .OnDelete(DeleteBehavior.SetNull);
@@ -1773,8 +1793,8 @@ namespace PropertyApi.Infrastructure.Migrations
                         .HasForeignKey("NeighborhoodId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("PropertyApi.Domain.Users.Entities.User", "Owner")
-                        .WithMany("Properties")
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", "Owner")
+                        .WithMany()
                         .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -1902,14 +1922,14 @@ namespace PropertyApi.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("PropertyApi.Domain.Users.Entities.User", null)
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", null)
                         .WithMany()
                         .HasForeignKey("ReceiverId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("PropertyApi.Domain.Users.Entities.User", "Sender")
-                        .WithMany("Messages")
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", "Sender")
+                        .WithMany()
                         .HasForeignKey("SenderId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -1921,7 +1941,7 @@ namespace PropertyApi.Infrastructure.Migrations
 
             modelBuilder.Entity("PropertyApi.Domain.Notifications.Entities.Notification", b =>
                 {
-                    b.HasOne("PropertyApi.Domain.Users.Entities.User", "Recipient")
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", "Recipient")
                         .WithMany()
                         .HasForeignKey("RecipientId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1938,7 +1958,7 @@ namespace PropertyApi.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("PropertyApi.Domain.Users.Entities.User", "Reviewer")
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", "Reviewer")
                         .WithMany()
                         .HasForeignKey("ReviewerId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -1951,7 +1971,7 @@ namespace PropertyApi.Infrastructure.Migrations
 
             modelBuilder.Entity("PropertyApi.Infrastructure.Identity.Entities.RefreshToken", b =>
                 {
-                    b.HasOne("PropertyApi.Domain.Users.Entities.User", "User")
+                    b.HasOne("PropertyApi.Infrastructure.Identity.Entities.ApplicationUser", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -2006,15 +2026,6 @@ namespace PropertyApi.Infrastructure.Migrations
 
             modelBuilder.Entity("PropertyApi.Domain.Lookups.Entities.PropertyType", b =>
                 {
-                    b.Navigation("Properties");
-                });
-
-            modelBuilder.Entity("PropertyApi.Domain.Users.Entities.User", b =>
-                {
-                    b.Navigation("Favorites");
-
-                    b.Navigation("Messages");
-
                     b.Navigation("Properties");
                 });
 #pragma warning restore 612, 618
