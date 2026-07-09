@@ -1,6 +1,4 @@
 ﻿using Microsoft.AspNetCore.Identity;
-using PropertyApi.Domain.Listings.Entities;
-using PropertyApi.Domain.Messaging.Entities;
 
 namespace PropertyApi.Domain.Users.Entities;
 
@@ -66,8 +64,4 @@ public class User : IdentityUser<Guid>
     /// <summary>تاريخ آخر تسجيل دخول — لتتبع النشاط</summary>
     public DateTime? LastLoginAt { get; set; }
 
-    // -- Navigation ---------------------------------------------
-    public ICollection<Property> Properties { get; set; } = new List<Property>();
-    public ICollection<Message> Messages { get; set; } = new List<Message>();
-    public ICollection<Favorite> Favorites { get; set; } = new List<Favorite>();
 }

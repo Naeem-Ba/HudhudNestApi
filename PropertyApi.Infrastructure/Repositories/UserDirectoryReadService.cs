@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using PropertyApi.Application.Users.DTOs;
+using PropertyApi.Application.Users.Models;
 using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Infrastructure.Persistence;
@@ -27,6 +28,93 @@ public sealed class UserDirectoryReadService
         _db = db;
     }
 
+    public async Task<UserDirectoryEntry?>
+    GetActiveByIdAsync(
+        Guid userId,
+        CancellationToken ct = default)
+    {
+        var row =
+            await (
+                from user in
+                    _db.Users.AsNoTracking()
+
+                where
+                    user.Id == userId &&
+                    !user.IsDeleted
+
+                join account in
+                    _db.Set<UserAccount>()
+                        .AsNoTracking()
+                    on user.Id equals account.Id
+                    into accountJoin
+
+                from account in
+                    accountJoin.DefaultIfEmpty()
+
+                select new
+                {
+                    UserId = user.Id,
+
+                    DisplayName =
+                        account == null
+                            ? null
+                            : account.DisplayName,
+
+                    FirstName =
+                        account == null
+                            ? null
+                            : account.FirstName,
+
+                    LastName =
+                        account == null
+                            ? null
+                            : account.LastName,
+
+                    ProfileImageUrl =
+                        account == null
+                            ? null
+                            : account.ProfileImageUrl
+                }
+            )
+            .SingleOrDefaultAsync(ct);
+
+        if (row is null)
+        {
+            return null;
+        }
+
+        var displayName =
+            BuildDisplayName(
+                row.DisplayName,
+                row.FirstName,
+                row.LastName);
+
+        return new UserDirectoryEntry(
+            row.UserId,
+            displayName,
+            row.ProfileImageUrl);
+    }
+
+    private static string BuildDisplayName(
+    string? displayName,
+    string? firstName,
+    string? lastName)
+    {
+        if (!string.IsNullOrWhiteSpace(
+                displayName))
+        {
+            return displayName;
+        }
+
+        var fullName =
+            $"{firstName} {lastName}"
+                .Trim();
+
+        return string.IsNullOrWhiteSpace(
+            fullName)
+                ? "مستخدم"
+                : fullName;
+    }
     public async Task<IReadOnlyList<UserSummaryDto>>
         GetAllActiveAsync(
             CancellationToken ct = default)

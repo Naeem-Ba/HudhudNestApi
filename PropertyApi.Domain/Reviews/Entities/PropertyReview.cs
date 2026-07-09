@@ -18,7 +18,7 @@ public sealed class PropertyReview : BaseEntity
 
     // EF navigation
     public Property? Property { get; private set; }
-    public User?     Reviewer { get; private set; }
+    public UserAccount? Reviewer { get; private set; }
 
     private PropertyReview() { }
 

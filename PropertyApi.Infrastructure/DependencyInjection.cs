@@ -233,7 +233,6 @@ public static class DependencyInjection
         services.AddScoped<IPropertyImageRepository, PropertyImageRepository>();
         services.AddScoped<IFavoriteRepository, FavoriteRepository>();
         services.AddScoped<IContactMessageRepository, ContactMessageRepository>();
-        services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IUserDirectoryReadService,UserDirectoryReadService>();
         services.AddScoped<IUserAccountRepository, UserAccountRepository>();
         services.AddScoped<IMessageRepository, MessageRepository>();  // ADDED

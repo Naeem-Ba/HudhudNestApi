@@ -105,7 +105,7 @@ public sealed class AppDbContext
         builder.Entity<PropertyReview>().HasQueryFilter(r => !r.IsDeleted);
         builder.Entity<Transaction>().HasQueryFilter(e => !e.IsDeleted);
 
-        builder.Entity<Favorite>().HasQueryFilter(favorite =>!favorite.User.IsDeleted &&!favorite.Property.IsDeleted);
+        builder.Entity<Favorite>().HasQueryFilter(favorite =>!favorite.Property.IsDeleted);
 
         builder.Entity<PropertyAmenity>().HasQueryFilter(propertyAmenity =>!propertyAmenity.Property.IsDeleted &&!propertyAmenity.Amenity.IsDeleted);
 

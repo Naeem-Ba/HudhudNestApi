@@ -124,6 +124,10 @@ internal sealed class PostgresAuthTestFactory : WebApplicationFactory<Program>
                     services.GetRequiredService<
                         IPureIdentityService>();
 
+                var db =
+                    services.GetRequiredService<
+                        AppDbContext>();
+
                 var normalized =
                     email
                         .Trim()
@@ -167,26 +171,48 @@ internal sealed class PostgresAuthTestFactory : WebApplicationFactory<Program>
                         PhoneConfirmed:
                             phoneConfirmed);
 
-                var create =
+                var createResult =
                     await identity.CreateAsync(
                         createRequest,
                         CancellationToken.None);
 
-                if (!create.Succeeded)
+                if (!createResult.Succeeded)
                 {
                     throw new InvalidOperationException(
                         "Failed to seed integration-test identity.");
                 }
 
+                /*
+                 * Test-fixture invariant:
+                 *
+                 * IdentityId == UserAccountId
+                 *
+                 * Existing identities used by integration tests must
+                 * have the same profile projection guaranteed by the
+                 * production migration/backfill contract.
+                 */
+                var account =
+                    UserAccount.Create(
+                        identityId,
+                        "Existing",
+                        "User",
+                        now);
+
+                db.UserAccounts.Add(
+                    account);
+
+                await db.SaveChangesAsync(
+                    CancellationToken.None);
+
                 if (addUserRole)
                 {
-                    var role =
+                    var roleResult =
                         await identity.AddToRoleAsync(
                             identityId,
                             RoleNames.User,
                             CancellationToken.None);
 
-                    if (!role.Succeeded)
+                    if (!roleResult.Succeeded)
                     {
                         throw new InvalidOperationException(
                             "Failed to seed integration-test identity role.");

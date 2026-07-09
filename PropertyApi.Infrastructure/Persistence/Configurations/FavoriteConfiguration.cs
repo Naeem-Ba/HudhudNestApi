@@ -19,7 +19,7 @@ public sealed class FavoriteConfiguration : IEntityTypeConfiguration<Favorite>
         builder.HasKey(f => new { f.UserId, f.PropertyId });
 
         builder.HasOne(f => f.User)
-            .WithMany(u => u.Favorites)
+            .WithMany()
             .HasForeignKey(f => f.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 

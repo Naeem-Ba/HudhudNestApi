@@ -633,31 +633,77 @@ public sealed class NotificationIntegrationTests
             roles.ToArray());
     }
 
-    private async Task<User> CreateUserAsync(string prefix)
+    private async Task<User> CreateUserAsync(
+        string prefix)
     {
-        await using var scope = _factory.Services.CreateAsyncScope();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+        await using var scope =
+            _factory.Services.CreateAsyncScope();
 
-        var unique = Guid.NewGuid().ToString("N");
-        var email = $"{prefix}.{unique}@tests.local";
+        var userManager =
+            scope.ServiceProvider
+                .GetRequiredService<UserManager<User>>();
 
-        var user = new User
-        {
-            UserName = email,
-            Email = email,
-            EmailConfirmed = true,
-            FirstName = prefix,
-            LastName = "Tester",
-            DisplayName = $"{prefix} Tester",
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
+        var db =
+            scope.ServiceProvider
+                .GetRequiredService<AppDbContext>();
 
-        var result = await userManager.CreateAsync(user, "Password123");
+        var unique =
+            Guid.NewGuid().ToString("N");
+
+        var email =
+            $"{prefix}.{unique}@tests.local";
+
+        var now =
+            DateTime.UtcNow;
+
+        var user =
+            new User
+            {
+                Id = Guid.NewGuid(),
+
+                UserName = email,
+                Email = email,
+                EmailConfirmed = true,
+
+                FirstName = prefix,
+                LastName = "Tester",
+                DisplayName = $"{prefix} Tester",
+
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+        var result =
+            await userManager.CreateAsync(
+                user,
+                "Password123");
 
         Assert.True(
             result.Succeeded,
-            "Failed to create test user: " + string.Join(" | ", result.Errors.Select(e => e.Description)));
+
+            "Failed to create test user: " +
+            string.Join(
+                " | ",
+                result.Errors.Select(
+                    error => error.Description)));
+
+        var account =
+            UserAccount.Create(
+                user.Id,
+                prefix,
+                "Tester",
+                now);
+
+        account.UpdateProfile(
+            prefix,
+            "Tester",
+            $"{prefix} Tester",
+            now);
+
+        await db.UserAccounts.AddAsync(
+            account);
+
+        await db.SaveChangesAsync();
 
         return user;
     }

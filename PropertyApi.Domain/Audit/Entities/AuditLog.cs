@@ -11,7 +11,7 @@ public sealed class AuditLog
     /// For the required security events this should be populated.
     /// </summary>
     public Guid? UserId { get; set; }
-    public User? User { get; set; }
+    public UserAccount? User { get; set; }
 
     public string Action { get; set; } = string.Empty;
     public string? IpAddress { get; set; }
