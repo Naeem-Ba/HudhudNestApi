@@ -2,13 +2,29 @@
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches:
+      - main
+      - master
+      - develop
+      - 'codex/**'
+      - 'feature/**'
+      - 'fix/**'
+
   pull_request:
-    branches: [ main, master, develop ]
+    branches:
+      - main
+      - master
+      - develop
+
+  workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   DOTNET_VERSION: '8.0.x'
@@ -24,12 +40,15 @@ jobs:
     services:
       postgres:
         image: postgis/postgis:16-3.4
+
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: propertyapi_testing
+
         ports:
           - 5432:5432
+
         options: >-
           --health-cmd="pg_isready -U postgres -d propertyapi_testing"
           --health-interval=10s
@@ -38,8 +57,10 @@ jobs:
 
       redis:
         image: redis:7-alpine
+
         ports:
           - 6379:6379
+
         options: >-
           --health-cmd="redis-cli ping"
           --health-interval=10s
@@ -47,18 +68,40 @@ jobs:
           --health-retries=10
 
     env:
-      ASPNETCORE_ENVIRONMENT: CI
-      DOTNET_ENVIRONMENT: CI
-      ConnectionStrings__DefaultConnection: 'Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true'
+      ASPNETCORE_ENVIRONMENT: Testing
+      DOTNET_ENVIRONMENT: Testing
+
+      ConnectionStrings__DefaultConnection: >-
+        Host=localhost;
+        Port=5432;
+        Database=propertyapi_testing;
+        Username=postgres;
+        Password=postgres
+
+      TEST_POSTGRES_CONNECTION_STRING: >-
+        Host=localhost;
+        Port=5432;
+        Database=propertyapi_testing;
+        Username=postgres;
+        Password=postgres
+
       ConnectionStrings__Redis: 'localhost:6379'
       Redis__ConnectionString: 'localhost:6379'
+
       RedisRateLimiting__ConnectionString: 'localhost:6379'
-      RateLimiting__Redis__Enabled: 'true'
       RedisRateLimiting__Enabled: 'true'
+
+      RateLimiting__Redis__Enabled: 'true'
+
       Jwt__Issuer: 'PropertyApi'
       Jwt__Audience: 'PropertyApiClient'
       Jwt__Key: 'TEST_ONLY_SECRET_KEY_1234567890_1234567890'
+
       OtpSettings__SecretKey: 'TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890'
+
+      Security__PhoneLookupHmacKey: >-
+        AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
+
       DataProtection__PersistKeysToDatabase: 'true'
 
     steps:
@@ -79,58 +122,261 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Restore dependencies
-        run: dotnet restore ${{ env.SOLUTION_PATH }}
-
-      - name: Build
         run: |
-          dotnet build ${{ env.SOLUTION_PATH }} \
+          dotnet restore "${{ env.SOLUTION_PATH }}"
+
+      - name: Build solution
+        run: |
+          dotnet build "${{ env.SOLUTION_PATH }}" \
             --configuration Release \
             --no-restore
 
       - name: Install PostgreSQL and Redis clients
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client redis-tools
+          sudo apt-get install -y \
+            postgresql-client \
+            redis-tools
 
-      - name: Verify PostGIS and pg_trgm extensions are available
+      - name: Verify PostgreSQL connectivity
         run: |
           PGPASSWORD=postgres psql \
+            -v ON_ERROR_STOP=1 \
             -h localhost \
             -U postgres \
             -d propertyapi_testing \
-            -c "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pg_trgm; SELECT postgis_version();"
+            -c "SELECT version();"
 
-      - name: Verify Redis
+      - name: Verify PostGIS and pg_trgm extensions
         run: |
-          redis-cli -h localhost -p 6379 ping
+          PGPASSWORD=postgres psql \
+            -v ON_ERROR_STOP=1 \
+            -h localhost \
+            -U postgres \
+            -d propertyapi_testing <<'SQL'
+          CREATE EXTENSION IF NOT EXISTS postgis;
+          CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+          SELECT postgis_version();
+
+          SELECT extname
+          FROM pg_extension
+          WHERE extname IN ('postgis', 'pg_trgm')
+          ORDER BY extname;
+          SQL
+
+      - name: Verify Redis connectivity
+        run: |
+          test "$(redis-cli -h localhost -p 6379 ping)" = "PONG"
 
       - name: Apply EF Core migrations
         run: |
           dotnet run \
             --project tools/PropertyApi.Migrator/PropertyApi.Migrator.csproj \
             --configuration Release \
-            --no-build
+            --no-build \
+            --no-restore
 
       - name: Verify migrated schema
         run: |
           PGPASSWORD=postgres psql \
+            -v ON_ERROR_STOP=1 \
             -h localhost \
             -U postgres \
-            -d propertyapi_testing \
-            -c 'select "MigrationId" from "__EFMigrationsHistory" order by "MigrationId" desc limit 5;'
+            -d propertyapi_testing <<'SQL'
 
-          PGPASSWORD=postgres psql \
-            -h localhost \
-            -U postgres \
-            -d propertyapi_testing \
-            -c "select table_name from information_schema.tables where table_schema = 'public' and table_name in ('Currencies','Governorates','Districts','Neighborhoods','PropertyTypes','Transactions','PropertyReviews','VisitRequests','RentalDetails','SaleDetails','AuditLogs','DataProtectionKeys') order by table_name;"
+          SELECT
+              "MigrationId",
+              "ProductVersion"
+          FROM "__EFMigrationsHistory"
+          ORDER BY "MigrationId" DESC
+          LIMIT 5;
 
-      - name: Run all tests
+
+          DO $$
+          BEGIN
+              IF NOT EXISTS
+              (
+                  SELECT 1
+                  FROM "__EFMigrationsHistory"
+                  WHERE "MigrationId" =
+                      '20260709114331_CutOverIdentityToApplicationUser'
+              )
+              THEN
+                  RAISE EXCEPTION
+                      'Required migration CutOverIdentityToApplicationUser is missing.';
+              END IF;
+          END
+          $$;
+
+
+          DO $$
+          DECLARE
+              missing_tables text;
+          BEGIN
+              SELECT string_agg(required_table.name, ', ')
+              INTO missing_tables
+              FROM
+              (
+                  VALUES
+                      ('Currencies'),
+                      ('Governorates'),
+                      ('Districts'),
+                      ('Neighborhoods'),
+                      ('PropertyTypes'),
+                      ('Transactions'),
+                      ('PropertyReviews'),
+                      ('VisitRequests'),
+                      ('RentalDetails'),
+                      ('SaleDetails'),
+                      ('AuditLogs'),
+                      ('DataProtectionKeys'),
+                      ('Users'),
+                      ('UserAccounts')
+              ) AS required_table(name)
+
+              LEFT JOIN information_schema.tables actual_table
+                  ON actual_table.table_schema = 'public'
+                 AND actual_table.table_name = required_table.name
+
+              WHERE actual_table.table_name IS NULL;
+
+
+              IF missing_tables IS NOT NULL
+              THEN
+                  RAISE EXCEPTION
+                      'Missing required tables: %',
+                      missing_tables;
+              END IF;
+          END
+          $$;
+
+
+          DO $$
+          DECLARE
+              legacy_user_column_count integer;
+          BEGIN
+              SELECT COUNT(*)
+              INTO legacy_user_column_count
+              FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'Users'
+                AND column_name IN
+                (
+                    'FirstName',
+                    'LastName',
+                    'DisplayName',
+                    'TaxNumber',
+                    'ProfileImageUrl',
+                    'WhatsAppNumber',
+                    'PreferredLanguage',
+                    'PreferredCurrency',
+                    'CountryCode'
+                );
+
+
+              IF legacy_user_column_count <> 0
+              THEN
+                  RAISE EXCEPTION
+                      'Users still contains % legacy profile columns.',
+                      legacy_user_column_count;
+              END IF;
+          END
+          $$;
+
+
+          DO $$
+          DECLARE
+              missing_profile_columns text;
+          BEGIN
+              SELECT string_agg(required_column.name, ', ')
+              INTO missing_profile_columns
+              FROM
+              (
+                  VALUES
+                      ('Id'),
+                      ('FirstName'),
+                      ('LastName'),
+                      ('DisplayName'),
+                      ('TaxNumber'),
+                      ('ProfileImageUrl'),
+                      ('WhatsAppNumber'),
+                      ('PreferredLanguage'),
+                      ('PreferredCurrency'),
+                      ('CountryCode'),
+                      ('CreatedAt'),
+                      ('UpdatedAt')
+              ) AS required_column(name)
+
+              LEFT JOIN information_schema.columns actual_column
+                  ON actual_column.table_schema = 'public'
+                 AND actual_column.table_name = 'UserAccounts'
+                 AND actual_column.column_name = required_column.name
+
+              WHERE actual_column.column_name IS NULL;
+
+
+              IF missing_profile_columns IS NOT NULL
+              THEN
+                  RAISE EXCEPTION
+                      'UserAccounts is missing required columns: %',
+                      missing_profile_columns;
+              END IF;
+          END
+          $$;
+
+          SQL
+
+      - name: Run Application tests
+        run: >
+          dotnet test
+          tests/PropertyApi.Application.Tests/PropertyApi.Application.Tests.csproj
+          --configuration Release
+          --no-build
+          --no-restore
+          --logger "console;verbosity=minimal"
+
+      - name: Reset Redis before Auth tests
         run: |
-          dotnet test ${{ env.SOLUTION_PATH }} \
-            --configuration Release \
-            --no-build \
-            --verbosity normal
+          redis-cli \
+            -h localhost \
+            -p 6379 \
+            FLUSHALL
+
+      - name: Run Auth tests
+        run: >
+          dotnet test
+          tests/PropertyApi.Auth.Tests/PropertyApi.Auth.Tests.csproj
+          --configuration Release
+          --no-build
+          --no-restore
+          --logger "console;verbosity=minimal"
+
+      - name: Reset Redis before Integration tests
+        run: |
+          redis-cli \
+            -h localhost \
+            -p 6379 \
+            FLUSHALL
+
+      - name: Run Integration tests
+        run: >
+          dotnet test
+          tests/PropertyApi.Integration.Tests/PropertyApi.Integration.Tests.csproj
+          --configuration Release
+          --no-build
+          --no-restore
+          --logger "console;verbosity=minimal"
+
+      - name: Run Architecture tests
+        run: >
+          dotnet test
+          tests/PropertyApi.Architecture.Tests/PropertyApi.Architecture.Tests.csproj
+          --configuration Release
+          --no-build
+          --no-restore
+          --logger "console;verbosity=minimal"
+
 
   secret-scan:
     name: Secret Scan
@@ -147,6 +393,7 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
   validate-repo-hygiene:
     name: Repo Hygiene Check
@@ -178,7 +425,9 @@ jobs:
 
       - name: Check no environment-specific appsettings are tracked
         run: |
-          if git ls-files | grep -E 'appsettings\.(Development|Production|Staging)\.json$'; then
+          if git ls-files |
+             grep -E 'appsettings\.(Development|Production|Staging)\.json$'
+          then
             echo "ERROR: Environment-specific appsettings found in repository."
             exit 1
           fi
@@ -187,7 +436,9 @@ jobs:
 
       - name: Check no local Data Protection keys are tracked
         run: |
-          if git ls-files | grep -E '(^|/)\.test-data-protection-keys/|(^|/)\.prod-migration-keys-temp/|DataProtection-Keys/|key-[0-9a-fA-F-]+\.xml$'; then
+          if git ls-files |
+             grep -E '(^|/)\.test-data-protection-keys/|(^|/)\.prod-migration-keys-temp/|DataProtection-Keys/|key-[0-9a-fA-F-]+\.xml$'
+          then
             echo "ERROR: Local Data Protection keys found in repository."
             echo "Remove them from Git history/commit and keep them only in runtime storage."
             exit 1
