@@ -72,7 +72,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -635,26 +635,48 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate staging configuration
+        id: staging-config
+        shell: bash
         env:
-          BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL }}
         run: |
           set -euo pipefail
 
-          if [ -z "${BASE_URL}" ]; then
-            echo "STAGING_BASE_URL is not configured."
-            exit 1
+          if [ -z "${STAGING_BASE_URL:-}" ]; then
+            echo "configured=false" >> "${GITHUB_OUTPUT}"
+
+            echo "::notice::STAGING_BASE_URL is not configured; staging deployment and smoke tests are skipped."
+
+            {
+              echo "## Staging Smoke Tests"
+              echo
+              echo "Skipped because STAGING_BASE_URL is not configured."
+              echo
+              echo "Configure the GitHub Actions variable STAGING_BASE_URL to enable this gate."
+            } >> "${GITHUB_STEP_SUMMARY}"
+
+            exit 0
           fi
 
+          normalized_base_url="${STAGING_BASE_URL%/}"
+
+          echo "configured=true" >> "${GITHUB_OUTPUT}"
+          echo "base_url=${normalized_base_url}" >> "${GITHUB_OUTPUT}"
+
+          echo "Staging configuration is available."
+
       - name: Trigger staging deployment
+        if: ${{ steps.staging-config.outputs.configured == 'true' }}
+        shell: bash
         env:
           DEPLOY_HOOK_URL: ${{ secrets.STAGING_DEPLOY_HOOK_URL }}
         run: |
           set -euo pipefail
 
-          if [ -n "${DEPLOY_HOOK_URL}" ]; then
+          if [ -n "${DEPLOY_HOOK_URL:-}" ]; then
             curl \
               --fail \
               --silent \
@@ -669,8 +691,10 @@ jobs:
           fi
 
       - name: Wait for staging readiness
+        if: ${{ steps.staging-config.outputs.configured == 'true' }}
+        shell: bash
         env:
-          BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          BASE_URL: ${{ steps.staging-config.outputs.base_url }}
         run: |
           set -euo pipefail
 
@@ -684,7 +708,10 @@ jobs:
               --silent \
               --show-error \
               --max-time 10 \
-              "${BASE_URL%/}/health/ready" \
+              --retry 2 \
+              --retry-delay 2 \
+              --retry-all-errors \
+              "${BASE_URL}/health/ready" \
               > /dev/null; then
 
               staging_ready=true
@@ -699,9 +726,32 @@ jobs:
             exit 1
           fi
 
-      - name: Run staging smoke tests
+      - name: Verify staging liveness
+        if: ${{ steps.staging-config.outputs.configured == 'true' }}
+        shell: bash
         env:
-          BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          BASE_URL: ${{ steps.staging-config.outputs.base_url }}
+        run: |
+          set -euo pipefail
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --max-time 10 \
+            --retry 3 \
+            --retry-delay 2 \
+            --retry-all-errors \
+            "${BASE_URL}/health/live"
+
+          echo
+
+      - name: Run staging smoke tests
+        if: ${{ steps.staging-config.outputs.configured == 'true' }}
+        shell: bash
+        env:
+          BASE_URL: ${{ steps.staging-config.outputs.base_url }}
+          STAGING_BASE_URL: ${{ steps.staging-config.outputs.base_url }}
           SMOKE_EMAIL: ${{ secrets.STAGING_SMOKE_EMAIL }}
           SMOKE_PASSWORD: ${{ secrets.STAGING_SMOKE_PASSWORD }}
           SMOKE_FIXED_OTP: ${{ secrets.STAGING_SMOKE_FIXED_OTP }}
