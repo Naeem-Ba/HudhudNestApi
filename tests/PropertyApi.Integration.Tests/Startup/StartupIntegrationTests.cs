@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using PropertyApi.Infrastructure.Persistence;
+using PropertyApi.Integration.Tests.TestInfrastructure;
 
 namespace PropertyApi.Integration.Tests.Startup;
 
@@ -282,12 +283,25 @@ public sealed class StartupIntegrationTests : IAsyncLifetime
                     ["Database:SeedOnStartup"] = "false",
                     ["RateLimiting:Redis:Enabled"] = "false",
                     ["RedisRateLimiting:Enabled"] = "false",
-                    ["Jwt:Issuer"] = "PropertyApi",
-                    ["Jwt:Audience"] = "PropertyApiClient",
-                    ["Jwt:Key"] = "TEST_ONLY_SECRET_KEY_1234567890_1234567890",
-                    ["Jwt:AccessTokenMinutes"] = "30",
-                    ["Jwt:RefreshTokenDays"] = "30",
-                    ["OtpSettings:SecretKey"] = "TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890",
+                    ["Jwt:Issuer"] =
+    PropertyApi.Integration.Tests.TestInfrastructure
+        .TestSecuritySettings.JwtIssuer,
+
+                    ["Jwt:Audience"] =
+    PropertyApi.Integration.Tests.TestInfrastructure
+        .TestSecuritySettings.JwtAudience,
+
+                    ["Jwt:Key"] =
+    PropertyApi.Integration.Tests.TestInfrastructure
+        .TestSecuritySettings.JwtKey,
+
+                    ["OtpSettings:SecretKey"] =
+    PropertyApi.Integration.Tests.TestInfrastructure
+        .TestSecuritySettings.OtpSecretKey,
+
+                    ["Security:PhoneLookupHmacKey"] =
+    PropertyApi.Integration.Tests.TestInfrastructure
+        .TestSecuritySettings.PhoneLookupHmacKey,
                     ["Cloudinary:CloudName"] = "test",
                     ["Cloudinary:ApiKey"] = "test",
                     ["Cloudinary:ApiSecret"] = "test",

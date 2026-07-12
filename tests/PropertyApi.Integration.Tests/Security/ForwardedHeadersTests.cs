@@ -44,21 +44,60 @@ public sealed class ForwardedHeadersTests
         Assert.True(options.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedHost));
     }
 
-    [Fact(DisplayName = "Program.cs keeps forwarded headers configurable and bounded")]
+    [Fact(DisplayName =
+     "Program.cs keeps forwarded headers explicitly trusted and bounded")]
     public void ProgramCs_ShouldKeepForwardedHeaders_ConfigurableAndBounded()
     {
-        var programPath = FindProgramCsPath();
-        var programSource = File.ReadAllText(programPath);
+        var repoRoot = FindRepositoryRoot();
 
-        Assert.Contains("RequireHeaderSymmetry = false", programSource);
-        Assert.Contains("ForwardedHeaders", programSource);
-        Assert.Contains("ForwardLimit", programSource);
-        Assert.Contains("KnownProxies", programSource);
-        Assert.Contains("KnownNetworks", programSource);
-        Assert.Contains("TrustAllProxies", programSource);
-        Assert.Contains("XForwardedProto", programSource);
-        Assert.Contains("XForwardedHost", programSource);
-        Assert.Contains("UseForwardedHeaders", programSource);
+        var programSource = File.ReadAllText(
+            Path.Combine(
+                repoRoot,
+                "PropertyApi",
+                "Program.cs"));
+
+        var registrationSource = File.ReadAllText(
+            Path.Combine(
+                repoRoot,
+                "PropertyApi",
+                "Configuration",
+                "ForwardedHeadersRegistration.cs"));
+
+        Assert.Contains(
+            "AddTrustedForwardedHeaders",
+            programSource);
+
+        Assert.Contains(
+            "UseForwardedHeaders",
+            programSource);
+
+        Assert.DoesNotContain(
+            "TrustAllProxies",
+            programSource);
+
+        Assert.Contains(
+            "KnownProxies",
+            registrationSource);
+
+        Assert.Contains(
+            "KnownNetworks",
+            registrationSource);
+
+        Assert.Contains(
+            "ForwardLimit",
+            registrationSource);
+
+        Assert.Contains(
+            "XForwardedFor",
+            registrationSource);
+
+        Assert.Contains(
+            "XForwardedProto",
+            registrationSource);
+
+        Assert.DoesNotContain(
+            "TrustAllProxies",
+            registrationSource);
     }
 
     private static string FindProgramCsPath()
@@ -76,5 +115,27 @@ public sealed class ForwardedHeadersTests
         }
 
         throw new FileNotFoundException("Could not find PropertyApi/Program.cs.");
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(
+            AppContext.BaseDirectory);
+
+        while (directory is not null)
+        {
+            if (File.Exists(
+                    Path.Combine(
+                        directory.FullName,
+                        "PropertyApi.sln")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException(
+            "Could not locate the PropertyApi repository root.");
     }
 }

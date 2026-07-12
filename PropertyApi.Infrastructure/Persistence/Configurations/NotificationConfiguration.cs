@@ -27,11 +27,11 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
             .IsRequired();
 
         builder.HasIndex(notification => new
-            {
-                notification.RecipientId,
-                notification.IsRead,
-                notification.CreatedAt
-            })
+        {
+            notification.RecipientId,
+            notification.IsRead,
+            notification.CreatedAt
+        })
             .HasDatabaseName("IX_Notifications_Recipient_Read_CreatedAt");
 
         builder.HasIndex(notification => notification.PropertyId)

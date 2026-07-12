@@ -85,3 +85,5 @@ docker-compose.override.yml
 .prod-migration-keys-temp/
 **/.test-data-protection-keys/
 **/.prod-migration-keys-temp/
+/ProductionGateKit/
+/.production-gate-backup_*/

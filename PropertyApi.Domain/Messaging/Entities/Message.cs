@@ -13,13 +13,13 @@ public class Message : BaseEntity
 
     // -- Participants --------------------------------------------
     public Guid SenderId { get; set; }
-    public Guid ReceiverId { get; set; }       
+    public Guid ReceiverId { get; set; }
 
     // -- Related Property ---------------------------------------
     public Guid PropertyId { get; set; }
 
     // -- Read Status --------------------------------------------
-    public bool IsRead { get; set; } = false;     
+    public bool IsRead { get; set; } = false;
     public DateTime? ReadAt { get; set; }
 
     // -- Navigation ---------------------------------------------

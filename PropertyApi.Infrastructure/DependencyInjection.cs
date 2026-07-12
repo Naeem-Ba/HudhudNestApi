@@ -233,7 +233,7 @@ public static class DependencyInjection
         services.AddScoped<IPropertyImageRepository, PropertyImageRepository>();
         services.AddScoped<IFavoriteRepository, FavoriteRepository>();
         services.AddScoped<IContactMessageRepository, ContactMessageRepository>();
-        services.AddScoped<IUserDirectoryReadService,UserDirectoryReadService>();
+        services.AddScoped<IUserDirectoryReadService, UserDirectoryReadService>();
         services.AddScoped<IUserAccountRepository, UserAccountRepository>();
         services.AddScoped<IMessageRepository, MessageRepository>();  // ADDED
 
@@ -254,18 +254,25 @@ public static class DependencyInjection
             sp.GetRequiredService<CloudinaryMediaStorageService>());
 
         var redisConnectionString = configuration.GetConnectionString("Redis")
-    ?? configuration["Redis:ConnectionString"];
+        ?? configuration["Redis:ConnectionString"];
 
         var isTestingOrCi =
             environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase) ||
             environment.EnvironmentName.Equals("CI", StringComparison.OrdinalIgnoreCase);
 
-        if (environment.IsProduction())
+        var requiresRedis =
+            configuration.GetValue<bool?>("Redis:Required")
+            ?? (environment.IsProduction() ||
+                environment.IsStaging());
+
+        if (requiresRedis)
         {
             if (string.IsNullOrWhiteSpace(redisConnectionString))
             {
                 throw new InvalidOperationException(
-                    "Redis is required in Production for distributed security stamp caching. Configure ConnectionStrings:Redis or Redis:ConnectionString.");
+                    "Redis is required in Staging and Production. " +
+                    "Configure ConnectionStrings:Redis or " +
+                    "Redis:ConnectionString.");
             }
 
             services.AddStackExchangeRedisCache(options =>
@@ -274,7 +281,8 @@ public static class DependencyInjection
                 options.InstanceName = "PropertyApi:";
             });
         }
-        else if (!isTestingOrCi && !string.IsNullOrWhiteSpace(redisConnectionString))
+        else if (!isTestingOrCi &&
+                 !string.IsNullOrWhiteSpace(redisConnectionString))
         {
             services.AddStackExchangeRedisCache(options =>
             {
@@ -286,12 +294,18 @@ public static class DependencyInjection
         {
             services.AddDistributedMemoryCache();
         }
-        services.AddScoped<ICommonLookupService, CommonLookupService>();
 
+        // Operational health checks
         services.AddScoped<PostGisHealthCheck>();
         services.AddHostedService<ProductionStartupValidator>();
+
         services.AddHealthChecks()
-            .AddCheck<PostGisHealthCheck>("postgis");
+            .AddCheck<PostGisHealthCheck>(
+                "postgresql-postgis",
+                tags: ["ready", "db"])
+            .AddCheck<DistributedCacheHealthCheck>(
+                "redis",
+                tags: ["ready", "cache"]);
 
         return services;
     }

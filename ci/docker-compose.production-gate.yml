@@ -1,0 +1,82 @@
+name: propertyapi-production-gate
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: propertyapi_gate
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U postgres -d propertyapi_gate
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrator:
+    build:
+      context: ..
+      dockerfile: ci/Dockerfile.migrator
+    environment:
+      DOTNET_ENVIRONMENT: Staging
+      ASPNETCORE_ENVIRONMENT: Staging
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=propertyapi_gate;Username=postgres;Password=postgres
+      Redis__Required: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ..
+      dockerfile: PropertyApi/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT: Staging
+      ASPNETCORE_ENVIRONMENT: Staging
+      ASPNETCORE_HTTP_PORTS: "8080"
+
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=propertyapi_gate;Username=postgres;Password=postgres
+      ConnectionStrings__Redis: redis:6379,abortConnect=false
+      Redis__ConnectionString: redis:6379,abortConnect=false
+      Redis__Required: "true"
+
+      DataProtection__PersistKeysToDatabase: "true"
+
+      Jwt__Key: ci-only-64-character-development-key-change-before-any-real-deployment-1234
+      Jwt__Issuer: PropertyApi.CI
+      Jwt__Audience: PropertyApi.CI
+
+      Cors__AllowedOrigins__0: http://localhost:4200
+
+      Database__ApplyMigrationsOnStartup: "false"
+      Database__SeedOnStartup: "false"
+
+      ForwardedHeaders__Enabled: "false"
+
+    ports:
+      - "18080:8080"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy

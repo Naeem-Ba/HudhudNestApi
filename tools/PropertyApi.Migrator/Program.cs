@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using PropertyApi.Infrastructure;
 using PropertyApi.Infrastructure.Persistence;
 using PropertyApi.Infrastructure.Persistence.Backfills;
+using PropertyApi.Infrastructure.Persistence.Seeds;
 
 var builder =
     Host.CreateApplicationBuilder(args);
@@ -85,6 +86,9 @@ try
                 .GetRequiredService<IMigrator>();
 
         await migrator.MigrateAsync();
+
+        await DatabaseSeeder.SeedAsync(
+    scope.ServiceProvider);
 
         logger.LogInformation(
             "Database schema migration completed successfully.");

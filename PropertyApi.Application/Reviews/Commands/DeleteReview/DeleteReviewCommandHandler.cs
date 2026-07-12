@@ -9,7 +9,7 @@ public sealed class DeleteReviewCommandHandler
     : IRequestHandler<DeleteReviewCommand, bool>
 {
     private readonly IPropertyReviewRepository _reviews;
-    private readonly IUnitOfWork               _uow;
+    private readonly IUnitOfWork _uow;
 
     public DeleteReviewCommandHandler(IPropertyReviewRepository reviews, IUnitOfWork uow)
         => (_reviews, _uow) = (reviews, uow);

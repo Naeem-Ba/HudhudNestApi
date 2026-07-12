@@ -17,7 +17,7 @@ public interface IPropertyRepository
     // Read
     Task<Property?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<Property?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default);
-    Task<Property?> GetPublishedByIdWithDetailsAsync(Guid id,CancellationToken ct = default);
+    Task<Property?> GetPublishedByIdWithDetailsAsync(Guid id, CancellationToken ct = default);
     Task<PagedResult<Property>> GetPagedAsync(PropertyFilterDto filter, CancellationToken ct = default);
     Task<IReadOnlyList<Property>> GetByOwnerAsync(Guid ownerId, CancellationToken ct = default);
     Task<bool> ExistsAsync(Guid id, CancellationToken ct = default);

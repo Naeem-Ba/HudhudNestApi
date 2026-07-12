@@ -12,6 +12,7 @@ using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Auth.Tests.Application.Commands;
+
 [Trait("Category", "AuthCQRS")]
 public sealed class LoginCommandHandlerTests
 {

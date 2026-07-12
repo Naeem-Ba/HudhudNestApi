@@ -24,18 +24,18 @@ public sealed record AdminOperationResult
     public static AdminOperationResult BadRequest(
         string message,
         IEnumerable<string>? errors = null) => new()
-    {
-        Succeeded = false,
-        Message = message,
-        Errors = errors?.ToArray() ?? Array.Empty<string>()
-    };
+        {
+            Succeeded = false,
+            Message = message,
+            Errors = errors?.ToArray() ?? Array.Empty<string>()
+        };
 
     public static AdminOperationResult InvalidRole(
         IEnumerable<string> allowedRoles) => new()
-    {
-        Succeeded = false,
-        Message = "The requested role is invalid.",
-        Errors = allowedRoles.ToArray()
-    };
+        {
+            Succeeded = false,
+            Message = "The requested role is invalid.",
+            Errors = allowedRoles.ToArray()
+        };
 }
 

@@ -1,13 +1,9 @@
 using System.Globalization;
-using System.Net;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -15,18 +11,20 @@ using PropertyApi.Application;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Common.Security;
 using PropertyApi.Domain.Users.Constants;
-using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Infrastructure;
 using PropertyApi.Infrastructure.Hubs;
-using PropertyApi.Infrastructure.Persistence;
-using PropertyApi.Infrastructure.Persistence.Seeds;
-using ApplicationRole = PropertyApi.Infrastructure.Identity.Entities.ApplicationRole;
 using PropertyApi.Middleware;
 using PropertyApi.Security.Csrf;
 using PropertyApi.Security.Headers;
 using PropertyApi.Security.RateLimiting;
+using PropertyApi.Configuration;
+using PropertyApi.Health;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddTrustedForwardedHeaders(
+    builder.Configuration,
+    builder.Environment);
 
 var isTestingOrCi =
     builder.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase) ||
@@ -62,44 +60,6 @@ if (builder.Environment.IsProduction() && !hasRedisConnectionString)
         "Redis is required in Production. Configure ConnectionStrings:Redis, Redis:ConnectionString, RedisRateLimiting:ConnectionString, REDIS_CONNECTION_STRING, or REDIS_URL.");
 }
 
-builder.Services.Configure<ForwardedHeadersOptions>(options =>
-{
-    var forwardedHeadersSection = builder.Configuration.GetSection("ForwardedHeaders");
-
-    options.ForwardedHeaders =
-        ForwardedHeaders.XForwardedFor |
-        ForwardedHeaders.XForwardedProto |
-        ForwardedHeaders.XForwardedHost;
-
-    options.RequireHeaderSymmetry = false;
-    options.ForwardLimit = forwardedHeadersSection.GetValue<int?>("ForwardLimit") ?? 1;
-
-    var trustAllProxies = forwardedHeadersSection.GetValue<bool>("TrustAllProxies");
-
-    if (trustAllProxies)
-    {
-        // Use this only when the app is behind a trusted managed proxy such as Render.
-        // Prefer KnownProxies/KnownNetworks when the proxy IP range is stable.
-        options.KnownNetworks.Clear();
-        options.KnownProxies.Clear();
-    }
-
-    foreach (var proxy in forwardedHeadersSection.GetSection("KnownProxies").Get<string[]>() ?? [])
-    {
-        if (IPAddress.TryParse(proxy, out var address))
-        {
-            options.KnownProxies.Add(address);
-        }
-    }
-
-    foreach (var network in forwardedHeadersSection.GetSection("KnownNetworks").Get<string[]>() ?? [])
-    {
-        if (TryParseCidr(network, out var ipNetwork))
-        {
-            options.KnownNetworks.Add(ipNetwork);
-        }
-    }
-});
 
 builder.Services.AddHsts(options =>
 {
@@ -118,6 +78,11 @@ builder.Services.AddApplication();
 
 // -- 3. Infrastructure Layer -----------------------------------
 builder.Services.AddInfrastructure(
+    builder.Configuration,
+    builder.Environment);
+
+
+builder.Services.AddScaleOutOutputCaching(
     builder.Configuration,
     builder.Environment);
 
@@ -287,14 +252,6 @@ builder.Services.AddCors(options =>
     });
 });
 
-// -- 5.5 Output Cache -----------------------------------------
-builder.Services.AddOutputCache(options =>
-{
-    options.AddPolicy("market-insights", policy =>
-        policy.Expire(TimeSpan.FromMinutes(5))
-              .Tag("analytics")
-              .SetVaryByQuery("*"));
-});
 
 // -- 6. Controllers + JSON -------------------------------------
 builder.Services
@@ -487,10 +444,6 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-// -- 10. Database startup --------------------------------------
-await ApplyPendingMigrationsAsync(app.Services, app.Configuration, app.Environment);
-await SeedStartupDataAsync(app.Services, app.Configuration);
-
 // -- 11. Middleware order --------------------------------------
 app.UseForwardedHeaders();
 
@@ -522,9 +475,11 @@ if (swaggerEnabled)
 }
 
 app.UseStaticFiles();
+
 app.UseRouting();
+
 app.UseCors("DefaultCors");
-app.UseOutputCache();
+
 app.UseAuthentication();
 
 if (useRedisRateLimiting)
@@ -537,10 +492,12 @@ else
 }
 
 app.UseCookieCsrfProtection();
+
 app.UseAuthorization();
 
+app.UseOutputCache();
+app.MapOperationalHealthEndpoints();
 app.MapControllers();
-app.MapHealthChecks("/health");
 app.MapHub<NotificationHub>("/notificationHub");
 
 app.Run();
@@ -609,107 +566,6 @@ static string? NormalizeRedisConnectionString(string? value)
     return string.Join(',', parts);
 }
 
-static async Task ApplyPendingMigrationsAsync(
-    IServiceProvider services,
-    IConfiguration configuration,
-    IHostEnvironment environment)
-{
-    var shouldApplyMigrations =
-        configuration.GetValue<bool?>("Database:ApplyMigrationsOnStartup")
-        ?? !environment.IsProduction();
-
-    if (!shouldApplyMigrations)
-        return;
-
-    using var scope = services.CreateScope();
-
-    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var logger = scope.ServiceProvider
-        .GetRequiredService<ILoggerFactory>()
-        .CreateLogger("DatabaseMigration");
-
-    var providerName = context.Database.ProviderName ?? string.Empty;
-    var isPostgres = providerName.Contains("Npgsql", StringComparison.OrdinalIgnoreCase);
-
-    if (!isPostgres)
-    {
-        logger.LogInformation(
-            "Skipping startup migrations because database provider is {ProviderName}.",
-            providerName);
-
-        return;
-    }
-
-    var pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToArray();
-
-    if (pendingMigrations.Length == 0)
-    {
-        logger.LogInformation("No pending EF Core migrations found.");
-        return;
-    }
-
-    logger.LogInformation(
-        "Applying {Count} pending EF Core migration(s): {Migrations}",
-        pendingMigrations.Length,
-        string.Join(", ", pendingMigrations));
-
-    await context.Database.MigrateAsync();
-
-    logger.LogInformation("EF Core database migrations completed successfully.");
-}
-
-static async Task SeedStartupDataAsync(
-    IServiceProvider services,
-    IConfiguration configuration)
-{
-    var shouldSeed = configuration.GetValue("Database:SeedOnStartup", true);
-
-    if (!shouldSeed)
-        return;
-
-    using var scope = services.CreateScope();
-
-    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
-    var logger = scope.ServiceProvider
-        .GetRequiredService<ILoggerFactory>()
-        .CreateLogger("StartupSeed");
-
-    var providerName = context.Database.ProviderName ?? string.Empty;
-    var isPostgres = providerName.Contains("Npgsql", StringComparison.OrdinalIgnoreCase);
-
-    if (isPostgres)
-    {
-        var strategy = context.Database.CreateExecutionStrategy();
-
-        await strategy.ExecuteAsync(async () =>
-        {
-            await using var transaction = await context.Database.BeginTransactionAsync();
-
-            await context.Database.ExecuteSqlRawAsync(
-                "SELECT pg_advisory_xact_lock(20260621194421::bigint);");
-
-            logger.LogInformation("Startup seed lock acquired.");
-
-            await CurrencySeed.SeedAsync(context);
-            await GovernoratesSeed.SeedAsync(context);
-            await PropertyTypesSeed.SeedAsync(context);
-            await ApplicationRolesSeed.SeedAsync(roleManager);
-
-            await transaction.CommitAsync();
-
-            logger.LogInformation("Startup seed completed.");
-        });
-
-        return;
-    }
-
-    await CurrencySeed.SeedAsync(context);
-    await GovernoratesSeed.SeedAsync(context);
-    await PropertyTypesSeed.SeedAsync(context);
-    await ApplicationRolesSeed.SeedAsync(roleManager);
-}
-
 static string GetClientRateLimitPartitionKey(HttpContext httpContext)
 {
     var userId = httpContext.User?
@@ -724,30 +580,6 @@ static string GetClientRateLimitPartitionKey(HttpContext httpContext)
     return $"ip:{ip}";
 }
 
-static bool TryParseCidr(
-    string value,
-    out Microsoft.AspNetCore.HttpOverrides.IPNetwork network)
-{
-    network = default!;
-
-    var parts = value.Split('/', 2, StringSplitOptions.TrimEntries);
-    if (parts.Length != 2 ||
-        !IPAddress.TryParse(parts[0], out var address) ||
-        !int.TryParse(parts[1], out var prefixLength))
-    {
-        return false;
-    }
-
-    try
-    {
-        network = new Microsoft.AspNetCore.HttpOverrides.IPNetwork(address, prefixLength);
-        return true;
-    }
-    catch (ArgumentOutOfRangeException)
-    {
-        return false;
-    }
-}
 
 public partial class Program
 {

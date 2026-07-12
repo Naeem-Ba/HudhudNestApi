@@ -49,8 +49,8 @@ public class PropertyImage : BaseEntity
 
 
 
-// FK
-public Guid PropertyId { get; set; }
+    // FK
+    public Guid PropertyId { get; set; }
 
     public Property Property { get; set; } = null!;
 }
