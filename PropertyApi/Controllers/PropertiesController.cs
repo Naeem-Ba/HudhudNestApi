@@ -110,7 +110,7 @@ public sealed class PropertiesController : ControllerBase
 
         var cmd = command with
         {
-            PropertyId       = id,
+            PropertyId = id,
             RequestingUserId = userId.Value
         };
 
@@ -146,9 +146,9 @@ public sealed class PropertiesController : ControllerBase
         if (userId is null) return Unauthorized();
 
         var success = await _mediator.Send(new UpdatePropertyCommand(
-            PropertyId       : id,
-            RequestingUserId : userId.Value,
-            Title            : null, Description: null,
+            PropertyId: id,
+            RequestingUserId: userId.Value,
+            Title: null, Description: null,
             Street: null, City: null, Region: null,
             CountryCode: null, PostalCode: null,
             Latitude: null, Longitude: null,
@@ -158,7 +158,7 @@ public sealed class PropertiesController : ControllerBase
             HasBalcony: null, HasElevator: null, HasParkingSpace: null,
             HeatingType: null, Status: null, Condition: null,
             EnergyEfficiency: null, AvailableFrom: null, ExpiresAt: null,
-            IsPublished      : true
+            IsPublished: true
         ), ct);
 
         return success ? NoContent() : NotFound();

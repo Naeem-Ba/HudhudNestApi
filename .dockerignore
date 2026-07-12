@@ -28,3 +28,40 @@ README.md
 !.git/config
 !.git/packed-refs
 !.git/refs/heads/**
+# Build outputs
+**/bin/
+**/obj/
+**/TestResults/
+**/coverage/
+**/artifacts/
+
+# Git and IDE
+.github/
+.vs/
+.vscode/
+.idea/
+
+# Local production-gate packages and backups
+ProductionGateKit/
+.production-gate-backup_*/
+dbkeys_patch/
+security-patch/
+
+# Local archives and logs
+*.zip
+*.7z
+*.rar
+*.log
+production-gate-containers.log
+
+# User-specific and secret files
+**/*.user
+**/*.suo
+**/appsettings.Development.json
+**/appsettings.Local.json
+.env
+.env.*
+
+# Frontend dependencies if present
+**/node_modules/
+**/dist/

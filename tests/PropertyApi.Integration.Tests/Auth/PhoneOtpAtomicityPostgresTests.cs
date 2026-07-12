@@ -19,7 +19,7 @@ public sealed class PhoneOtpAtomicityPostgresTests
         Assert.False(AuthTestReflection.IsSucceeded(result));
         Assert.Equal(0, await AuthDbAssertions.UserCountByPhoneAsync(factory, phone));
         Assert.False((await AuthDbAssertions.LatestOtpStateAsync(factory, phone)).IsUsed);
-        Assert.Equal(0,await AuthDbAssertions.UserAccountTotalCountAsync( factory));
+        Assert.Equal(0, await AuthDbAssertions.UserAccountTotalCountAsync(factory));
     }
 
     [Fact]
@@ -36,7 +36,7 @@ public sealed class PhoneOtpAtomicityPostgresTests
         Assert.False(AuthTestReflection.IsSucceeded(result));
         Assert.Equal(0, await AuthDbAssertions.UserCountByPhoneAsync(factory, phone));
         Assert.False((await AuthDbAssertions.LatestOtpStateAsync(factory, phone)).IsUsed);
-        Assert.Equal( 0,await AuthDbAssertions.UserAccountTotalCountAsync(factory));
+        Assert.Equal(0, await AuthDbAssertions.UserAccountTotalCountAsync(factory));
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public sealed class PhoneOtpAtomicityPostgresTests
 
         var user = await AuthDbAssertions.UserByPhoneAsync(factory, phone);
         Assert.NotNull(user);
-        Assert.Equal(1,await AuthDbAssertions.UserAccountCountAsync(factory, user.Value.UserId));
+        Assert.Equal(1, await AuthDbAssertions.UserAccountCountAsync(factory, user.Value.UserId));
         Assert.Equal(1, await AuthDbAssertions.RoleCountAsync(factory, user!.Value.UserId));
         Assert.True((await AuthDbAssertions.LatestOtpStateAsync(factory, phone)).IsUsed);
 
@@ -94,7 +94,7 @@ public sealed class PhoneOtpAtomicityPostgresTests
         phone);
 
         Assert.NotNull(user);
-        Assert.Equal( 1, await AuthDbAssertions.UserAccountCountAsync(factory, user.Value.UserId));
+        Assert.Equal(1, await AuthDbAssertions.UserAccountCountAsync(factory, user.Value.UserId));
         Assert.Equal(1, results.Count(x => x));
         Assert.Equal(1, await AuthDbAssertions.UserCountByPhoneAsync(factory, phone));
         Assert.True((await AuthDbAssertions.LatestOtpStateAsync(factory, phone)).IsUsed);

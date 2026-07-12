@@ -1,0 +1,710 @@
+name: Production Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+
+  push:
+    branches:
+      - main
+      - master
+      - develop
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: 8.0.x
+  COMPOSE_FILE: ci/docker-compose.production-gate.yml
+
+jobs:
+  build-test-container:
+    name: Build, Test and Container Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    services:
+      postgres_test:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: propertyapi_testing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d propertyapi_testing"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+      redis_test:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      TEST_POSTGRES_CONNECTION_STRING: >-
+        Host=127.0.0.1;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres
+      ConnectionStrings__DefaultConnection: >-
+        Host=127.0.0.1;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres
+      ConnectionStrings__Redis: 127.0.0.1:6379,abortConnect=false
+      Redis__ConnectionString: 127.0.0.1:6379,abortConnect=false
+      Redis__Required: "false"
+      ASPNETCORE_ENVIRONMENT: Testing
+      DOTNET_ENVIRONMENT: Testing
+      Database__ApplyMigrationsOnStartup: "false"
+      Database__SeedOnStartup: "false"
+
+      # Non-secret identifiers used by the test host.
+      Jwt__Issuer: PropertyApi
+      Jwt__Audience: PropertyApiClient
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Generate ephemeral test security keys
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          jwt_key="$(openssl rand -base64 48 | tr -d '\n')"
+          otp_key="$(openssl rand -base64 48 | tr -d '\n')"
+          phone_hmac_key="$(openssl rand -base64 32 | tr -d '\n')"
+
+          echo "::add-mask::${jwt_key}"
+          echo "::add-mask::${otp_key}"
+          echo "::add-mask::${phone_hmac_key}"
+
+          {
+            echo "Jwt__Key=${jwt_key}"
+            echo "OtpSettings__SecretKey=${otp_key}"
+            echo "Security__PhoneLookupHmacKey=${phone_hmac_key}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Restore dependencies
+        run: dotnet restore PropertyApi.sln
+
+      - name: Build solution
+        run: |
+          dotnet build PropertyApi.sln \
+            --configuration Release \
+            --no-restore
+
+      - name: Verify formatting
+        run: |
+          dotnet format PropertyApi.sln \
+            --verify-no-changes \
+            --no-restore
+
+      - name: Run static production gate
+        shell: pwsh
+        run: |
+          ./scripts/verify-production-gate.ps1 `
+            -RepositoryRoot $PWD.Path
+
+      - name: Verify test infrastructure
+        run: |
+          set -euo pipefail
+
+          docker exec \
+            "${{ job.services.postgres_test.id }}" \
+            pg_isready \
+            -U postgres \
+            -d propertyapi_testing
+
+          redis_response="$(
+            docker exec \
+              "${{ job.services.redis_test.id }}" \
+              redis-cli \
+              ping
+          )"
+
+          if [ "${redis_response}" != "PONG" ]; then
+            echo "Redis test service did not return PONG."
+            exit 1
+          fi
+
+      - name: Apply integration-test database migrations
+        run: |
+          set -euo pipefail
+
+          dotnet run \
+            --project tools/PropertyApi.Migrator/PropertyApi.Migrator.csproj \
+            --configuration Release \
+            --no-build
+
+      - name: Run architecture tests without coverage instrumentation
+        run: |
+          dotnet test \
+            tests/PropertyApi.Architecture.Tests/PropertyApi.Architecture.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --logger "trx;LogFileName=architecture-tests.trx"
+
+      - name: Run application tests with coverage
+        run: |
+          dotnet test \
+            tests/PropertyApi.Application.Tests/PropertyApi.Application.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=application-tests.trx"
+
+      - name: Run authentication tests with coverage
+        run: |
+          dotnet test \
+            tests/PropertyApi.Auth.Tests/PropertyApi.Auth.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=auth-tests.trx"
+
+      - name: Run integration tests with coverage
+        run: |
+          dotnet test \
+            tests/PropertyApi.Integration.Tests/PropertyApi.Integration.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=integration-tests.trx"
+
+      - name: Check vulnerable packages
+        run: |
+          dotnet list PropertyApi.sln \
+            package \
+            --vulnerable \
+            --include-transitive
+
+      - name: Validate Docker Compose configuration
+        run: |
+          set -euo pipefail
+
+          docker compose \
+            -f "${COMPOSE_FILE}" \
+            config \
+            --quiet
+
+      - name: Build production-like images
+        run: |
+          set -euo pipefail
+
+          docker compose \
+            -f "${COMPOSE_FILE}" \
+            build \
+            --pull \
+            api \
+            migrator
+
+      - name: Start PostgreSQL and Redis
+        run: |
+          set -euo pipefail
+
+          docker compose \
+            -f "${COMPOSE_FILE}" \
+            up \
+            -d \
+            --wait \
+            --wait-timeout 120 \
+            postgres \
+            redis
+
+          docker compose \
+            -f "${COMPOSE_FILE}" \
+            ps
+
+      - name: Run database migrator
+        run: |
+          set -euo pipefail
+
+          docker compose \
+            -f "${COMPOSE_FILE}" \
+            run \
+            --rm \
+            --no-deps \
+            migrator
+
+      - name: Verify applied migrations
+        run: |
+          set -euo pipefail
+
+          migration_count="$(
+            docker compose \
+              -f "${COMPOSE_FILE}" \
+              exec \
+              -T \
+              postgres \
+              psql \
+              -U postgres \
+              -d propertyapi_gate \
+              -tAc \
+              'SELECT COUNT(*) FROM "__EFMigrationsHistory";'
+          )"
+
+          migration_count="$(echo "${migration_count}" | tr -d '[:space:]')"
+
+          echo "Applied migration count: ${migration_count}"
+
+          if [ -z "${migration_count}" ] || [ "${migration_count}" -le 0 ]; then
+            echo "No EF Core migrations were found."
+            exit 1
+          fi
+
+      - name: Verify PostGIS
+        run: |
+          set -euo pipefail
+
+          docker compose \
+            -f "${COMPOSE_FILE}" \
+            exec \
+            -T \
+            postgres \
+            psql \
+            -U postgres \
+            -d propertyapi_gate \
+            -c "SELECT PostGIS_Version();"
+
+      - name: Start API
+        run: |
+          set -euo pipefail
+
+          docker compose \
+            -f "${COMPOSE_FILE}" \
+            up \
+            -d \
+            api
+
+      - name: Wait for API liveness
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          api_ready=false
+
+          for attempt in $(seq 1 60); do
+            echo "Liveness attempt ${attempt}/60"
+
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 5 \
+              http://127.0.0.1:18080/health/live \
+              > /dev/null; then
+
+              api_ready=true
+              break
+            fi
+
+            sleep 2
+          done
+
+          if [ "${api_ready}" != "true" ]; then
+            echo "API did not become live."
+
+            docker compose \
+              -f "${COMPOSE_FILE}" \
+              logs \
+              --no-color \
+              api
+
+            exit 1
+          fi
+
+      - name: Verify liveness and readiness
+        run: |
+          set -euo pipefail
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --max-time 10 \
+            http://127.0.0.1:18080/health/live
+
+          echo
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --max-time 10 \
+            http://127.0.0.1:18080/health/ready
+
+          echo
+
+      - name: Assert API container is non-root
+        run: |
+          set -euo pipefail
+
+          uid="$(
+            docker compose \
+              -f "${COMPOSE_FILE}" \
+              exec \
+              -T \
+              api \
+              id -u
+          )"
+
+          uid="$(echo "${uid}" | tr -d '[:space:]')"
+
+          echo "API container UID: ${uid}"
+
+          if [ "${uid}" = "0" ]; then
+            echo "API container is running as root."
+            exit 1
+          fi
+
+      - name: Verify Data Protection key persistence
+        run: |
+          set -euo pipefail
+
+          key_count="$(
+            docker compose \
+              -f "${COMPOSE_FILE}" \
+              exec \
+              -T \
+              postgres \
+              psql \
+              -U postgres \
+              -d propertyapi_gate \
+              -tAc \
+              'SELECT COUNT(*) FROM "DataProtectionKeys";'
+          )"
+
+          key_count="$(echo "${key_count}" | tr -d '[:space:]')"
+
+          echo "Data Protection key count: ${key_count}"
+
+          if [ -z "${key_count}" ] || [ "${key_count}" -le 0 ]; then
+            echo "No persisted Data Protection key was found."
+            exit 1
+          fi
+
+      - name: Assert API does not use filesystem key storage
+        run: |
+          set -euo pipefail
+
+          api_logs="$(
+            docker compose \
+              -f "${COMPOSE_FILE}" \
+              logs \
+              --no-color \
+              api
+          )"
+
+          if echo "${api_logs}" |
+            grep -E \
+              'FileSystemXmlRepository|/home/app/.aspnet/DataProtection-Keys'; then
+
+            echo "API is using ephemeral filesystem Data Protection keys."
+            exit 1
+          fi
+
+          echo "Data Protection keys are not stored in the container filesystem."
+
+      - name: Verify readiness failure when Redis is unavailable
+        id: redis-outage-test
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "redis_stopped=false" >> "${GITHUB_OUTPUT}"
+
+          redis_container_id="$(
+            docker compose \
+              -f "${COMPOSE_FILE}" \
+              ps \
+              -q \
+              redis \
+              2>/dev/null \
+              || true
+          )"
+
+          if [ -z "${redis_container_id}" ]; then
+            echo "Redis container does not exist."
+            exit 1
+          fi
+
+          docker compose \
+            -f "${COMPOSE_FILE}" \
+            stop \
+            redis
+
+          echo "redis_stopped=true" >> "${GITHUB_OUTPUT}"
+
+          dependency_failure_verified=false
+
+          for attempt in $(seq 1 30); do
+            live_status="$(
+              curl \
+                --silent \
+                --output /dev/null \
+                --write-out "%{http_code}" \
+                --max-time 10 \
+                http://127.0.0.1:18080/health/live \
+                || true
+            )"
+
+            ready_status="$(
+              curl \
+                --silent \
+                --output /dev/null \
+                --write-out "%{http_code}" \
+                --max-time 15 \
+                http://127.0.0.1:18080/health/ready \
+                || true
+            )"
+
+            echo "Dependency failure attempt ${attempt}/30"
+            echo "Liveness status without Redis: ${live_status}"
+            echo "Readiness status without Redis: ${ready_status}"
+
+            if [ "${live_status}" = "200" ] && [ "${ready_status}" = "503" ]; then
+              dependency_failure_verified=true
+              break
+            fi
+
+            sleep 2
+          done
+
+          if [ "${dependency_failure_verified}" != "true" ]; then
+            echo "Expected liveness 200 and readiness 503 after stopping Redis."
+            exit 1
+          fi
+
+      - name: Restore Redis and verify readiness recovery
+        if: ${{ always() && steps.redis-outage-test.outputs.redis_stopped == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          redis_container_id="$(
+            docker compose \
+              -f "${COMPOSE_FILE}" \
+              ps \
+              -a \
+              -q \
+              redis \
+              2>/dev/null \
+              || true
+          )"
+
+          api_container_id="$(
+            docker compose \
+              -f "${COMPOSE_FILE}" \
+              ps \
+              -a \
+              -q \
+              api \
+              2>/dev/null \
+              || true
+          )"
+
+          if [ -z "${redis_container_id}" ]; then
+            echo "Redis container was not created."
+            exit 1
+          fi
+
+          if [ -z "${api_container_id}" ]; then
+            echo "API container was not created."
+            exit 1
+          fi
+
+          docker compose \
+            -f "${COMPOSE_FILE}" \
+            start \
+            redis
+
+          redis_ready=false
+
+          for attempt in $(seq 1 40); do
+            redis_health="$(
+              docker inspect \
+                --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+                "${redis_container_id}" \
+                2>/dev/null \
+                || true
+            )"
+
+            echo "Redis health attempt ${attempt}/40: ${redis_health}"
+
+            if [ "${redis_health}" = "healthy" ]; then
+              redis_ready=true
+              break
+            fi
+
+            sleep 2
+          done
+
+          if [ "${redis_ready}" != "true" ]; then
+            echo "Redis did not recover to a healthy state."
+            exit 1
+          fi
+
+          readiness_recovered=false
+
+          for attempt in $(seq 1 30); do
+            ready_status="$(
+              curl \
+                --silent \
+                --output /dev/null \
+                --write-out "%{http_code}" \
+                --max-time 10 \
+                http://127.0.0.1:18080/health/ready \
+                || true
+            )"
+
+            echo "Readiness recovery attempt ${attempt}/30: ${ready_status}"
+
+            if [ "${ready_status}" = "200" ]; then
+              readiness_recovered=true
+              break
+            fi
+
+            sleep 2
+          done
+
+          if [ "${readiness_recovered}" != "true" ]; then
+            echo "API readiness did not recover after Redis restarted."
+            exit 1
+          fi
+
+      - name: Collect container logs
+        if: always()
+        run: |
+          docker compose \
+            -f "${COMPOSE_FILE}" \
+            logs \
+            --no-color \
+            > production-gate-containers.log \
+            || true
+
+      - name: Shutdown production gate
+        if: always()
+        run: |
+          docker compose \
+            -f "${COMPOSE_FILE}" \
+            down \
+            -v \
+            --remove-orphans \
+            || true
+
+      - name: Upload production gate results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-gate-results
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            **/TestResults/**
+            production-gate-containers.log
+
+  staging-smoke:
+    name: Staging Smoke Tests
+    needs:
+      - build-test-container
+
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.ref == 'refs/heads/main' ||
+      github.ref == 'refs/heads/master'
+
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate staging configuration
+        env:
+          BASE_URL: ${{ vars.STAGING_BASE_URL }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BASE_URL}" ]; then
+            echo "STAGING_BASE_URL is not configured."
+            exit 1
+          fi
+
+      - name: Trigger staging deployment
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.STAGING_DEPLOY_HOOK_URL }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${DEPLOY_HOOK_URL}" ]; then
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --request POST \
+              "${DEPLOY_HOOK_URL}"
+
+            echo "Staging deployment was triggered."
+          else
+            echo "No staging deployment hook is configured."
+            echo "Assuming staging is deployed by another workflow."
+          fi
+
+      - name: Wait for staging readiness
+        env:
+          BASE_URL: ${{ vars.STAGING_BASE_URL }}
+        run: |
+          set -euo pipefail
+
+          staging_ready=false
+
+          for attempt in $(seq 1 60); do
+            echo "Staging readiness attempt ${attempt}/60"
+
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 10 \
+              "${BASE_URL%/}/health/ready" \
+              > /dev/null; then
+
+              staging_ready=true
+              break
+            fi
+
+            sleep 5
+          done
+
+          if [ "${staging_ready}" != "true" ]; then
+            echo "Staging did not become ready."
+            exit 1
+          fi
+
+      - name: Run staging smoke tests
+        env:
+          BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          SMOKE_EMAIL: ${{ secrets.STAGING_SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.STAGING_SMOKE_PASSWORD }}
+          SMOKE_FIXED_OTP: ${{ secrets.STAGING_SMOKE_FIXED_OTP }}
+        run: |
+          set -euo pipefail
+          bash scripts/smoke-staging.sh

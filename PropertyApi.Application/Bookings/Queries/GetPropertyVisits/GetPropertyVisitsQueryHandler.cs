@@ -9,7 +9,7 @@ namespace PropertyApi.Application.Bookings.Queries.GetPropertyVisits;
 public sealed class GetPropertyVisitsQueryHandler
     : IRequestHandler<GetPropertyVisitsQuery, IReadOnlyList<VisitDto>>
 {
-    private readonly IVisitRepository    _visits;
+    private readonly IVisitRepository _visits;
     private readonly IPropertyReadRepository _properties;
 
     public GetPropertyVisitsQueryHandler(
@@ -32,21 +32,21 @@ public sealed class GetPropertyVisitsQueryHandler
         return visits
             .OrderByDescending(v => v.CreatedAt)
             .Select(v => new VisitDto(
-                Id:                  v.Id,
-                PropertyId:          v.PropertyId,
-                PropertyTitle:       property.Title,
-                PropertyCity:        property.City,
+                Id: v.Id,
+                PropertyId: v.PropertyId,
+                PropertyTitle: property.Title,
+                PropertyCity: property.City,
                 PropertyMainImageUrl: null,
-                RequesterId:         v.RequesterId,
-                RequesterName:       $"{v.Requester?.FirstName} {v.Requester?.LastName}".Trim(),
-                VisitorName:         v.VisitorName,
-                VisitorPhone:        v.VisitorPhone,
-                VisitorNote:         v.VisitorNote,
-                ProposedAt:          v.ProposedAt,
-                OwnerNote:           v.OwnerNote,
-                RespondedAt:         v.RespondedAt,
-                Status:              v.Status,
-                CreatedAt:           v.CreatedAt))
+                RequesterId: v.RequesterId,
+                RequesterName: $"{v.Requester?.FirstName} {v.Requester?.LastName}".Trim(),
+                VisitorName: v.VisitorName,
+                VisitorPhone: v.VisitorPhone,
+                VisitorNote: v.VisitorNote,
+                ProposedAt: v.ProposedAt,
+                OwnerNote: v.OwnerNote,
+                RespondedAt: v.RespondedAt,
+                Status: v.Status,
+                CreatedAt: v.CreatedAt))
             .ToList()
             .AsReadOnly();
     }
