@@ -18,6 +18,11 @@ namespace PropertyApi.Integration.Tests.TestInfrastructure;
 public sealed class PhoneAuthWebApplicationFactory
     : WebApplicationFactory<Program>
 {
+
+    public PhoneAuthWebApplicationFactory()
+    {
+        TestSecuritySettings.EnsureEnvironmentConfigured();
+    }
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -26,10 +31,20 @@ public sealed class PhoneAuthWebApplicationFactory
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Jwt:Issuer"] = "PropertyApi",
-                ["Jwt:Audience"] = "PropertyApiClient",
-                ["Jwt:Key"] = "TEST_ONLY_SECRET_KEY_1234567890_1234567890",
-                ["OtpSettings:SecretKey"] = "TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890"
+                ["Jwt:Issuer"] =
+    TestSecuritySettings.JwtIssuer,
+
+                ["Jwt:Audience"] =
+    TestSecuritySettings.JwtAudience,
+
+                ["Jwt:Key"] =
+    TestSecuritySettings.JwtKey,
+
+                ["OtpSettings:SecretKey"] =
+    TestSecuritySettings.OtpSecretKey,
+
+                ["Security:PhoneLookupHmacKey"] =
+    TestSecuritySettings.PhoneLookupHmacKey
             });
         });
 

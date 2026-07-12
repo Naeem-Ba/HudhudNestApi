@@ -36,6 +36,7 @@ public sealed class TestApplication : WebApplicationFactory<Program>
         string environmentName = "Testing",
         IDictionary<string, string?>? configurationOverrides = null)
     {
+        TestSecuritySettings.EnsureEnvironmentConfigured();
         _environmentName = environmentName;
         _configuration = CreateDefaultConfiguration(environmentName);
 
@@ -127,15 +128,26 @@ public sealed class TestApplication : WebApplicationFactory<Program>
     {
         var settings = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
         {
-            ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=propertyapi_test;Username=postgres;Password=postgres;Trust Server Certificate=true",
+            ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=propertyapi_test;Username=postgres;Password=not-used;Trust Server Certificate=true",
             ["ConnectionStrings:Redis"] = "localhost:6379",
             ["Redis:ConnectionString"] = "localhost:6379",
-            ["Jwt:Issuer"] = "PropertyApi",
-            ["Jwt:Audience"] = "PropertyApiClient",
-            ["Jwt:Key"] = "TEST_ONLY_SECRET_KEY_1234567890_1234567890",
+            ["Jwt:Issuer"] =
+    TestSecuritySettings.JwtIssuer,
+
+            ["Jwt:Audience"] =
+    TestSecuritySettings.JwtAudience,
+
+            ["Jwt:Key"] =
+    TestSecuritySettings.JwtKey,
+
             ["Jwt:AccessTokenMinutes"] = "30",
             ["Jwt:RefreshTokenDays"] = "30",
-            ["OtpSettings:SecretKey"] = "TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890",
+
+            ["OtpSettings:SecretKey"] =
+    TestSecuritySettings.OtpSecretKey,
+
+            ["Security:PhoneLookupHmacKey"] =
+    TestSecuritySettings.PhoneLookupHmacKey,
             ["Cloudinary:CloudName"] = "test",
             ["Cloudinary:ApiKey"] = "test",
             ["Cloudinary:ApiSecret"] = "test",
