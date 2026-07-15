@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -270,13 +271,16 @@ public sealed class StartupIntegrationTests : IAsyncLifetime
 
     private sealed class StartupWebApplicationFactory : WebApplicationFactory<Program>
     {
+        private readonly string _databaseName = $"PropertyApiStartupTests_{Guid.NewGuid():N}";
+
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Testing");
+            builder.UseStableTestLogging();
 
             builder.ConfigureAppConfiguration((_, config) =>
             {
-                config.AddInMemoryCollection(new Dictionary<string, string?>
+                var settings = new Dictionary<string, string?>
                 {
                     ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true",
                     ["Database:ApplyMigrationsOnStartup"] = "false",
@@ -307,15 +311,25 @@ public sealed class StartupIntegrationTests : IAsyncLifetime
                     ["Cloudinary:ApiSecret"] = "test",
                     ["Cors:AllowedOrigins:0"] = "http://localhost:4200",
                     ["Swagger:Enabled"] = "false"
-                });
+                };
+
+                TestHostConfiguration.AddDataProtectionSettings(
+                    settings,
+                    nameof(StartupWebApplicationFactory));
+
+                config.AddInMemoryCollection(settings);
             });
 
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.UseEphemeralDataProtection();
 
                 services.AddDbContext<AppDbContext>(options =>
-                    options.UseInMemoryDatabase($"PropertyApiStartupTests_{Guid.NewGuid():N}"));
+                    options
+                        .UseInMemoryDatabase(_databaseName)
+                        .ConfigureWarnings(warnings =>
+                            warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
             });
         }
     }

@@ -14,6 +14,7 @@ using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Infrastructure;
 using PropertyApi.Infrastructure.Hubs;
 using PropertyApi.Middleware;
+using PropertyApi.Observability;
 using PropertyApi.Security.Csrf;
 using PropertyApi.Security.Headers;
 using PropertyApi.Security.RateLimiting;
@@ -21,6 +22,8 @@ using PropertyApi.Configuration;
 using PropertyApi.Health;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.AddPropertyApiObservability();
 
 builder.Services.AddTrustedForwardedHeaders(
     builder.Configuration,
@@ -446,6 +449,7 @@ var app = builder.Build();
 
 // -- 11. Middleware order --------------------------------------
 app.UseForwardedHeaders();
+app.UsePropertyApiObservability();
 
 if (app.Environment.IsProduction())
 {

@@ -22,7 +22,7 @@ public sealed class AddEmailCommandHandler
         AddEmailCommand,
         AddEmailResult>
 {
-    private readonly IPureIdentityService _identity;
+    private readonly IAddEmailIdentityService _identity;
 
     private readonly IEmailVerificationService _emailService;
 
@@ -30,7 +30,7 @@ public sealed class AddEmailCommandHandler
         _logger;
 
     public AddEmailCommandHandler(
-        IPureIdentityService identity,
+        IAddEmailIdentityService identity,
         IEmailVerificationService emailService,
         ILogger<AddEmailCommandHandler> logger)
     {

@@ -61,7 +61,7 @@ public sealed class LoginCommandHandlerTests
                     user.SecurityStamp);
 
         var identityService =
-            new Mock<IPureIdentityService>();
+            new Mock<ILoginIdentityService>();
 
         identityService
             .Setup(
@@ -280,7 +280,7 @@ public sealed class LoginCommandHandlerTests
                     user.SecurityStamp);
 
         var identityService =
-            new Mock<IPureIdentityService>();
+            new Mock<ILoginIdentityService>();
 
         identityService
             .Setup(
@@ -410,7 +410,7 @@ public sealed class RegisterCommandHandlerTests
                     "security-stamp");
 
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IRegisterIdentityService>();
 
         identity
             .Setup(
@@ -474,7 +474,7 @@ public sealed class RegisterCommandHandlerTests
     {
         // Arrange
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IRegisterIdentityService>();
 
         identity
             .Setup(
@@ -584,7 +584,7 @@ public sealed class ForgotPasswordCommandHandlerTests
         UnknownEmail_ReturnsGenericSuccess_AndDoesNotSendEmail()
     {
         var identityService =
-            new Mock<IPureIdentityService>();
+            new Mock<IForgotPasswordIdentityService>();
 
         identityService
             .Setup(
@@ -650,7 +650,7 @@ public sealed class ForgotPasswordCommandHandlerTests
                 SecurityStamp: "stamp");
 
         var identityService =
-            new Mock<IPureIdentityService>();
+            new Mock<IForgotPasswordIdentityService>();
 
         identityService
             .Setup(
@@ -745,7 +745,7 @@ public sealed class ResetPasswordCommandHandlerTests
             CreateIdentitySnapshot(id);
 
         var identityService =
-            new Mock<IPureIdentityService>();
+            new Mock<IResetPasswordIdentityService>();
 
         identityService
             .Setup(
@@ -808,7 +808,7 @@ public sealed class ResetPasswordCommandHandlerTests
             CreateIdentitySnapshot(id);
 
         var identityService =
-            new Mock<IPureIdentityService>();
+            new Mock<IResetPasswordIdentityService>();
 
         identityService
             .Setup(

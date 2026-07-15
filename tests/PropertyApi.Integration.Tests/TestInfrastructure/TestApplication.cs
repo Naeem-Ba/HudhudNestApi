@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Domain.Auth.Entities;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Infrastructure.Persistence;
@@ -25,6 +27,7 @@ namespace PropertyApi.Integration.Tests.TestInfrastructure;
 public sealed class TestApplication : WebApplicationFactory<Program>
 {
     private readonly string _environmentName;
+    private readonly string _databaseName = $"PropertyApiTests_{Guid.NewGuid():N}";
     private readonly Dictionary<string, string?> _configuration;
     private readonly string? _previousDatabaseUrl;
     private readonly string? _previousForwardedHeadersForwardLimit;
@@ -32,7 +35,12 @@ public sealed class TestApplication : WebApplicationFactory<Program>
     private readonly string? _previousForwardedHeadersKnownNetwork;
     private readonly string? _previousCorsAllowedOrigin;
 
-    public TestApplication(
+    public TestApplication()
+        : this("Testing", null)
+    {
+    }
+
+    private TestApplication(
         string environmentName = "Testing",
         IDictionary<string, string?>? configurationOverrides = null)
     {
@@ -83,6 +91,7 @@ public sealed class TestApplication : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(_environmentName);
+        builder.UseStableTestLogging();
 
         builder.ConfigureAppConfiguration((_, config) =>
         {
@@ -92,10 +101,14 @@ public sealed class TestApplication : WebApplicationFactory<Program>
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IHostedService>();
+            services.UseEphemeralDataProtection();
 
             services.RemoveAll<DbContextOptions<AppDbContext>>();
             services.AddDbContext<AppDbContext>(options =>
-                options.UseInMemoryDatabase($"PropertyApiTests_{Guid.NewGuid():N}"));
+                options
+                    .UseInMemoryDatabase(_databaseName)
+                    .ConfigureWarnings(warnings =>
+                        warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
 
             services.RemoveAll<IOtpService>();
             services.AddSingleton<IOtpService, DeterministicOtpService>();
@@ -107,7 +120,24 @@ public sealed class TestApplication : WebApplicationFactory<Program>
             services.AddSingleton<InMemoryOtpCodeRepository>();
             services.AddSingleton<IOtpCodeRepository>(sp =>
                 sp.GetRequiredService<InMemoryOtpCodeRepository>());
+
+            services.RemoveAll<IRefreshTokenRepository>();
+            services.RemoveAll<IRefreshTokenStore>();
+            services.AddScoped<EfInMemoryRefreshTokenRepository>();
+            services.AddScoped<IRefreshTokenRepository>(sp =>
+                sp.GetRequiredService<EfInMemoryRefreshTokenRepository>());
+            services.AddScoped<IRefreshTokenStore>(sp =>
+                sp.GetRequiredService<EfInMemoryRefreshTokenRepository>());
         });
+    }
+
+    protected override IHost CreateHost(IHostBuilder builder)
+    {
+        var host = base.CreateHost(builder);
+
+        TestHostConfiguration.SeedApplicationRoles(host.Services);
+
+        return host;
     }
 
     protected override void Dispose(bool disposing)
@@ -165,6 +195,10 @@ public sealed class TestApplication : WebApplicationFactory<Program>
         {
             settings["Cors:AllowedOrigins:0"] = "http://localhost:4200";
         }
+
+        TestHostConfiguration.AddDataProtectionSettings(
+            settings,
+            $"TestApplication_{environmentName}");
 
         return settings;
     }

@@ -22,6 +22,13 @@ public sealed class HealthCheckTests
                 "PropertyApi.Infrastructure",
                 "DependencyInjection.cs"));
 
+        var healthRegistration = File.ReadAllText(
+            Path.Combine(
+                repoRoot,
+                "PropertyApi.Infrastructure",
+                "Health",
+                "HealthInfrastructureRegistration.cs"));
+
         var healthEndpoints = File.ReadAllText(
             Path.Combine(
                 repoRoot,
@@ -49,24 +56,28 @@ public sealed class HealthCheckTests
             healthEndpoints);
 
         Assert.Contains(
-            "AddCheck<PostGisHealthCheck>",
+            "AddOperationalHealthChecks",
             dependencyInjection);
+
+        Assert.Contains(
+            "AddCheck<PostGisHealthCheck>",
+            healthRegistration);
 
         Assert.Contains(
             "\"postgresql-postgis\"",
-            dependencyInjection);
+            healthRegistration);
 
         Assert.Contains(
             "AddCheck<DistributedCacheHealthCheck>",
-            dependencyInjection);
+            healthRegistration);
 
         Assert.Contains(
             "\"redis\"",
-            dependencyInjection);
+            healthRegistration);
 
         Assert.Contains(
             "\"ready\"",
-            dependencyInjection);
+            healthRegistration);
 
         Assert.Contains(
             "pg_extension",

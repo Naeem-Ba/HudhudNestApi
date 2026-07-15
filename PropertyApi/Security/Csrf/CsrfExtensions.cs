@@ -9,8 +9,14 @@ public static class CsrfExtensions
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        services.Configure<CookieCsrfOptions>(
-            configuration.GetSection(CookieCsrfOptions.SectionName));
+        services.AddOptions<CookieCsrfOptions>()
+            .Bind(configuration.GetSection(CookieCsrfOptions.SectionName))
+            .Validate(
+                options =>
+                    !options.Enabled ||
+                    !string.IsNullOrWhiteSpace(options.AuthenticationCookieName),
+                "CookieCsrf:AuthenticationCookieName is required when CookieCsrf:Enabled=true.")
+            .ValidateOnStart();
 
         services.AddAntiforgery(options =>
         {

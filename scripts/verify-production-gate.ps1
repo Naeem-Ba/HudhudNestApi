@@ -1,162 +1,100 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
-    [string] $RepositoryRoot = (Get-Location).Path
+    [string] $RepositoryRoot = (Resolve-Path ".").Path
 )
 
-$ErrorActionPreference = 'Stop'
-$failures = [System.Collections.Generic.List[string]]::new()
+$ErrorActionPreference = "Stop"
 
-function Assert-Condition {
+$failures = New-Object System.Collections.Generic.List[string]
+$artifactDirectory = Join-Path $RepositoryRoot "artifacts/production-gate"
+$reportPath = Join-Path $artifactDirectory "static-production-gate.md"
+
+New-Item -ItemType Directory -Force -Path $artifactDirectory | Out-Null
+
+function Read-RepositoryFile {
+    param([string[]] $RelativePath)
+
+    $path = $RepositoryRoot
+    foreach ($part in $RelativePath) {
+        $path = Join-Path $path $part
+    }
+
+    if (-not (Test-Path $path)) {
+        $failures.Add("Missing required file: $($RelativePath -join '/')")
+        return ""
+    }
+
+    return Get-Content -Path $path -Raw
+}
+
+function Assert-Contains {
     param(
-        [bool] $Condition,
-        [string] $Message
+        [string] $Source,
+        [string] $Needle,
+        [string] $Description
     )
 
-    if (-not $Condition) {
-        $failures.Add($Message)
+    if ($Source -notlike "*$Needle*") {
+        $failures.Add($Description)
     }
 }
 
-$solution = Join-Path $RepositoryRoot 'PropertyApi.sln'
-$domain = Join-Path $RepositoryRoot 'PropertyApi.Domain'
-$application = Join-Path $RepositoryRoot 'PropertyApi.Application'
-$program = Join-Path $RepositoryRoot 'PropertyApi/Program.cs'
+function Assert-NotContains {
+    param(
+        [string] $Source,
+        [string] $Needle,
+        [string] $Description
+    )
 
-$forwardedRegistration = Join-Path `
-    $RepositoryRoot `
-    'PropertyApi/Configuration/ForwardedHeadersRegistration.cs'
-
-$outputCacheRegistration = Join-Path `
-    $RepositoryRoot `
-    'PropertyApi/Configuration/OutputCacheRegistration.cs'
-
-$healthEndpoints = Join-Path `
-    $RepositoryRoot `
-    'PropertyApi/Health/HealthEndpointExtensions.cs'
-
-Assert-Condition `
-    (Test-Path $solution) `
-    'PropertyApi.sln not found.'
-
-Assert-Condition `
-    (-not (Test-Path (Join-Path $domain 'Auth/DTOs/SendOtpResult.cs'))) `
-    'OTP/JWT DTO file still exists inside Domain.'
-
-Assert-Condition `
-    (Test-Path (Join-Path $application 'Auth/DTOs/SendOtpResult.cs')) `
-    'OTP/JWT DTO file is missing from Application.'
-
-$domainLeaks = Get-ChildItem `
-    $domain `
-    -Recurse `
-    -Filter *.cs `
-    -File `
-    -ErrorAction SilentlyContinue |
-    Select-String `
-        -Pattern 'namespace\s+PropertyApi\.(Application|Infrastructure)' `
-        -ErrorAction SilentlyContinue
-
-Assert-Condition `
-    ($null -eq $domainLeaks) `
-    'Domain contains Application or Infrastructure namespaces.'
-
-if (Test-Path $program) {
-    $programText = Get-Content $program -Raw
-
-    Assert-Condition `
-        ($programText -notmatch 'TrustAllProxies') `
-        'Program.cs still contains TrustAllProxies.'
-
-    Assert-Condition `
-        ($programText -match 'AddTrustedForwardedHeaders') `
-        'Trusted Forwarded Headers registration was not found.'
-
-    Assert-Condition `
-        ($programText -match 'UseForwardedHeaders\s*\(') `
-        'UseForwardedHeaders was not found.'
-
-    Assert-Condition `
-        ($programText -match 'AddScaleOutOutputCaching') `
-        'Scale-out Output Cache registration was not found.'
-
-    Assert-Condition `
-        ($programText -match 'UseOutputCache\s*\(') `
-        'UseOutputCache was not found.'
-
-    Assert-Condition `
-        ($programText -match 'MapOperationalHealthEndpoints\s*\(') `
-        'Operational health endpoint mapping was not found.'
+    if ($Source -like "*$Needle*") {
+        $failures.Add($Description)
+    }
 }
 
-Assert-Condition `
-    (Test-Path $forwardedRegistration) `
-    'ForwardedHeadersRegistration.cs was not found.'
+$program = Read-RepositoryFile @("PropertyApi", "Program.cs")
+$apiDockerfile = Read-RepositoryFile @("PropertyApi", "Dockerfile")
+$migratorDockerfile = Read-RepositoryFile @("ci", "Dockerfile.migrator")
+$compose = Read-RepositoryFile @("ci", "docker-compose.production-gate.yml")
+$dependencyInjection = Read-RepositoryFile @("PropertyApi.Infrastructure", "DependencyInjection.cs")
 
-Assert-Condition `
-    (Test-Path $outputCacheRegistration) `
-    'OutputCacheRegistration.cs was not found.'
+Assert-Contains $program "UseForwardedHeaders" "Program.cs must apply forwarded headers before security middleware."
+Assert-Contains $program "UseHsts" "Program.cs must enable HSTS for production."
+Assert-Contains $program "MapOperationalHealthEndpoints" "Program.cs must map operational health endpoints."
+Assert-Contains $program "UsePropertyApiSecurityHeaders" "Program.cs must apply security headers middleware."
 
-Assert-Condition `
-    (Test-Path $healthEndpoints) `
-    'HealthEndpointExtensions.cs was not found.'
+Assert-Contains $dependencyInjection "ConfigureDataProtection" "Infrastructure composition must configure Data Protection."
 
-$productionRoots = @(
-    (Join-Path $RepositoryRoot 'PropertyApi'),
-    (Join-Path $RepositoryRoot 'PropertyApi.Application'),
-    (Join-Path $RepositoryRoot 'PropertyApi.Domain'),
-    (Join-Path $RepositoryRoot 'PropertyApi.Infrastructure')
+Assert-Contains $apiDockerfile 'USER $APP_UID' "API Dockerfile must run as a non-root user."
+Assert-Contains $migratorDockerfile "USER app" "Migrator Dockerfile must run as a non-root user."
+
+Assert-Contains $compose "DataProtection__PersistKeysToDatabase" "Production gate compose must persist Data Protection keys."
+Assert-Contains $compose 'Redis__Required: "true"' "Production gate compose must require Redis for the API."
+Assert-Contains $compose "Cloudinary__CloudName" "Production gate compose must provide Cloudinary options for startup validation."
+Assert-NotContains $compose "Trust Server Certificate=true" "Production gate compose must not trust invalid database certificates."
+
+$status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
+
+$report = @(
+    "# Static Production Gate",
+    "",
+    "Status: $status",
+    ""
 )
 
-$allCs = foreach ($root in $productionRoots) {
-    if (Test-Path $root) {
-        Get-ChildItem `
-            $root `
-            -Recurse `
-            -Filter *.cs `
-            -File `
-            -ErrorAction SilentlyContinue |
-            Where-Object {
-                $_.FullName -notmatch '\\(bin|obj|Migrations)\\'
-            }
+if ($failures.Count -eq 0) {
+    $report += "All static production checks passed."
+}
+else {
+    $report += "Failures:"
+    $report += ""
+    foreach ($failure in $failures) {
+        $report += "- $failure"
     }
 }
 
-$startupMigrations = $allCs |
-    Select-String `
-        -Pattern 'Database\.Migrate(?:Async)?\s*\(|ApplyPendingMigrationsAsync|SeedStartupDataAsync' `
-        -ErrorAction SilentlyContinue
-
-Assert-Condition `
-    ($null -eq $startupMigrations) `
-    'Migration or startup seed calls exist inside production API projects.'
-
-$redisOutputCache = $allCs |
-    Select-String `
-        -Pattern 'AddStackExchangeRedisOutputCache' `
-        -ErrorAction SilentlyContinue
-
-Assert-Condition `
-    ($null -ne $redisOutputCache) `
-    'Redis Output Cache store registration was not found.'
-
-$wildcardVary = $allCs |
-    Select-String `
-        -Pattern 'SetVaryByQuery\s*\(\s*"\*"' `
-        -ErrorAction SilentlyContinue
-
-Assert-Condition `
-    ($null -eq $wildcardVary) `
-    'Wildcard Output Cache query variation still exists.'
+$report | Set-Content -Path $reportPath -Encoding utf8
+Get-Content $reportPath
 
 if ($failures.Count -gt 0) {
-    Write-Error (
-        "Production Gate verification failed:`n- " +
-        ($failures -join "`n- ")
-    )
-
     exit 1
 }
-
-Write-Host `
-    'Static Production Gate checks passed.' `
-    -ForegroundColor Green

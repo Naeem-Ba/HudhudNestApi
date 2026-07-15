@@ -7,11 +7,11 @@ namespace PropertyApi.Application.Users.Commands.DeleteUser;
 public sealed class DeleteUserCommandHandler
     : IRequestHandler<DeleteUserCommand, DeleteUserResult>
 {
-    private readonly IPureIdentityService _identity;
+    private readonly IDeleteUserIdentityService _identity;
     private readonly ILogger<DeleteUserCommandHandler> _logger;
 
     public DeleteUserCommandHandler(
-        IPureIdentityService identity,
+        IDeleteUserIdentityService identity,
         ILogger<DeleteUserCommandHandler> logger)
     {
         _identity = identity;

@@ -23,7 +23,7 @@ namespace PropertyApi.Infrastructure.Identity.Services;
 /// without forcing Application handlers to depend on that concrete type.
 /// </summary>
 public sealed class PureIdentityService
-    : IPureIdentityService
+    : IIdentityCapabilityAdapter
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IPhoneNumberLookupHasher _phoneLookupHasher;

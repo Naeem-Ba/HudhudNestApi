@@ -44,7 +44,7 @@ public sealed class ForgotPasswordCommandHandler
         ForgotPasswordCommand,
         ForgotPasswordResult>
 {
-    private readonly IPureIdentityService _identity;
+    private readonly IForgotPasswordIdentityService _identity;
 
     private readonly IUserAccountRepository _userAccounts;
 
@@ -56,7 +56,7 @@ public sealed class ForgotPasswordCommandHandler
         _logger;
 
     public ForgotPasswordCommandHandler(
-        IPureIdentityService identity,
+        IForgotPasswordIdentityService identity,
         IUserAccountRepository userAccounts,
         IApplicationEmailSender emailSender,
         IPasswordResetUrlBuilder urlBuilder,

@@ -120,9 +120,13 @@ internal sealed class PostgresAuthTestFactory : WebApplicationFactory<Program>
         return await InScopeAsync(
             async services =>
             {
-                var identity =
+                var registrationIdentity =
                     services.GetRequiredService<
-                        IPureIdentityService>();
+                        IRegisterIdentityService>();
+
+                var userIdentity =
+                    services.GetRequiredService<
+                        IUserIdentityReadService>();
 
                 var db =
                     services.GetRequiredService<
@@ -172,7 +176,7 @@ internal sealed class PostgresAuthTestFactory : WebApplicationFactory<Program>
                             phoneConfirmed);
 
                 var createResult =
-                    await identity.CreateAsync(
+                    await registrationIdentity.CreateAsync(
                         createRequest,
                         CancellationToken.None);
 
@@ -207,7 +211,7 @@ internal sealed class PostgresAuthTestFactory : WebApplicationFactory<Program>
                 if (addUserRole)
                 {
                     var roleResult =
-                        await identity.AddToRoleAsync(
+                        await registrationIdentity.AddToRoleAsync(
                             identityId,
                             RoleNames.User,
                             CancellationToken.None);
@@ -219,7 +223,7 @@ internal sealed class PostgresAuthTestFactory : WebApplicationFactory<Program>
                     }
                 }
 
-                return await identity.FindByIdAsync(
+                return await userIdentity.FindByIdAsync(
                            identityId,
                            CancellationToken.None)
                        ?? throw new InvalidOperationException(

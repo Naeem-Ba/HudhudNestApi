@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "scenarios": [
+    {
+      "name": "properties-list-default",
+      "method": "GET",
+      "path": "/api/properties?Page=1&PageSize=20&SortBy=CreatedAt&SortDescending=true",
+      "requiresCredentials": false
+    },
+    {
+      "name": "properties-list-filtered",
+      "method": "GET",
+      "path": "/api/properties?CountryCode=SY&City=Damascus&Status=Available&Page=1&PageSize=20&SortBy=CreatedAt&SortDescending=true",
+      "requiresCredentials": false
+    },
+    {
+      "name": "properties-geo-search",
+      "method": "GET",
+      "path": "/api/properties/geo-search?Latitude=33.513800&Longitude=36.276500&RadiusKm=10&Page=1&PageSize=20&CountryCode=SY&Status=Available",
+      "requiresCredentials": false
+    },
+    {
+      "name": "auth-login",
+      "method": "POST",
+      "path": "/api/auth/login",
+      "requiresCredentials": true,
+      "bodyTemplate": {
+        "Email": "${AUTH_EMAIL}",
+        "Password": "${AUTH_PASSWORD}"
+      }
+    },
+    {
+      "name": "auth-refresh",
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "requiresCredentials": true,
+      "requiresRefreshToken": true,
+      "bodyTemplate": {
+        "RefreshToken": "${REFRESH_TOKEN}"
+      }
+    }
+  ]
+}

@@ -65,6 +65,10 @@ services:
       Jwt__Issuer: PropertyApi.CI
       Jwt__Audience: PropertyApi.CI
 
+      Cloudinary__CloudName: ci
+      Cloudinary__ApiKey: ci
+      Cloudinary__ApiSecret: ci
+
       Cors__AllowedOrigins__0: http://localhost:4200
 
       Database__ApplyMigrationsOnStartup: "false"

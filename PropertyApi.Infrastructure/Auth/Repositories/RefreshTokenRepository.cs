@@ -116,7 +116,8 @@ public sealed class RefreshTokenRepository
          * Do not load the Identity user entity.
          *
          * The Application layer only requires token metadata and UserId.
-         * Identity state is resolved through IPureIdentityService.
+         * Identity state is resolved through Application identity
+         * capability contracts.
          */
         var token =
             await _db.RefreshTokens

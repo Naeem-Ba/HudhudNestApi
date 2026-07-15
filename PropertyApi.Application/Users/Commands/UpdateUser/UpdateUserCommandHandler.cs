@@ -11,13 +11,13 @@ namespace PropertyApi.Application.Users.Commands.UpdateUser;
 public sealed class UpdateUserCommandHandler
     : IRequestHandler<UpdateUserCommand, UserDto?>
 {
-    private readonly IPureIdentityService _identity;
+    private readonly IUpdateUserIdentityService _identity;
     private readonly IUserAccountRepository _accounts;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<UpdateUserCommandHandler> _logger;
 
     public UpdateUserCommandHandler(
-        IPureIdentityService identity,
+        IUpdateUserIdentityService identity,
         IUserAccountRepository accounts,
         IUnitOfWork unitOfWork,
         ILogger<UpdateUserCommandHandler> logger)

@@ -20,7 +20,7 @@ public sealed class AddEmailCommandHandlerTests
             Guid.NewGuid();
 
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IAddEmailIdentityService>();
 
         identity
             .Setup(
@@ -96,7 +96,7 @@ public sealed class AddEmailCommandHandlerTests
                 emailConfirmed: true);
 
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IAddEmailIdentityService>();
 
         identity
             .Setup(
@@ -177,7 +177,7 @@ public sealed class AddEmailCommandHandlerTests
                 emailConfirmed: false);
 
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IAddEmailIdentityService>();
 
         identity
             .Setup(
@@ -318,7 +318,7 @@ public sealed class VerifyEmailCommandHandlerTests
             Guid.NewGuid();
 
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IVerifyEmailIdentityService>();
 
         identity
             .Setup(
@@ -372,7 +372,7 @@ public sealed class VerifyEmailCommandHandlerTests
                 emailConfirmed: true);
 
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IVerifyEmailIdentityService>();
 
         identity
             .Setup(
@@ -421,7 +421,7 @@ public sealed class VerifyEmailCommandHandlerTests
                 emailConfirmed: false);
 
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IVerifyEmailIdentityService>();
 
         identity
             .Setup(
@@ -474,7 +474,7 @@ public sealed class VerifyEmailCommandHandlerTests
                 emailConfirmed: false);
 
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IVerifyEmailIdentityService>();
 
         identity
             .Setup(
@@ -540,7 +540,7 @@ public sealed class VerifyEmailCommandHandlerTests
                 emailConfirmed: false);
 
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IVerifyEmailIdentityService>();
 
         identity
             .Setup(

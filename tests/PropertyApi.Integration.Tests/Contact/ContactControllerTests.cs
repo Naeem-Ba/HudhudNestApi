@@ -1,7 +1,6 @@
 ﻿using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
+using PropertyApi.Integration.Tests.TestInfrastructure;
 using Xunit;
 
 namespace PropertyApi.Application.Tests.Contact;
@@ -14,20 +13,13 @@ namespace PropertyApi.Application.Tests.Contact;
 ///   3. قراءة Enums عبر API
 /// </summary>
 public sealed class ContactControllerTests
-    : IClassFixture<WebApplicationFactory<Program>>
+    : IClassFixture<TestApplication>
 {
     private readonly HttpClient _client;
 
-    public ContactControllerTests(WebApplicationFactory<Program> factory)
+    public ContactControllerTests(TestApplication factory)
     {
-        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
-
-        _client = factory
-            .WithWebHostBuilder(builder =>
-            {
-                builder.UseSetting("environment", "Testing");
-            })
-            .CreateClient();
+        _client = factory.CreateClient();
     }
 
     [Fact]

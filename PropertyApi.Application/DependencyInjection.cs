@@ -4,6 +4,9 @@ using Microsoft.Extensions.DependencyInjection;
 using PropertyApi.Application.Common.Behaviors;
 using PropertyApi.Application.Admin.Interfaces;
 using PropertyApi.Application.Admin.Services;
+using PropertyApi.Application.Auth.Commands.SocialLogin;
+using PropertyApi.Application.Auth.Commands.RefreshToken;
+using PropertyApi.Application.Auth.Commands.VerifyPhoneOtp;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Listings.Services;
 
@@ -29,7 +32,8 @@ public static class DependencyInjection
         {
             cfg.RegisterServicesFromAssembly(assembly);
 
-            // Pipeline order: Logging -> Validation -> Handler
+            // Pipeline order: Telemetry -> Logging -> Validation -> Handler
+            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(TelemetryBehavior<,>));
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
         });
@@ -37,6 +41,9 @@ public static class DependencyInjection
         // FluentValidation
         // Scans for all AbstractValidator<T> in this assembly
         services.AddValidatorsFromAssembly(assembly);
+        services.AddScoped<RefreshTokenReuseHandler>();
+        services.AddScoped<SocialLoginSessionIssuer>();
+        services.AddScoped<PhoneOtpSessionIssuer>();
         services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<IPropertyOwnershipService, PropertyOwnershipService>();
 

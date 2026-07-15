@@ -7,9 +7,9 @@ public sealed class SecurityTests
     [Fact(DisplayName = "Production DB connection must not trust invalid server certificates")]
     public void DependencyInjection_Should_Not_Use_TrustServerCertificate_In_ProductionResolver()
     {
-        var source = ReadSource("PropertyApi.Infrastructure", "DependencyInjection.cs");
+        var source = ReadSource("PropertyApi.Infrastructure", "PostgresConnectionStringResolver.cs");
 
-        Assert.Contains("SSL Mode=Require", source);
+        Assert.Contains("SslMode.Require", source);
         Assert.DoesNotContain("SSL Mode=Require;Trust Server Certificate=true", source);
         Assert.Contains("Production database connection must not contain Trust Server Certificate=true", source);
     }
@@ -53,11 +53,15 @@ public sealed class SecurityTests
     public void Infrastructure_Should_Validate_Sms_Settings_On_Start()
     {
         var dependencyInjection = ReadSource("PropertyApi.Infrastructure", "DependencyInjection.cs");
+        var authInfrastructure = ReadSource("PropertyApi.Infrastructure", "Auth", "AuthInfrastructureRegistration.cs");
         var startupValidator = ReadSource("PropertyApi.Infrastructure", "Health", "ProductionStartupValidator.cs");
         var smsOptions = ReadSource("PropertyApi.Infrastructure", "Auth", "Services", "SmsProviderOptions.cs");
+        var compositionSource =
+            dependencyInjection + Environment.NewLine + authInfrastructure;
 
-        Assert.Contains("SmsProviderOptions", dependencyInjection);
-        Assert.Contains("ValidateOnStart", dependencyInjection);
+        Assert.Contains("AddAuthInfrastructure", dependencyInjection);
+        Assert.Contains("SmsProviderOptions", compositionSource);
+        Assert.Contains("ValidateOnStart", compositionSource);
         Assert.Contains("ValidateSmsSettings", startupValidator);
         Assert.Contains("ValidateForEnvironment", startupValidator);
 

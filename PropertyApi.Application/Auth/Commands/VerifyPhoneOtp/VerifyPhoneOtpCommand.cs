@@ -26,20 +26,18 @@ public sealed class VerifyPhoneOtpCommandHandler
 {
     private readonly IOtpCodeRepository _otpRepo;
     private readonly IOtpService _otpService;
-    private readonly IPureIdentityService _identity;
+    private readonly IPhoneOtpIdentityService _identity;
     private readonly IUserAccountRepository _accounts;
-    private readonly ITokenService _tokenService;
-    private readonly IRefreshTokenStore _refreshTokenStore;
+    private readonly PhoneOtpSessionIssuer _sessionIssuer;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<VerifyPhoneOtpCommandHandler> _logger;
 
     public VerifyPhoneOtpCommandHandler(
         IOtpCodeRepository otpRepo,
         IOtpService otpService,
-        IPureIdentityService identity,
+        IPhoneOtpIdentityService identity,
         IUserAccountRepository accounts,
-        ITokenService tokenService,
-        IRefreshTokenStore refreshTokenStore,
+        PhoneOtpSessionIssuer sessionIssuer,
         IUnitOfWork unitOfWork,
         ILogger<VerifyPhoneOtpCommandHandler> logger)
     {
@@ -47,8 +45,7 @@ public sealed class VerifyPhoneOtpCommandHandler
         _otpService = otpService;
         _identity = identity;
         _accounts = accounts;
-        _tokenService = tokenService;
-        _refreshTokenStore = refreshTokenStore;
+        _sessionIssuer = sessionIssuer;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -169,12 +166,11 @@ public sealed class VerifyPhoneOtpCommandHandler
 
             if (resolved.Identity is null)
             {
-                await _unitOfWork.RollbackTransactionAsync(
-                    ct);
+                await _unitOfWork.RollbackTransactionAsync(ct);
 
                 return VerifyOtpResult.Fail(
-                    "USER_CREATE_FAILED",
-                    "Could not create or initialize the account.");
+                    resolved.ErrorCode ?? "USER_CREATE_FAILED",
+                    resolved.ErrorMessage ?? "Could not create or initialize the account.");
             }
 
             var identity =
@@ -186,59 +182,22 @@ public sealed class VerifyPhoneOtpCommandHandler
             var isNewUser =
                 resolved.IsNewUser;
 
-            var roles =
-                await _identity.GetRolesAsync(
-                    identity.IdentityId,
+            var sessionResult =
+                await _sessionIssuer.IssueAsync(
+                    identity,
+                    account,
+                    isNewUser,
+                    phone,
+                    request.IpAddress,
                     ct);
 
-            /*
-             * A newly-created account must always have the mandatory
-             * default User role before any token is issued.
-             */
-            if (isNewUser &&
-                !roles.Contains(
-                    RoleNames.User,
-                    StringComparer.OrdinalIgnoreCase))
+            if (!sessionResult.Success)
             {
                 await _unitOfWork.RollbackTransactionAsync(
                     ct);
 
-                _logger.LogError(
-                    "New phone identity {IdentityId} does not have the required default role.",
-                    identity.IdentityId);
-
-                return VerifyOtpResult.Fail(
-                    "ROLE_ASSIGNMENT_FAILED",
-                    "Could not initialize the account.");
+                return sessionResult;
             }
-
-            var tokenSubject =
-                new AccessTokenSubject(
-                    IdentityId:
-                        identity.IdentityId,
-
-                    Email:
-                        identity.Email,
-
-                    UserName:
-                        identity.UserName,
-
-                    SecurityStamp:
-                        identity.SecurityStamp);
-
-            var accessToken =
-                _tokenService.GenerateAccessToken(
-                    tokenSubject,
-                    roles.ToArray());
-
-            var refreshToken =
-                _tokenService.GenerateRefreshToken();
-
-            await _refreshTokenStore.StoreAsync(
-                identity.IdentityId,
-                refreshToken,
-                request.IpAddress,
-                ct);
 
             /*
              * Commit only after all required state has succeeded:
@@ -258,54 +217,7 @@ public sealed class VerifyPhoneOtpCommandHandler
                 identity.IdentityId,
                 isNewUser);
 
-            return VerifyOtpResult.Ok(
-                isNewUser:
-                    isNewUser,
-
-                accessToken:
-                    accessToken,
-
-                refreshToken:
-                    refreshToken,
-
-                expiresAt:
-                    _tokenService
-                        .GetAccessTokenExpiresAtUtc(),
-
-                user:
-                    new UserProfileDto
-                    {
-                        Id =
-                            identity.UserAccountId,
-
-                        PhoneNumber =
-                            identity.PhoneNumber
-                            ?? phone,
-
-                        Email =
-                            identity.Email,
-
-                        DisplayName =
-                            account?.DisplayName,
-
-                        FirstName =
-                            account?.FirstName
-                            ?? string.Empty,
-
-                        LastName =
-                            account?.LastName
-                            ?? string.Empty,
-
-                        HasEmail =
-                            !string.IsNullOrWhiteSpace(
-                                identity.Email),
-
-                        HasPassword =
-                            identity.HasPassword,
-
-                        EmailVerified =
-                            identity.EmailConfirmed
-                    });
+            return sessionResult;
         }
         catch (OperationCanceledException)
         {
@@ -435,7 +347,9 @@ public sealed class VerifyPhoneOtpCommandHandler
             _logger.LogWarning(
                 "New phone identity creation rejected because profile names are missing.");
 
-            return ResolvedPhoneIdentity.Failed();
+            return ResolvedPhoneIdentity.Failed(
+                errorCode: "PROFILE_NAME_REQUIRED",
+                errorMessage: "First name and last name are required to create a new account.");
         }
 
         var identityId =
@@ -590,17 +504,18 @@ public sealed class VerifyPhoneOtpCommandHandler
     private sealed record ResolvedPhoneIdentity(
         IdentityAccountSnapshot? Identity,
         UserAccount? Account,
-        bool IsNewUser)
+        bool IsNewUser,
+        string? ErrorCode = null,
+        string? ErrorMessage = null)
     {
-        public static ResolvedPhoneIdentity Failed()
+        public static ResolvedPhoneIdentity Failed(
+            string? errorCode = null,
+            string? errorMessage = null)
             => new(
-                Identity:
-                    null,
-
-                Account:
-                    null,
-
-                IsNewUser:
-                    false);
+                Identity: null,
+                Account: null,
+                IsNewUser: false,
+                ErrorCode: errorCode,
+                ErrorMessage: errorMessage);
     }
 }

@@ -62,7 +62,7 @@ public sealed class RegisterCommandHandler
         RegisterCommand,
         RegisterResult>
 {
-    private readonly IPureIdentityService _identity;
+    private readonly IRegisterIdentityService _identity;
 
     private readonly IUserAccountRepository _accounts;
 
@@ -72,7 +72,7 @@ public sealed class RegisterCommandHandler
         _logger;
 
     public RegisterCommandHandler(
-        IPureIdentityService identity,
+        IRegisterIdentityService identity,
         IUserAccountRepository accounts,
         IUnitOfWork unitOfWork,
         ILogger<RegisterCommandHandler> logger)

@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using PropertyApi.Application.Auth.Commands.SocialLogin;
 using PropertyApi.Application.Auth.Contracts;
@@ -22,7 +23,7 @@ public sealed class SocialLoginSecurityTests
     private readonly Mock<ISocialTokenVerifier> _verifier =
         new(MockBehavior.Strict);
 
-    private readonly Mock<IPureIdentityService> _identity =
+    private readonly Mock<ISocialLoginIdentityService> _identity =
         new(MockBehavior.Loose);
 
     private readonly Mock<ITokenService> _tokenService =
@@ -129,15 +130,15 @@ public sealed class SocialLoginSecurityTests
 
         AssertMethodNotCalled(
             _identity,
-            nameof(IPureIdentityService.AddLoginAsync));
+            nameof(ISocialLoginIdentityService.AddLoginAsync));
 
         AssertMethodNotCalled(
             _identity,
-            nameof(IPureIdentityService.CreateAsync));
+            nameof(ISocialLoginIdentityService.CreateAsync));
 
         AssertMethodNotCalled(
             _identity,
-            nameof(IPureIdentityService.FindByEmailAsync));
+            nameof(ISocialLoginIdentityService.FindByEmailAsync));
     }
 
     [Fact]
@@ -197,7 +198,7 @@ public sealed class SocialLoginSecurityTests
 
         AssertMethodNotCalled(
             _identity,
-            nameof(IPureIdentityService.FindByEmailAsync));
+            nameof(ISocialLoginIdentityService.FindByEmailAsync));
     }
 
     [Fact]
@@ -245,7 +246,7 @@ public sealed class SocialLoginSecurityTests
 
         AssertMethodNotCalled(
             _identity,
-            nameof(IPureIdentityService.FindByEmailAsync));
+            nameof(ISocialLoginIdentityService.FindByEmailAsync));
     }
 
     [Fact]
@@ -315,7 +316,7 @@ public sealed class SocialLoginSecurityTests
 
         AssertMethodNotCalled(
             _identity,
-            nameof(IPureIdentityService.CreateAsync));
+            nameof(ISocialLoginIdentityService.CreateAsync));
 
         AssertMethodCalled(
             _tokenService,
@@ -502,25 +503,33 @@ public sealed class SocialLoginSecurityTests
 
         AssertMethodNotCalled(
             _identity,
-            nameof(IPureIdentityService.CreateAsync));
+            nameof(ISocialLoginIdentityService.CreateAsync));
 
         AssertNoTokenIssuance();
     }
 
     private SocialLoginCommandHandler CreateSut()
-        => new(
+    {
+        var sessionIssuer =
+            new SocialLoginSessionIssuer(
+                _identity.Object,
+                _tokenService.Object,
+                _refreshTokens.Object,
+                _jwtSettings.Object,
+                _auditLogs.Object,
+                NullLogger<SocialLoginSessionIssuer>.Instance);
+
+        return new SocialLoginCommandHandler(
             new[]
             {
                 _verifier.Object
             },
             _identity.Object,
             Mock.Of<IUserAccountRepository>(),
-            _tokenService.Object,
-            _refreshTokens.Object,
-            _jwtSettings.Object,
-            _auditLogs.Object,
+            sessionIssuer,
             _unitOfWork.Object,
             _logger.Object);
+    }
 
     private void SetupVerifiedSocialUser(
         SocialUserInfo socialUser)
@@ -538,11 +547,11 @@ public sealed class SocialLoginSecurityTests
     {
         AssertMethodNotCalled(
             _identity,
-            nameof(IPureIdentityService.AddLoginAsync));
+            nameof(ISocialLoginIdentityService.AddLoginAsync));
 
         AssertMethodNotCalled(
             _identity,
-            nameof(IPureIdentityService.CreateAsync));
+            nameof(ISocialLoginIdentityService.CreateAsync));
 
         AssertNoTokenIssuance();
     }

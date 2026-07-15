@@ -70,6 +70,10 @@ jobs:
       Jwt__Issuer: PropertyApi
       Jwt__Audience: PropertyApiClient
 
+      Cloudinary__CloudName: ci
+      Cloudinary__ApiKey: ci
+      Cloudinary__ApiSecret: ci
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -188,11 +192,33 @@ jobs:
             --logger "trx;LogFileName=integration-tests.trx"
 
       - name: Check vulnerable packages
+        shell: pwsh
         run: |
-          dotnet list PropertyApi.sln \
-            package \
-            --vulnerable \
-            --include-transitive
+          ./ci/check-vulnerable-packages.ps1 `
+            -SolutionPath "PropertyApi.sln" `
+            -BaselinePath "ci/vulnerability-baseline.json" `
+            -OutputDirectory "artifacts/vulnerability"
+
+      - name: Check coverage baseline
+        shell: pwsh
+        run: |
+          ./ci/check-coverage-baseline.ps1 `
+            -CoverageRoot "." `
+            -BaselinePath "ci/coverage-baseline.json" `
+            -OutputDirectory "artifacts/coverage"
+
+      - name: Generate coverage report
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+
+          reportgenerator \
+            -reports:"**/coverage.cobertura.xml" \
+            -targetdir:"artifacts/coverage/report" \
+            -reporttypes:"HtmlInline;Cobertura;MarkdownSummaryGithub"
+
+          if [ -f artifacts/coverage/report/SummaryGithub.md ]; then
+            cat artifacts/coverage/report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Validate Docker Compose configuration
         run: |
@@ -617,6 +643,9 @@ jobs:
           retention-days: 14
           path: |
             **/TestResults/**
+            artifacts/coverage/**
+            artifacts/vulnerability/**
+            artifacts/production-gate/**
             production-gate-containers.log
 
   staging-smoke:

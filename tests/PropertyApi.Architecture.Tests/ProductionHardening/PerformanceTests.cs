@@ -21,11 +21,11 @@ public sealed class PerformanceTests
     public void Cloudinary_Should_Not_Use_Static_HttpClient()
     {
         var service = ReadSource("PropertyApi.Infrastructure", "Media", "CloudinaryMediaStorageService.cs");
-        var dependencyInjection = ReadSource("PropertyApi.Infrastructure", "DependencyInjection.cs");
+        var mediaRegistration = ReadSource("PropertyApi.Infrastructure", "Media", "MediaInfrastructureRegistration.cs");
 
         Assert.DoesNotContain("static readonly HttpClient", service);
         Assert.Contains("HttpClient httpClient", service);
-        Assert.Contains("AddHttpClient<CloudinaryMediaStorageService>", dependencyInjection);
+        Assert.Contains("AddHttpClient<CloudinaryMediaStorageService>", mediaRegistration);
     }
 
     [Fact(DisplayName = "Geo search validator must cap radius and maximum paging window")]

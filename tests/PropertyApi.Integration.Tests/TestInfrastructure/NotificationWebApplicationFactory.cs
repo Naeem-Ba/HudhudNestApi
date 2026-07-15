@@ -22,6 +22,7 @@ public sealed class NotificationWebApplicationFactory
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.UseStableTestLogging();
 
         builder.ConfigureAppConfiguration((_, config) =>
         {
@@ -35,7 +36,7 @@ public sealed class NotificationWebApplicationFactory
                     "Set TEST_POSTGRES_CONNECTION_STRING or " +
                     "ConnectionStrings__DefaultConnection.");
 
-            config.AddInMemoryCollection(
+            var settings =
                 new Dictionary<string, string?>
                 {
                     ["ConnectionStrings:DefaultConnection"] =
@@ -65,7 +66,13 @@ public sealed class NotificationWebApplicationFactory
 
                     ["Cors:AllowedOrigins:0"] =
                         "http://localhost:4200"
-                });
+                };
+
+            TestHostConfiguration.AddDataProtectionSettings(
+                settings,
+                nameof(NotificationWebApplicationFactory));
+
+            config.AddInMemoryCollection(settings);
         });
     }
 }

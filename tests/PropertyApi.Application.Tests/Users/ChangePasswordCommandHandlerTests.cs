@@ -19,7 +19,7 @@ public sealed class ChangePasswordCommandHandlerTests
             Guid.NewGuid();
 
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IChangePasswordIdentityService>();
 
         identity
             .Setup(
@@ -98,7 +98,7 @@ public sealed class ChangePasswordCommandHandlerTests
                 isDeleted: true);
 
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IChangePasswordIdentityService>();
 
         identity
             .Setup(
@@ -180,7 +180,7 @@ public sealed class ChangePasswordCommandHandlerTests
             };
 
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IChangePasswordIdentityService>();
 
         identity
             .Setup(
@@ -348,7 +348,7 @@ public sealed class ChangePasswordCommandHandlerTests
             CreateIdentitySnapshot(userId);
 
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IChangePasswordIdentityService>();
 
         identity
             .Setup(
@@ -450,7 +450,7 @@ public sealed class ChangePasswordCommandHandlerTests
             CreateIdentitySnapshot(userId);
 
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IChangePasswordIdentityService>();
 
         identity
             .Setup(
@@ -612,7 +612,7 @@ It.Is<string?>(
         auditLogs.VerifyNoOtherCalls();
     }
 
-    private static Mock<IPureIdentityService>
+    private static Mock<IChangePasswordIdentityService>
         CreateSuccessfulIdentityMock(
             Guid userId)
     {
@@ -620,7 +620,7 @@ It.Is<string?>(
             CreateIdentitySnapshot(userId);
 
         var identity =
-            new Mock<IPureIdentityService>();
+            new Mock<IChangePasswordIdentityService>();
 
         identity
             .Setup(

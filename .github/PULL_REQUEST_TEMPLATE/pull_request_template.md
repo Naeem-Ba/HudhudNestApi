@@ -10,8 +10,10 @@ Describe the purpose of this pull request.
 
 ## Validation
 
-- [ ] `dotnet build PropertyApi.sln`
-- [ ] `dotnet test PropertyApi.sln`
+- [ ] `dotnet format PropertyApi.sln --verify-no-changes --no-restore`
+- [ ] `dotnet build PropertyApi.sln --configuration Release --no-restore`
+- [ ] `dotnet test PropertyApi.sln --configuration Release --no-build`
+- [ ] CI quality gates reviewed: vulnerability scan, coverage baseline, artifacts.
 
 ## Checklist
 
@@ -20,3 +22,4 @@ Describe the purpose of this pull request.
 - [ ] Tests were added or updated where appropriate.
 - [ ] API behavior was verified if controllers/endpoints changed.
 - [ ] Database/migration impact was reviewed.
+- [ ] No quality gate was skipped without documenting why.

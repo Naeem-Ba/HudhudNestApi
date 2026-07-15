@@ -1,20 +1,16 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
+using PropertyApi.Integration.Tests.TestInfrastructure;
 
 namespace PropertyApi.Integration.Tests.Security;
 
-public sealed class RateLimitingTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class RateLimitingTests : IClassFixture<TestApplication>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestApplication _factory;
 
-    public RateLimitingTests(WebApplicationFactory<Program> factory)
+    public RateLimitingTests(TestApplication factory)
     {
-        _factory = factory.WithWebHostBuilder(builder =>
-        {
-            builder.UseEnvironment("Testing");
-        });
+        _factory = factory;
     }
 
     [Fact(DisplayName = "Login endpoint returns 429 after auth-login policy limit is exceeded")]

@@ -14,7 +14,7 @@ namespace PropertyApi.Integration.Tests.Auth;
 internal static class AuthTestReflection
 {
     private static readonly Assembly ApplicationAssembly =
-        typeof(IPureIdentityService).Assembly;
+        typeof(IRegisterIdentityService).Assembly;
 
     /// <summary>
     /// Creates the exact Auth registration command.

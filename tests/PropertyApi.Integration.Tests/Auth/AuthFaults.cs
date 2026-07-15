@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Infrastructure.Identity.Services;
 
 
 namespace PropertyApi.Integration.Tests.Auth;
@@ -19,14 +20,14 @@ internal sealed class AuthFaultPlan
 }
 
 internal sealed class FaultingPureIdentityService
-    : IPureIdentityService
+    : IIdentityCapabilityAdapter
 {
-    private readonly IPureIdentityService _inner;
+    private readonly IIdentityCapabilityAdapter _inner;
 
     private readonly AuthFaultPlan _faults;
 
     public FaultingPureIdentityService(
-        IPureIdentityService inner,
+        IIdentityCapabilityAdapter inner,
         AuthFaultPlan faults)
     {
         _inner = inner;
@@ -36,7 +37,7 @@ internal sealed class FaultingPureIdentityService
     FindByPhoneNumberAsync(
         string phoneNumber,
         CancellationToken ct = default)
-    => _inner.FindByPhoneNumberAsync(
+    => ((IPhoneOtpIdentityService)_inner).FindByPhoneNumberAsync(
         phoneNumber,
         ct);
     public Task<IdentityOperationResult>
@@ -44,7 +45,7 @@ internal sealed class FaultingPureIdentityService
         Guid identityId,
         DateTime confirmedAtUtc,
         CancellationToken ct = default)
-    => _inner.ConfirmPhoneNumberAsync(
+    => ((IPhoneOtpIdentityService)_inner).ConfirmPhoneNumberAsync(
         identityId,
         confirmedAtUtc,
         ct);
@@ -54,7 +55,7 @@ internal sealed class FaultingPureIdentityService
         Guid identityId,
         DateTime deletedAtUtc,
         CancellationToken ct = default)
-    => _inner.SoftDeleteAsync(
+    => ((IDeleteUserIdentityService)_inner).SoftDeleteAsync(
         identityId,
         deletedAtUtc,
         ct);
@@ -65,7 +66,7 @@ internal sealed class FaultingPureIdentityService
         string? phoneNumber,
         DateTime changedAtUtc,
         CancellationToken ct = default)
-    => _inner.SetPhoneNumberAsync(
+    => ((IUpdateUserIdentityService)_inner).SetPhoneNumberAsync(
         identityId,
         phoneNumber,
         changedAtUtc,
@@ -76,21 +77,21 @@ internal sealed class FaultingPureIdentityService
         string loginProvider,
         string providerKey,
         CancellationToken ct = default)
-    => _inner.FindByLoginAsync(
+    => ((ISocialLoginIdentityService)_inner).FindByLoginAsync(
         loginProvider,
         providerKey,
         ct);
     public Task<IdentityAccountSnapshot?> FindByIdAsync(
         Guid identityId,
         CancellationToken ct = default)
-        => _inner.FindByIdAsync(
+        => ((IUserIdentityReadService)_inner).FindByIdAsync(
             identityId,
             ct);
 
     public Task<IdentityAccountSnapshot?> FindByEmailAsync(
         string email,
         CancellationToken ct = default)
-        => _inner.FindByEmailAsync(
+        => ((IAddEmailIdentityService)_inner).FindByEmailAsync(
             email,
             ct);
     public Task<IdentityOperationResult>
@@ -107,7 +108,7 @@ internal sealed class FaultingPureIdentityService
                 {
                     "Injected AddLoginAsync failure."
                 }))
-        : _inner.AddLoginAsync(
+        : ((ISocialLoginIdentityService)_inner).AddLoginAsync(
             identityId,
             loginProvider,
             providerKey,
@@ -123,7 +124,7 @@ internal sealed class FaultingPureIdentityService
                     {
                         "Injected CreateAsync failure."
                     }))
-            : _inner.CreateAsync(
+            : ((IRegisterIdentityService)_inner).CreateAsync(
                 request,
                 ct);
 
@@ -131,7 +132,7 @@ internal sealed class FaultingPureIdentityService
         Guid identityId,
         string password,
         CancellationToken ct = default)
-        => _inner.CheckPasswordAsync(
+        => ((ILoginIdentityService)_inner).CheckPasswordAsync(
             identityId,
             password,
             ct);
@@ -139,7 +140,7 @@ internal sealed class FaultingPureIdentityService
     public Task<IReadOnlyList<string>> GetRolesAsync(
         Guid identityId,
         CancellationToken ct = default)
-        => _inner.GetRolesAsync(
+        => ((IUserIdentityReadService)_inner).GetRolesAsync(
             identityId,
             ct);
 
@@ -154,7 +155,7 @@ internal sealed class FaultingPureIdentityService
                     {
                         "Injected AddToRoleAsync failure."
                     }))
-            : _inner.AddToRoleAsync(
+            : ((IRegisterIdentityService)_inner).AddToRoleAsync(
                 identityId,
                 role,
                 ct);
@@ -162,7 +163,7 @@ internal sealed class FaultingPureIdentityService
     public Task<IdentityOperationResult> UpdateSecurityStampAsync(
         Guid identityId,
         CancellationToken ct = default)
-        => _inner.UpdateSecurityStampAsync(
+        => ((ILogoutIdentityService)_inner).UpdateSecurityStampAsync(
             identityId,
             ct);
 
@@ -170,7 +171,7 @@ internal sealed class FaultingPureIdentityService
         Guid identityId,
         DateTime loginAtUtc,
         CancellationToken ct = default)
-        => _inner.RecordSuccessfulLoginAsync(
+        => ((ILoginIdentityService)_inner).RecordSuccessfulLoginAsync(
             identityId,
             loginAtUtc,
             ct);
@@ -178,7 +179,7 @@ internal sealed class FaultingPureIdentityService
     public Task<string> GeneratePasswordResetTokenAsync(
         Guid identityId,
         CancellationToken ct = default)
-        => _inner.GeneratePasswordResetTokenAsync(
+        => ((IForgotPasswordIdentityService)_inner).GeneratePasswordResetTokenAsync(
             identityId,
             ct);
 
@@ -187,7 +188,7 @@ internal sealed class FaultingPureIdentityService
         string token,
         string newPassword,
         CancellationToken ct = default)
-        => _inner.ResetPasswordAsync(
+        => ((IResetPasswordIdentityService)_inner).ResetPasswordAsync(
             identityId,
             token,
             newPassword,
@@ -198,7 +199,7 @@ internal sealed class FaultingPureIdentityService
         string currentPassword,
         string newPassword,
         CancellationToken ct = default)
-        => _inner.ChangePasswordAsync(
+        => ((IChangePasswordIdentityService)_inner).ChangePasswordAsync(
             identityId,
             currentPassword,
             newPassword,
@@ -208,7 +209,7 @@ internal sealed class FaultingPureIdentityService
         Guid identityId,
         DateTime changedAtUtc,
         CancellationToken ct = default)
-        => _inner.RecordCredentialChangeAsync(
+        => ((IChangePasswordIdentityService)_inner).RecordCredentialChangeAsync(
             identityId,
             changedAtUtc,
             ct);
@@ -217,7 +218,7 @@ internal sealed class FaultingPureIdentityService
         Guid identityId,
         string email,
         CancellationToken ct = default)
-        => _inner.SetEmailAsync(
+        => ((IAddEmailIdentityService)_inner).SetEmailAsync(
             identityId,
             email,
             ct);
@@ -225,7 +226,7 @@ internal sealed class FaultingPureIdentityService
     public Task<string> GenerateEmailConfirmationTokenAsync(
         Guid identityId,
         CancellationToken ct = default)
-        => _inner.GenerateEmailConfirmationTokenAsync(
+        => ((IAddEmailIdentityService)_inner).GenerateEmailConfirmationTokenAsync(
             identityId,
             ct);
 
@@ -233,7 +234,7 @@ internal sealed class FaultingPureIdentityService
         Guid identityId,
         string token,
         CancellationToken ct = default)
-        => _inner.ConfirmEmailAsync(
+        => ((IVerifyEmailIdentityService)_inner).ConfirmEmailAsync(
             identityId,
             token,
             ct);
@@ -367,7 +368,7 @@ internal static class AuthFaultServiceCollectionExtensions
         this IServiceCollection services,
         AuthFaultPlan faults)
     {
-        DecoratePureIdentityService(
+        DecorateIdentityCapabilityAdapter(
             services,
             faults);
 
@@ -380,7 +381,7 @@ internal static class AuthFaultServiceCollectionExtensions
             faults);
     }
 
-    private static void DecoratePureIdentityService(
+    private static void DecorateIdentityCapabilityAdapter(
         IServiceCollection services,
         AuthFaultPlan faults)
     {
@@ -388,21 +389,21 @@ internal static class AuthFaultServiceCollectionExtensions
             services.LastOrDefault(
                 service =>
                     service.ServiceType ==
-                    typeof(IPureIdentityService))
+                    typeof(IIdentityCapabilityAdapter))
             ?? throw new InvalidOperationException(
-                "IPureIdentityService is not registered.");
+                "IIdentityCapabilityAdapter is not registered.");
 
         services.Remove(
             descriptor);
 
         services.Add(
             ServiceDescriptor.Describe(
-                typeof(IPureIdentityService),
+                typeof(IIdentityCapabilityAdapter),
 
                 serviceProvider =>
                     new FaultingPureIdentityService(
                         ResolveOriginal<
-                            IPureIdentityService>(
+                            IIdentityCapabilityAdapter>(
                             serviceProvider,
                             descriptor),
                         faults),

@@ -64,7 +64,7 @@ public sealed class ResetPasswordCommandHandler
         ResetPasswordCommand,
         ResetPasswordResult>
 {
-    private readonly IPureIdentityService _identity;
+    private readonly IResetPasswordIdentityService _identity;
 
     private readonly IRefreshTokenRepository _refreshTokens;
 
@@ -72,7 +72,7 @@ public sealed class ResetPasswordCommandHandler
         _logger;
 
     public ResetPasswordCommandHandler(
-        IPureIdentityService identity,
+        IResetPasswordIdentityService identity,
         IRefreshTokenRepository refreshTokens,
         ILogger<ResetPasswordCommandHandler> logger)
     {

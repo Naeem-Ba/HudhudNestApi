@@ -1,0 +1,146 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+using PropertyApi.Infrastructure;
+using PropertyApi.Infrastructure.Media;
+using PropertyApi.Observability;
+using PropertyApi.Security.Csrf;
+
+namespace PropertyApi.Architecture.Tests.Api;
+
+public sealed class OptionsValidationGuardTests
+{
+    [Fact(DisplayName = "Cloudinary options must fail fast when required settings are missing")]
+    public void CloudinaryOptions_Should_Validate_Required_Settings()
+    {
+        var services = new ServiceCollection();
+
+        services.AddInfrastructure(
+            CreateInfrastructureConfiguration(includeCloudinary: false),
+            new TestHostEnvironment());
+
+        using var provider = services.BuildServiceProvider();
+
+        var exception = Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<CloudinaryOptions>>().Value);
+
+        Assert.Contains(
+            "Cloudinary:CloudName",
+            exception.Message);
+    }
+
+    [Fact(DisplayName = "Cookie CSRF options must require an auth cookie name when enabled")]
+    public void CookieCsrfOptions_Should_Validate_Cookie_Name_When_Enabled()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["CookieCsrf:Enabled"] = "true",
+                    ["CookieCsrf:AuthenticationCookieName"] = ""
+                })
+            .Build();
+
+        services.AddPropertyApiAntiforgery(
+            configuration,
+            new TestHostEnvironment());
+
+        using var provider = services.BuildServiceProvider();
+
+        var exception = Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<CookieCsrfOptions>>().Value);
+
+        Assert.Contains(
+            "CookieCsrf:AuthenticationCookieName",
+            exception.Message);
+    }
+
+    [Fact(DisplayName = "Observability options must reject invalid OTLP endpoint configuration")]
+    public void ObservabilityOptions_Should_Validate_Otlp_Endpoint()
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = "Testing"
+        });
+
+        builder.Configuration.AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["Observability:ServiceName"] = "PropertyApi",
+                ["Observability:CorrelationHeaderName"] = "X-Correlation-ID",
+                ["Observability:Otlp:Endpoint"] = "not-a-uri"
+            });
+
+        builder.AddPropertyApiObservability();
+
+        using var provider = builder.Services.BuildServiceProvider();
+
+        var exception = Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<PropertyApiObservabilityOptions>>().Value);
+
+        Assert.Contains(
+            "Observability:Otlp:Endpoint",
+            exception.Message);
+    }
+
+    private static IConfiguration CreateInfrastructureConfiguration(
+        bool includeCloudinary)
+    {
+        var settings = new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:DefaultConnection"] =
+                "Host=localhost;Database=propertyapi;Username=test;Password=test",
+
+            ["Jwt:Key"] =
+                "0123456789abcdef0123456789abcdef",
+
+            ["Jwt:Issuer"] =
+                "PropertyApi.Tests",
+
+            ["Jwt:Audience"] =
+                "PropertyApi.Tests",
+
+            ["Jwt:AccessTokenMinutes"] =
+                "30",
+
+            ["Jwt:RefreshTokenDays"] =
+                "7",
+
+            ["OtpSettings:SecretKey"] =
+                "integration-test-otp-secret-key-at-least-32-bytes",
+
+            ["Security:PhoneLookupHmacKey"] =
+                "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+        };
+
+        if (includeCloudinary)
+        {
+            settings["Cloudinary:CloudName"] = "test";
+            settings["Cloudinary:ApiKey"] = "test";
+            settings["Cloudinary:ApiSecret"] = "test";
+        }
+
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(settings)
+            .Build();
+    }
+
+    private sealed class TestHostEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } =
+            "Testing";
+
+        public string ApplicationName { get; set; } =
+            "PropertyApi.Architecture.Tests";
+
+        public string ContentRootPath { get; set; } =
+            Directory.GetCurrentDirectory();
+
+        public IFileProvider ContentRootFileProvider { get; set; } =
+            new NullFileProvider();
+    }
+}

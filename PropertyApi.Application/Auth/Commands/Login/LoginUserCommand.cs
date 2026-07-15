@@ -53,7 +53,7 @@ public sealed record LoginResult
 public sealed class LoginCommandHandler
     : IRequestHandler<LoginCommand, LoginResult>
 {
-    private readonly IPureIdentityService _identity;
+    private readonly ILoginIdentityService _identity;
 
     private readonly ITokenService _tokenService;
 
@@ -66,7 +66,7 @@ public sealed class LoginCommandHandler
     private readonly ILogger<LoginCommandHandler> _logger;
 
     public LoginCommandHandler(
-        IPureIdentityService identity,
+        ILoginIdentityService identity,
         ITokenService tokenService,
         IRefreshTokenRepository refreshTokens,
         IJwtTokenSettings jwtSettings,

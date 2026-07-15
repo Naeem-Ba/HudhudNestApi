@@ -17,13 +17,13 @@ public sealed class VerifyEmailCommandHandler
         VerifyEmailCommand,
         VerifyEmailResult>
 {
-    private readonly IPureIdentityService _identity;
+    private readonly IVerifyEmailIdentityService _identity;
 
     private readonly ILogger<VerifyEmailCommandHandler>
         _logger;
 
     public VerifyEmailCommandHandler(
-        IPureIdentityService identity,
+        IVerifyEmailIdentityService identity,
         ILogger<VerifyEmailCommandHandler> logger)
     {
         _identity = identity;

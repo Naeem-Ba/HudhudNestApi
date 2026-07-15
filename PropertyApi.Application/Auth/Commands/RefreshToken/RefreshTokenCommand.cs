@@ -1,11 +1,9 @@
-﻿using System.Text.Json;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
 using PropertyApi.Application.Common.Interfaces;
-using PropertyApi.Domain.Audit.Constants;
 
 namespace PropertyApi.Application.Auth.Commands.RefreshToken;
 
@@ -58,7 +56,7 @@ public sealed class RefreshTokenCommandHandler
     private readonly IRefreshTokenRepository
         _refreshTokens;
 
-    private readonly IPureIdentityService
+    private readonly IRefreshTokenIdentityService
         _identity;
 
     private readonly ITokenService
@@ -67,23 +65,18 @@ public sealed class RefreshTokenCommandHandler
     private readonly IJwtTokenSettings
         _jwtSettings;
 
-    private readonly IUserSecurityStampCacheInvalidator
-        _securityStampCacheInvalidator;
-
-    private readonly IAuditLogService
-        _auditLogs;
+    private readonly RefreshTokenReuseHandler
+        _reuseHandler;
 
     private readonly ILogger<RefreshTokenCommandHandler>
         _logger;
 
     public RefreshTokenCommandHandler(
         IRefreshTokenRepository refreshTokens,
-        IPureIdentityService identity,
+        IRefreshTokenIdentityService identity,
         ITokenService tokenService,
         IJwtTokenSettings jwtSettings,
-        IUserSecurityStampCacheInvalidator
-            securityStampCacheInvalidator,
-        IAuditLogService auditLogs,
+        RefreshTokenReuseHandler reuseHandler,
         ILogger<RefreshTokenCommandHandler> logger)
     {
         _refreshTokens =
@@ -98,11 +91,8 @@ public sealed class RefreshTokenCommandHandler
         _jwtSettings =
             jwtSettings;
 
-        _securityStampCacheInvalidator =
-            securityStampCacheInvalidator;
-
-        _auditLogs =
-            auditLogs;
+        _reuseHandler =
+            reuseHandler;
 
         _logger =
             logger;
@@ -137,7 +127,7 @@ public sealed class RefreshTokenCommandHandler
 
                     if (stored.IsRevoked)
                     {
-                        await HandleRefreshTokenReuseAsync(
+                        await _reuseHandler.HandleAsync(
                             stored,
                             request.IpAddress,
                             tokenCt);
@@ -186,7 +176,7 @@ public sealed class RefreshTokenCommandHandler
 
                     if (!revoked)
                     {
-                        await HandleRefreshTokenReuseAsync(
+                        await _reuseHandler.HandleAsync(
                             stored,
                             request.IpAddress,
                             tokenCt);
@@ -237,110 +227,6 @@ public sealed class RefreshTokenCommandHandler
                 ct);
     }
 
-    private async Task HandleRefreshTokenReuseAsync(
-        RefreshTokenRecord stored,
-        string? ipAddress,
-        CancellationToken ct)
-    {
-        var now =
-            DateTime.UtcNow;
-
-        /*
-         * Revoke all currently active refresh tokens first.
-         */
-        await _refreshTokens
-            .RevokeActiveTokensForUserAsync(
-                stored.UserId,
-                now,
-                ipAddress,
-                ct);
-
-        /*
-         * Resolve the Identity account separately.
-         *
-         * Missing or deleted identities do not block refresh-token
-         * revocation or audit logging.
-         */
-        var identity =
-            await _identity.FindByIdAsync(
-                stored.UserId,
-                ct);
-
-        if (identity is not null &&
-            !identity.IsDeleted)
-        {
-            var stampResult =
-                await _identity
-                    .UpdateSecurityStampAsync(
-                        identity.IdentityId,
-                        ct);
-
-            if (!stampResult.Succeeded)
-            {
-                _logger.LogWarning(
-                    "Security stamp update failed after refresh-token reuse detection for user {UserId}. Errors: {Errors}",
-                    stored.UserId,
-                    string.Join(
-                        ", ",
-                        stampResult.Errors));
-            }
-        }
-
-        /*
-         * Invalidate the distributed/in-memory stamp cache even when
-         * the Identity account cannot be resolved.
-         */
-        await _securityStampCacheInvalidator
-            .InvalidateAsync(
-                stored.UserId,
-                ct);
-
-        await _auditLogs.LogAsync(
-            userId:
-                stored.UserId,
-
-            action:
-                AuditActions
-                    .RefreshTokenReuseDetected,
-
-            ipAddress:
-                ipAddress,
-
-            oldValue:
-                JsonSerializer.Serialize(
-                    new
-                    {
-                        refreshTokenId =
-                            stored.Id,
-
-                        wasRevoked =
-                            stored.IsRevoked,
-
-                        expiresAt =
-                            stored.ExpiresAt
-                    }),
-
-            newValue:
-                JsonSerializer.Serialize(
-                    new
-                    {
-                        activeRefreshTokensRevoked =
-                            true,
-
-                        accessTokensInvalidatedBySecurityStamp =
-                            true,
-
-                        timestamp =
-                            now
-                    }),
-
-            ct:
-                ct);
-
-        _logger.LogWarning(
-            "Refresh token reuse detected for user {UserId}. Active refresh tokens revoked and security stamp invalidated.",
-            stored.UserId);
-    }
 }
 
 public sealed class RefreshTokenCommandValidator

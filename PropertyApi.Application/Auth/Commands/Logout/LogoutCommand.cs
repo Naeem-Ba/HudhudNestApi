@@ -16,14 +16,14 @@ public sealed class LogoutCommandHandler
     : IRequestHandler<LogoutCommand>
 {
     private readonly IRefreshTokenRepository _refreshTokens;
-    private readonly IPureIdentityService _identity;
+    private readonly ILogoutIdentityService _identity;
     private readonly IUserSecurityStampCacheInvalidator
         _securityStampCacheInvalidator;
     private readonly ILogger<LogoutCommandHandler> _logger;
 
     public LogoutCommandHandler(
         IRefreshTokenRepository refreshTokens,
-        IPureIdentityService identity,
+        ILogoutIdentityService identity,
         IUserSecurityStampCacheInvalidator securityStampCacheInvalidator,
         ILogger<LogoutCommandHandler> logger)
     {

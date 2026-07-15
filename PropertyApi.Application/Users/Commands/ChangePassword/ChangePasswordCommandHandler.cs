@@ -12,7 +12,7 @@ public sealed class ChangePasswordCommandHandler
         ChangePasswordCommand,
         ChangePasswordResult>
 {
-    private readonly IPureIdentityService _identity;
+    private readonly IChangePasswordIdentityService _identity;
 
     private readonly IAuditLogService _auditLogs;
 
@@ -20,7 +20,7 @@ public sealed class ChangePasswordCommandHandler
         _logger;
 
     public ChangePasswordCommandHandler(
-        IPureIdentityService identity,
+        IChangePasswordIdentityService identity,
         IAuditLogService auditLogs,
         ILogger<ChangePasswordCommandHandler> logger)
     {

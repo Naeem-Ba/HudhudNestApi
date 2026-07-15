@@ -10,11 +10,11 @@ namespace PropertyApi.Application.Users.Queries.GetCurrentUser;
 public sealed class GetCurrentUserQueryHandler
     : IRequestHandler<GetCurrentUserQuery, UserDto?>
 {
-    private readonly IPureIdentityService _identity;
+    private readonly IUserIdentityReadService _identity;
     private readonly IUserAccountRepository _accounts;
 
     public GetCurrentUserQueryHandler(
-        IPureIdentityService identity,
+        IUserIdentityReadService identity,
         IUserAccountRepository accounts)
     {
         _identity = identity;

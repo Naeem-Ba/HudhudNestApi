@@ -1,0 +1,5 @@
+{
+  "minimumLineCoveragePercent": 5.0,
+  "minimumBranchCoveragePercent": 10.0,
+  "minimumAuthLineCoveragePercent": 12.0
+}

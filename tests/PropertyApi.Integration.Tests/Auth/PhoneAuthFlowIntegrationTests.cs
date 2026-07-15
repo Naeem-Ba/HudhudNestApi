@@ -57,12 +57,16 @@ public sealed class PhoneAuthFlowIntegrationTests
             firstName: "Naeem",
             lastName: "Bazzazeh");
 
-        Assert.Equal(HttpStatusCode.OK, verifyResponse.StatusCode);
+        var verifyBody = await verifyResponse.Content.ReadAsStringAsync();
+
+        Assert.True(
+            verifyResponse.StatusCode == HttpStatusCode.OK,
+            $"Expected 200 OK from /api/auth/phone/verify, but got {(int)verifyResponse.StatusCode} {verifyResponse.StatusCode}. Body: {verifyBody}");
 
         string userId;
         string refreshToken;
 
-        using (var verifyJson = await ReadJsonAsync(verifyResponse))
+        using (var verifyJson = JsonDocument.Parse(verifyBody))
         {
             var root = verifyJson.RootElement;
 

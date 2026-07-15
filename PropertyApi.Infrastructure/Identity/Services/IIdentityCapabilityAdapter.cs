@@ -1,0 +1,25 @@
+using PropertyApi.Application.Auth.Interfaces;
+
+namespace PropertyApi.Infrastructure.Identity.Services;
+
+/// <summary>
+/// Infrastructure composition adapter that groups the Identity capabilities
+/// implemented by <see cref="PureIdentityService" />.
+/// </summary>
+public interface IIdentityCapabilityAdapter
+    : ISocialLoginIdentityService,
+        IAddEmailIdentityService,
+        IForgotPasswordIdentityService,
+        IRefreshTokenIdentityService,
+        IPhoneOtpIdentityService,
+        IRegisterIdentityService,
+        ILoginIdentityService,
+        IResetPasswordIdentityService,
+        ILogoutIdentityService,
+        IVerifyEmailIdentityService,
+        IChangePasswordIdentityService,
+        IUserIdentityReadService,
+        IUpdateUserIdentityService,
+        IDeleteUserIdentityService
+{
+}

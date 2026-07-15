@@ -11,11 +11,11 @@ namespace PropertyApi.Application.Users.Queries.GetUserById;
 public sealed class GetUserByIdQueryHandler
     : IRequestHandler<GetUserByIdQuery, UserSummaryDto?>
 {
-    private readonly IPureIdentityService _identity;
+    private readonly IUserIdentityReadService _identity;
     private readonly IUserAccountRepository _accounts;
 
     public GetUserByIdQueryHandler(
-        IPureIdentityService identity,
+        IUserIdentityReadService identity,
         IUserAccountRepository accounts)
     {
         _identity = identity;

@@ -29,6 +29,8 @@ concurrency:
 env:
   DOTNET_VERSION: '8.0.x'
   SOLUTION_PATH: 'PropertyApi.sln'
+  COVERAGE_BASELINE_PATH: 'ci/coverage-baseline.json'
+  VULNERABILITY_BASELINE_PATH: 'ci/vulnerability-baseline.json'
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -104,6 +106,10 @@ jobs:
 
       DataProtection__PersistKeysToDatabase: 'true'
 
+      Cloudinary__CloudName: 'ci'
+      Cloudinary__ApiKey: 'ci'
+      Cloudinary__ApiSecret: 'ci'
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -124,6 +130,20 @@ jobs:
       - name: Restore dependencies
         run: |
           dotnet restore "${{ env.SOLUTION_PATH }}"
+
+      - name: Verify formatting
+        run: |
+          dotnet format "${{ env.SOLUTION_PATH }}" \
+            --verify-no-changes \
+            --no-restore
+
+      - name: Check vulnerable packages
+        shell: pwsh
+        run: |
+          ./ci/check-vulnerable-packages.ps1 `
+            -SolutionPath "${{ env.SOLUTION_PATH }}" `
+            -BaselinePath "${{ env.VULNERABILITY_BASELINE_PATH }}" `
+            -OutputDirectory "artifacts/vulnerability"
 
       - name: Build solution
         run: |
@@ -334,7 +354,10 @@ jobs:
           --configuration Release
           --no-build
           --no-restore
+          --collect:"XPlat Code Coverage"
+          --results-directory artifacts/test-results/application
           --logger "console;verbosity=minimal"
+          --logger "trx;LogFileName=application-tests.trx"
 
       - name: Reset Redis before Auth tests
         run: |
@@ -350,7 +373,10 @@ jobs:
           --configuration Release
           --no-build
           --no-restore
+          --collect:"XPlat Code Coverage"
+          --results-directory artifacts/test-results/auth
           --logger "console;verbosity=minimal"
+          --logger "trx;LogFileName=auth-tests.trx"
 
       - name: Reset Redis before Integration tests
         run: |
@@ -366,7 +392,10 @@ jobs:
           --configuration Release
           --no-build
           --no-restore
+          --collect:"XPlat Code Coverage"
+          --results-directory artifacts/test-results/integration
           --logger "console;verbosity=minimal"
+          --logger "trx;LogFileName=integration-tests.trx"
 
       - name: Run Architecture tests
         run: >
@@ -375,7 +404,43 @@ jobs:
           --configuration Release
           --no-build
           --no-restore
+          --collect:"XPlat Code Coverage"
+          --results-directory artifacts/test-results/architecture
           --logger "console;verbosity=minimal"
+          --logger "trx;LogFileName=architecture-tests.trx"
+
+      - name: Check coverage baseline
+        shell: pwsh
+        run: |
+          ./ci/check-coverage-baseline.ps1 `
+            -CoverageRoot "artifacts/test-results" `
+            -BaselinePath "${{ env.COVERAGE_BASELINE_PATH }}" `
+            -OutputDirectory "artifacts/coverage"
+
+      - name: Generate coverage report
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+
+          reportgenerator \
+            -reports:"artifacts/test-results/**/coverage.cobertura.xml" \
+            -targetdir:"artifacts/coverage/report" \
+            -reporttypes:"HtmlInline;Cobertura;MarkdownSummaryGithub"
+
+          if [ -f artifacts/coverage/report/SummaryGithub.md ]; then
+            cat artifacts/coverage/report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload CI reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-quality-gate-reports
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            artifacts/test-results/**
+            artifacts/coverage/**
+            artifacts/vulnerability/**
 
 
   secret-scan:
