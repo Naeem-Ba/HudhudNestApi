@@ -57,7 +57,7 @@ WITH nearby AS (
         p."Area",
         p."OwnerId",
         p."CreatedAt",
-        trim(coalesce(u."FirstName", '') || ' ' || coalesce(u."LastName", '')) AS "OwnerName",
+        trim(coalesce(ua."FirstName", '') || ' ' || coalesce(ua."LastName", '')) AS "OwnerName",
         main_image."Url" AS "MainImageUrl",
         ST_Distance(
             p."GeoLocation",
@@ -65,7 +65,7 @@ WITH nearby AS (
         ) AS "DistanceMeters",
         COUNT(*) OVER() AS "TotalCount"
     FROM "Properties" p
-    LEFT JOIN "Users" u ON u."Id" = p."OwnerId"
+    LEFT JOIN "UserAccounts" ua ON ua."Id" = p."OwnerId"
     LEFT JOIN LATERAL (
         SELECT pi."Url"
         FROM "PropertyImages" pi
@@ -128,29 +128,29 @@ LIMIT @pageSize OFFSET @offset;
         command.CommandText = sql;
         command.CommandType = CommandType.Text;
 
-        AddParameter(command, "lat", latitude);
-        AddParameter(command, "lng", longitude);
-        AddParameter(command, "radiusMeters", radiusMeters);
-        AddParameter(command, "pageSize", pageSize);
-        AddParameter(command, "offset", offset);
+        AddParameter(command, "lat", latitude, DbType.Double);
+        AddParameter(command, "lng", longitude, DbType.Double);
+        AddParameter(command, "radiusMeters", radiusMeters, DbType.Double);
+        AddParameter(command, "pageSize", pageSize, DbType.Int32);
+        AddParameter(command, "offset", offset, DbType.Int32);
 
-        AddParameter(command, "countryCode", NormalizeUpper(filter.CountryCode));
-        AddParameter(command, "city", NormalizeText(filter.City));
-        AddParameter(command, "region", NormalizeText(filter.Region));
-        AddParameter(command, "listingType", filter.ListingType?.ToString());
-        AddParameter(command, "status", filter.Status?.ToString());
-        AddParameter(command, "condition", filter.Condition?.ToString());
-        AddParameter(command, "currencyCode", NormalizeUpper(filter.CurrencyCode));
-        AddParameter(command, "ownerId", filter.OwnerId);
-        AddParameter(command, "minRooms", filter.MinRooms);
-        AddParameter(command, "maxRooms", filter.MaxRooms);
-        AddParameter(command, "minArea", filter.MinArea);
-        AddParameter(command, "maxArea", filter.MaxArea);
-        AddParameter(command, "hasBalcony", filter.HasBalcony);
-        AddParameter(command, "hasElevator", filter.HasElevator);
-        AddParameter(command, "hasParkingSpace", filter.HasParkingSpace);
-        AddParameter(command, "minPrice", filter.MinPrice);
-        AddParameter(command, "maxPrice", filter.MaxPrice);
+        AddParameter(command, "countryCode", NormalizeUpper(filter.CountryCode), DbType.String);
+        AddParameter(command, "city", NormalizeText(filter.City), DbType.String);
+        AddParameter(command, "region", NormalizeText(filter.Region), DbType.String);
+        AddParameter(command, "listingType", filter.ListingType?.ToString(), DbType.String);
+        AddParameter(command, "status", filter.Status?.ToString(), DbType.String);
+        AddParameter(command, "condition", filter.Condition?.ToString(), DbType.String);
+        AddParameter(command, "currencyCode", NormalizeUpper(filter.CurrencyCode), DbType.String);
+        AddParameter(command, "ownerId", filter.OwnerId, DbType.Guid);
+        AddParameter(command, "minRooms", filter.MinRooms, DbType.Int32);
+        AddParameter(command, "maxRooms", filter.MaxRooms, DbType.Int32);
+        AddParameter(command, "minArea", filter.MinArea, DbType.Decimal);
+        AddParameter(command, "maxArea", filter.MaxArea, DbType.Decimal);
+        AddParameter(command, "hasBalcony", filter.HasBalcony, DbType.Boolean);
+        AddParameter(command, "hasElevator", filter.HasElevator, DbType.Boolean);
+        AddParameter(command, "hasParkingSpace", filter.HasParkingSpace, DbType.Boolean);
+        AddParameter(command, "minPrice", filter.MinPrice, DbType.Decimal);
+        AddParameter(command, "maxPrice", filter.MaxPrice, DbType.Decimal);
 
         var items = new List<GeoPropertySearchResultDto>();
         var totalCount = 0;
@@ -280,10 +280,15 @@ LIMIT @pageSize OFFSET @offset;
             : value.Trim();
     }
 
-    private static void AddParameter(IDbCommand command, string name, object? value)
+    private static void AddParameter(
+        IDbCommand command,
+        string name,
+        object? value,
+        DbType dbType)
     {
         var parameter = command.CreateParameter();
         parameter.ParameterName = name;
+        parameter.DbType = dbType;
         parameter.Value = value ?? DBNull.Value;
         command.Parameters.Add(parameter);
     }

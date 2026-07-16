@@ -27,6 +27,8 @@ public sealed class PerformanceAssetsTests
         Assert.Contains("properties-geo-search", scenarios);
         Assert.Contains("auth-login", scenarios);
         Assert.Contains("auth-refresh", scenarios);
+        Assert.Contains("\"requestsPerScenario\"", scenarios);
+        Assert.Contains("\"warmupRequests\"", scenarios);
     }
 
     private static string FindRepositoryRoot()

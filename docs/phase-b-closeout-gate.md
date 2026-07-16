@@ -4,15 +4,36 @@ Run this gate only after the Auth, composition, CI, performance, and observabili
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/phase-b-closeout.ps1 `
+  -ReleaseCandidate `
   -StagingBaseUrl "https://staging.example.com" `
   -PerformanceBaselinePath "artifacts/performance/baseline-before.json" `
   -PerformanceCurrentPath "artifacts/performance/baseline-after.json"
 ```
 
+For a local confidence run without staging, PostgreSQL, or performance artifacts:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/phase-b-closeout.ps1 `
+  -SkipIntegrationTests
+```
+
+Local runs with skipped release-only gates return `LOCAL-PASS`, not `GO`.
+
+To prepare a local PostgreSQL test database when PostgreSQL is installed locally:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-local-test-postgres.ps1 `
+  -AdminPassword "<local-postgres-password>"
+```
+
+Then set the printed `TEST_POSTGRES_CONNECTION_STRING` value in the same PowerShell session before running the closeout gate without `-SkipIntegrationTests`.
+
 The script produces:
 
 - `artifacts/phase-b-closeout/phase-b-closeout-*.json`
 - `artifacts/phase-b-closeout/phase-b-closeout-*.md`
+
+By default, performance comparison fails on p95 regression greater than 20 percent or throughput drop greater than 20 percent. Local localhost runs may pass wider tolerances explicitly, but release-candidate runs should keep the default unless the team records a reason.
 
 ## GO Requirements
 

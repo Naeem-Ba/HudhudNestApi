@@ -42,6 +42,23 @@ public sealed class PerformanceTests
         Assert.Contains("Page * filter.PageSize <= 1000", validator);
     }
 
+    [Fact(DisplayName = "Geo search SQL must read owner profile data from UserAccounts after identity cutover")]
+    public void GeoSearchSql_Should_Use_UserAccounts_For_Owner_Profile()
+    {
+        var repository = ReadSource(
+            "PropertyApi.Infrastructure",
+            "Repositories",
+            "PropertyGeoSearchRepository.cs");
+
+        Assert.Contains("LEFT JOIN \"UserAccounts\"", repository);
+        Assert.Contains("DbType.String", repository);
+        Assert.Contains("DbType.Guid", repository);
+        Assert.Contains("DbType.Decimal", repository);
+        Assert.DoesNotContain("LEFT JOIN \"Users\" u", repository);
+        Assert.DoesNotContain("u.\"FirstName\"", repository);
+        Assert.DoesNotContain("u.\"LastName\"", repository);
+    }
+
     private static string ReadSource(params string[] relativePath)
     {
         var repoRoot = FindRepositoryRoot();

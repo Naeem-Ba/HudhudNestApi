@@ -5,6 +5,9 @@ param(
     [string] $StagingBaseUrl = "",
     [string] $PerformanceBaselinePath = "",
     [string] $PerformanceCurrentPath = "",
+    [double] $LatencyRegressionTolerancePercent = 20,
+    [double] $ThroughputRegressionTolerancePercent = 20,
+    [switch] $ReleaseCandidate,
     [switch] $SkipIntegrationTests
 )
 
@@ -25,10 +28,19 @@ function Add-GateResult {
         [string] $Details = ""
     )
 
+    $effectiveStatus = $Status
+    $effectiveDetails = $Details
+
+    if ($ReleaseCandidate -and $Status -eq "skipped") {
+        $script:hasFailures = $true
+        $effectiveStatus = "fail"
+        $effectiveDetails = "Required for ReleaseCandidate. $Details".Trim()
+    }
+
     $script:results.Add([pscustomobject]@{
         name = $Name
-        status = $Status
-        details = $Details
+        status = $effectiveStatus
+        details = $effectiveDetails
     })
 }
 
@@ -39,7 +51,13 @@ function Invoke-Gate {
     )
 
     try {
+        $global:LASTEXITCODE = 0
         & $Command
+
+        if ($global:LASTEXITCODE -ne 0) {
+            throw "Gate '$Name' failed with exit code $global:LASTEXITCODE."
+        }
+
         Add-GateResult $Name "pass"
     }
     catch {
@@ -56,10 +74,10 @@ function Assert-StagingUrl {
     }
 
     $uri = [Uri] $Url
-    $host = $uri.Host.ToLowerInvariant()
+    $targetHost = $uri.Host.ToLowerInvariant()
 
-    if ($host.Contains("prod") -or $host.Contains("production")) {
-        throw "Refusing to run smoke tests against a host that looks like production: $host"
+    if ($targetHost.Contains("prod") -or $targetHost.Contains("production")) {
+        throw "Refusing to run smoke tests against a host that looks like production: $targetHost"
     }
 
     return $uri.GetLeftPart([UriPartial]::Authority).TrimEnd("/")
@@ -87,21 +105,37 @@ function Invoke-SmokeCheck {
     }
 }
 
+function Get-TestPostgresConnectionString {
+    $connectionString =
+        [Environment]::GetEnvironmentVariable("TEST_POSTGRES_CONNECTION_STRING")
+
+    if ([string]::IsNullOrWhiteSpace($connectionString)) {
+        $connectionString =
+            [Environment]::GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
+    }
+
+    return $connectionString
+}
+
+function Assert-TestPostgresConfigured {
+    $connectionString = Get-TestPostgresConnectionString
+
+    if ([string]::IsNullOrWhiteSpace($connectionString)) {
+        throw "Set TEST_POSTGRES_CONNECTION_STRING or ConnectionStrings__DefaultConnection before running integration tests."
+    }
+}
+
 function Compare-Performance {
     param(
         [string] $BaselinePath,
         [string] $CurrentPath
     )
 
-    if ([string]::IsNullOrWhiteSpace($BaselinePath) -or
-        [string]::IsNullOrWhiteSpace($CurrentPath)) {
-        Add-GateResult "performance-compare" "skipped" "Provide PerformanceBaselinePath and PerformanceCurrentPath to compare p95/p99/throughput."
-        return
-    }
-
     $baseline = Get-Content -Path $BaselinePath -Raw | ConvertFrom-Json
     $current = Get-Content -Path $CurrentPath -Raw | ConvertFrom-Json
     $failures = New-Object System.Collections.Generic.List[string]
+    $latencyMultiplier = 1 + ($LatencyRegressionTolerancePercent / 100.0)
+    $throughputMultiplier = 1 - ($ThroughputRegressionTolerancePercent / 100.0)
 
     foreach ($currentScenario in $current.results) {
         if ($currentScenario.skipped) {
@@ -115,12 +149,16 @@ function Compare-Performance {
         }
 
         if ($baselineScenario.p95Ms -gt 0 -and
-            $currentScenario.p95Ms -gt ($baselineScenario.p95Ms * 1.20)) {
+            $currentScenario.p95Ms -gt ($baselineScenario.p95Ms * $latencyMultiplier)) {
             $failures.Add("$($currentScenario.name) p95 regressed from $($baselineScenario.p95Ms) ms to $($currentScenario.p95Ms) ms.")
         }
 
+        if ($currentScenario.failed -gt 0) {
+            $failures.Add("$($currentScenario.name) had $($currentScenario.failed) failed requests.")
+        }
+
         if ($baselineScenario.throughputRps -gt 0 -and
-            $currentScenario.throughputRps -lt ($baselineScenario.throughputRps * 0.80)) {
+            $currentScenario.throughputRps -lt ($baselineScenario.throughputRps * $throughputMultiplier)) {
             $failures.Add("$($currentScenario.name) throughput regressed from $($baselineScenario.throughputRps) rps to $($currentScenario.throughputRps) rps.")
         }
     }
@@ -128,8 +166,6 @@ function Compare-Performance {
     if ($failures.Count -gt 0) {
         throw ($failures -join " ")
     }
-
-    Add-GateResult "performance-compare" "pass"
 }
 
 Invoke-Gate "restore" { dotnet restore }
@@ -143,7 +179,10 @@ if ($SkipIntegrationTests) {
     Add-GateResult "integration-tests" "skipped" "SkipIntegrationTests was specified."
 }
 else {
-    Invoke-Gate "integration-tests" { dotnet test tests/PropertyApi.Integration.Tests/PropertyApi.Integration.Tests.csproj --configuration $Configuration --no-build }
+    Invoke-Gate "integration-tests" {
+        Assert-TestPostgresConfigured
+        dotnet test tests/PropertyApi.Integration.Tests/PropertyApi.Integration.Tests.csproj --configuration $Configuration --no-build
+    }
 }
 
 Invoke-Gate "vulnerability-baseline" { powershell -NoProfile -ExecutionPolicy Bypass -File ci/check-vulnerable-packages.ps1 }
@@ -164,9 +203,25 @@ else {
     Invoke-Gate "staging-smoke" { Invoke-SmokeCheck $StagingBaseUrl }
 }
 
-Invoke-Gate "performance-compare" { Compare-Performance $PerformanceBaselinePath $PerformanceCurrentPath }
+if ([string]::IsNullOrWhiteSpace($PerformanceBaselinePath) -or
+    [string]::IsNullOrWhiteSpace($PerformanceCurrentPath)) {
+    Add-GateResult "performance-compare" "skipped" "Provide PerformanceBaselinePath and PerformanceCurrentPath to compare p95/p99/throughput."
+}
+else {
+    Invoke-Gate "performance-compare" { Compare-Performance $PerformanceBaselinePath $PerformanceCurrentPath }
+}
 
-$decision = if ($hasFailures) { "NO-GO" } else { "GO" }
+$hasSkipped = @($results | Where-Object { $_.status -eq "skipped" }).Count -gt 0
+$decision =
+    if ($hasFailures) {
+        "NO-GO"
+    }
+    elseif ($hasSkipped) {
+        "LOCAL-PASS"
+    }
+    else {
+        "GO"
+    }
 $jsonPath = Join-Path $OutputDirectory "phase-b-closeout-$runId.json"
 $markdownPath = Join-Path $OutputDirectory "phase-b-closeout-$runId.md"
 

@@ -24,6 +24,8 @@
       "method": "POST",
       "path": "/api/auth/login",
       "requiresCredentials": true,
+      "warmupRequests": 0,
+      "requestsPerScenario": 2,
       "bodyTemplate": {
         "Email": "${AUTH_EMAIL}",
         "Password": "${AUTH_PASSWORD}"
@@ -35,6 +37,8 @@
       "path": "/api/auth/refresh",
       "requiresCredentials": true,
       "requiresRefreshToken": true,
+      "warmupRequests": 0,
+      "requestsPerScenario": 1,
       "bodyTemplate": {
         "RefreshToken": "${REFRESH_TOKEN}"
       }

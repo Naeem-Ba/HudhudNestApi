@@ -13,6 +13,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+Add-Type -AssemblyName System.Net.Http
+
 if ($WarmupRequests -lt 0) {
     throw "WarmupRequests must be greater than or equal to zero."
 }
@@ -72,6 +74,22 @@ function Get-ScenarioFlag {
     }
 
     return [bool] $property.Value
+}
+
+function Get-ScenarioInt {
+    param(
+        [object] $Scenario,
+        [string] $Name,
+        [int] $DefaultValue
+    )
+
+    $property = $Scenario.PSObject.Properties[$Name]
+
+    if ($null -eq $property) {
+        return $DefaultValue
+    }
+
+    return [int] $property.Value
 }
 
 function Invoke-ScenarioRequest {
@@ -153,18 +171,13 @@ function LoginForTokens {
     }
 }
 
-$tokens = LoginForTokens
-$templateValues = @{
-    AUTH_EMAIL = $AuthEmail
-    AUTH_PASSWORD = $AuthPassword
-    REFRESH_TOKEN = if ($tokens) { $tokens.refreshToken } else { "" }
-}
-
 $scenarioResults = New-Object System.Collections.Generic.List[object]
 
 foreach ($scenario in $scenarioConfig.scenarios) {
     $requiresCredentials = Get-ScenarioFlag $scenario "requiresCredentials"
     $requiresRefreshToken = Get-ScenarioFlag $scenario "requiresRefreshToken"
+    $scenarioWarmups = Get-ScenarioInt $scenario "warmupRequests" $WarmupRequests
+    $scenarioRequests = Get-ScenarioInt $scenario "requestsPerScenario" $RequestsPerScenario
 
     if ($requiresCredentials -and
         ([string]::IsNullOrWhiteSpace($AuthEmail) -or
@@ -177,6 +190,8 @@ foreach ($scenario in $scenarioConfig.scenarios) {
         continue
     }
 
+    $tokens = if ($requiresRefreshToken) { LoginForTokens } else { $null }
+
     if ($requiresRefreshToken -and -not $tokens) {
         $scenarioResults.Add([pscustomobject]@{
             name = $scenario.name
@@ -186,11 +201,17 @@ foreach ($scenario in $scenarioConfig.scenarios) {
         continue
     }
 
+    $templateValues = @{
+        AUTH_EMAIL = $AuthEmail
+        AUTH_PASSWORD = $AuthPassword
+        REFRESH_TOKEN = if ($tokens) { $tokens.refreshToken } else { "" }
+    }
+
     $body = Expand-Template `
         -Template $scenario.bodyTemplate `
         -Values $templateValues
 
-    for ($i = 0; $i -lt $WarmupRequests; $i++) {
+    for ($i = 0; $i -lt $scenarioWarmups; $i++) {
         Invoke-ScenarioRequest `
             -Method $scenario.method `
             -Path $scenario.path `
@@ -200,7 +221,7 @@ foreach ($scenario in $scenarioConfig.scenarios) {
     $samples = New-Object System.Collections.Generic.List[object]
     $scenarioWatch = [System.Diagnostics.Stopwatch]::StartNew()
 
-    for ($i = 0; $i -lt $RequestsPerScenario; $i++) {
+    for ($i = 0; $i -lt $scenarioRequests; $i++) {
         $samples.Add((Invoke-ScenarioRequest `
             -Method $scenario.method `
             -Path $scenario.path `

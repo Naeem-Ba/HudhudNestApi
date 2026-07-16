@@ -13,6 +13,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+Add-Type -AssemblyName System.Net.Http
+
 if ($PropertyCount -lt 0) {
     throw "PropertyCount must be greater than or equal to zero."
 }
