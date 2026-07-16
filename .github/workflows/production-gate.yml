@@ -691,11 +691,52 @@ jobs:
           fi
 
           normalized_base_url="${STAGING_BASE_URL%/}"
+          if [[ ! "${normalized_base_url}" =~ ^https?://[^/]+ ]]; then
+            echo "::error::STAGING_BASE_URL must be an absolute http(s) URL."
+            {
+              echo "## Staging Smoke Tests"
+              echo
+              echo "Failed because STAGING_BASE_URL is not an absolute http(s) URL."
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+
+          staging_host="${normalized_base_url#http://}"
+          staging_host="${staging_host#https://}"
+          staging_host="${staging_host%%/*}"
+          staging_host="${staging_host%%:*}"
+          staging_host="${staging_host,,}"
+
+          case "${staging_host}" in
+            example.com|*.example.com|example.net|*.example.net|example.org|*.example.org|invalid|*.invalid|localhost|127.*|0.0.0.0)
+              echo "::error::STAGING_BASE_URL points to a placeholder or local host: ${staging_host}. Configure the real staging API URL or remove STAGING_BASE_URL to skip this gate."
+              {
+                echo "## Staging Smoke Tests"
+                echo
+                echo "Failed because STAGING_BASE_URL points to a placeholder or local host: \`${staging_host}\`."
+                echo
+                echo "Configure the GitHub Actions environment variable STAGING_BASE_URL with the real staging API URL."
+              } >> "${GITHUB_STEP_SUMMARY}"
+              exit 1
+              ;;
+          esac
+
+          if ! getent hosts "${staging_host}" > /dev/null; then
+            echo "::error::STAGING_BASE_URL host cannot be resolved by DNS: ${staging_host}. Configure the real staging API URL or remove STAGING_BASE_URL to skip this gate."
+            {
+              echo "## Staging Smoke Tests"
+              echo
+              echo "Failed because STAGING_BASE_URL host cannot be resolved by DNS: \`${staging_host}\`."
+              echo
+              echo "Configure the GitHub Actions environment variable STAGING_BASE_URL with a resolvable staging API host."
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
 
           echo "configured=true" >> "${GITHUB_OUTPUT}"
           echo "base_url=${normalized_base_url}" >> "${GITHUB_OUTPUT}"
 
-          echo "Staging configuration is available."
+          echo "Staging configuration is available for ${staging_host}."
 
       - name: Trigger staging deployment
         if: ${{ steps.staging-config.outputs.configured == 'true' }}

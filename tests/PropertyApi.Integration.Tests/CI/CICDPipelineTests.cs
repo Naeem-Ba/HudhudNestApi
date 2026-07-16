@@ -81,6 +81,23 @@ public sealed class CICDPipelineTests
             "Staging smoke test script was not found.");
     }
 
+    [Fact(DisplayName = "Production gate must fail fast for invalid staging base URL")]
+    public void ProductionGate_Should_Fail_Fast_For_Invalid_Staging_Base_Url()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var workflowFile = Path.Combine(repoRoot, ".github", "workflows", "production-gate.yml");
+
+        Assert.True(File.Exists(workflowFile), "Production gate workflow file was not found.");
+
+        var yaml = File.ReadAllText(workflowFile);
+
+        Assert.Contains("STAGING_BASE_URL must be an absolute http(s) URL", yaml);
+        Assert.Contains("example.com|*.example.com", yaml);
+        Assert.Contains("STAGING_BASE_URL points to a placeholder or local host", yaml);
+        Assert.Contains("getent hosts", yaml);
+        Assert.Contains("STAGING_BASE_URL host cannot be resolved by DNS", yaml);
+    }
+
     [Fact(DisplayName = "Staging smoke script must report failed endpoint details")]
     public void StagingSmokeScript_Should_Report_Failed_Endpoint_Details()
     {
