@@ -115,7 +115,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Setup .NET ${{ env.DOTNET_VERSION }}
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -432,7 +432,7 @@ jobs:
 
       - name: Upload CI reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ci-quality-gate-reports
           if-no-files-found: warn

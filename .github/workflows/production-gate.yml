@@ -81,7 +81,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -636,7 +636,7 @@ jobs:
 
       - name: Upload production gate results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: production-gate-results
           if-no-files-found: warn
@@ -734,6 +734,7 @@ jobs:
 
             if curl \
               --fail \
+              --location \
               --silent \
               --show-error \
               --max-time 10 \
@@ -765,6 +766,7 @@ jobs:
 
           curl \
             --fail \
+            --location \
             --silent \
             --show-error \
             --max-time 10 \

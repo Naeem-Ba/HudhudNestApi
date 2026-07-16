@@ -28,6 +28,29 @@ public sealed class CICDPipelineTests
         Assert.Contains("ci-quality-gate-reports", yaml);
     }
 
+    [Fact(DisplayName = "CI workflows must use Node 24 compatible GitHub Actions")]
+    public void CiWorkflows_Should_Use_Node24_Compatible_Actions()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var workflowFiles = new[]
+        {
+            Path.Combine(repoRoot, ".github", "workflows", "ci.yml"),
+            Path.Combine(repoRoot, ".github", "workflows", "production-gate.yml")
+        };
+
+        foreach (var workflowFile in workflowFiles)
+        {
+            Assert.True(File.Exists(workflowFile), $"Workflow file was not found: {workflowFile}");
+
+            var yaml = File.ReadAllText(workflowFile);
+
+            Assert.Contains("actions/setup-dotnet@v5", yaml);
+            Assert.Contains("actions/upload-artifact@v6", yaml);
+            Assert.DoesNotContain("actions/setup-dotnet@v4", yaml);
+            Assert.DoesNotContain("actions/upload-artifact@v4", yaml);
+        }
+    }
+
     [Fact(DisplayName = "CI quality gate scripts and baseline must be present")]
     public void CiPipeline_Should_Include_Quality_Gate_Scripts_And_Baseline()
     {
@@ -56,6 +79,23 @@ public sealed class CICDPipelineTests
         Assert.True(
             File.Exists(Path.Combine(repoRoot, "scripts", "smoke-staging.sh")),
             "Staging smoke test script was not found.");
+    }
+
+    [Fact(DisplayName = "Staging smoke script must report failed endpoint details")]
+    public void StagingSmokeScript_Should_Report_Failed_Endpoint_Details()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var scriptFile = Path.Combine(repoRoot, "scripts", "smoke-staging.sh");
+
+        Assert.True(File.Exists(scriptFile), "Staging smoke test script was not found.");
+
+        var script = File.ReadAllText(scriptFile);
+
+        Assert.Contains("request_smoke_endpoint", script);
+        Assert.Contains("--location", script);
+        Assert.Contains("Response preview", script);
+        Assert.Contains("::error::Staging smoke check failed", script);
+        Assert.Contains("SMOKE_RETRY_ATTEMPTS", script);
     }
 
     private static string FindRepositoryRoot()
