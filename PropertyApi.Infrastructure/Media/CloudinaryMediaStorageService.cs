@@ -15,7 +15,11 @@ public sealed class CloudinaryMediaStorageService : IMediaStorageService
         IOptions<CloudinaryOptions> options,
         HttpClient httpClient)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(httpClient);
+
         _httpClient = httpClient;
+
         var value = options.Value;
 
         if (string.IsNullOrWhiteSpace(value.CloudName) ||
@@ -23,7 +27,9 @@ public sealed class CloudinaryMediaStorageService : IMediaStorageService
             string.IsNullOrWhiteSpace(value.ApiSecret))
         {
             throw new InvalidOperationException(
-                "Cloudinary configuration is missing. Configure Cloudinary__CloudName, Cloudinary__ApiKey and Cloudinary__ApiSecret.");
+                "Cloudinary configuration is missing. Configure either " +
+                "CLOUDINARY_URL or Cloudinary__CloudName, " +
+                "Cloudinary__ApiKey and Cloudinary__ApiSecret.");
         }
 
         var account = new Account(
@@ -44,13 +50,24 @@ public sealed class CloudinaryMediaStorageService : IMediaStorageService
         ArgumentNullException.ThrowIfNull(content);
 
         if (content.CanSeek && content.Length == 0)
-            throw new InvalidOperationException("Cannot upload empty file.");
+        {
+            throw new InvalidOperationException(
+                "Cannot upload an empty file.");
+        }
 
         if (string.IsNullOrWhiteSpace(fileName))
-            throw new ArgumentException("File name is required.", nameof(fileName));
+        {
+            throw new ArgumentException(
+                "File name is required.",
+                nameof(fileName));
+        }
 
         if (string.IsNullOrWhiteSpace(folder))
-            throw new ArgumentException("Folder is required.", nameof(folder));
+        {
+            throw new ArgumentException(
+                "Folder is required.",
+                nameof(folder));
+        }
 
         var uploadParams = new ImageUploadParams
         {
@@ -61,13 +78,21 @@ public sealed class CloudinaryMediaStorageService : IMediaStorageService
             Overwrite = false
         };
 
-        var result = await _cloudinary.UploadAsync(uploadParams, cancellationToken);
+        var result = await _cloudinary.UploadAsync(
+            uploadParams,
+            cancellationToken);
 
         if (result.Error is not null)
+        {
             return MediaUploadResult.Failed(result.Error.Message);
+        }
 
-        if (result.SecureUrl is null || string.IsNullOrWhiteSpace(result.PublicId))
-            return MediaUploadResult.Failed("Cloudinary upload did not return a valid URL or PublicId.");
+        if (result.SecureUrl is null ||
+            string.IsNullOrWhiteSpace(result.PublicId))
+        {
+            return MediaUploadResult.Failed(
+                "Cloudinary upload did not return a valid URL or PublicId.");
+        }
 
         return MediaUploadResult.Success(
             result.SecureUrl.AbsoluteUri,
@@ -79,14 +104,23 @@ public sealed class CloudinaryMediaStorageService : IMediaStorageService
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(publicId))
-            throw new ArgumentException("PublicId is required.", nameof(publicId));
+        {
+            throw new ArgumentException(
+                "PublicId is required.",
+                nameof(publicId));
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        var result = await _cloudinary.DestroyAsync(new DeletionParams(publicId));
+        var result = await _cloudinary.DestroyAsync(
+            new DeletionParams(publicId));
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (result.Error is not null)
+        {
             throw new InvalidOperationException(result.Error.Message);
+        }
     }
 
     public async Task<MediaFileResult?> GetImageAsync(
@@ -94,21 +128,47 @@ public sealed class CloudinaryMediaStorageService : IMediaStorageService
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(imageUrl))
-            throw new ArgumentException("Image URL is required.", nameof(imageUrl));
+        {
+            throw new ArgumentException(
+                "Image URL is required.",
+                nameof(imageUrl));
+        }
 
-        using var response = await _httpClient.GetAsync(imageUrl, cancellationToken);
+        if (!Uri.TryCreate(
+                imageUrl,
+                UriKind.Absolute,
+                out var parsedImageUri))
+        {
+            throw new ArgumentException(
+                "Image URL must be a valid absolute URL.",
+                nameof(imageUrl));
+        }
+
+        using var response = await _httpClient.GetAsync(
+            parsedImageUri,
+            cancellationToken);
 
         if (!response.IsSuccessStatusCode)
+        {
             return null;
+        }
 
-        var content = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        var content = await response.Content.ReadAsByteArrayAsync(
+            cancellationToken);
+
         var contentType = response.Content.Headers.ContentType?.MediaType
             ?? "application/octet-stream";
 
-        var fileName = Path.GetFileName(new Uri(imageUrl).AbsolutePath);
-        if (string.IsNullOrWhiteSpace(fileName))
-            fileName = "image";
+        var fileName = Path.GetFileName(parsedImageUri.AbsolutePath);
 
-        return new MediaFileResult(content, contentType, fileName);
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            fileName = "image";
+        }
+
+        return new MediaFileResult(
+            content,
+            contentType,
+            fileName);
     }
 }

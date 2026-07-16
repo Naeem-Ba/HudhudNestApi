@@ -7,6 +7,7 @@ using PropertyApi.Application.Admin.Services;
 using PropertyApi.Application.Auth.Commands.SocialLogin;
 using PropertyApi.Application.Auth.Commands.RefreshToken;
 using PropertyApi.Application.Auth.Commands.VerifyPhoneOtp;
+using PropertyApi.Application.Auth.Services;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Listings.Services;
 
@@ -44,6 +45,7 @@ public static class DependencyInjection
         services.AddScoped<RefreshTokenReuseHandler>();
         services.AddScoped<SocialLoginSessionIssuer>();
         services.AddScoped<PhoneOtpSessionIssuer>();
+        services.AddSingleton<IPhoneVerificationPolicy, PhoneVerificationPolicy>();
         services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<IPropertyOwnershipService, PropertyOwnershipService>();
 

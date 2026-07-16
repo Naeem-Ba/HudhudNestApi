@@ -5,7 +5,7 @@ Run this gate only after the Auth, composition, CI, performance, and observabili
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/phase-b-closeout.ps1 `
   -ReleaseCandidate `
-  -StagingBaseUrl "https://staging.example.com" `
+  -StagingBaseUrl "https://<real-staging-api-host>" `
   -PerformanceBaselinePath "artifacts/performance/baseline-before.json" `
   -PerformanceCurrentPath "artifacts/performance/baseline-after.json"
 ```
@@ -56,3 +56,4 @@ By default, performance comparison fails on p95 regression greater than 20 perce
 - Do not run smoke or load tests against production.
 - Keep performance comparisons within the same environment and dataset.
 - Treat skipped staging smoke or skipped performance comparison as acceptable only for local development, never for release closure.
+- Do not configure staging smoke with placeholder hosts such as `*.example.com`; use the real staging API host or leave `STAGING_BASE_URL` unset until staging exists.

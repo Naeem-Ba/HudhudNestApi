@@ -14,4 +14,5 @@ public enum NotificationType
     VisitCancelled = 9,
 
     ReviewAdded = 10,
+    PhoneVerification = 11,
 }

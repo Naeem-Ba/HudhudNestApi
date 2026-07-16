@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
 
+using PropertyApi.Domain.Enums;
+
 namespace PropertyApi.Infrastructure.Identity.Entities;
 
 /// <summary>
@@ -20,6 +22,18 @@ public sealed class ApplicationUser
     /// identities by encrypted phone number.
     /// </summary>
     public string? PhoneNumberLookupHash { get; set; }
+
+    public string? NormalizedPhoneNumber { get; set; }
+
+    public DateTimeOffset? PhoneLastVerifiedAtUtc { get; set; }
+
+    public DateTimeOffset? PhoneVerificationDueAtUtc { get; set; }
+
+    public DateTimeOffset? PhoneVerificationGraceEndsAtUtc { get; set; }
+
+    public PhoneVerificationState PhoneVerificationState { get; set; }
+
+    public string? LastPhoneVerificationNotificationKey { get; set; }
 
     /// <summary>
     /// Identity creation timestamp.

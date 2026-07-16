@@ -113,8 +113,8 @@ public sealed class PureIdentityService
             await _userManager.Users
                 .SingleOrDefaultAsync(
                     candidate =>
-                        candidate.PhoneNumberLookupHash ==
-                        lookupHash,
+                        candidate.NormalizedPhoneNumber == phoneNumber ||
+                        candidate.PhoneNumberLookupHash == lookupHash,
                     ct);
 
         return user is null
@@ -166,6 +166,18 @@ public sealed class PureIdentityService
 
                 PhoneNumberLookupHash =
                     phoneLookupHash,
+
+                NormalizedPhoneNumber = request.PhoneNumber,
+
+                PhoneLastVerifiedAtUtc = request.PhoneConfirmed ? new DateTimeOffset(now, TimeSpan.Zero) : null,
+
+                PhoneVerificationDueAtUtc = request.PhoneConfirmed ? new DateTimeOffset(now, TimeSpan.Zero).AddDays(180) : null,
+
+                PhoneVerificationGraceEndsAtUtc = request.PhoneConfirmed ? new DateTimeOffset(now, TimeSpan.Zero).AddDays(183) : null,
+
+                PhoneVerificationState = request.PhoneConfirmed
+                    ? PropertyApi.Domain.Enums.PhoneVerificationState.Verified
+                    : PropertyApi.Domain.Enums.PhoneVerificationState.NotConfigured,
 
                 PhoneNumberConfirmed =
                     request.PhoneConfirmed,
@@ -547,7 +559,12 @@ public sealed class PureIdentityService
                 user.UserName,
 
             SecurityStamp:
-                user.SecurityStamp);
+                user.SecurityStamp,
+
+            PhoneLastVerifiedAtUtc: user.PhoneLastVerifiedAtUtc,
+            PhoneVerificationDueAtUtc: user.PhoneVerificationDueAtUtc,
+            PhoneVerificationGraceEndsAtUtc: user.PhoneVerificationGraceEndsAtUtc,
+            PhoneVerificationState: user.PhoneVerificationState);
 
     private static IdentityOperationResult Map(
         IdentityResult result)
@@ -591,6 +608,8 @@ public sealed class PureIdentityService
                 ? null
                 : _phoneLookupHasher.Compute(
                     normalizedPhone);
+
+        user.NormalizedPhoneNumber = normalizedPhone;
 
         /*
          * A changed phone number must be verified again.

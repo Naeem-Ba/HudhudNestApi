@@ -16,7 +16,11 @@ public sealed record IdentityAccountSnapshot(
     bool HasPassword,
     bool IsDeleted,
     string? UserName = null,
-    string? SecurityStamp = null);
+    string? SecurityStamp = null,
+    DateTimeOffset? PhoneLastVerifiedAtUtc = null,
+    DateTimeOffset? PhoneVerificationDueAtUtc = null,
+    DateTimeOffset? PhoneVerificationGraceEndsAtUtc = null,
+    PropertyApi.Domain.Enums.PhoneVerificationState PhoneVerificationState = PropertyApi.Domain.Enums.PhoneVerificationState.NotConfigured);
 
 /// <summary>
 /// Framework-neutral request for creating an identity account.

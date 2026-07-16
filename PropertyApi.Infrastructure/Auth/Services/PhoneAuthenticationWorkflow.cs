@@ -1,0 +1,338 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Auth.Models;
+using PropertyApi.Application.Auth.Phone;
+using PropertyApi.Application.Auth.Services;
+using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Domain.Auth.Entities;
+using PropertyApi.Domain.Enums;
+using PropertyApi.Domain.Users.Constants;
+using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Infrastructure.Identity.Entities;
+using PropertyApi.Infrastructure.Persistence;
+using PropertyApi.Domain.Audit.Constants;
+
+namespace PropertyApi.Infrastructure.Auth.Services;
+
+public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
+{
+    private const string GenericSendMessage = "If the phone number is eligible, a verification code will be sent.";
+    private readonly AppDbContext _db;
+    private readonly UserManager<ApplicationUser> _users;
+    private readonly SignInManager<ApplicationUser> _signIn;
+    private readonly IPhoneNumberNormalizer _normalizer;
+    private readonly IOtpService _otp;
+    private readonly ISmsService _sms;
+    private readonly ITokenService _tokens;
+    private readonly IRefreshTokenRepository _refreshTokens;
+    private readonly IPhoneVerificationPolicy _policy;
+    private readonly TimeProvider _clock;
+    private readonly IAuditLogService _audit;
+
+    public PhoneAuthenticationWorkflow(AppDbContext db, UserManager<ApplicationUser> users,
+        SignInManager<ApplicationUser> signIn, IPhoneNumberNormalizer normalizer, IOtpService otp,
+        ISmsService sms, ITokenService tokens, IRefreshTokenRepository refreshTokens,
+        IPhoneVerificationPolicy policy, TimeProvider clock, IAuditLogService audit)
+    {
+        _db = db; _users = users; _signIn = signIn; _normalizer = normalizer; _otp = otp;
+        _sms = sms; _tokens = tokens; _refreshTokens = refreshTokens; _policy = policy; _clock = clock; _audit = audit;
+    }
+
+    public async Task<PhoneWorkflowResult> SendOtpAsync(string phoneNumber, OtpPurpose purpose,
+        Guid? userId, string? ipAddress, CancellationToken ct)
+    {
+        var normalized = _normalizer.Normalize(phoneNumber);
+        if (!normalized.Succeeded) return Fail("PHONE_NUMBER_INVALID");
+        var phone = normalized.Value!;
+        var user = await _users.Users.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == phone, ct);
+        var eligible = purpose switch
+        {
+            OtpPurpose.PhoneRegistration => user is null,
+            OtpPurpose.PhonePasswordReset => user is not null,
+            OtpPurpose.PhoneReverification => user is not null && user.Id == userId,
+            OtpPurpose.PhoneNumberChange => user is null && userId.HasValue,
+            _ => false
+        };
+        if (!eligible) return new(true, Message: GenericSendMessage);
+
+        var cutoff = _clock.GetUtcNow().AddHours(-1);
+        var count = await _db.PhoneOtpChallenges.CountAsync(x =>
+            x.NormalizedPhoneNumber == phone && x.Purpose == purpose && x.CreatedAtUtc >= cutoff, ct);
+        if (count >= 3) return new(true, Message: GenericSendMessage);
+
+        var (code, hash) = _otp.Generate();
+        var challenge = PhoneOtpChallenge.Create(phone, hash, purpose, _clock.GetUtcNow(), userId);
+        _db.PhoneOtpChallenges.Add(challenge);
+        await _db.SaveChangesAsync(ct);
+        if (!await _sms.SendOtpAsync(phone, code, ct))
+        {
+            _db.PhoneOtpChallenges.Remove(challenge);
+            await _db.SaveChangesAsync(ct);
+            return Fail("SMS_FAILED");
+        }
+        await _audit.LogAsync(userId, purpose switch
+        {
+            OtpPurpose.PhoneRegistration => AuditActions.PhoneRegistrationOtpRequested,
+            OtpPurpose.PhonePasswordReset => AuditActions.PhonePasswordResetOtpRequested,
+            OtpPurpose.PhoneReverification => AuditActions.PhoneReverificationRequested,
+            _ => AuditActions.PhoneNumberChangeRequested
+        }, ipAddress, newValue: "{\"outcome\":\"accepted\"}", ct: ct);
+        return new(true, Message: GenericSendMessage, ChallengeId: challenge.Id);
+    }
+
+    public async Task<PhoneWorkflowResult> RegisterAsync(Guid challengeId, string code, string password,
+        string firstName, string lastName, string? ipAddress, CancellationToken ct)
+    {
+        var challenge = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneRegistration, null, ct);
+        if (challenge is null) return Fail("OTP_INVALID");
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            if (await _users.Users.AnyAsync(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber, ct))
+            {
+                await transaction.RollbackAsync(ct);
+                await ReleaseAsync(challenge.Id, ct);
+                return Fail("PHONE_ALREADY_REGISTERED");
+            }
+            var now = _clock.GetUtcNow();
+            var id = Guid.NewGuid();
+            var user = NewVerifiedUser(id, challenge.NormalizedPhoneNumber, now);
+            var created = await _users.CreateAsync(user, password);
+            if (!created.Succeeded)
+            {
+                await transaction.RollbackAsync(ct);
+                await ReleaseAsync(challenge.Id, ct);
+                return IdentityFail(created, "USER_CREATE_FAILED");
+            }
+            var role = await _users.AddToRoleAsync(user, RoleNames.User);
+            if (!role.Succeeded)
+            {
+                await transaction.RollbackAsync(ct);
+                await ReleaseAsync(challenge.Id, ct);
+                return IdentityFail(role, "ROLE_ASSIGNMENT_FAILED");
+            }
+            _db.UserAccounts.Add(UserAccount.Create(id, firstName.Trim(), lastName.Trim(), now.UtcDateTime));
+            await ConsumeAsync(challenge.Id, ct);
+            await _db.SaveChangesAsync(ct);
+            var session = await IssueSessionAsync(user, ipAddress, ct);
+            await transaction.CommitAsync(ct);
+            await _audit.LogAsync(user.Id, AuditActions.PhoneRegistrationCompleted, ipAddress,
+                newValue: "{\"outcome\":\"succeeded\"}", ct: ct);
+            return session;
+        }
+        catch (DbUpdateException)
+        {
+            await transaction.RollbackAsync(ct);
+            await ReleaseAsync(challenge.Id, ct);
+            return Fail("PHONE_ALREADY_REGISTERED");
+        }
+    }
+
+    public async Task<PhoneWorkflowResult> LoginAsync(string phoneNumber, string password,
+        string? ipAddress, CancellationToken ct)
+    {
+        var normalized = _normalizer.Normalize(phoneNumber);
+        var user = normalized.Succeeded
+            ? await _users.Users.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == normalized.Value, ct)
+            : null;
+        if (user is null)
+        {
+            var dummy = new ApplicationUser();
+            var dummyHash = _users.PasswordHasher.HashPassword(dummy, "Dummy-Password-9D6A4E01");
+            _users.PasswordHasher.VerifyHashedPassword(dummy, dummyHash, password);
+            await _audit.LogAsync(null, AuditActions.PhoneLoginFailed, ipAddress,
+                newValue: "{\"outcome\":\"failed\"}", ct: ct);
+            return Fail("PHONE_AUTH_FAILED");
+        }
+        var signIn = await _signIn.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true);
+        if (!signIn.Succeeded)
+        {
+            await _audit.LogAsync(user.Id, AuditActions.PhoneLoginFailed, ipAddress,
+                newValue: "{\"outcome\":\"failed\"}", ct: ct);
+            return Fail("PHONE_AUTH_FAILED");
+        }
+        user.LastLoginAt = _clock.GetUtcNow().UtcDateTime;
+        await _users.UpdateAsync(user);
+        await _audit.LogAsync(user.Id, AuditActions.PhoneLoginSucceeded, ipAddress,
+            newValue: "{\"outcome\":\"succeeded\"}", ct: ct);
+        return await IssueSessionAsync(user, ipAddress, ct);
+    }
+
+    public async Task<PhoneWorkflowResult> VerifyPasswordResetAsync(Guid challengeId, string code,
+        CancellationToken ct)
+    {
+        var challenge = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhonePasswordReset, null, ct);
+        if (challenge is null) return Fail("PASSWORD_RESET_INVALID");
+        var user = await _users.Users.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber, ct);
+        if (user is null) return Fail("PASSWORD_RESET_INVALID");
+        await ConsumeAsync(challenge.Id, ct);
+        return new(true, ConfirmationToken: await _users.GeneratePasswordResetTokenAsync(user));
+    }
+
+    public async Task<PhoneWorkflowResult> ConfirmPasswordResetAsync(string phoneNumber,
+        string confirmationToken, string newPassword, string? ipAddress, CancellationToken ct)
+    {
+        var normalized = _normalizer.Normalize(phoneNumber);
+        if (!normalized.Succeeded) return Fail("PASSWORD_RESET_INVALID");
+        var user = await _users.Users.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == normalized.Value, ct);
+        if (user is null) return Fail("PASSWORD_RESET_INVALID");
+        var reset = await _users.ResetPasswordAsync(user, confirmationToken, newPassword);
+        if (!reset.Succeeded) return IdentityFail(reset, "PASSWORD_RESET_INVALID");
+        await _users.UpdateSecurityStampAsync(user);
+        await _refreshTokens.RevokeActiveTokensForUserAsync(user.Id, _clock.GetUtcNow().UtcDateTime, ipAddress, ct);
+        await _audit.LogAsync(user.Id, AuditActions.PhonePasswordResetCompleted, ipAddress,
+            newValue: "{\"outcome\":\"succeeded\"}", ct: ct);
+        return new(true, Message: "Password reset completed.");
+    }
+
+    public async Task<PhoneWorkflowResult> GetReverificationStatusAsync(Guid userId, CancellationToken ct)
+    {
+        var user = await _users.FindByIdAsync(userId.ToString());
+        if (user?.PhoneLastVerifiedAtUtc is null) return Fail("PHONE_REVERIFICATION_NOT_CONFIGURED");
+        var state = _policy.Evaluate(user.PhoneLastVerifiedAtUtc.Value, _clock.GetUtcNow());
+        return new(true, VerificationState: state, DueAtUtc: user.PhoneVerificationDueAtUtc,
+            GraceEndsAtUtc: user.PhoneVerificationGraceEndsAtUtc);
+    }
+
+    public async Task<PhoneWorkflowResult> VerifyReverificationAsync(Guid userId, Guid challengeId,
+        string code, CancellationToken ct)
+    {
+        var challenge = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneReverification, userId, ct);
+        if (challenge is null) return Fail("OTP_INVALID");
+        var user = await _users.FindByIdAsync(userId.ToString());
+        if (user is null || user.NormalizedPhoneNumber != challenge.NormalizedPhoneNumber) return Fail("OTP_INVALID");
+        SetVerified(user, _clock.GetUtcNow());
+        await ConsumeAsync(challenge.Id, ct);
+        await _users.UpdateAsync(user);
+        await _audit.LogAsync(user.Id, AuditActions.PhoneOwnershipReverified, null,
+            newValue: "{\"outcome\":\"succeeded\"}", ct: ct);
+        return new(true, VerificationState: PhoneVerificationState.Verified,
+            DueAtUtc: user.PhoneVerificationDueAtUtc, GraceEndsAtUtc: user.PhoneVerificationGraceEndsAtUtc);
+    }
+
+    public async Task<PhoneWorkflowResult> VerifyPhoneChangeAsync(Guid userId, Guid challengeId,
+        string code, string currentPassword, string? ipAddress, CancellationToken ct)
+    {
+        var user = await _users.FindByIdAsync(userId.ToString());
+        if (user is null || !await _users.CheckPasswordAsync(user, currentPassword))
+            return Fail("RECENT_AUTHENTICATION_REQUIRED");
+        var challenge = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneNumberChange, userId, ct);
+        if (challenge is null) return Fail("OTP_INVALID");
+        if (await _users.Users.AnyAsync(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber, ct))
+            return Fail("PHONE_NUMBER_ALREADY_IN_USE");
+        user.PhoneNumber = challenge.NormalizedPhoneNumber;
+        user.NormalizedPhoneNumber = challenge.NormalizedPhoneNumber;
+        user.PhoneNumberConfirmed = true;
+        SetVerified(user, _clock.GetUtcNow());
+        await ConsumeAsync(challenge.Id, ct);
+        await _users.UpdateSecurityStampAsync(user);
+        await _users.UpdateAsync(user);
+        await _refreshTokens.RevokeActiveTokensForUserAsync(user.Id, _clock.GetUtcNow().UtcDateTime, ipAddress, ct);
+        await _audit.LogAsync(user.Id, AuditActions.PhoneNumberChanged, ipAddress,
+            newValue: "{\"outcome\":\"succeeded\"}", ct: ct);
+        return new(true, Message: "Phone number changed.");
+    }
+
+    private async Task<PhoneOtpChallenge?> ValidateAndReserveAsync(Guid id, string code,
+        OtpPurpose purpose, Guid? userId, CancellationToken ct)
+    {
+        var now = _clock.GetUtcNow();
+        var challenge = await _db.PhoneOtpChallenges.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (challenge is null || challenge.Purpose != purpose || challenge.UserId != userId ||
+            challenge.ConsumedAtUtc is not null || challenge.ExpiresAtUtc <= now || challenge.AttemptCount >= 3 ||
+            (challenge.ReservedUntilUtc > now)) return null;
+        if (!_otp.Verify(code, challenge.CodeHash))
+        {
+            if (!_db.Database.IsRelational())
+            {
+                challenge.IncrementAttempts();
+                await _db.SaveChangesAsync(ct);
+                return null;
+            }
+            await _db.PhoneOtpChallenges.Where(x => x.Id == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.AttemptCount, x => x.AttemptCount + 1), ct);
+            return null;
+        }
+        var reservation = Guid.NewGuid();
+        if (!_db.Database.IsRelational())
+        {
+            challenge.Reserve(reservation, now.AddMinutes(2));
+            await _db.SaveChangesAsync(ct);
+            return challenge;
+        }
+        var affected = await _db.PhoneOtpChallenges.Where(x => x.Id == id && x.ConsumedAtUtc == null &&
+                (x.ReservedUntilUtc == null || x.ReservedUntilUtc <= now))
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.ReservationId, reservation)
+                .SetProperty(x => x.ReservedUntilUtc, now.AddMinutes(2)), ct);
+        return affected == 1 ? await _db.PhoneOtpChallenges.SingleAsync(x => x.Id == id, ct) : null;
+    }
+
+    private async Task ConsumeAsync(Guid id, CancellationToken ct)
+    {
+        if (!_db.Database.IsRelational())
+        {
+            var challenge = await _db.PhoneOtpChallenges.SingleAsync(x => x.Id == id, ct);
+            challenge.Consume(_clock.GetUtcNow());
+            await _db.SaveChangesAsync(ct);
+            return;
+        }
+        await _db.PhoneOtpChallenges.Where(x => x.Id == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.ConsumedAtUtc, _clock.GetUtcNow())
+                .SetProperty(x => x.ReservationId, (Guid?)null)
+                .SetProperty(x => x.ReservedUntilUtc, (DateTimeOffset?)null), ct);
+    }
+
+    private async Task ReleaseAsync(Guid id, CancellationToken ct)
+    {
+        if (!_db.Database.IsRelational())
+        {
+            var challenge = await _db.PhoneOtpChallenges.SingleAsync(x => x.Id == id, ct);
+            challenge.Release();
+            await _db.SaveChangesAsync(ct);
+            return;
+        }
+        await _db.PhoneOtpChallenges.Where(x => x.Id == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.ReservationId, (Guid?)null)
+                .SetProperty(x => x.ReservedUntilUtc, (DateTimeOffset?)null), ct);
+    }
+
+    private ApplicationUser NewVerifiedUser(Guid id, string phone, DateTimeOffset now)
+    {
+        var user = new ApplicationUser
+        {
+            Id = id,
+            UserName = phone,
+            PhoneNumber = phone,
+            NormalizedPhoneNumber = phone,
+            PhoneNumberConfirmed = true,
+            CreatedAt = now.UtcDateTime,
+            UpdatedAt = now.UtcDateTime
+        };
+        SetVerified(user, now);
+        return user;
+    }
+
+    private static void SetVerified(ApplicationUser user, DateTimeOffset now)
+    {
+        user.PhoneLastVerifiedAtUtc = now; user.PhoneVerificationDueAtUtc = now.AddDays(180);
+        user.PhoneVerificationGraceEndsAtUtc = now.AddDays(183);
+        user.PhoneVerificationState = PhoneVerificationState.Verified;
+    }
+
+    private async Task<PhoneWorkflowResult> IssueSessionAsync(ApplicationUser user, string? ip, CancellationToken ct)
+    {
+        var roles = await _users.GetRolesAsync(user);
+        var access = _tokens.GenerateAccessToken(new AccessTokenSubject(user.Id, user.Email, user.UserName, user.SecurityStamp), roles.ToArray());
+        var refresh = _tokens.GenerateRefreshToken();
+        await _refreshTokens.AddAsync(user.Id, refresh, ip, ct);
+        return new(true, AccessToken: access, RefreshToken: refresh,
+            AccessTokenExpiresAtUtc: _tokens.GetAccessTokenExpiresAtUtc(), VerificationState: user.PhoneVerificationState,
+            DueAtUtc: user.PhoneVerificationDueAtUtc, GraceEndsAtUtc: user.PhoneVerificationGraceEndsAtUtc);
+    }
+
+    private static PhoneWorkflowResult Fail(string code) => new(false, code, "The request could not be completed.");
+    private static PhoneWorkflowResult IdentityFail(IdentityResult result, string fallback) =>
+        new(false, result.Errors.FirstOrDefault()?.Code == "PasswordTooShort" ? "PASSWORD_POLICY_FAILED" : fallback,
+            "The request could not be completed.");
+}

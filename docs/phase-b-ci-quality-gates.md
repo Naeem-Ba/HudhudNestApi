@@ -18,6 +18,30 @@ gate scripts, and missing report artifacts.
 | Production static gate | `scripts/verify-production-gate.ps1` verifies key production hardening assumptions |
 | Staging smoke | `scripts/smoke-staging.sh` checks liveness, readiness, and a public API endpoint |
 
+## GitHub Actions Versions
+
+CI and production-gate workflows use Node 24 compatible GitHub Actions:
+
+- `actions/setup-dotnet@v5`
+- `actions/upload-artifact@v6`
+
+Do not downgrade these to Node 20 based actions; GitHub runners emit deprecation warnings and may force compatibility behavior.
+
+## Staging Smoke Configuration
+
+`STAGING_BASE_URL` is optional. When it is not configured, the staging smoke job is skipped and writes a notice to the GitHub Actions summary.
+
+When `STAGING_BASE_URL` is configured, it must be the real staging API base URL:
+
+- use an absolute `http` or `https` URL.
+- do not use placeholder hosts such as `staging-api.example.com`.
+- do not use localhost or production hosts.
+- ensure the host is resolvable by public DNS from GitHub-hosted runners.
+
+If there is no staging environment yet, delete the GitHub Actions environment variable `STAGING_BASE_URL` instead of setting it to a placeholder. Placeholder values fail fast during configuration validation before readiness polling starts.
+
+The smoke script follows redirects, retries transient failures, and reports the failing endpoint, HTTP status, and a short response preview when a check fails.
+
 ## Baseline
 
 ### Vulnerabilities

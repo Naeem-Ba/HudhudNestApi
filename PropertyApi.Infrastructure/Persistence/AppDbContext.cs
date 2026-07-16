@@ -55,6 +55,7 @@ public sealed class AppDbContext
     public DbSet<Favorite> Favorites => Set<Favorite>();
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<OtpCode> OtpCodes => Set<OtpCode>();
+    public DbSet<PhoneOtpChallenge> PhoneOtpChallenges => Set<PhoneOtpChallenge>();
     public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Notification> Notifications => Set<Notification>();

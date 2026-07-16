@@ -7,6 +7,7 @@ using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Infrastructure.Audit;
 using PropertyApi.Infrastructure.Auth.Repositories;
 using PropertyApi.Infrastructure.Auth.Security;
+using PropertyApi.Application.Auth.Phone;
 using PropertyApi.Infrastructure.Auth.Services;
 using PropertyApi.Infrastructure.Email;
 using PropertyApi.Infrastructure.Identity.Services;
@@ -89,6 +90,10 @@ internal static class AuthInfrastructureRegistration
         services.AddSingleton<
             IPhoneNumberLookupHasher,
             HmacPhoneNumberLookupHasher>();
+        services.AddSingleton<IPhoneNumberNormalizer, E164PhoneNumberNormalizer>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<IPhoneAuthenticationWorkflow, PhoneAuthenticationWorkflow>();
+        services.AddHostedService<PhoneVerificationHostedService>();
 
         services.AddScoped<IIdentityCapabilityAdapter, PureIdentityService>();
 

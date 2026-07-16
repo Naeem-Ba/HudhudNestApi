@@ -485,6 +485,8 @@ app.UseRouting();
 app.UseCors("DefaultCors");
 
 app.UseAuthentication();
+app.UseMiddleware<PropertyApi.Security.LegacyPhoneOtpDeprecationMiddleware>();
+app.UseMiddleware<PropertyApi.Security.PhoneVerificationRestrictionMiddleware>();
 
 if (useRedisRateLimiting)
 {

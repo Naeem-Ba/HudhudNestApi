@@ -278,6 +278,10 @@ public sealed class PhoneNumberLookupHashBackfillPostgresTests
                             setters.SetProperty(
                                 user =>
                                     user.PhoneNumberLookupHash,
+                                (string?)null)
+                            .SetProperty(
+                                user =>
+                                    user.NormalizedPhoneNumber,
                                 (string?)null));
             });
     }

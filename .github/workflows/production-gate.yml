@@ -709,13 +709,15 @@ jobs:
 
           case "${staging_host}" in
             example.com|*.example.com|example.net|*.example.net|example.org|*.example.org|invalid|*.invalid|localhost|127.*|0.0.0.0)
-              echo "::error::STAGING_BASE_URL points to a placeholder or local host: ${staging_host}. Configure the real staging API URL or remove STAGING_BASE_URL to skip this gate."
+              echo "::error::STAGING_BASE_URL points to a placeholder or local host: ${staging_host}. Set it to the real staging API URL, or delete the GitHub Actions variable to skip staging smoke until staging exists."
               {
                 echo "## Staging Smoke Tests"
                 echo
                 echo "Failed because STAGING_BASE_URL points to a placeholder or local host: \`${staging_host}\`."
                 echo
-                echo "Configure the GitHub Actions environment variable STAGING_BASE_URL with the real staging API URL."
+                echo "This is a staging configuration problem, not an application startup failure."
+                echo
+                echo "Set STAGING_BASE_URL to the real staging API URL, or delete the GitHub Actions variable to skip staging smoke until staging exists."
               } >> "${GITHUB_STEP_SUMMARY}"
               exit 1
               ;;
