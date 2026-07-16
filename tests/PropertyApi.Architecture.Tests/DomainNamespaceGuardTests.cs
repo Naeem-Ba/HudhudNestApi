@@ -12,6 +12,7 @@ public sealed class DomainNamespaceGuardTests
         var domainAssembly = typeof(BaseEntity).Assembly;
 
         var invalidTypes = GetLoadableTypes(domainAssembly)
+            .Where(type => !IsCoverageInstrumentationType(type))
             .Where(type =>
             {
                 var namespaceName = type.Namespace;
@@ -75,5 +76,12 @@ public sealed class DomainNamespaceGuardTests
         {
             return exception.Types.OfType<Type>();
         }
+    }
+
+    private static bool IsCoverageInstrumentationType(Type type)
+    {
+        return type.FullName?.StartsWith(
+            "Coverlet.Core.Instrumentation.Tracker.",
+            StringComparison.Ordinal) == true;
     }
 }
