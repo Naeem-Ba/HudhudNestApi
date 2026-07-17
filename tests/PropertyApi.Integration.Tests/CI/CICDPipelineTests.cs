@@ -98,6 +98,22 @@ public sealed class CICDPipelineTests
         Assert.Contains("STAGING_BASE_URL host cannot be resolved by DNS", yaml);
     }
 
+    [Fact(DisplayName = "Coverage gate must exclude generated migrations from Auth-sensitive coverage")]
+    public void CoverageGate_Should_Exclude_Generated_Migrations_From_Auth_Sensitive_Coverage()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var scriptFile = Path.Combine(repoRoot, "ci", "check-coverage-baseline.ps1");
+
+        Assert.True(File.Exists(scriptFile), "Coverage baseline script was not found.");
+
+        var script = File.ReadAllText(scriptFile);
+
+        Assert.Contains("Test-IsGeneratedCoverageClass", script);
+        Assert.Contains("[\\\\/](Migrations)[\\\\/]", script);
+        Assert.Contains("\\.Designer\\.cs$", script);
+        Assert.Contains("authGeneratedClassesExcluded", script);
+    }
+
     [Fact(DisplayName = "Staging smoke script must report failed endpoint details")]
     public void StagingSmokeScript_Should_Report_Failed_Endpoint_Details()
     {

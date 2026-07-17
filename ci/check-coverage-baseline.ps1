@@ -28,6 +28,20 @@ $totalBranchesCovered = 0
 $totalBranchesValid = 0
 $authLinesCovered = 0
 $authLinesValid = 0
+$authGeneratedClassesExcluded = 0
+
+function Test-IsGeneratedCoverageClass {
+    param(
+        [string] $ClassName,
+        [string] $FileName
+    )
+
+    return (
+        $ClassName -match '(^|\.)Migrations(\.|$)' -or
+        $FileName -match '[\\/](Migrations)[\\/]' -or
+        $FileName -match '\.Designer\.cs$'
+    )
+}
 
 foreach ($file in $coverageFiles) {
     [xml] $document = Get-Content -Path $file.FullName -Raw
@@ -49,6 +63,11 @@ foreach ($file in $coverageFiles) {
             $fileName -match "(Auth|Identity|Security|Otp|Token|Login|Register|Password)"
 
         if (-not $isAuthSensitive) {
+            continue
+        }
+
+        if (Test-IsGeneratedCoverageClass -ClassName $className -FileName $fileName) {
+            $authGeneratedClassesExcluded++
             continue
         }
 
@@ -83,7 +102,9 @@ $summary = @(
     "| --- | ---: | ---: |",
     "| Line coverage | $lineCoverage% | $minimumLineCoverage% |",
     "| Branch coverage | $branchCoverage% | $minimumBranchCoverage% |",
-    "| Auth-sensitive line coverage | $authLineCoverage% | $minimumAuthLineCoverage% |"
+    "| Auth-sensitive line coverage | $authLineCoverage% | $minimumAuthLineCoverage% |",
+    "",
+    "Auth-sensitive generated classes excluded: $authGeneratedClassesExcluded"
 )
 
 $summaryPath = Join-Path $OutputDirectory "coverage-gate-summary.md"
@@ -96,6 +117,7 @@ $summary | Set-Content -Path $summaryPath -Encoding utf8
     lineCoveragePercent = $lineCoverage
     branchCoveragePercent = $branchCoverage
     authLineCoveragePercent = $authLineCoverage
+    authGeneratedClassesExcluded = $authGeneratedClassesExcluded
     minimumLineCoveragePercent = $minimumLineCoverage
     minimumBranchCoveragePercent = $minimumBranchCoverage
     minimumAuthLineCoveragePercent = $minimumAuthLineCoverage
