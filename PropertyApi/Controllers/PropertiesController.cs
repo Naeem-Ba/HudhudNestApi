@@ -6,11 +6,14 @@ using PropertyApi.Application.Listings.DTOs;
 using PropertyApi.Application.Listings.Commands.CreateProperty;
 using PropertyApi.Application.Listings.Commands.DeleteProperty;
 using PropertyApi.Application.Listings.Commands.UpdateProperty;
+using PropertyApi.Application.Listings.Commands.PublishProperty;
 using PropertyApi.Application.Listings.Queries.GetPropertiesList;
 using PropertyApi.Application.Listings.Queries.GetPropertyById;
+using PropertyApi.Application.Listings.Queries.GetPropertyForManagement;
 using PropertyApi.Application.Listings.Queries.SearchPropertiesNearby;
 using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Domain.Enums;
+using PropertyApi.Domain.Users.Constants;
 
 namespace PropertyApi.Controllers;
 
@@ -70,6 +73,26 @@ public sealed class PropertiesController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
+    [HttpGet("{id:guid}/manage")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetForManagement(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var result = await _mediator.Send(
+            new GetPropertyForManagementQuery(
+                id,
+                userId.Value,
+                User.IsInRole(RoleNames.Admin)),
+            ct);
+
+        return Ok(result);
+    }
+
     // ── POST /api/properties ─────────────────────────────────────
     [HttpPost]
     [Authorize]
@@ -91,7 +114,13 @@ public sealed class PropertiesController : ControllerBase
         return CreatedAtAction(
             nameof(GetById),
             new { id = propertyId },
-            new { id = propertyId });
+            new
+            {
+                id = propertyId,
+                isPublished = false,
+                status = "Draft",
+                nextAction = "UploadImages"
+            });
     }
 
     // ── PUT /api/properties/{id} ─────────────────────────────────
@@ -136,32 +165,26 @@ public sealed class PropertiesController : ControllerBase
     }
 
     // ── PATCH /api/properties/{id}/publish ───────────────────────
+    [HttpPost("{id:guid}/publish")]
     [HttpPatch("{id:guid}/publish")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Publish(Guid id, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
 
-        var success = await _mediator.Send(new UpdatePropertyCommand(
-            PropertyId: id,
-            RequestingUserId: userId.Value,
-            Title: null, Description: null,
-            Street: null, City: null, Region: null,
-            CountryCode: null, PostalCode: null,
-            Latitude: null, Longitude: null,
-            ColdRent: null, WarmRent: null, PurchasePrice: null,
-            Deposit: null, AdditionalCosts: null, CurrencyCode: null,
-            Rooms: null, Area: null, Floor: null, TotalFloors: null,
-            HasBalcony: null, HasElevator: null, HasParkingSpace: null,
-            HeatingType: null, Status: null, Condition: null,
-            EnergyEfficiency: null, AvailableFrom: null, ExpiresAt: null,
-            IsPublished: true
-        ), ct);
+        await _mediator.Send(
+            new PublishPropertyCommand(
+                id,
+                userId.Value,
+                User.IsInRole(RoleNames.Admin)),
+            ct);
 
-        return success ? NoContent() : NotFound();
+        return NoContent();
     }
 
     // ── Helper ───────────────────────────────────────────────────

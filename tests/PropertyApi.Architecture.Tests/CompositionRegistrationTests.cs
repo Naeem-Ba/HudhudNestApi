@@ -99,6 +99,7 @@ public sealed class CompositionRegistrationTests
         AssertScoped<IUserDirectoryReadService>(services);
         AssertScoped<IUserAccountRepository>(services);
         AssertScoped<IMessageRepository>(services);
+        AssertScoped<ICommonLookupService>(services);
 
         AssertScoped<ICurrentUserService>(services);
         AssertScoped<IMediaStorageService>(services);

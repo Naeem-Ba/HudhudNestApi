@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using PropertyApi.Infrastructure.Auth;
 using PropertyApi.Infrastructure.Caching;
 using PropertyApi.Infrastructure.Health;
+using PropertyApi.Infrastructure.Lookups;
 using PropertyApi.Infrastructure.Media;
 using PropertyApi.Infrastructure.Persistence;
 using PropertyApi.Infrastructure.Repositories;
@@ -27,6 +28,7 @@ public static class DependencyInjection
         services.AddAuthInfrastructure(configuration, environment);
         services.AddPersistenceInfrastructure(configuration, environment);
         services.AddRepositoryInfrastructure();
+        services.AddLookupInfrastructure();
         services.AddUserContextInfrastructure();
         services.AddMediaInfrastructure(configuration);
         services.AddCacheInfrastructure(configuration, environment);

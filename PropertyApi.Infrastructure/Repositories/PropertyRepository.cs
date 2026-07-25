@@ -45,8 +45,9 @@ public sealed class PropertyRepository : IPropertyRepository
 
         return await _db.Properties
             .AsNoTracking()
+            .AsSplitQuery()
             .Include(property => property.Owner)
-            .Include(property => property.Images)
+            .Include(property => property.Images.Where(image => !image.IsDeleted))
             .Include(property => property.PropertyAmenities)
                 .ThenInclude(propertyAmenity => propertyAmenity.Amenity)
             .FirstOrDefaultAsync(
