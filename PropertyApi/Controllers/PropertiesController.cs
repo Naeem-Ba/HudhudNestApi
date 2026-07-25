@@ -10,6 +10,7 @@ using PropertyApi.Application.Listings.Commands.PublishProperty;
 using PropertyApi.Application.Listings.Queries.GetPropertiesList;
 using PropertyApi.Application.Listings.Queries.GetPropertyById;
 using PropertyApi.Application.Listings.Queries.GetPropertyForManagement;
+using PropertyApi.Application.Listings.Queries.GetMyProperties;
 using PropertyApi.Application.Listings.Queries.SearchPropertiesNearby;
 using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Domain.Enums;
@@ -71,6 +72,21 @@ public sealed class PropertiesController : ControllerBase
     {
         var result = await _mediator.Send(new GetPropertyByIdQuery(id), ct);
         return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpGet("mine")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMine(CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var result = await _mediator.Send(
+            new GetMyPropertiesQuery(userId.Value),
+            ct);
+
+        return Ok(result);
     }
 
     [HttpGet("{id:guid}/manage")]

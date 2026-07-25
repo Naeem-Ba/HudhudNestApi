@@ -4,6 +4,7 @@ using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Commands.PublishProperty;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Listings.Queries.GetPropertyForManagement;
+using PropertyApi.Application.Listings.Queries.GetMyProperties;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Listings.Entities;
 
@@ -11,6 +12,25 @@ namespace PropertyApi.Application.Tests.Listings;
 
 public sealed class PropertyPublicationWorkflowTests
 {
+    [Fact]
+    public async Task MyProperties_ReturnsDraftsOwnedByCurrentUser()
+    {
+        var property = CreateProperty();
+        var repository = RepositoryReturning(property);
+        repository
+            .Setup(x => x.GetByOwnerAsync(property.OwnerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([property]);
+        var handler = new GetMyPropertiesQueryHandler(repository.Object);
+
+        var result = await handler.Handle(
+            new GetMyPropertiesQuery(property.OwnerId),
+            CancellationToken.None);
+
+        var item = Assert.Single(result);
+        Assert.Equal(property.Id, item.Id);
+        Assert.False(item.IsPublished);
+    }
+
     [Fact]
     public async Task Owner_CanPreviewOwnUnpublishedProperty()
     {
