@@ -51,7 +51,13 @@ public sealed class PhoneAuthWebApplicationFactory
     TestSecuritySettings.OtpSecretKey,
 
                 ["Security:PhoneLookupHmacKey"] =
-    TestSecuritySettings.PhoneLookupHmacKey
+    TestSecuritySettings.PhoneLookupHmacKey,
+
+                // CI enables the Redis-backed limiter for the whole test process.
+                // Give this host its own key namespace so another factory cannot
+                // exhaust auth-login for TestServer's shared "unknown" client IP.
+                ["RateLimiting:Redis:InstanceName"] =
+    $"PropertyApiTests:PhoneAuth:{_databaseName}:"
             };
 
             TestHostConfiguration.AddDataProtectionSettings(
