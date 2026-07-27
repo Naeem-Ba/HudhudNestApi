@@ -13,6 +13,19 @@ namespace PropertyApi.Application.Tests.Listings;
 public sealed class PropertyPublicationWorkflowTests
 {
     [Fact]
+    public void NewProperties_ArePublishedByDefault()
+    {
+        var property = Property.Create(
+            "Published property",
+            "Published property description",
+            Guid.NewGuid(),
+            ListingType.ForRent);
+
+        Assert.True(property.IsPublished);
+        Assert.NotNull(property.PublishedAt);
+    }
+
+    [Fact]
     public async Task MyProperties_ReturnsDraftsOwnedByCurrentUser()
     {
         var property = CreateProperty();
@@ -131,7 +144,8 @@ public sealed class PropertyPublicationWorkflowTests
             Guid.NewGuid(),
             ListingType.ForRent,
             "SY",
-            "SYP");
+            "SYP",
+            isPublished: false);
 
     private static Mock<IPropertyRepository> RepositoryReturning(Property property)
     {

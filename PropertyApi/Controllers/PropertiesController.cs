@@ -133,8 +133,8 @@ public sealed class PropertiesController : ControllerBase
             new
             {
                 id = propertyId,
-                isPublished = false,
-                status = "Draft",
+                isPublished = true,
+                status = "Published",
                 nextAction = "UploadImages"
             });
     }

@@ -73,7 +73,7 @@ public class Property : AuditableEntity
     public UserAccount? Owner { get; set; }
 
     // -- Publishing ---------------------------------------------
-    public bool IsPublished { get; private set; }
+    public bool IsPublished { get; private set; } = true;
     public DateTime? PublishedAt { get; private set; }
     public DateTime? ExpiresAt { get; set; }
 
@@ -205,7 +205,8 @@ public class Property : AuditableEntity
         Guid ownerId,
         ListingType listingType,
         string countryCode = "SY",
-        string currencyCode = "SYP")
+        string currencyCode = "SYP",
+        bool isPublished = true)
     {
         if (string.IsNullOrWhiteSpace(title))
             throw new DomainException("Property title is required.");
@@ -213,6 +214,8 @@ public class Property : AuditableEntity
             throw new DomainException("Property description is required.");
         if (ownerId == Guid.Empty)
             throw new DomainException("OwnerId is required.");
+
+        var now = DateTime.UtcNow;
 
         return new Property
         {
@@ -223,8 +226,10 @@ public class Property : AuditableEntity
             ListingType = listingType,
             CountryCode = countryCode.ToUpperInvariant(),
             CurrencyCode = currencyCode.ToUpperInvariant(),
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            IsPublished = isPublished,
+            PublishedAt = isPublished ? now : null,
+            CreatedAt = now,
+            UpdatedAt = now
         };
     }
 
