@@ -1,0 +1,121 @@
+name: Concurrent Performance Validation
+
+on:
+  pull_request:
+    branches: [main, master, develop]
+  push:
+    branches: [main, master]
+  schedule:
+    - cron: '17 2 * * 1'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Performance profile
+        type: choice
+        options: [pr, release, staging]
+        default: pr
+  workflow_call:
+    inputs:
+      profile:
+        description: Performance profile
+        required: false
+        type: string
+        default: release
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-${{ github.workflow }}-${{ github.ref }}-${{ inputs.profile || github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  performance-validation:
+    name: Two replicas + k6 + PostgreSQL analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PERF_ENVIRONMENT: CI
+      PERF_PROFILE: ${{ inputs.profile || (github.event_name == 'schedule' && 'staging') || (github.event_name == 'pull_request' && 'pr') || 'release' }}
+      PERF_COMMIT_SHA: ${{ github.sha }}
+      PERF_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+      PERF_BASE_URL: http://localhost:58080
+      PRODUCTION_BASE_URL: https://production.invalid
+
+    steps:
+      - name: Checkout intended release
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install PostgreSQL client
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client jq
+
+      - name: Restore performance projects
+        run: |
+          set -euo pipefail
+          dotnet restore PropertyApi.sln
+
+      - name: Build performance validation system
+        run: |
+          set -euo pipefail
+          dotnet build PropertyApi.sln --configuration Release --no-restore
+
+      - name: Run performance configuration regression tests
+        run: |
+          set -euo pipefail
+          dotnet test tests/PropertyApi.Performance.Tests/PropertyApi.Performance.Tests.csproj \
+            --configuration Release --no-build --no-restore
+          dotnet test tests/PropertyApi.Concurrency.Tests/PropertyApi.Concurrency.Tests.csproj \
+            --configuration Release --no-build --no-restore
+
+      - name: Run mandatory concurrent performance and query gate
+        run: |
+          set -euo pipefail
+          chmod +x scripts/run-performance-tests.sh \
+            scripts/capture-query-plans.sh \
+            scripts/capture-pg-stat-statements.sh \
+            scripts/capture-auth-race-integrity.sh \
+            scripts/compare-performance-baseline.sh
+          bash scripts/run-performance-tests.sh
+
+      - name: Publish performance summary
+        if: always()
+        run: |
+          if [ -f artifacts/performance/summary.md ]; then
+            cat artifacts/performance/summary.md >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo '## Performance validation failed before summary generation' >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload sanitized performance evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: performance-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/performance/summary.json
+            artifacts/performance/summary.md
+            artifacts/performance/junit.xml
+            artifacts/performance/thresholds.json
+            artifacts/performance/environment.json
+            artifacts/performance/dataset-manifest.json
+            artifacts/performance/endpoint-results.csv
+            artifacts/performance/concurrency/**
+            artifacts/performance/database-results.json
+            artifacts/performance/query-plan-analysis.json
+            artifacts/performance/query-plans/**
+            artifacts/performance/postgresql/**
+            artifacts/performance/k6/**
+            artifacts/performance/baseline-comparison.json
+            artifacts/performance/service-logs.txt
+            artifacts/performance/container-resources.jsonl
+            artifacts/performance/redis-memory.txt

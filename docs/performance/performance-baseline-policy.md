@@ -1,0 +1,53 @@
+# Performance baseline policy
+
+## Approval
+
+An approved baseline must be built from at least three successful repetitions of the same profile. The median run is
+stored as `performance/baselines/approved-baseline.json`. Approval requires review by a service owner and a
+performance/SRE reviewer. A baseline replacement in the same change as an observed regression must not be approved
+without an explicit explanation and evidence.
+
+`performance/performance-budgets.json` remains `approved: false` until measured evidence exists. Release and
+scheduled profiles require both approved budgets and an approved baseline; missing files fail closed.
+
+## Comparability
+
+Comparisons require the same:
+
+- dataset manifest hash and deterministic seed;
+- API instance count and instance resource limits;
+- PostgreSQL/PostGIS and Redis major versions;
+- performance profile and load shape;
+- connection-pool configuration;
+- cold/warm cache policy.
+
+Runs with materially different metadata are informative but not release-comparable.
+
+## Blocking metrics
+
+p95, p99, minimum throughput, HTTP errors, 5xx errors, failed checks, security invariants, rate-limit overshoot,
+query-count budgets, database duration, spatial-index use, temporary blocks, and large-table sequential scans are
+release blocking. CPU, memory, cache ratios, and capacity saturation are advisory until stable environment-specific
+budgets are approved.
+
+Relative gates fail when p95 regresses more than 15%, p99 more than 20%, throughput falls more than 15%, database
+time grows more than 20%, or buffer reads grow more than 25%. These initial policies cannot be loosened merely to
+make a failing release pass.
+
+## Variance and reruns
+
+Warm-up is excluded from custom steady-state endpoint metrics. A suspected noisy result is rerun three times in the
+same environment; the median determines the result. A security invariant, 5xx response, missing instance, missing
+artifact, or database-plan regression is never dismissed as an outlier.
+
+## Updating the baseline
+
+1. Run the release or Staging profile three times without changing infrastructure.
+2. Verify dataset and environment fingerprints are identical.
+3. Review root summaries, PostgreSQL statistics, plans, resource diagnostics, and correctness checks.
+4. Select the median comparable run.
+5. Record commit, application version, environment versions, dataset hash, profile, instance count, and timestamp.
+6. Obtain the two required approvals.
+7. Change `approved` metadata and add the baseline in a dedicated reviewed commit.
+
+The automation never overwrites an approved baseline.

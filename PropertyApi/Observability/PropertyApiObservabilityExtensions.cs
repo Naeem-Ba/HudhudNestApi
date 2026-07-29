@@ -1,15 +1,19 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Options;
+using Npgsql;
+using OpenTelemetry;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using PropertyApi.Application.Common.Observability;
 
 namespace PropertyApi.Observability;
 
 public static class PropertyApiObservabilityExtensions
 {
-    private static readonly string[] AllowedOtlpProtocols =
-    [
-        "grpc",
-        "http/protobuf"
-    ];
+    private static readonly string[] AllowedOtlpProtocols = ["grpc", "http/protobuf"];
 
     public static WebApplicationBuilder AddPropertyApiObservability(
         this WebApplicationBuilder builder)
@@ -17,23 +21,206 @@ public static class PropertyApiObservabilityExtensions
         builder.Services
             .AddOptions<PropertyApiObservabilityOptions>()
             .Bind(builder.Configuration.GetSection(PropertyApiObservabilityOptions.SectionName))
-            .Validate(
-                options => !string.IsNullOrWhiteSpace(options.ServiceName),
+            .ValidateDataAnnotations()
+            .Validate(options => !string.IsNullOrWhiteSpace(options.ServiceName),
                 "Observability:ServiceName is required.")
-            .Validate(
-                options => !string.IsNullOrWhiteSpace(options.CorrelationHeaderName),
-                "Observability:CorrelationHeaderName is required.")
-            .Validate(
-                options => string.IsNullOrWhiteSpace(options.Otlp.Endpoint) ||
-                    Uri.TryCreate(options.Otlp.Endpoint, UriKind.Absolute, out _),
+            .Validate(options => !string.IsNullOrWhiteSpace(options.ServiceNamespace),
+                "Observability:ServiceNamespace is required.")
+            .Validate(options => string.IsNullOrWhiteSpace(options.Otlp.Endpoint) ||
+                Uri.TryCreate(options.Otlp.Endpoint, UriKind.Absolute, out _),
                 "Observability:Otlp:Endpoint must be an absolute URI when configured.")
-            .Validate(
-                options => AllowedOtlpProtocols.Contains(
-                    options.Otlp.Protocol,
-                    StringComparer.OrdinalIgnoreCase),
+            .Validate(options => AllowedOtlpProtocols.Contains(
+                    options.Otlp.Protocol, StringComparer.OrdinalIgnoreCase),
                 "Observability:Otlp:Protocol must be grpc or http/protobuf.")
+            .Validate(options => options.Tracing.SamplingRatio is >= 0 and <= 1,
+                "Observability:Tracing:SamplingRatio must be between 0 and 1.")
+            .Validate(options => options.Otlp.ExportTimeoutMilliseconds is >= 1_000 and <= 60_000,
+                "Observability:Otlp:ExportTimeoutMilliseconds must be between 1000 and 60000.")
+            .Validate(options => options.Metrics.ExportIntervalMilliseconds is >= 1_000 and <= 300_000,
+                "Observability:Metrics:ExportIntervalMilliseconds must be between 1000 and 300000.")
+            .Validate(options => !builder.Environment.IsProduction() ||
+                PropertyApiObservabilityValidator.IsValidProductionConfiguration(options),
+                "Production observability requires Enabled=true, Environment=Production, a service version, " +
+                "an HTTPS OTLP endpoint, and authentication headers when RequireAuthentication=true.")
             .ValidateOnStart();
 
+        ConfigureLogging(builder);
+
+        var options = builder.Configuration
+            .GetSection(PropertyApiObservabilityOptions.SectionName)
+            .Get<PropertyApiObservabilityOptions>() ?? new();
+
+        if (!options.Enabled)
+        {
+            return builder;
+        }
+
+        var resource = CreateResource(builder, options);
+        var openTelemetry = builder.Services.AddOpenTelemetry().ConfigureResource(resourceBuilder =>
+            resourceBuilder.AddAttributes(resource));
+
+        if (options.Tracing.Enabled)
+        {
+            openTelemetry.WithTracing(tracing =>
+            {
+                tracing
+                    .SetSampler(new ParentBasedSampler(
+                        new TraceIdRatioBasedSampler(options.Tracing.SamplingRatio)))
+                    .AddSource(PropertyApiTelemetry.ActivitySourceName)
+                    .AddSource(ApplicationTelemetry.ActivitySourceName)
+                    .AddAspNetCoreInstrumentation(instrumentation =>
+                    {
+                        instrumentation.RecordException = options.Tracing.RecordExceptions;
+                        instrumentation.Filter = context =>
+                            !context.Request.Path.StartsWithSegments("/health/live");
+                        instrumentation.EnrichWithHttpRequest = (activity, request) =>
+                        {
+                            if (request.HttpContext.Items.TryGetValue("CorrelationId", out var correlationId))
+                            {
+                                activity.SetTag("propertyapi.correlation_id", correlationId?.ToString());
+                            }
+                        };
+                    })
+                    .AddHttpClientInstrumentation(instrumentation =>
+                    {
+                        instrumentation.RecordException = options.Tracing.RecordExceptions;
+                        instrumentation.FilterHttpRequestMessage = request =>
+                            request.RequestUri is not null &&
+                            !request.RequestUri.IsLoopback;
+                    })
+                    .AddNpgsql()
+                    .AddRedisInstrumentation(redis =>
+                    {
+                        redis.SetVerboseDatabaseStatements = false;
+                    })
+                    .AddProcessor(new TelemetryRedactionProcessor());
+
+                AddTraceOtlpExporter(tracing, options);
+            });
+        }
+
+        if (options.Metrics.Enabled)
+        {
+            openTelemetry.WithMetrics(metrics =>
+            {
+                metrics
+                    .AddMeter(PropertyApiTelemetry.MeterName)
+                    .AddMeter(ApplicationTelemetry.MeterName)
+                    .AddMeter("Npgsql")
+                    .AddAspNetCoreInstrumentation()
+                    .AddHttpClientInstrumentation()
+                    .AddRuntimeInstrumentation()
+                    .AddView("http.server.request.duration", new ExplicitBucketHistogramConfiguration
+                    {
+                        Boundaries = [0.1, 0.25, 0.5, 1, 2, 5]
+                    })
+                    .AddView("http.client.request.duration", new ExplicitBucketHistogramConfiguration
+                    {
+                        Boundaries = [0.1, 0.25, 0.5, 1, 2, 5]
+                    });
+
+                AddMetricOtlpExporter(metrics, options);
+            });
+        }
+
+        return builder;
+    }
+
+    public static IApplicationBuilder UsePropertyApiObservability(this IApplicationBuilder app)
+    {
+        _ = app.ApplicationServices
+            .GetRequiredService<IOptions<PropertyApiObservabilityOptions>>()
+            .Value;
+
+        return app.UseMiddleware<CorrelationIdMiddleware>();
+    }
+
+    private static IReadOnlyDictionary<string, object> CreateResource(
+        WebApplicationBuilder builder,
+        PropertyApiObservabilityOptions options)
+    {
+        var environment = options.Environment ?? builder.Environment.EnvironmentName;
+        var serviceVersion = options.ServiceVersion ?? "development";
+        var instanceId = Environment.GetEnvironmentVariable("RENDER_INSTANCE_ID")
+            ?? Environment.GetEnvironmentVariable("HOSTNAME")
+            ?? Environment.MachineName;
+
+        var attributes = new Dictionary<string, object>
+        {
+            ["service.name"] = options.ServiceName,
+            ["service.namespace"] = options.ServiceNamespace,
+            ["service.version"] = serviceVersion,
+            ["service.instance.id"] = instanceId,
+            ["deployment.environment.name"] = environment
+        };
+
+        var commitSha = options.GitCommitSha
+            ?? Environment.GetEnvironmentVariable("RENDER_GIT_COMMIT")
+            ?? Environment.GetEnvironmentVariable("GITHUB_SHA");
+
+        if (!string.IsNullOrWhiteSpace(commitSha))
+        {
+            attributes["git.commit.sha"] = commitSha;
+        }
+
+        return attributes;
+    }
+
+    private static void AddTraceOtlpExporter(
+        TracerProviderBuilder tracing,
+        PropertyApiObservabilityOptions options)
+    {
+        if (!TryGetEndpoint(options, out var endpoint))
+        {
+            return;
+        }
+
+        tracing.AddOtlpExporter(exporter => ConfigureExporter(exporter, options, endpoint));
+    }
+
+    private static void AddMetricOtlpExporter(
+        MeterProviderBuilder metrics,
+        PropertyApiObservabilityOptions options)
+    {
+        if (!TryGetEndpoint(options, out var endpoint))
+        {
+            return;
+        }
+
+        metrics.AddOtlpExporter((exporter, reader) =>
+        {
+            ConfigureExporter(exporter, options, endpoint);
+            reader.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds =
+                options.Metrics.ExportIntervalMilliseconds;
+            reader.PeriodicExportingMetricReaderOptions.ExportTimeoutMilliseconds =
+                options.Otlp.ExportTimeoutMilliseconds;
+        });
+    }
+
+    private static void ConfigureExporter(
+        OtlpExporterOptions exporter,
+        PropertyApiObservabilityOptions options,
+        Uri endpoint)
+    {
+        exporter.Endpoint = endpoint;
+        exporter.Protocol = options.Otlp.Protocol.Equals("grpc", StringComparison.OrdinalIgnoreCase)
+            ? OtlpExportProtocol.Grpc
+            : OtlpExportProtocol.HttpProtobuf;
+        exporter.Headers = string.IsNullOrWhiteSpace(options.Otlp.Headers)
+            ? null
+            : options.Otlp.Headers;
+        exporter.TimeoutMilliseconds = options.Otlp.ExportTimeoutMilliseconds;
+    }
+
+    private static bool TryGetEndpoint(
+        PropertyApiObservabilityOptions options,
+        out Uri endpoint)
+    {
+        return Uri.TryCreate(options.Otlp.Endpoint, UriKind.Absolute, out endpoint!);
+    }
+
+    private static void ConfigureLogging(WebApplicationBuilder builder)
+    {
         builder.Logging.Configure(options =>
         {
             options.ActivityTrackingOptions =
@@ -43,43 +230,27 @@ public static class PropertyApiObservabilityExtensions
                 ActivityTrackingOptions.Tags;
         });
 
-        var observabilityOptions = builder.Configuration
+        var options = builder.Configuration
             .GetSection(PropertyApiObservabilityOptions.SectionName)
-            .Get<PropertyApiObservabilityOptions>() ?? new PropertyApiObservabilityOptions();
+            .Get<PropertyApiObservabilityOptions>() ?? new();
 
-        if (observabilityOptions.JsonConsoleEnabled)
+        if (options.JsonConsoleEnabled)
         {
             builder.Logging.ClearProviders();
-            builder.Logging.AddJsonConsole(options =>
+            builder.Logging.AddJsonConsole(console =>
             {
-                options.IncludeScopes = true;
-                options.TimestampFormat = "O";
-                options.JsonWriterOptions = new System.Text.Json.JsonWriterOptions
-                {
-                    Indented = false
-                };
+                console.IncludeScopes = true;
+                console.TimestampFormat = "O";
+                console.JsonWriterOptions = new System.Text.Json.JsonWriterOptions { Indented = false };
             });
         }
         else
         {
-            builder.Services.Configure<SimpleConsoleFormatterOptions>(options =>
+            builder.Services.Configure<SimpleConsoleFormatterOptions>(console =>
             {
-                options.IncludeScopes = true;
-                options.TimestampFormat = "O";
+                console.IncludeScopes = true;
+                console.TimestampFormat = "O";
             });
         }
-
-        return builder;
-    }
-
-    public static IApplicationBuilder UsePropertyApiObservability(
-        this IApplicationBuilder app)
-    {
-        app.ApplicationServices
-            .GetRequiredService<IOptions<PropertyApiObservabilityOptions>>()
-            .Value
-            .GetType();
-
-        return app.UseMiddleware<CorrelationIdMiddleware>();
     }
 }

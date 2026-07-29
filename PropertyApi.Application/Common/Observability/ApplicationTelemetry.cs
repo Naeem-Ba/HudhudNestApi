@@ -23,6 +23,18 @@ public static class ApplicationTelemetry
             unit: "ms",
             description: "Application request duration in milliseconds.");
 
+    private static readonly IReadOnlyDictionary<string, Counter<long>> AuthenticationCounters =
+        new Dictionary<string, Counter<long>>(StringComparer.Ordinal)
+        {
+            ["account_resolution"] = Meter.CreateCounter<long>("auth.account_resolution"),
+            ["account_creation"] = Meter.CreateCounter<long>("auth.account_creation"),
+            ["account_linking"] = Meter.CreateCounter<long>("auth.account_linking"),
+            ["phone_verification"] = Meter.CreateCounter<long>("auth.phone_verification"),
+            ["session_issuance"] = Meter.CreateCounter<long>("auth.session_issuance"),
+            ["compensation"] = Meter.CreateCounter<long>("auth.compensation"),
+            ["concurrency_conflict"] = Meter.CreateCounter<long>("auth.concurrency_conflict")
+        };
+
     public static void RecordRequest(
         string requestKind,
         string outcome,
@@ -36,5 +48,21 @@ public static class ApplicationTelemetry
 
         RequestCounter.Add(1, tags);
         RequestDuration.Record(elapsedMilliseconds, tags);
+    }
+
+    public static void RecordAuthenticationStage(
+        string stage,
+        string outcome,
+        string method)
+    {
+        if (!AuthenticationCounters.TryGetValue(stage, out var counter))
+        {
+            throw new ArgumentOutOfRangeException(nameof(stage));
+        }
+
+        counter.Add(
+            1,
+            new KeyValuePair<string, object?>("outcome", outcome),
+            new KeyValuePair<string, object?>("authentication_method", method));
     }
 }

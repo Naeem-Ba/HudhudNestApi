@@ -1,0 +1,110 @@
+name: propertyapi-observability
+
+services:
+  postgres:
+    extends:
+      file: ../ci/docker-compose.production-gate.yml
+      service: postgres
+
+  redis:
+    extends:
+      file: ../ci/docker-compose.production-gate.yml
+      service: redis
+
+  migrator:
+    extends:
+      file: ../ci/docker-compose.production-gate.yml
+      service: migrator
+
+  api:
+    extends:
+      file: ../ci/docker-compose.production-gate.yml
+      service: api
+    environment:
+      Observability__Enabled: "true"
+      Observability__ServiceName: property-api
+      Observability__ServiceNamespace: yaqeen-real-estate
+      Observability__ServiceVersion: local-observability
+      Observability__Environment: Staging
+      Observability__GitCommitSha: local-observability
+      Observability__Otlp__Endpoint: http://otel-collector:4317
+      Observability__Otlp__Protocol: grpc
+      Observability__Otlp__ExportTimeoutMilliseconds: "10000"
+      Observability__Tracing__SamplingRatio: "1.0"
+      Observability__Metrics__ExportIntervalMilliseconds: "5000"
+      Observability__Synthetic__HttpEndpoint: http://synthetic-http:5678/
+      RateLimiting__Redis__Enabled: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+      synthetic-http:
+        condition: service_started
+
+  synthetic-http:
+    image: hashicorp/http-echo:1.0.0
+    command: ["-listen=:5678", "-text=ok"]
+    expose: ["5678"]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.132.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    expose: ["4317", "4318", "8889", "13133"]
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol-contrib/config.yaml"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      - tempo
+
+  tempo:
+    image: grafana/tempo:2.8.1
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./tempo/tempo.yml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    expose: ["3200", "4317"]
+    ports:
+      - "13200:3200"
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "19090:9090"
+    depends_on:
+      - otel-collector
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: local-observability-only
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "13000:3000"
+    depends_on:
+      - prometheus
+      - tempo
+
+volumes:
+  tempo-data:
+  prometheus-data:
+  grafana-data:

@@ -13,6 +13,8 @@ internal static class RedisRateLimitingDefaults
             ["auth-register"] = Policy(5, TimeSpan.FromMinutes(10)),
             ["auth-refresh"] = Policy(20, TimeSpan.FromMinutes(5)),
             ["auth-logout"] = Policy(20, TimeSpan.FromMinutes(5)),
+            ["public-search"] = Policy(120, TimeSpan.FromMinutes(1)),
+            ["geo-search"] = Policy(60, TimeSpan.FromMinutes(1)),
             ["visits"] = Policy(10, TimeSpan.FromHours(1)),
             ["reviews"] = Policy(5, TimeSpan.FromHours(24))
         };

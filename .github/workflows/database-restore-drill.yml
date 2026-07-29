@@ -1,0 +1,246 @@
+name: Database Restore Drill
+
+on:
+  schedule:
+    - cron: "29 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      fresh_backup:
+        description: Create a fresh production backup before the drill
+        required: true
+        default: true
+        type: boolean
+  workflow_call:
+    inputs:
+      fresh_backup:
+        required: false
+        default: true
+        type: boolean
+    outputs:
+      backup_id:
+        description: Verified backup identifier used by the drill
+        value: ${{ jobs.restore-drill.outputs.backup_id }}
+      ef_core_migration:
+        description: Migration captured in the backup manifest
+        value: ${{ jobs.restore-drill.outputs.ef_core_migration }}
+    secrets:
+      PRODUCTION_DATABASE_URL:
+        required: true
+      BACKUP_ENCRYPTION_KEY:
+        required: true
+      BACKUP_STORAGE_URI:
+        required: true
+      BACKUP_AWS_ACCESS_KEY_ID:
+        required: true
+      BACKUP_AWS_SECRET_ACCESS_KEY:
+        required: true
+      BACKUP_AWS_REGION:
+        required: false
+      BACKUP_S3_ENDPOINT_URL:
+        required: false
+      BACKUP_S3_KMS_KEY_ID:
+        required: false
+      RECOVERY_ALERT_WEBHOOK_URL:
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database-restore-drill
+  cancel-in-progress: false
+
+jobs:
+  restore-drill:
+    name: Actual PostgreSQL 16 + PostGIS Restore
+    runs-on: ubuntu-latest
+    environment: production-recovery
+    timeout-minutes: 120
+    outputs:
+      backup_id: ${{ steps.recovery-evidence.outputs.backup_id }}
+      ef_core_migration: ${{ steps.recovery-evidence.outputs.ef_core_migration }}
+    env:
+      PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+      BACKUP_STORAGE_URI: ${{ secrets.BACKUP_STORAGE_URI }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+      BACKUP_AWS_REGION: ${{ secrets.BACKUP_AWS_REGION }}
+      BACKUP_S3_ENDPOINT_URL: ${{ secrets.BACKUP_S3_ENDPOINT_URL }}
+      BACKUP_S3_KMS_KEY_ID: ${{ secrets.BACKUP_S3_KMS_KEY_ID }}
+      BACKUP_S3_SSE: ${{ vars.BACKUP_S3_SSE || 'AES256' }}
+      RESTORE_TARGET_ENVIRONMENT: recovery-drill
+      RESTORE_TARGET_DISPOSABLE: "true"
+      ALLOW_DESTRUCTIVE_RESTORE: "true"
+      RESTORE_TARGET_DATABASE_URL: postgresql://postgres:postgres@restore-postgres:5432/propertyapi_restore_drill?sslmode=disable
+      RESTORE_ADMIN_DATABASE_URL: postgresql://postgres:postgres@restore-postgres:5432/postgres?sslmode=disable
+      BACKUP_OUTPUT_DIR: /workspace/artifacts/database-recovery
+      RESTORE_RESULT_DIR: /workspace/artifacts/database-recovery
+      RPO_TARGET_SECONDS: "3600"
+      RTO_TARGET_SECONDS: "7200"
+      APPLICATION_COMMIT_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Require production recovery configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in PRODUCTION_DATABASE_URL BACKUP_ENCRYPTION_KEY BACKUP_STORAGE_URI AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Required production recovery secret is missing: ${name}"
+              exit 1
+            fi
+          done
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Start recovery clock
+        shell: bash
+        run: |
+          echo "DRILL_STARTED_EPOCH=$(date -u +%s)" >> "${GITHUB_ENV}"
+          echo "DRILL_STARTED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${GITHUB_ENV}"
+
+      - name: Build recovery assets
+        run: |
+          docker compose -f ci/docker-compose.database-recovery.yml build --pull recovery-toolbox api-restored
+          dotnet restore tools/PropertyApi.DatabaseRecoveryVerifier/PropertyApi.DatabaseRecoveryVerifier.csproj --locked-mode
+          dotnet build tools/PropertyApi.DatabaseRecoveryVerifier/PropertyApi.DatabaseRecoveryVerifier.csproj --configuration Release --no-restore
+
+      - name: Create fresh encrypted backup
+        if: ${{ inputs.fresh_backup != false }}
+        shell: bash
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          BACKUP_REQUIRE_REMOTE_UPLOAD: "true"
+          BACKUP_ID: production-predeploy-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/database-recovery
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --env DATABASE_URL --env BACKUP_ENCRYPTION_KEY --env BACKUP_STORAGE_URI \
+            --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --env BACKUP_AWS_REGION \
+            --env BACKUP_S3_ENDPOINT_URL --env BACKUP_S3_KMS_KEY_ID \
+            --env BACKUP_S3_SSE \
+            --env BACKUP_REQUIRE_REMOTE_UPLOAD --env BACKUP_ID --env BACKUP_OUTPUT_DIR \
+            --env APPLICATION_COMMIT_SHA \
+            --volume "${PWD}/artifacts/database-recovery:/workspace/artifacts/database-recovery" \
+            propertyapi-database-recovery:local \
+            bash /workspace/scripts/database/backup-postgres.sh
+          echo "BACKUP_ID=${BACKUP_ID}" >> "${GITHUB_ENV}"
+
+      - name: Download latest encrypted backup
+        if: ${{ inputs.fresh_backup == false }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          download_started="$(date -u +%s)"
+          mkdir -p artifacts/database-recovery
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --env BACKUP_STORAGE_URI --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY \
+            --env BACKUP_AWS_REGION --env BACKUP_S3_ENDPOINT_URL \
+            --env BACKUP_OUTPUT_DIR \
+            --volume "${PWD}/artifacts/database-recovery:/workspace/artifacts/database-recovery" \
+            propertyapi-database-recovery:local \
+            bash /workspace/scripts/database/download-latest-backup.sh
+          mv artifacts/database-recovery/manifest.json artifacts/database-recovery/downloaded.manifest.json
+          mv artifacts/database-recovery/backup.dump.gpg artifacts/database-recovery/downloaded.dump.gpg
+          echo "BACKUP_ID=downloaded" >> "${GITHUB_ENV}"
+          echo "DOWNLOAD_DURATION_SECONDS=$(( $(date -u +%s) - download_started ))" >> "${GITHUB_ENV}"
+
+      - name: Start isolated restore dependencies
+        run: docker compose -f ci/docker-compose.database-recovery.yml up -d --wait --wait-timeout 120 restore-postgres redis
+
+      - name: Restore and validate the backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MANIFEST_FILE="/workspace/artifacts/database-recovery/${BACKUP_ID}.manifest.json"
+          export BACKUP_FILE="/workspace/artifacts/database-recovery/${BACKUP_ID}.dump.gpg"
+          docker compose -f ci/docker-compose.database-recovery.yml run --rm --no-deps \
+            -e BACKUP_ENCRYPTION_KEY -e MANIFEST_FILE -e BACKUP_FILE \
+            -e RESTORE_TARGET_ENVIRONMENT -e RESTORE_TARGET_DISPOSABLE \
+            -e ALLOW_DESTRUCTIVE_RESTORE -e RESTORE_TARGET_DATABASE_URL \
+            -e RESTORE_ADMIN_DATABASE_URL -e PRODUCTION_DATABASE_URL \
+            recovery-toolbox bash /workspace/scripts/database/restore-postgres.sh
+          docker compose -f ci/docker-compose.database-recovery.yml run --rm --no-deps \
+            -e MANIFEST_FILE -e RESTORE_TARGET_ENVIRONMENT -e RESTORE_TARGET_DATABASE_URL \
+            -e RPO_TARGET_SECONDS -e RTO_TARGET_SECONDS \
+            recovery-toolbox bash /workspace/scripts/database/verify-restored-database.sh
+
+      - name: Run application-level database verification
+        shell: bash
+        env:
+          ConnectionStrings__DefaultConnection: Host=127.0.0.1;Port=55433;Database=propertyapi_restore_drill;Username=postgres;Password=postgres
+        run: dotnet run --project tools/PropertyApi.DatabaseRecoveryVerifier/PropertyApi.DatabaseRecoveryVerifier.csproj --configuration Release --no-build --no-restore
+
+      - name: Start API against restored database
+        run: docker compose -f ci/docker-compose.database-recovery.yml up -d api-restored
+
+      - name: Restored API smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          smoke_started="$(date -u +%s)"
+          ready=false
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error --max-time 5 http://127.0.0.1:18081/health/ready >/dev/null; then ready=true; break; fi
+            sleep 2
+          done
+          [ "${ready}" = "true" ]
+          curl --fail --silent --show-error --max-time 10 'http://127.0.0.1:18081/api/properties?page=1&pageSize=1' >/dev/null
+          echo "SMOKE_DURATION_SECONDS=$(( $(date -u +%s) - smoke_started ))" >> "${GITHUB_ENV}"
+
+      - name: Enforce RPO and RTO and write evidence
+        id: recovery-evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          export APPLICATION_SMOKE_DURATION_SECONDS="${SMOKE_DURATION_SECONDS}"
+          export DOWNLOAD_DURATION_SECONDS="${DOWNLOAD_DURATION_SECONDS:-0}"
+          docker compose -f ci/docker-compose.database-recovery.yml run --rm --no-deps \
+            -e BACKUP_ID -e DRILL_STARTED_EPOCH -e APPLICATION_SMOKE_DURATION_SECONDS \
+            -e DOWNLOAD_DURATION_SECONDS -e RPO_TARGET_SECONDS -e RTO_TARGET_SECONDS \
+            recovery-toolbox bash /workspace/scripts/database/create-recovery-report.sh
+          manifest="artifacts/database-recovery/${BACKUP_ID}.manifest.json"
+          resolved_backup_id="$(jq -r '.backupId' "${manifest}")"
+          resolved_migration="$(jq -r '.efCoreMigration' "${manifest}")"
+          echo "backup_id=${resolved_backup_id}" >> "${GITHUB_OUTPUT}"
+          echo "ef_core_migration=${resolved_migration}" >> "${GITHUB_OUTPUT}"
+
+      - name: Collect restored API logs
+        if: always()
+        run: docker compose -f ci/docker-compose.database-recovery.yml logs --no-color api-restored restore-postgres > artifacts/database-recovery/recovery-containers.log || true
+
+      - name: Destroy restore environment
+        if: always()
+        run: |
+          docker compose -f ci/docker-compose.database-recovery.yml down -v --remove-orphans
+          jq -n --arg status PASS --arg completedAtUtc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{status:$status,completedAtUtc:$completedAtUtc,disposableEnvironmentRemoved:true}' > artifacts/database-recovery/cleanup-result.json
+
+      - name: Upload non-sensitive restore evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: database-restore-drill-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            artifacts/database-recovery/*.json
+            artifacts/database-recovery/*.log
+            !artifacts/database-recovery/*.manifest.json
+
+      - name: Alert on failure
+        if: failure()
+        shell: bash
+        env:
+          RECOVERY_ALERT_WEBHOOK_URL: ${{ secrets.RECOVERY_ALERT_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -n "${RECOVERY_ALERT_WEBHOOK_URL:-}" ]; then
+            curl --fail --silent --show-error --request POST --header 'Content-Type: application/json' \
+              --data "$(jq -n --arg text "PropertyApi database restore drill failed: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" '{text:$text}')" \
+              "${RECOVERY_ALERT_WEBHOOK_URL}"
+          fi

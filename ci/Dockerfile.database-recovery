@@ -1,0 +1,21 @@
+FROM postgis/postgis:16-3.4
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        awscli \
+        ca-certificates \
+        curl \
+        gnupg \
+        jq \
+        python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+COPY scripts/database/ /workspace/scripts/database/
+RUN chmod 0755 /workspace/scripts/database/*.sh \
+    && mkdir -p /workspace/artifacts \
+    && chown -R postgres:postgres /workspace
+
+USER postgres
+ENTRYPOINT []
+CMD ["bash"]

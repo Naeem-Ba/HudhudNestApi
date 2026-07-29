@@ -12,6 +12,23 @@ public static class PropertyApiTelemetry
     public static readonly ActivitySource ActivitySource = new(ActivitySourceName, "1.0.0");
     public static readonly Meter Meter = new(MeterName, "1.0.0");
 
+    private static readonly Process CurrentProcess = Process.GetCurrentProcess();
+    private static readonly DateTimeOffset ProcessStartedAt = CurrentProcess.StartTime.ToUniversalTime();
+
+    private static readonly ObservableGauge<long> ProcessWorkingSet =
+        Meter.CreateObservableGauge(
+            "process.memory.working_set",
+            () => CurrentProcess.WorkingSet64,
+            unit: "By",
+            description: "Physical memory held by the PropertyApi process.");
+
+    private static readonly ObservableGauge<double> ProcessUptime =
+        Meter.CreateObservableGauge(
+            "process.uptime",
+            () => (DateTimeOffset.UtcNow - ProcessStartedAt).TotalSeconds,
+            unit: "s",
+            description: "PropertyApi process uptime.");
+
     private static readonly Counter<long> HttpRequestCounter =
         Meter.CreateCounter<long>(
             "propertyapi.http.server.requests",
@@ -35,6 +52,27 @@ public static class PropertyApiTelemetry
             "propertyapi.auth.duration",
             unit: "ms",
             description: "Authentication request duration in milliseconds.");
+
+    private static readonly IReadOnlyDictionary<string, Counter<long>> AuthAttemptCounters =
+        new Dictionary<string, Counter<long>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["register"] = Meter.CreateCounter<long>("auth.registration.attempts"),
+            ["login"] = Meter.CreateCounter<long>("auth.login.attempts"),
+            ["refresh"] = Meter.CreateCounter<long>("auth.refresh.attempts"),
+            ["logout"] = Meter.CreateCounter<long>("auth.logout.attempts"),
+            ["send_otp"] = Meter.CreateCounter<long>("auth.otp.requests")
+        };
+
+    private static readonly IReadOnlyDictionary<string, Counter<long>> AuthFailureCounters =
+        new Dictionary<string, Counter<long>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["register"] = Meter.CreateCounter<long>("auth.registration.failures"),
+            ["login"] = Meter.CreateCounter<long>("auth.login.failures"),
+            ["refresh"] = Meter.CreateCounter<long>("auth.refresh.failures"),
+            ["logout"] = Meter.CreateCounter<long>("auth.logout.failures"),
+            ["send_otp"] = Meter.CreateCounter<long>("auth.otp.failures"),
+            ["verify_otp"] = Meter.CreateCounter<long>("auth.otp.verification.failures")
+        };
 
     private static readonly Counter<long> PropertyRequestCounter =
         Meter.CreateCounter<long>(
@@ -91,6 +129,19 @@ public static class PropertyApiTelemetry
 
         AuthRequestCounter.Add(1, tags);
         AuthRequestDuration.Record(elapsedMilliseconds, tags);
+
+        if (AuthAttemptCounters.TryGetValue(operation, out var attempts))
+        {
+            attempts.Add(1, new KeyValuePair<string, object?>("operation", operation));
+        }
+
+        if (!outcome.Equals("success", StringComparison.OrdinalIgnoreCase) &&
+            AuthFailureCounters.TryGetValue(operation, out var failures))
+        {
+            failures.Add(1,
+                new KeyValuePair<string, object?>("operation", operation),
+                new KeyValuePair<string, object?>("failure_reason_category", "unknown"));
+        }
     }
 
     private static void RecordPropertyRequest(

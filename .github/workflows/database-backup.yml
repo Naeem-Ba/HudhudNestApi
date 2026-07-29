@@ -1,0 +1,115 @@
+name: Database Backup
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Encrypted PostgreSQL Backup
+    runs-on: ubuntu-latest
+    environment: production-recovery
+    timeout-minutes: 45
+    env:
+      DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+      BACKUP_STORAGE_URI: ${{ secrets.BACKUP_STORAGE_URI }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+      BACKUP_AWS_REGION: ${{ secrets.BACKUP_AWS_REGION }}
+      BACKUP_S3_ENDPOINT_URL: ${{ secrets.BACKUP_S3_ENDPOINT_URL }}
+      BACKUP_S3_KMS_KEY_ID: ${{ secrets.BACKUP_S3_KMS_KEY_ID }}
+      BACKUP_S3_SSE: ${{ vars.BACKUP_S3_SSE || 'AES256' }}
+      BACKUP_REQUIRE_REMOTE_UPLOAD: "true"
+      APPLICATION_COMMIT_SHA: ${{ github.sha }}
+      BACKUP_OUTPUT_DIR: /workspace/artifacts/database-backup
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Require production backup configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in DATABASE_URL BACKUP_ENCRYPTION_KEY BACKUP_STORAGE_URI AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Required production recovery secret is missing: ${name}"
+              exit 1
+            fi
+          done
+
+      - name: Build pinned PostgreSQL 16 recovery toolbox
+        run: docker build --pull --file ci/Dockerfile.database-recovery --tag propertyapi-database-recovery:local .
+
+      - name: Create, encrypt, verify, and upload backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/database-backup
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --env DATABASE_URL \
+            --env BACKUP_ENCRYPTION_KEY \
+            --env BACKUP_STORAGE_URI \
+            --env AWS_ACCESS_KEY_ID \
+            --env AWS_SECRET_ACCESS_KEY \
+            --env BACKUP_AWS_REGION \
+            --env BACKUP_S3_ENDPOINT_URL \
+            --env BACKUP_S3_KMS_KEY_ID \
+            --env BACKUP_S3_SSE \
+            --env BACKUP_REQUIRE_REMOTE_UPLOAD \
+            --env APPLICATION_COMMIT_SHA \
+            --env BACKUP_OUTPUT_DIR \
+            --volume "${PWD}/artifacts/database-backup:/workspace/artifacts/database-backup" \
+            propertyapi-database-recovery:local \
+            bash /workspace/scripts/database/backup-postgres.sh
+
+      - name: Apply tiered retention
+        shell: bash
+        env:
+          RETENTION_APPLY: "true"
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --env BACKUP_STORAGE_URI \
+            --env AWS_ACCESS_KEY_ID \
+            --env AWS_SECRET_ACCESS_KEY \
+            --env BACKUP_AWS_REGION \
+            --env BACKUP_S3_ENDPOINT_URL \
+            --env RETENTION_APPLY \
+            propertyapi-database-recovery:local \
+            bash /workspace/scripts/database/apply-retention.sh
+
+      - name: Publish non-sensitive backup evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: database-backup-evidence-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            artifacts/database-backup/*.manifest.json
+            artifacts/database-backup/*result.json
+            artifacts/database-backup/*verification.json
+
+      - name: Alert on failure
+        if: failure()
+        shell: bash
+        env:
+          RECOVERY_ALERT_WEBHOOK_URL: ${{ secrets.RECOVERY_ALERT_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -n "${RECOVERY_ALERT_WEBHOOK_URL:-}" ]; then
+            curl --fail --silent --show-error --request POST \
+              --header 'Content-Type: application/json' \
+              --data "$(jq -n --arg text "PropertyApi production database backup failed: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" '{text:$text}')" \
+              "${RECOVERY_ALERT_WEBHOOK_URL}"
+          fi

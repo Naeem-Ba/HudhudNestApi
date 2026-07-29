@@ -3,6 +3,7 @@ using PropertyApi.Application.Auth.Commands.ForgotPassword;
 using PropertyApi.Application.Auth.Commands.Login;
 using PropertyApi.Application.Auth.Commands.Register;
 using PropertyApi.Application.Auth.Commands.ResetPassword;
+using PropertyApi.Application.Auth.Services;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
 using PropertyApi.Application.Common.Interfaces;
@@ -162,10 +163,13 @@ public sealed class LoginCommandHandlerTests
         var handler =
             new LoginCommandHandler(
                 identityService.Object,
-                tokenService.Object,
-                refreshRepo.Object,
-                jwt.Object,
-                auditLogs.Object,
+                new AuthenticationSessionIssuer(
+                    identityService.Object,
+                    tokenService.Object,
+                    refreshRepo.Object,
+                    jwt.Object,
+                    auditLogs.Object,
+                    NullLogger<AuthenticationSessionIssuer>.Instance),
                 NullLogger<LoginCommandHandler>
                     .Instance);
 
@@ -306,10 +310,13 @@ public sealed class LoginCommandHandlerTests
         var handler =
             new LoginCommandHandler(
                 identityService.Object,
-                tokenService.Object,
-                refreshRepo.Object,
-                Mock.Of<IJwtTokenSettings>(),
-                Mock.Of<IAuditLogService>(),
+                new AuthenticationSessionIssuer(
+                    identityService.Object,
+                    tokenService.Object,
+                    refreshRepo.Object,
+                    Mock.Of<IJwtTokenSettings>(),
+                    Mock.Of<IAuditLogService>(),
+                    NullLogger<AuthenticationSessionIssuer>.Instance),
                 NullLogger<LoginCommandHandler>
                     .Instance);
 

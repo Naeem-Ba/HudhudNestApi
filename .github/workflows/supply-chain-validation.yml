@@ -1,0 +1,104 @@
+name: Supply Chain Validation
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+      - 'codex/**'
+      - 'feature/**'
+      - 'fix/**'
+
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: supply-chain-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: 8.0.x
+  SOLUTION_PATH: PropertyApi.sln
+
+jobs:
+  validate-source-supply-chain:
+    name: Validate Source Supply Chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('Directory.Packages.props', 'NuGet.config', '**/*.csproj', '**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore locked dependencies
+        run: |
+          dotnet restore "${{ env.SOLUTION_PATH }}" --locked-mode
+
+      - name: Restore local .NET tools
+        run: |
+          dotnet tool restore
+
+      - name: Validate package governance
+        shell: pwsh
+        run: |
+          ./scripts/validate-package-governance.ps1 `
+            -RepositoryRoot $PWD.Path `
+            -SolutionPath "${{ env.SOLUTION_PATH }}" `
+            -PolicyPath "ci/package-policy.json" `
+            -OutputDirectory "artifacts/supply-chain"
+
+      - name: Validate GitHub Actions pinning
+        run: |
+          python scripts/validate-github-actions-pinning.py \
+            --repository-root . \
+            --output artifacts/supply-chain/action-pinning-report.json
+
+      - name: Generate package inventory
+        run: |
+          mkdir -p artifacts/supply-chain
+          dotnet list "${{ env.SOLUTION_PATH }}" package --include-transitive \
+            > artifacts/supply-chain/package-inventory.txt
+
+      - name: Check vulnerable packages
+        shell: pwsh
+        run: |
+          ./ci/check-vulnerable-packages.ps1 `
+            -SolutionPath "${{ env.SOLUTION_PATH }}" `
+            -BaselinePath "ci/vulnerability-baseline.json" `
+            -OutputDirectory "artifacts/vulnerability"
+
+      - name: Upload supply-chain reports
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: supply-chain-validation-${{ github.sha }}-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/supply-chain/**
+            artifacts/vulnerability/**

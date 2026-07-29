@@ -1,11 +1,14 @@
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Listings.DTOs;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Domain.Enums;
+using PropertyApi.Infrastructure.Performance;
 using PropertyApi.Infrastructure.Persistence;
 
 namespace PropertyApi.Infrastructure.Repositories;
@@ -14,13 +17,16 @@ public sealed class PropertyGeoSearchRepository : IPropertyGeoSearchRepository
 {
     private readonly AppDbContext _db;
     private readonly ILogger<PropertyGeoSearchRepository> _logger;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
     public PropertyGeoSearchRepository(
         AppDbContext db,
-        ILogger<PropertyGeoSearchRepository> logger)
+        ILogger<PropertyGeoSearchRepository> logger,
+        IHttpContextAccessor httpContextAccessor)
     {
         _db = db;
         _logger = logger;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task<PagedResult<GeoPropertySearchResultDto>> SearchNearbyAsync(
@@ -34,55 +40,11 @@ public sealed class PropertyGeoSearchRepository : IPropertyGeoSearchRepository
         var latitude = decimal.ToDouble(filter.Latitude);
         var longitude = decimal.ToDouble(filter.Longitude);
 
-        const string sql = """
-WITH nearby AS (
-    SELECT
-        p."Id",
-        p."Title",
-        p."Description",
-        p."Street",
-        p."City",
-        p."Region",
-        p."CountryCode",
-        p."PostalCode",
-        p."Latitude",
-        p."Longitude",
-        p."ListingType",
-        p."Status",
-        p."ColdRent",
-        p."WarmRent",
-        p."PurchasePrice",
-        p."CurrencyCode",
-        p."Rooms",
-        p."Area",
-        p."OwnerId",
-        p."CreatedAt",
-        trim(coalesce(ua."FirstName", '') || ' ' || coalesce(ua."LastName", '')) AS "OwnerName",
-        main_image."Url" AS "MainImageUrl",
-        ST_Distance(
-            p."GeoLocation",
-            ST_SetSRID(ST_MakePoint(@lng, @lat), 4326)::geography
-        ) AS "DistanceMeters",
-        COUNT(*) OVER() AS "TotalCount"
-    FROM "Properties" p
-    LEFT JOIN "UserAccounts" ua ON ua."Id" = p."OwnerId"
-    LEFT JOIN LATERAL (
-        SELECT pi."Url"
-        FROM "PropertyImages" pi
-        WHERE pi."PropertyId" = p."Id"
-          AND pi."IsDeleted" = FALSE
-        ORDER BY pi."IsMain" DESC, pi."SortOrder" ASC, pi."CreatedAt" ASC
-        LIMIT 1
-    ) main_image ON TRUE
-    WHERE p."IsDeleted" = FALSE
+        const string filters = """
+      p."IsDeleted" = FALSE
       AND p."IsPublished" = TRUE
       AND (p."ExpiresAt" IS NULL OR p."ExpiresAt" > now())
       AND p."GeoLocation" IS NOT NULL
-      AND ST_DWithin(
-            p."GeoLocation",
-            ST_SetSRID(ST_MakePoint(@lng, @lat), 4326)::geography,
-            @radiusMeters
-          )
       AND (@countryCode IS NULL OR p."CountryCode" = @countryCode)
       AND (@city IS NULL OR p."City" ILIKE '%' || @city || '%')
       AND (@region IS NULL OR p."Region" ILIKE '%' || @region || '%')
@@ -110,11 +72,78 @@ WITH nearby AS (
             (p."WarmRent" IS NULL OR p."WarmRent" <= @maxPrice) AND
             (p."PurchasePrice" IS NULL OR p."PurchasePrice" <= @maxPrice)
           )
+""";
+
+        var countSql = $"""
+SELECT COUNT(*)
+FROM "Properties" p
+WHERE {filters}
+  AND ST_DWithin(
+        p."GeoLocation",
+        ST_SetSRID(ST_MakePoint(@lng, @lat), 4326)::geography,
+        @radiusMeters
+      );
+""";
+
+        var sql = $"""
+WITH nearest_candidates AS MATERIALIZED (
+    SELECT p.*
+    FROM "Properties" p
+    WHERE {filters}
+    ORDER BY p."GeoLocation" <->
+             ST_SetSRID(ST_MakePoint(@lng, @lat), 4326)::geography
+    LIMIT (@pageSize + @offset)
+),
+nearest AS (
+    SELECT p.*
+    FROM nearest_candidates p
+    WHERE ST_DWithin(
+            p."GeoLocation",
+            ST_SetSRID(ST_MakePoint(@lng, @lat), 4326)::geography,
+            @radiusMeters
+          )
+    ORDER BY p."GeoLocation" <->
+             ST_SetSRID(ST_MakePoint(@lng, @lat), 4326)::geography
+    OFFSET @offset
 )
-SELECT *
-FROM nearby
-ORDER BY "DistanceMeters" ASC, "CreatedAt" DESC
-LIMIT @pageSize OFFSET @offset;
+SELECT
+        p."Id",
+        p."Title",
+        p."Description",
+        p."Street",
+        p."City",
+        p."Region",
+        p."CountryCode",
+        p."PostalCode",
+        p."Latitude",
+        p."Longitude",
+        p."ListingType",
+        p."Status",
+        p."ColdRent",
+        p."WarmRent",
+        p."PurchasePrice",
+        p."CurrencyCode",
+        p."Rooms",
+        p."Area",
+        p."OwnerId",
+        p."CreatedAt",
+        trim(coalesce(ua."FirstName", '') || ' ' || coalesce(ua."LastName", '')) AS "OwnerName",
+        main_image."Url" AS "MainImageUrl",
+        ST_Distance(
+            p."GeoLocation",
+            ST_SetSRID(ST_MakePoint(@lng, @lat), 4326)::geography
+        ) AS "DistanceMeters"
+FROM nearest p
+LEFT JOIN "UserAccounts" ua ON ua."Id" = p."OwnerId"
+LEFT JOIN LATERAL (
+    SELECT pi."Url"
+    FROM "PropertyImages" pi
+    WHERE pi."PropertyId" = p."Id"
+      AND pi."IsDeleted" = FALSE
+    ORDER BY pi."IsMain" DESC, pi."SortOrder" ASC, pi."CreatedAt" ASC
+    LIMIT 1
+) main_image ON TRUE
+ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
 """;
 
         await using var connection = _db.Database.GetDbConnection();
@@ -124,38 +153,16 @@ LIMIT @pageSize OFFSET @offset;
             await connection.OpenAsync(ct);
         }
 
+        var totalCount = await ExecuteCountAsync(connection, countSql, filter, latitude,
+            longitude, radiusMeters, pageSize, offset, ct);
+
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         command.CommandType = CommandType.Text;
-
-        AddParameter(command, "lat", latitude, DbType.Double);
-        AddParameter(command, "lng", longitude, DbType.Double);
-        AddParameter(command, "radiusMeters", radiusMeters, DbType.Double);
-        AddParameter(command, "pageSize", pageSize, DbType.Int32);
-        AddParameter(command, "offset", offset, DbType.Int32);
-
-        AddParameter(command, "countryCode", NormalizeUpper(filter.CountryCode), DbType.String);
-        AddParameter(command, "city", NormalizeText(filter.City), DbType.String);
-        AddParameter(command, "region", NormalizeText(filter.Region), DbType.String);
-        AddParameter(command, "listingType", filter.ListingType?.ToString(), DbType.String);
-        AddParameter(command, "status", filter.Status?.ToString(), DbType.String);
-        AddParameter(command, "condition", filter.Condition?.ToString(), DbType.String);
-        AddParameter(command, "currencyCode", NormalizeUpper(filter.CurrencyCode), DbType.String);
-        AddParameter(command, "ownerId", filter.OwnerId, DbType.Guid);
-        AddParameter(command, "minRooms", filter.MinRooms, DbType.Int32);
-        AddParameter(command, "maxRooms", filter.MaxRooms, DbType.Int32);
-        AddParameter(command, "minArea", filter.MinArea, DbType.Decimal);
-        AddParameter(command, "maxArea", filter.MaxArea, DbType.Decimal);
-        AddParameter(command, "hasBalcony", filter.HasBalcony, DbType.Boolean);
-        AddParameter(command, "hasElevator", filter.HasElevator, DbType.Boolean);
-        AddParameter(command, "hasParkingSpace", filter.HasParkingSpace, DbType.Boolean);
-        AddParameter(command, "minPrice", filter.MinPrice, DbType.Decimal);
-        AddParameter(command, "maxPrice", filter.MaxPrice, DbType.Decimal);
+        AddParameters(command, filter, latitude, longitude, radiusMeters, pageSize, offset);
 
         var items = new List<GeoPropertySearchResultDto>();
-        var totalCount = 0;
-        var originalPageSize = pageSize;
-        var originalOffset = offset;
+        var stopwatch = Stopwatch.StartNew();
 
         try
         {
@@ -163,11 +170,6 @@ LIMIT @pageSize OFFSET @offset;
 
             while (await reader.ReadAsync(ct))
             {
-                if (totalCount == 0 && !reader.IsDBNull(reader.GetOrdinal("TotalCount")))
-                {
-                    totalCount = Convert.ToInt32(reader["TotalCount"]);
-                }
-
                 items.Add(new GeoPropertySearchResultDto
                 {
                     Id = reader.GetGuid(reader.GetOrdinal("Id")),
@@ -206,14 +208,10 @@ LIMIT @pageSize OFFSET @offset;
                 filter.RadiusKm);
             throw;
         }
-
-        if (items.Count == 0 && page > 1)
+        finally
         {
-            totalCount = await ReadTotalCountFromFirstMatchingRowAsync(
-                command,
-                originalPageSize,
-                originalOffset,
-                ct);
+            stopwatch.Stop();
+            RecordPerformanceDatabaseCommand(stopwatch.Elapsed);
         }
 
         return new PagedResult<GeoPropertySearchResultDto>
@@ -225,45 +223,75 @@ LIMIT @pageSize OFFSET @offset;
         };
     }
 
-
-    private static async Task<int> ReadTotalCountFromFirstMatchingRowAsync(
-        IDbCommand command,
-        int originalPageSize,
-        int originalOffset,
+    private async Task<int> ExecuteCountAsync(
+        DbConnection connection,
+        string sql,
+        GeoPropertySearchRequestDto filter,
+        double latitude,
+        double longitude,
+        double radiusMeters,
+        int pageSize,
+        int offset,
         CancellationToken ct)
     {
-        SetParameterValue(command, "pageSize", 1);
-        SetParameterValue(command, "offset", 0);
-
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        command.CommandType = CommandType.Text;
+        AddParameters(command, filter, latitude, longitude, radiusMeters, pageSize, offset);
+        var stopwatch = Stopwatch.StartNew();
         try
         {
-            await using var reader = await ((DbCommand)command).ExecuteReaderAsync(ct);
-            if (await reader.ReadAsync(ct) && !reader.IsDBNull(reader.GetOrdinal("TotalCount")))
-            {
-                return Convert.ToInt32(reader["TotalCount"]);
-            }
-
-            return 0;
+            return Convert.ToInt32(await command.ExecuteScalarAsync(ct));
         }
         finally
         {
-            SetParameterValue(command, "pageSize", originalPageSize);
-            SetParameterValue(command, "offset", originalOffset);
+            stopwatch.Stop();
+            RecordPerformanceDatabaseCommand(stopwatch.Elapsed);
         }
     }
 
-    private static void SetParameterValue(IDbCommand command, string name, object value)
+    private static void AddParameters(
+        IDbCommand command,
+        GeoPropertySearchRequestDto filter,
+        double latitude,
+        double longitude,
+        double radiusMeters,
+        int pageSize,
+        int offset)
     {
-        foreach (IDbDataParameter parameter in command.Parameters)
-        {
-            if (string.Equals(parameter.ParameterName, name, StringComparison.OrdinalIgnoreCase))
-            {
-                parameter.Value = value;
-                return;
-            }
-        }
+        AddParameter(command, "lat", latitude, DbType.Double);
+        AddParameter(command, "lng", longitude, DbType.Double);
+        AddParameter(command, "radiusMeters", radiusMeters, DbType.Double);
+        AddParameter(command, "pageSize", pageSize, DbType.Int32);
+        AddParameter(command, "offset", offset, DbType.Int32);
 
-        throw new InvalidOperationException($"SQL parameter '{name}' was not found.");
+        AddParameter(command, "countryCode", NormalizeUpper(filter.CountryCode), DbType.String);
+        AddParameter(command, "city", NormalizeText(filter.City), DbType.String);
+        AddParameter(command, "region", NormalizeText(filter.Region), DbType.String);
+        AddParameter(command, "listingType", filter.ListingType?.ToString(), DbType.String);
+        AddParameter(command, "status", filter.Status?.ToString(), DbType.String);
+        AddParameter(command, "condition", filter.Condition?.ToString(), DbType.String);
+        AddParameter(command, "currencyCode", NormalizeUpper(filter.CurrencyCode), DbType.String);
+        AddParameter(command, "ownerId", filter.OwnerId, DbType.Guid);
+        AddParameter(command, "minRooms", filter.MinRooms, DbType.Int32);
+        AddParameter(command, "maxRooms", filter.MaxRooms, DbType.Int32);
+        AddParameter(command, "minArea", filter.MinArea, DbType.Decimal);
+        AddParameter(command, "maxArea", filter.MaxArea, DbType.Decimal);
+        AddParameter(command, "hasBalcony", filter.HasBalcony, DbType.Boolean);
+        AddParameter(command, "hasElevator", filter.HasElevator, DbType.Boolean);
+        AddParameter(command, "hasParkingSpace", filter.HasParkingSpace, DbType.Boolean);
+        AddParameter(command, "minPrice", filter.MinPrice, DbType.Decimal);
+        AddParameter(command, "maxPrice", filter.MaxPrice, DbType.Decimal);
+    }
+
+    private void RecordPerformanceDatabaseCommand(TimeSpan duration)
+    {
+        if (_httpContextAccessor.HttpContext?.Items[
+                PerformanceDatabaseDiagnosticsPolicy.ContextItemName]
+            is PerformanceDatabaseDiagnosticState state)
+        {
+            state.Record(duration);
+        }
     }
 
     private static string? NormalizeUpper(string? value)

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "centralPackageManagement": {
+    "required": true,
+    "disallowProjectPackageVersions": true,
+    "disallowVersionOverride": true,
+    "disallowFloatingVersions": true,
+    "allowPreviewPackages": false,
+    "centralTransitivePinningEnabled": false
+  },
+  "restore": {
+    "lockFilesRequiredForSolutionProjects": true,
+    "lockedModeRequiredInCi": true
+  },
+  "nugetSources": {
+    "approvedSources": [
+      {
+        "name": "nuget.org",
+        "url": "https://api.nuget.org/v3/index.json"
+      }
+    ],
+    "requireHttps": true,
+    "allowCredentialsInRepository": false
+  },
+  "testPackages": {
+    "Microsoft.NET.Test.Sdk": "17.8.0",
+    "xunit": "2.6.6",
+    "xunit.runner.visualstudio": "2.5.6",
+    "coverlet.collector": "6.0.0"
+  },
+  "allowedVersionOverrides": [],
+  "allowedPreviewPackages": [],
+  "nonSolutionProjects": [
+    {
+      "path": "dbkeys_patch/PropertyApi.Infrastructure/PropertyApi.Infrastructure.csproj",
+      "policy": "Package versions are centrally governed, but lock files are not required because this patch project is not part of PropertyApi.sln."
+    }
+  ],
+  "vulnerabilitySeverityPolicy": {
+    "nuget": {
+      "blockNewAdvisories": true
+    },
+    "container": {
+      "blockSeverities": [
+        "CRITICAL",
+        "HIGH"
+      ],
+      "reportSeverities": [
+        "MEDIUM",
+        "LOW",
+        "UNKNOWN"
+      ]
+    }
+  }
+}

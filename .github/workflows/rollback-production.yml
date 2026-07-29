@@ -1,0 +1,65 @@
+name: Rollback Production Application
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_deploy_id:
+        description: Known-good Render deploy ID (dep-...)
+        required: true
+        type: string
+      incident_id:
+        description: Incident or change ticket ID
+        required: true
+        type: string
+      approved_by:
+        description: Human approver identity
+        required: true
+        type: string
+      confirm_autodeploy_disabled:
+        description: Render auto-deploy has been disabled for this incident
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-application-rollback
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Protected Render Rollback
+    runs-on: ubuntu-latest
+    environment: production-rollback
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Require explicit rollback confirmation
+        if: ${{ inputs.confirm_autodeploy_disabled != true }}
+        run: |
+          echo "::error::Disable Render auto-deploy and confirm the input before rollback."
+          exit 1
+
+      - name: Roll back immutable Render deploy
+        shell: bash
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          PRODUCTION_BASE_URL: ${{ secrets.PRODUCTION_BASE_URL }}
+          TARGET_DEPLOY_ID: ${{ inputs.target_deploy_id }}
+          INCIDENT_ID: ${{ inputs.incident_id }}
+          APPROVED_BY: ${{ inputs.approved_by }}
+          CONFIRM_AUTODEPLOY_DISABLED: "true"
+        run: bash scripts/deployment/rollback-application.sh
+
+      - name: Upload rollback evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: production-rollback-${{ github.run_id }}
+          retention-days: 90
+          if-no-files-found: error
+          path: artifacts/rollback-production/*.json

@@ -22,7 +22,17 @@ env:
   DOTNET_VERSION: 8.0.x
   COMPOSE_FILE: ci/docker-compose.production-gate.yml
 
+concurrency:
+  group: production-gate-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  performance-validation:
+    name: Mandatory Concurrent Performance Gate
+    uses: ./.github/workflows/performance-validation.yml
+    with:
+      profile: ${{ github.event_name == 'pull_request' && 'pr' || 'release' }}
+
   build-test-container:
     name: Build, Test and Container Gate
     runs-on: ubuntu-latest
@@ -76,12 +86,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -105,7 +115,25 @@ jobs:
           } >> "${GITHUB_ENV}"
 
       - name: Restore dependencies
-        run: dotnet restore PropertyApi.sln
+        run: dotnet restore PropertyApi.sln --locked-mode
+
+      - name: Restore local .NET tools
+        run: dotnet tool restore
+
+      - name: Validate package governance
+        shell: pwsh
+        run: |
+          ./scripts/validate-package-governance.ps1 `
+            -RepositoryRoot $PWD.Path `
+            -SolutionPath "PropertyApi.sln" `
+            -PolicyPath "ci/package-policy.json" `
+            -OutputDirectory "artifacts/supply-chain"
+
+      - name: Validate GitHub Actions pinning
+        run: |
+          python scripts/validate-github-actions-pinning.py \
+            --repository-root . \
+            --output artifacts/supply-chain/action-pinning-report.json
 
       - name: Build solution
         run: |
@@ -124,6 +152,10 @@ jobs:
         run: |
           ./scripts/verify-production-gate.ps1 `
             -RepositoryRoot $PWD.Path
+
+      - name: Enforce migration recovery classification
+        shell: bash
+        run: bash scripts/database/analyze-migrations.sh
 
       - name: Verify test infrastructure
         run: |
@@ -191,6 +223,13 @@ jobs:
             --collect:"XPlat Code Coverage" \
             --logger "trx;LogFileName=integration-tests.trx"
 
+      - name: Validate test result files
+        shell: pwsh
+        run: |
+          ./scripts/validate-test-results.ps1 `
+            -TestResultsRoot "." `
+            -OutputDirectory "artifacts/supply-chain"
+
       - name: Check vulnerable packages
         shell: pwsh
         run: |
@@ -207,11 +246,17 @@ jobs:
             -BaselinePath "ci/coverage-baseline.json" `
             -OutputDirectory "artifacts/coverage"
 
+      - name: Validate staged coverage thresholds
+        run: |
+          python scripts/validate-coverage-thresholds.py \
+            --repository-root . \
+            --coverage-root . \
+            --policy ci/coverage-thresholds.json \
+            --output-directory artifacts/coverage
+
       - name: Generate coverage report
         run: |
-          dotnet tool install --global dotnet-reportgenerator-globaltool
-
-          reportgenerator \
+          dotnet tool run reportgenerator -- \
             -reports:"**/coverage.cobertura.xml" \
             -targetdir:"artifacts/coverage/report" \
             -reporttypes:"HtmlInline;Cobertura;MarkdownSummaryGithub"
@@ -239,6 +284,91 @@ jobs:
             --pull \
             api \
             migrator
+
+      - name: Capture API image digest
+        id: capture-api-image
+        run: |
+          set -euo pipefail
+
+          api_image_ref="propertyapi-api:${PROPERTYAPI_IMAGE_TAG}"
+          api_image_digest="$(
+            docker image inspect \
+              --format '{{.Id}}' \
+              "${api_image_ref}"
+          )"
+
+          if [[ ! "${api_image_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Could not capture an immutable sha256 image id for ${api_image_ref}."
+            exit 1
+          fi
+
+          {
+            echo "image_ref=${api_image_ref}"
+            echo "image_digest=${api_image_digest}"
+          } >> "${GITHUB_OUTPUT}"
+
+          {
+            echo "PROPERTYAPI_IMAGE_REF=${api_image_ref}"
+            echo "PROPERTYAPI_IMAGE_DIGEST=${api_image_digest}"
+          } >> "${GITHUB_ENV}"
+
+          mkdir -p artifacts/supply-chain
+          jq -n \
+            --arg imageRef "${api_image_ref}" \
+            --arg imageDigest "${api_image_digest}" \
+            --arg commitSha "${GITHUB_SHA}" \
+            '{imageRef: $imageRef, imageDigest: $imageDigest, commitSha: $commitSha}' \
+            > artifacts/supply-chain/image-digest.json
+
+      - name: Generate application SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: cyclonedx
+          output: artifacts/supply-chain/propertyapi-dotnet.cdx.json
+          scanners: vuln
+          skip-dirs: artifacts
+
+      - name: Generate container SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.capture-api-image.outputs.image_digest }}
+          format: spdx-json
+          output: artifacts/supply-chain/propertyapi-container.spdx.json
+          scanners: vuln
+
+      - name: Scan container image as JSON
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.capture-api-image.outputs.image_digest }}
+          format: json
+          output: artifacts/supply-chain/container-scan.json
+          scanners: vuln,secret,misconfig
+          vuln-type: os,library
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          exit-code: '0'
+
+      - name: Scan container image as SARIF
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.capture-api-image.outputs.image_digest }}
+          format: sarif
+          output: artifacts/supply-chain/container-scan.sarif
+          scanners: vuln,secret,misconfig
+          vuln-type: os,library
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          exit-code: '0'
+
+      - name: Validate release security evidence
+        run: |
+          python scripts/generate-release-security-manifest.py \
+            --repository-root . \
+            --output artifacts/supply-chain/release-security-manifest.json \
+            --sbom-metadata-output artifacts/supply-chain/sbom-metadata.json \
+            --correlation-output artifacts/supply-chain/sbom-vulnerability-report.json \
+            --summary-output artifacts/supply-chain/release-security-manifest.md \
+            --container-scan-summary-output artifacts/supply-chain/container-scan-summary.md
 
       - name: Start PostgreSQL and Redis
         run: |
@@ -636,9 +766,9 @@ jobs:
 
       - name: Upload production gate results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: production-gate-results
+          name: production-gate-results-${{ github.sha }}-${{ github.run_id }}
           if-no-files-found: warn
           retention-days: 14
           path: |
@@ -646,10 +776,68 @@ jobs:
             artifacts/coverage/**
             artifacts/vulnerability/**
             artifacts/production-gate/**
+            artifacts/supply-chain/**
             production-gate-containers.log
 
-  staging-smoke:
-    name: Staging Smoke Tests
+  observability-validation:
+    name: Mandatory Observability Export Gate
+    needs:
+      - build-test-container
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Run observability tests
+        run: dotnet test tests/PropertyApi.Observability.Tests/PropertyApi.Observability.Tests.csproj --configuration Release
+      - name: Validate observability configuration artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD/observability/otel-collector:/config:ro" \
+            otel/opentelemetry-collector-contrib:0.132.0 \
+            validate --config=/config/config.yaml
+          docker run --rm -v "$PWD/observability/prometheus:/etc/prometheus:ro" \
+            --entrypoint promtool prom/prometheus:v3.5.0 \
+            check config /etc/prometheus/prometheus.yml
+          jq -e . observability/grafana/dashboards/property-api-production.json >/dev/null
+          docker compose -f observability/docker-compose.observability.yml config --quiet
+      - name: Start local observability stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f observability/docker-compose.observability.yml up -d --build \
+            postgres redis tempo otel-collector prometheus grafana synthetic-http
+          docker compose -f observability/docker-compose.observability.yml run --rm migrator
+          docker compose -f observability/docker-compose.observability.yml up -d api
+          for attempt in $(seq 1 60); do
+            curl --fail --silent --max-time 5 http://127.0.0.1:18080/health/ready >/dev/null && exit 0
+            sleep 3
+          done
+          docker compose -f observability/docker-compose.observability.yml logs --no-color
+          exit 1
+      - name: Verify stored telemetry, dashboards, redaction and alert lifecycle
+        shell: bash
+        env:
+          OBSERVABILITY_TEST_KEY: local-staging-cleanup-secret-at-least-32-characters
+          EXPECTED_COMMIT_SHA: local-observability
+        run: bash scripts/verify-observability.sh
+      - name: Upload observability evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: observability-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          retention-days: 30
+          path: artifacts/observability/observability-verification-report.json
+      - name: Stop observability stack
+        if: always()
+        run: docker compose -f observability/docker-compose.observability.yml down -v --remove-orphans
+
+  validate-redis-ha-topology:
+    name: Validate Redis HA Topology Evidence
     needs:
       - build-test-container
 
@@ -660,175 +848,372 @@ jobs:
 
     runs-on: ubuntu-latest
     environment: staging
-    timeout-minutes: 20
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - name: Validate staging configuration
-        id: staging-config
+      - name: Validate Redis HA evidence
+        shell: bash
+        env:
+          REDIS_HA_EVIDENCE_JSON: ${{ secrets.REDIS_HA_EVIDENCE_JSON }}
+          REDIS_HA_OUTPUT_DIR: artifacts/redis-ha
+        run: |
+          set -euo pipefail
+          bash scripts/verify-redis-ha.sh
+
+      - name: Upload Redis HA validation artifacts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: redis-ha-validation
+          if-no-files-found: warn
+          retention-days: 30
+          path: artifacts/redis-ha/**
+
+  staging-smoke:
+    name: Mandatory Staging Deploy + E2E Smoke
+    needs:
+      - build-test-container
+      - observability-validation
+      - validate-redis-ha-topology
+
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.ref == 'refs/heads/main' ||
+      github.ref == 'refs/heads/master'
+
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Validate mandatory staging configuration
         shell: bash
         env:
           STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          PRODUCTION_BASE_URL: ${{ vars.PRODUCTION_BASE_URL }}
+          STAGING_DEPLOY_HOOK_URL: ${{ secrets.STAGING_DEPLOY_HOOK_URL }}
+          STAGING_SMOKE_PHONE_PREFIX: ${{ vars.STAGING_SMOKE_PHONE_PREFIX }}
+          STAGING_SMOKE_PASSWORD: ${{ secrets.STAGING_SMOKE_PASSWORD }}
+          STAGING_SMOKE_FIXED_OTP: ${{ secrets.STAGING_SMOKE_FIXED_OTP }}
+          STAGING_SMOKE_CLEANUP_SECRET: ${{ secrets.STAGING_SMOKE_CLEANUP_SECRET }}
+          EXPECTED_COMMIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-
-          if [ -z "${STAGING_BASE_URL:-}" ]; then
-            echo "configured=false" >> "${GITHUB_OUTPUT}"
-
-            echo "::notice::STAGING_BASE_URL is not configured; staging deployment and smoke tests are skipped."
-
-            {
-              echo "## Staging Smoke Tests"
-              echo
-              echo "Skipped because STAGING_BASE_URL is not configured."
-              echo
-              echo "Configure the GitHub Actions variable STAGING_BASE_URL to enable this gate."
-            } >> "${GITHUB_STEP_SUMMARY}"
-
-            exit 0
-          fi
-
-          normalized_base_url="${STAGING_BASE_URL%/}"
-          if [[ ! "${normalized_base_url}" =~ ^https?://[^/]+ ]]; then
-            echo "::error::STAGING_BASE_URL must be an absolute http(s) URL."
-            {
-              echo "## Staging Smoke Tests"
-              echo
-              echo "Failed because STAGING_BASE_URL is not an absolute http(s) URL."
-            } >> "${GITHUB_STEP_SUMMARY}"
-            exit 1
-          fi
-
-          staging_host="${normalized_base_url#http://}"
-          staging_host="${staging_host#https://}"
-          staging_host="${staging_host%%/*}"
-          staging_host="${staging_host%%:*}"
-          staging_host="${staging_host,,}"
-
-          case "${staging_host}" in
-            example.com|*.example.com|example.net|*.example.net|example.org|*.example.org|invalid|*.invalid|localhost|127.*|0.0.0.0)
-              echo "::error::STAGING_BASE_URL points to a placeholder or local host: ${staging_host}. Set it to the real staging API URL, or delete the GitHub Actions variable to skip staging smoke until staging exists."
-              {
-                echo "## Staging Smoke Tests"
-                echo
-                echo "Failed because STAGING_BASE_URL points to a placeholder or local host: \`${staging_host}\`."
-                echo
-                echo "This is a staging configuration problem, not an application startup failure."
-                echo
-                echo "Set STAGING_BASE_URL to the real staging API URL, or delete the GitHub Actions variable to skip staging smoke until staging exists."
-              } >> "${GITHUB_STEP_SUMMARY}"
-              exit 1
-              ;;
-          esac
-
-          if ! getent hosts "${staging_host}" > /dev/null; then
-            echo "::error::STAGING_BASE_URL host cannot be resolved by DNS: ${staging_host}. Configure the real staging API URL or remove STAGING_BASE_URL to skip this gate."
-            {
-              echo "## Staging Smoke Tests"
-              echo
-              echo "Failed because STAGING_BASE_URL host cannot be resolved by DNS: \`${staging_host}\`."
-              echo
-              echo "Configure the GitHub Actions environment variable STAGING_BASE_URL with a resolvable staging API host."
-            } >> "${GITHUB_STEP_SUMMARY}"
-            exit 1
-          fi
-
-          echo "configured=true" >> "${GITHUB_OUTPUT}"
-          echo "base_url=${normalized_base_url}" >> "${GITHUB_OUTPUT}"
-
-          echo "Staging configuration is available for ${staging_host}."
+          bash scripts/smoke-staging.sh --validate-only
 
       - name: Trigger staging deployment
-        if: ${{ steps.staging-config.outputs.configured == 'true' }}
         shell: bash
         env:
-          DEPLOY_HOOK_URL: ${{ secrets.STAGING_DEPLOY_HOOK_URL }}
+          STAGING_DEPLOY_HOOK_URL: ${{ secrets.STAGING_DEPLOY_HOOK_URL }}
         run: |
           set -euo pipefail
-
-          if [ -n "${DEPLOY_HOOK_URL:-}" ]; then
-            curl \
-              --fail \
-              --silent \
-              --show-error \
-              --request POST \
-              "${DEPLOY_HOOK_URL}"
-
-            echo "Staging deployment was triggered."
+          mkdir -p artifacts/staging-smoke
+          response_file="$(mktemp)"
+          trap 'rm -f "${response_file}"' EXIT
+          curl --fail --silent --show-error \
+            --request POST \
+            --max-time 30 \
+            --output "${response_file}" \
+            "${STAGING_DEPLOY_HOOK_URL}"
+          deployment_id="$(jq -r '.deploy.id // .id // empty' "${response_file}" 2>/dev/null || true)"
+          if [ -n "${deployment_id}" ]; then
+            echo "deployment_id=${deployment_id}" >> "${GITHUB_ENV}"
+            echo "Staging deployment was triggered (provider deployment id captured)."
           else
-            echo "No staging deployment hook is configured."
-            echo "Assuming staging is deployed by another workflow."
+            echo "Staging deployment was triggered; the hook returned no deployment id."
           fi
 
-      - name: Wait for staging readiness
-        if: ${{ steps.staging-config.outputs.configured == 'true' }}
+      - name: Wait for intended staging release
         shell: bash
         env:
-          BASE_URL: ${{ steps.staging-config.outputs.base_url }}
+          STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          EXPECTED_COMMIT_SHA: ${{ github.sha }}
+          STAGING_READY_TIMEOUT_SECONDS: ${{ vars.STAGING_READY_TIMEOUT_SECONDS || '900' }}
         run: |
           set -euo pipefail
-
-          staging_ready=false
-
-          for attempt in $(seq 1 60); do
-            echo "Staging readiness attempt ${attempt}/60"
-
-            if curl \
-              --fail \
-              --location \
-              --silent \
-              --show-error \
-              --max-time 10 \
-              --retry 2 \
-              --retry-delay 2 \
-              --retry-all-errors \
-              "${BASE_URL}/health/ready" \
-              > /dev/null; then
-
-              staging_ready=true
-              break
+          base_url="${STAGING_BASE_URL%/}"
+          deadline=$((SECONDS + STAGING_READY_TIMEOUT_SECONDS))
+          release_ready=false
+          attempt=0
+          while [ "${SECONDS}" -lt "${deadline}" ]; do
+            attempt=$((attempt + 1))
+            body="$(mktemp)"
+            status="$(curl --location --silent --show-error --max-time 15 \
+              --output "${body}" --write-out '%{http_code}' \
+              "${base_url}/api/operational/build-info" || true)"
+            if [ "${status}" = "200" ] && jq -e . "${body}" > /dev/null 2>&1; then
+              deployed_sha="$(jq -r '.commitSha // empty' "${body}")"
+              environment="$(jq -r '.environment // empty' "${body}")"
+              migrations_complete="$(jq -r '.migration.complete // false' "${body}")"
+              postgis_available="$(jq -r '.migration.postGisAvailable // false' "${body}")"
+              if [ "${environment}" = "Staging" ] && \
+                 [ "${deployed_sha,,}" = "${EXPECTED_COMMIT_SHA,,}" ] && \
+                 [ "${migrations_complete}" = "true" ] && \
+                 [ "${postgis_available}" = "true" ] && \
+                 curl --fail --silent --show-error --max-time 10 \
+                   "${base_url}/health/ready" > /dev/null; then
+                release_ready=true
+                rm -f "${body}"
+                break
+              fi
             fi
-
+            rm -f "${body}"
+            echo "Waiting for intended Staging release (attempt ${attempt})."
             sleep 5
           done
-
-          if [ "${staging_ready}" != "true" ]; then
-            echo "Staging did not become ready."
+          if [ "${release_ready}" != "true" ]; then
+            echo "::error::Staging did not activate the intended commit with complete migrations before timeout."
             exit 1
           fi
 
-      - name: Verify staging liveness
-        if: ${{ steps.staging-config.outputs.configured == 'true' }}
+      - name: Run mandatory staging E2E smoke tests
         shell: bash
         env:
-          BASE_URL: ${{ steps.staging-config.outputs.base_url }}
+          STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          PRODUCTION_BASE_URL: ${{ vars.PRODUCTION_BASE_URL }}
+          EXPECTED_COMMIT_SHA: ${{ github.sha }}
+          STAGING_SMOKE_PHONE_PREFIX: ${{ vars.STAGING_SMOKE_PHONE_PREFIX }}
+          STAGING_SMOKE_PASSWORD: ${{ secrets.STAGING_SMOKE_PASSWORD }}
+          STAGING_SMOKE_FIXED_OTP: ${{ secrets.STAGING_SMOKE_FIXED_OTP }}
+          STAGING_SMOKE_CLEANUP_SECRET: ${{ secrets.STAGING_SMOKE_CLEANUP_SECRET }}
+          SMOKE_HTTP_TIMEOUT_SECONDS: ${{ vars.SMOKE_HTTP_TIMEOUT_SECONDS || '20' }}
+          SMOKE_MAX_RETRIES: ${{ vars.SMOKE_MAX_RETRIES || '5' }}
+          SMOKE_RETRY_DELAY_SECONDS: ${{ vars.SMOKE_RETRY_DELAY_SECONDS || '3' }}
         run: |
-          set -euo pipefail
-
-          curl \
-            --fail \
-            --location \
-            --silent \
-            --show-error \
-            --max-time 10 \
-            --retry 3 \
-            --retry-delay 2 \
-            --retry-all-errors \
-            "${BASE_URL}/health/live"
-
-          echo
-
-      - name: Run staging smoke tests
-        if: ${{ steps.staging-config.outputs.configured == 'true' }}
-        shell: bash
-        env:
-          BASE_URL: ${{ steps.staging-config.outputs.base_url }}
-          STAGING_BASE_URL: ${{ steps.staging-config.outputs.base_url }}
-          SMOKE_EMAIL: ${{ secrets.STAGING_SMOKE_EMAIL }}
-          SMOKE_PASSWORD: ${{ secrets.STAGING_SMOKE_PASSWORD }}
-          SMOKE_FIXED_OTP: ${{ secrets.STAGING_SMOKE_FIXED_OTP }}
-        run: |
-          set -euo pipefail
           bash scripts/smoke-staging.sh
+
+      - name: Verify observability for intended Staging release
+        shell: bash
+        env:
+          API_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          PROMETHEUS_URL: ${{ vars.STAGING_PROMETHEUS_URL }}
+          TEMPO_URL: ${{ vars.STAGING_TEMPO_URL }}
+          OBSERVABILITY_TEST_KEY: ${{ secrets.STAGING_SMOKE_CLEANUP_SECRET }}
+          OBSERVABILITY_SERVICE_VERSION: ${{ github.sha }}
+          EXPECTED_COMMIT_SHA: ${{ github.sha }}
+          OBSERVABILITY_ENVIRONMENT: Staging
+        run: |
+          set -euo pipefail
+          for variable in API_BASE_URL PROMETHEUS_URL TEMPO_URL OBSERVABILITY_TEST_KEY; do
+            if [ -z "${!variable:-}" ]; then
+              echo "::error::${variable} is mandatory for Staging observability verification."
+              exit 1
+            fi
+          done
+          bash scripts/verify-observability.sh
+
+      - name: Upload sanitized staging evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: staging-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            artifacts/staging-smoke/staging-smoke-report.json
+            artifacts/staging-smoke/staging-smoke-junit.xml
+            artifacts/staging-smoke/staging-smoke-summary.md
+            artifacts/staging-smoke/test-results/**
+            artifacts/observability/observability-verification-report.json
+
+  redis-staging-failover:
+    name: Redis Staging Managed Failover
+    needs:
+      - staging-smoke
+      - validate-redis-ha-topology
+
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.ref == 'refs/heads/main' ||
+      github.ref == 'refs/heads/master'
+
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Execute provider Redis failover drill
+        shell: bash
+        env:
+          REDIS_FAILOVER_ENVIRONMENT: Staging
+          STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          REDIS_PROVIDER_FAILOVER_COMMAND: ${{ secrets.REDIS_PROVIDER_FAILOVER_COMMAND }}
+          REDIS_FAILOVER_REPORT_PATH: artifacts/redis-failover/redis-failover-report.json
+          REDIS_FAILOVER_SUMMARY_PATH: artifacts/redis-failover/redis-failover-summary.md
+          REDIS_FAILOVER_JUNIT_PATH: artifacts/redis-failover/redis-failover-junit.xml
+        run: |
+          set -euo pipefail
+          bash scripts/test-redis-failover.sh
+
+      - name: Verify Redis post-failover recovery evidence
+        shell: bash
+        env:
+          REDIS_FAILOVER_REPORT_PATH: artifacts/redis-failover/redis-failover-report.json
+          REDIS_FAILOVER_OUTPUT_DIR: artifacts/redis-failover
+        run: |
+          set -euo pipefail
+          bash scripts/verify-redis-recovery.sh
+
+      - name: Upload Redis failover artifacts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: redis-staging-failover
+          if-no-files-found: error
+          retention-days: 30
+          path: artifacts/redis-failover/**
+
+  deploy-production:
+    name: Production Deployment (environment approval required)
+    needs:
+      - build-test-container
+      - observability-validation
+      - validate-redis-ha-topology
+      - staging-smoke
+      - redis-staging-failover
+      - performance-validation
+      - production-deployment-gate
+    if: >-
+      (github.event_name == 'workflow_dispatch' ||
+       github.ref == 'refs/heads/main' ||
+       github.ref == 'refs/heads/master') &&
+      needs.build-test-container.result == 'success' &&
+       needs.observability-validation.result == 'success' &&
+       needs.staging-smoke.result == 'success' &&
+       needs.redis-staging-failover.result == 'success' &&
+       needs.performance-validation.result == 'success' &&
+       needs.production-deployment-gate.result == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Assert mandatory staging gate succeeded
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.staging-smoke.result }}" != "success" ]; then
+            echo "::error::Production is blocked because the mandatory Staging gate did not succeed."
+            exit 1
+          fi
+          if [ "${{ needs.performance-validation.result }}" != "success" ]; then
+            echo "::error::Production is blocked because concurrent performance validation did not succeed."
+            exit 1
+          fi
+          if [ "${{ needs.production-deployment-gate.result }}" != "success" ]; then
+            echo "::error::Production is blocked because database recovery validation did not succeed."
+            exit 1
+          fi
+
+      - name: Trigger production deployment
+        shell: bash
+        env:
+          PRODUCTION_DEPLOY_HOOK_URL: ${{ secrets.PRODUCTION_DEPLOY_HOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PRODUCTION_DEPLOY_HOOK_URL:-}" ]; then
+            echo "::error::PRODUCTION_DEPLOY_HOOK_URL is required."
+            exit 1
+          fi
+          curl --fail --silent --show-error \
+            --request POST \
+            --max-time 30 \
+            --output /dev/null \
+            "${PRODUCTION_DEPLOY_HOOK_URL}"
+          echo "Production deployment was triggered after successful Staging verification."
+  database-recovery:
+    name: Production Database Recovery Gate
+    needs:
+      - build-test-container
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' &&
+       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
+    uses: ./.github/workflows/database-restore-drill.yml
+    with:
+      fresh_backup: true
+    secrets: inherit
+
+  production-deployment-gate:
+    name: Production Deployment Gate
+    needs:
+      - build-test-container
+      - staging-smoke
+      - database-recovery
+    if: >-
+      always() &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' &&
+        (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')))
+    runs-on: ubuntu-latest
+    environment: production-release
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Require a previous known-good Render deploy
+        shell: bash
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          [ -n "${RENDER_API_KEY:-}" ]
+          [[ "${RENDER_SERVICE_ID:-}" =~ ^srv-[A-Za-z0-9]+$ ]]
+          auth_file="$(mktemp)"
+          trap 'rm -f "${auth_file}"' EXIT
+          chmod 600 "${auth_file}"
+          printf 'header = "Authorization: Bearer %s"\nheader = "Accept: application/json"\n' "${RENDER_API_KEY}" > "${auth_file}"
+          curl --fail --silent --show-error --config "${auth_file}" \
+            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys?limit=20" > render-deploys.json
+          previous_deploy_id="$(jq -r '[.. | objects | select(.status? == "live" or .status? == "deactivated") | .id? | select(. != null)] | first // empty' render-deploys.json)"
+          [ -n "${previous_deploy_id}" ]
+          echo "PREVIOUS_KNOWN_GOOD_DEPLOY_ID=${previous_deploy_id}" >> "${GITHUB_ENV}"
+
+      - name: Enforce successful recovery validation
+        env:
+          BUILD_RESULT: ${{ needs.build-test-container.result }}
+          STAGING_RESULT: ${{ needs.staging-smoke.result }}
+          RECOVERY_RESULT: ${{ needs.database-recovery.result }}
+        run: |
+          set -euo pipefail
+          echo "Build gate: ${BUILD_RESULT}"
+          echo "Staging gate: ${STAGING_RESULT}"
+          echo "Recovery gate: ${RECOVERY_RESULT}"
+          [ "${BUILD_RESULT}" = "success" ]
+          [ "${STAGING_RESULT}" = "success" ]
+          [ "${RECOVERY_RESULT}" = "success" ]
+          echo "Production release is eligible only because actual backup restore validation passed."
+
+      - name: Record pre-deployment recovery metadata
+        shell: bash
+        env:
+          BACKUP_ID: ${{ needs.database-recovery.outputs.backup_id }}
+          EF_CORE_MIGRATION: ${{ needs.database-recovery.outputs.ef_core_migration }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/production-release
+          jq -n --arg commitSha "${GITHUB_SHA}" --arg backupId "${BACKUP_ID}" \
+            --arg efCoreMigration "${EF_CORE_MIGRATION}" \
+            --arg previousKnownGoodDeployId "${PREVIOUS_KNOWN_GOOD_DEPLOY_ID}" \
+            --arg gateCompletedAtUtc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{commitSha:$commitSha,backupId:$backupId,efCoreMigration:$efCoreMigration,previousKnownGoodDeployId:$previousKnownGoodDeployId,gateCompletedAtUtc:$gateCompletedAtUtc,recoveryGate:"PASS",eligibleForRenderDeploy:true}' \
+            > artifacts/production-release/predeployment-recovery-metadata.json
+
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: production-release-recovery-metadata-${{ github.run_id }}
+          retention-days: 90
+          path: artifacts/production-release/*.json

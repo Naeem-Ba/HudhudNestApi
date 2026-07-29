@@ -4,10 +4,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using PropertyApi.Application.Auth.Commands.SocialLogin;
 using PropertyApi.Application.Auth.Contracts;
+using PropertyApi.Application.Auth.Orchestration;
+using PropertyApi.Application.Auth.Policies;
+using PropertyApi.Application.Auth.Services;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Users.Interfaces;
+using PropertyApi.Auth.Tests.TestHelpers;
 using Xunit;
 
 namespace PropertyApi.Auth.Tests.Application.Commands;
@@ -511,24 +515,34 @@ public sealed class SocialLoginSecurityTests
     private SocialLoginCommandHandler CreateSut()
     {
         var sessionIssuer =
-            new SocialLoginSessionIssuer(
-                _identity.Object,
+            new AuthenticationSessionIssuer(
+                new SocialSessionIdentityAdapter(_identity.Object),
                 _tokenService.Object,
                 _refreshTokens.Object,
                 _jwtSettings.Object,
                 _auditLogs.Object,
-                NullLogger<SocialLoginSessionIssuer>.Instance);
+                NullLogger<AuthenticationSessionIssuer>.Instance);
 
-        return new SocialLoginCommandHandler(
-            new[]
-            {
-                _verifier.Object
-            },
+        var validator = new SocialIdentityValidator(
+            new[] { _verifier.Object },
+            NullLogger<SocialIdentityValidator>.Instance);
+        var resolver = new SocialAccountResolver(
+            _identity.Object,
+            new SocialAccountLinkingPolicy());
+        var mutations = new SocialAccountMutationCoordinator(
             _identity.Object,
             Mock.Of<IUserAccountRepository>(),
             sessionIssuer,
+            new SocialAccountCreationPolicy(),
             _unitOfWork.Object,
-            _logger.Object);
+            NullLogger<SocialAccountMutationCoordinator>.Instance);
+        var orchestrator = new SocialAuthenticationOrchestrator(
+            validator,
+            resolver,
+            mutations,
+            NullLogger<SocialAuthenticationOrchestrator>.Instance);
+
+        return new SocialLoginCommandHandler(orchestrator);
     }
 
     private void SetupVerifiedSocialUser(

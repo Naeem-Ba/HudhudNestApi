@@ -20,7 +20,9 @@ public sealed record IdentityAccountSnapshot(
     DateTimeOffset? PhoneLastVerifiedAtUtc = null,
     DateTimeOffset? PhoneVerificationDueAtUtc = null,
     DateTimeOffset? PhoneVerificationGraceEndsAtUtc = null,
-    PropertyApi.Domain.Enums.PhoneVerificationState PhoneVerificationState = PropertyApi.Domain.Enums.PhoneVerificationState.NotConfigured);
+    PropertyApi.Domain.Enums.PhoneVerificationState PhoneVerificationState = PropertyApi.Domain.Enums.PhoneVerificationState.NotConfigured,
+    bool IsBanned = false,
+    DateTimeOffset? LockoutEndUtc = null);
 
 /// <summary>
 /// Framework-neutral request for creating an identity account.

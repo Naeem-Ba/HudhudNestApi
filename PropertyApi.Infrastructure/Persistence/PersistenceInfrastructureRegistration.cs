@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Infrastructure.Identity.Entities;
+using PropertyApi.Infrastructure.Performance;
 using InfrastructureApplicationRole = PropertyApi.Infrastructure.Identity.Entities.ApplicationRole;
 
 namespace PropertyApi.Infrastructure.Persistence;
@@ -16,7 +17,12 @@ internal static class PersistenceInfrastructureRegistration
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        services.AddDbContext<AppDbContext>(options =>
+        var exposeDatabaseDiagnostics =
+            PerformanceDatabaseDiagnosticsPolicy.IsEnabled(environment, configuration);
+        if (exposeDatabaseDiagnostics)
+            services.AddSingleton<PerformanceDatabaseCommandInterceptor>();
+
+        services.AddDbContext<AppDbContext>((serviceProvider, options) =>
         {
             var connectionString =
                 PostgresConnectionStringResolver.Resolve(
@@ -24,6 +30,10 @@ internal static class PersistenceInfrastructureRegistration
                     environment);
 
             options.UseNpgsql(connectionString);
+
+            if (exposeDatabaseDiagnostics)
+                options.AddInterceptors(
+                    serviceProvider.GetRequiredService<PerformanceDatabaseCommandInterceptor>());
 
             if (environment.IsDevelopment())
             {

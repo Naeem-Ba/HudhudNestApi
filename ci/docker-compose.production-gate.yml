@@ -6,11 +6,11 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: propertyapi_gate
+      POSTGRES_DB: propertyapi_staging_gate
     healthcheck:
       test:
         - CMD-SHELL
-        - pg_isready -U postgres -d propertyapi_gate
+        - pg_isready -U postgres -d propertyapi_staging_gate
       interval: 5s
       timeout: 3s
       retries: 20
@@ -33,19 +33,21 @@ services:
       retries: 20
 
   migrator:
+    image: propertyapi-migrator:${PROPERTYAPI_IMAGE_TAG:-production-gate}
     build:
       context: ..
       dockerfile: ci/Dockerfile.migrator
     environment:
       DOTNET_ENVIRONMENT: Staging
       ASPNETCORE_ENVIRONMENT: Staging
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=propertyapi_gate;Username=postgres;Password=postgres
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=propertyapi_staging_gate;Username=postgres;Password=postgres
       Redis__Required: "false"
     depends_on:
       postgres:
         condition: service_healthy
 
   api:
+    image: propertyapi-api:${PROPERTYAPI_IMAGE_TAG:-production-gate}
     build:
       context: ..
       dockerfile: PropertyApi/Dockerfile
@@ -54,10 +56,26 @@ services:
       ASPNETCORE_ENVIRONMENT: Staging
       ASPNETCORE_HTTP_PORTS: "8080"
 
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=propertyapi_gate;Username=postgres;Password=postgres
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=propertyapi_staging_gate;Username=postgres;Password=postgres
       ConnectionStrings__Redis: redis:6379,abortConnect=false
       Redis__ConnectionString: redis:6379,abortConnect=false
       Redis__Required: "true"
+
+      Deployment__CommitSha: local-smoke
+      Deployment__Version: local-production-gate
+      Deployment__PublicBaseUrl: http://127.0.0.1:18080
+      Deployment__ProductionBaseUrl: https://production.invalid
+      Staging__AllowHttpLocal: "true"
+      Staging__EnvironmentId: local-isolated-staging
+      Staging__DatabaseNameMarker: staging
+      Staging__RedisIsolationMarker: local-staging-redis
+      Staging__StorageIsolationMarker: local-in-memory-smoke-media
+      Staging__ExternalNotificationsDisabled: "true"
+      Staging__TestSupport__Enabled: "true"
+      Staging__TestSupport__FixedOtp: "246810"
+      Staging__TestSupport__PhonePrefix: "+155500"
+      Staging__TestSupport__CleanupSecret: local-staging-cleanup-secret-at-least-32-characters
+      Staging__TestSupport__UseInMemoryMedia: "true"
 
       DataProtection__PersistKeysToDatabase: "true"
 

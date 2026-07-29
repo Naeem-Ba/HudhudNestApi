@@ -30,7 +30,7 @@ public static class DependencyInjection
         services.AddRepositoryInfrastructure();
         services.AddLookupInfrastructure();
         services.AddUserContextInfrastructure();
-        services.AddMediaInfrastructure(configuration);
+        services.AddMediaInfrastructure(configuration, environment);
         services.AddCacheInfrastructure(configuration, environment);
         services.AddOperationalHealthChecks();
 

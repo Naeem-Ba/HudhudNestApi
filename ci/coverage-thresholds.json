@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "currentStage": "stage-1-initial-minimum",
+  "global": {
+    "minimumLineCoveragePercent": 6.0,
+    "minimumBranchCoveragePercent": 12.0,
+    "maximumAllowedRegressionPercent": 0.25
+  },
+  "criticalModules": {
+    "authSensitive": {
+      "minimumLineCoveragePercent": 12.0,
+      "minimumBranchCoveragePercent": 15.0,
+      "classOrPathPattern": "(Auth|Identity|Security|Otp|Token|Login|Register|Password)"
+    }
+  },
+  "changedCode": {
+    "enabled": true,
+    "enforcement": "pull_request",
+    "minimumLineCoveragePercent": 70.0,
+    "minimumBranchCoveragePercent": 60.0,
+    "productionPathPrefixes": [
+      "PropertyApi/",
+      "PropertyApi.Application/",
+      "PropertyApi.Domain/",
+      "PropertyApi.Infrastructure/",
+      "tools/PropertyApi.Migrator/"
+    ],
+    "excludedPathPatterns": [
+      "/Migrations/",
+      ".Designer.cs",
+      ".g.cs",
+      ".AssemblyInfo.cs"
+    ]
+  },
+  "nextStages": [
+    {
+      "stage": "stage-2-security-core",
+      "minimumLineCoveragePercent": 15.0,
+      "minimumBranchCoveragePercent": 15.0,
+      "minimumAuthLineCoveragePercent": 25.0,
+      "entryCriteria": "Add meaningful tests around Auth, token rotation, OTP replay, authorization failures, and critical Properties workflows."
+    },
+    {
+      "stage": "stage-3-release-maturity",
+      "minimumLineCoveragePercent": 25.0,
+      "minimumBranchCoveragePercent": 20.0,
+      "minimumAuthLineCoveragePercent": 40.0,
+      "entryCriteria": "Coverage must rise through behavior tests, not exclusions or getter-only tests."
+    },
+    {
+      "stage": "stage-4-long-term-target",
+      "minimumLineCoveragePercent": 40.0,
+      "minimumBranchCoveragePercent": 30.0,
+      "minimumAuthLineCoveragePercent": 70.0,
+      "entryCriteria": "Critical authentication and authorization branches have dedicated failure-path coverage."
+    }
+  ]
+}

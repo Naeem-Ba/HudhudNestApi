@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "policy": "New HIGH_RISK or DESTRUCTIVE migrations require an explicit recovery decision and baseline entry.",
+  "migrations": [
+    { "migrationId": "20260601184159_InitialCleanArchitecture", "classification": "ADDITIVE", "recovery": "Restore backup if initial deployment must be abandoned." },
+    { "migrationId": "20260607093907_HashRefreshTokens", "classification": "HIGH_RISK", "recovery": "Forward-fix; token hashes cannot be losslessly reversed." },
+    { "migrationId": "20260609101015_AddOtpCodes", "classification": "ADDITIVE", "recovery": "Application rollback may leave the table unused." },
+    { "migrationId": "20260610123330_AddNotifications", "classification": "ADDITIVE", "recovery": "Application rollback may leave the table unused." },
+    { "migrationId": "20260610190609_RemoveUserIsAgent", "classification": "DESTRUCTIVE", "recovery": "Restore the pre-migration backup; do not run Down in production." },
+    { "migrationId": "20260610195746_AddOtpCleanupAndRefreshTokenRotation", "classification": "HIGH_RISK", "recovery": "Forward-fix or restore pre-migration backup." },
+    { "migrationId": "20260611065011_AddPropertyGeoLocationPostGis", "classification": "HIGH_RISK", "recovery": "Keep PostGIS enabled; application rollback is preferred." },
+    { "migrationId": "20260611193000_AddPropertyTextSearchTrigramIndexes", "classification": "HIGH_RISK", "recovery": "Drop indexes only after query-plan review; prefer forward-fix." },
+    { "migrationId": "20260621194421_AddSyrianMarketLookupsAndApplicationRole", "classification": "HIGH_RISK", "recovery": "Restore for data rollback; otherwise forward-fix lookup data." },
+    { "migrationId": "20260624143959_AddSecurityHardeningAuditLogsAndEncryptedUserFields", "classification": "HIGH_RISK", "recovery": "Never decrypt via Down; restore or forward-fix." },
+    { "migrationId": "20260624152941_AddDataProtectionKeys", "classification": "ADDITIVE", "recovery": "Preserve key rows across application rollback." },
+    { "migrationId": "20260625174320_ExpandContactMessageIpAddress", "classification": "ADDITIVE", "recovery": "Backward-compatible expansion." },
+    { "migrationId": "20260706194115_AddUserAccountsProfileProjection", "classification": "HIGH_RISK", "recovery": "Data projection requires restore or audited forward-fix." },
+    { "migrationId": "20260707145048_AddPhoneNumberLookupHash", "classification": "HIGH_RISK", "recovery": "Forward-fix lookup hashes; preserve encrypted source data." },
+    { "migrationId": "20260709063950_RebindBusinessUserRelationshipsToUserAccounts", "classification": "HIGH_RISK", "recovery": "Restore pre-migration backup if relationship rebind is invalid." },
+    { "migrationId": "20260709114331_CutOverIdentityToApplicationUser", "classification": "DESTRUCTIVE", "recovery": "Restore pre-migration backup; database downgrade is forbidden." },
+    { "migrationId": "20260716192200_AddPhonePasswordAuthenticationAndReverification", "classification": "HIGH_RISK", "recovery": "Application rollback or forward-fix; restore only for corrupt data." }
+  ]
+}

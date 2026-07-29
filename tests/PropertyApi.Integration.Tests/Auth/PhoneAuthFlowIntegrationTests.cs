@@ -33,8 +33,7 @@ public sealed class PhoneAuthFlowIntegrationTests : IClassFixture<PhoneAuthWebAp
         Assert.False(string.IsNullOrWhiteSpace(await Property<string>(registration, "refreshToken")));
 
         var login = await _client.PostAsJsonAsync("/api/auth/phone/login", new { phoneNumber = phone, password = "SecurePass9" });
-        Assert.True(login.StatusCode == HttpStatusCode.OK,
-            $"Phone login failed: {login.StatusCode}: {await login.Content.ReadAsStringAsync()}");
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         Assert.False(string.IsNullOrWhiteSpace(await Property<string>(login, "accessToken")));
 
         var legacy = await _client.PostAsJsonAsync("/api/auth/phone/verify", new { phoneNumber = phone, code = DeterministicOtpService.ValidOtp });

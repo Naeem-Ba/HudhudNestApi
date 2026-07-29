@@ -250,7 +250,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
                 await _db.SaveChangesAsync(ct);
                 return null;
             }
-            await _db.PhoneOtpChallenges.Where(x => x.Id == id)
+            await _db.PhoneOtpChallenges.Where(x => x.Id == id && x.AttemptCount < 3)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.AttemptCount, x => x.AttemptCount + 1), ct);
             return null;
         }

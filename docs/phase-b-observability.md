@@ -30,7 +30,11 @@ The application now owns a stable configuration section:
 }
 ```
 
-`Observability:Otlp:Endpoint` is fail-fast validated when configured. The app emits `ActivitySource` and `Meter` instruments without adding exporter packages in this slice; the deployment can attach an OpenTelemetry collector/exporter without changing request behavior.
+This historical Phase B slice has been superseded by the production pipeline in
+`docs/observability/`. The application now registers the OpenTelemetry SDK and
+OTLP trace/metric exporters. Production startup fails when observability is
+disabled, the service version/environment is missing, the OTLP URI is insecure
+or invalid, or required authentication headers are absent.
 
 ## Redaction Review
 

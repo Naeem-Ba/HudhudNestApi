@@ -1,0 +1,80 @@
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+  transform/redaction:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - delete_key(attributes, "http.request.header.authorization")
+          - delete_key(attributes, "http.request.header.cookie")
+          - delete_key(attributes, "http.response.header.set-cookie")
+          - delete_key(attributes, "db.connection_string")
+          - delete_key(attributes, "db.statement")
+          - delete_key(attributes, "db.query.text")
+          - delete_key(attributes, "url.query")
+          - delete_key(attributes, "url.full")
+          - delete_key(attributes, "user.email")
+          - delete_key(attributes, "user.phone")
+          - delete_key(attributes, "auth.token")
+          - delete_key(attributes, "auth.otp")
+          - delete_key(attributes, "redis.key")
+  batch:
+    timeout: 2s
+    send_batch_size: 512
+
+connectors:
+  spanmetrics:
+    histogram:
+      explicit:
+        buckets: [100ms, 250ms, 500ms, 1s, 2s, 5s]
+    dimensions:
+      - name: db.system.name
+      - name: http.request.method
+      - name: http.response.status_code
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    resource_to_telemetry_conversion:
+      enabled: true
+
+service:
+  extensions: [health_check]
+  telemetry:
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+                without_type_suffix: true
+                without_units: true
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, transform/redaction, batch]
+      exporters: [otlp/tempo, spanmetrics]
+    metrics:
+      receivers: [otlp, spanmetrics]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]

@@ -95,7 +95,13 @@ internal static class AuthInfrastructureRegistration
         services.AddScoped<IPhoneAuthenticationWorkflow, PhoneAuthenticationWorkflow>();
         services.AddHostedService<PhoneVerificationHostedService>();
 
+        services.AddScoped<IdentityAccountReader>();
+        services.AddScoped<IdentityAccountCreator>();
+        services.AddScoped<IdentityAccessService>();
+        services.AddScoped<IdentityCredentialService>();
+#pragma warning disable CS0618 // Compatibility facade is intentionally registered during staged migration.
         services.AddScoped<IIdentityCapabilityAdapter, PureIdentityService>();
+#pragma warning restore CS0618
 
         services.AddScoped<ISocialLoginIdentityService>(
             sp => (ISocialLoginIdentityService)
@@ -242,10 +248,22 @@ internal static class AuthInfrastructureRegistration
         }
 
         services.AddScoped<IOtpCodeRepository, OtpCodeRepository>();
-        services.AddScoped<IOtpService, OtpService>();
+
+        var stagingTestSupportEnabled =
+            StagingTestSupportPolicy.IsEnabled(environment, configuration);
+
+        if (stagingTestSupportEnabled)
+            services.AddScoped<IOtpService, StagingFixedOtpService>();
+        else
+            services.AddScoped<IOtpService, OtpService>();
+
         services.AddScoped<IEmailVerificationService, EmailVerificationService>();
 
-        if (environment.IsDevelopment() ||
+        if (stagingTestSupportEnabled)
+        {
+            services.AddScoped<ISmsService, StagingSmokeSmsSink>();
+        }
+        else if (environment.IsDevelopment() ||
             environment.EnvironmentName == "Testing" ||
             environment.EnvironmentName == "CI")
         {

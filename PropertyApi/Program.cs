@@ -18,12 +18,14 @@ using PropertyApi.Observability;
 using PropertyApi.Security.Csrf;
 using PropertyApi.Security.Headers;
 using PropertyApi.Security.RateLimiting;
+using PropertyApi.Performance;
 using PropertyApi.Configuration;
 using PropertyApi.Health;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddPropertyApiObservability();
+StagingEnvironmentGuard.Validate(builder.Configuration, builder.Environment);
 
 builder.Services.AddTrustedForwardedHeaders(
     builder.Configuration,
@@ -83,6 +85,18 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(
     builder.Configuration,
     builder.Environment);
+
+if (builder.Environment.IsStaging() &&
+    builder.Configuration.GetValue<bool>("Staging:TestSupport:Enabled"))
+{
+    builder.Services.AddHttpClient("ObservabilitySynthetic", client =>
+    {
+        var endpoint = builder.Configuration["Observability:Synthetic:HttpEndpoint"]
+            ?? "http://synthetic-http:5678/";
+        client.BaseAddress = new Uri(endpoint);
+        client.Timeout = TimeSpan.FromSeconds(5);
+    });
+}
 
 
 builder.Services.AddScaleOutOutputCaching(
@@ -422,6 +436,28 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0
             }));
 
+    options.AddPolicy("public-search", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetClientRateLimitPartitionKey(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy("geo-search", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetClientRateLimitPartitionKey(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+
     options.AddPolicy("visits", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: GetClientRateLimitPartitionKey(httpContext),
@@ -449,6 +485,8 @@ var app = builder.Build();
 
 // -- 11. Middleware order --------------------------------------
 app.UseForwardedHeaders();
+app.UsePerformanceInstanceHeader(app.Environment, app.Configuration);
+app.UsePerformanceDatabaseDiagnostics(app.Environment, app.Configuration);
 app.UsePropertyApiObservability();
 
 if (app.Environment.IsProduction())

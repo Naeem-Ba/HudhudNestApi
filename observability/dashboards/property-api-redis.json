@@ -1,0 +1,71 @@
+{
+  "title": "PropertyApi Redis Resilience",
+  "tags": [
+    "propertyapi",
+    "redis",
+    "resilience"
+  ],
+  "panels": [
+    {
+      "title": "Redis command latency p95/p99",
+      "type": "timeseries",
+      "targets": [
+        "redis_command_duration_ms{quantile=\"0.95\"}",
+        "redis_command_duration_ms{quantile=\"0.99\"}"
+      ]
+    },
+    {
+      "title": "Redis timeout and error rate",
+      "type": "timeseries",
+      "targets": [
+        "redis_timeouts_total",
+        "redis_errors_total"
+      ]
+    },
+    {
+      "title": "Redis reconnects",
+      "type": "timeseries",
+      "targets": [
+        "redis_reconnects_total"
+      ]
+    },
+    {
+      "title": "Feature degradation activations",
+      "type": "timeseries",
+      "targets": [
+        "propertyapi_redis_feature_degraded_total"
+      ]
+    },
+    {
+      "title": "Rate limiter fallback/fail-closed decisions",
+      "type": "timeseries",
+      "targets": [
+        "propertyapi_rate_limiter_fallback_total",
+        "propertyapi_rate_limiter_fail_closed_total"
+      ]
+    },
+    {
+      "title": "SignalR backplane state",
+      "type": "stat",
+      "targets": [
+        "propertyapi_signalr_backplane_connected"
+      ]
+    },
+    {
+      "title": "Redis memory and connections",
+      "type": "timeseries",
+      "targets": [
+        "redis_memory_used_bytes",
+        "redis_connected_clients"
+      ]
+    },
+    {
+      "title": "Redis replication health",
+      "type": "timeseries",
+      "targets": [
+        "redis_replica_lag_seconds",
+        "redis_primary_role_changes_total"
+      ]
+    }
+  ]
+}

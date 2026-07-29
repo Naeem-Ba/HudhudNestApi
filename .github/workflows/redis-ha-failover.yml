@@ -1,0 +1,60 @@
+name: Redis HA Failover Drill
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  redis-ha-failover:
+    name: Redis HA Failover Drill
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Validate Redis HA evidence
+        shell: bash
+        env:
+          REDIS_HA_EVIDENCE_JSON: ${{ secrets.REDIS_HA_EVIDENCE_JSON }}
+          REDIS_HA_OUTPUT_DIR: artifacts/redis-ha
+        run: |
+          set -euo pipefail
+          bash scripts/verify-redis-ha.sh
+
+      - name: Execute provider Redis failover drill
+        shell: bash
+        env:
+          REDIS_FAILOVER_ENVIRONMENT: Staging
+          STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+          REDIS_PROVIDER_FAILOVER_COMMAND: ${{ secrets.REDIS_PROVIDER_FAILOVER_COMMAND }}
+          REDIS_FAILOVER_REPORT_PATH: artifacts/redis-failover/redis-failover-report.json
+          REDIS_FAILOVER_SUMMARY_PATH: artifacts/redis-failover/redis-failover-summary.md
+          REDIS_FAILOVER_JUNIT_PATH: artifacts/redis-failover/redis-failover-junit.xml
+        run: |
+          set -euo pipefail
+          bash scripts/test-redis-failover.sh
+
+      - name: Verify Redis post-failover recovery evidence
+        shell: bash
+        env:
+          REDIS_FAILOVER_REPORT_PATH: artifacts/redis-failover/redis-failover-report.json
+          REDIS_FAILOVER_OUTPUT_DIR: artifacts/redis-failover
+        run: |
+          set -euo pipefail
+          bash scripts/verify-redis-recovery.sh
+
+      - name: Upload Redis failover artifacts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: redis-ha-failover-drill
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            artifacts/redis-ha/**
+            artifacts/redis-failover/**

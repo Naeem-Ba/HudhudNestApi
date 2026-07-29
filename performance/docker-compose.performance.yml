@@ -1,0 +1,161 @@
+name: propertyapi-performance
+
+x-api-environment: &api-environment
+  ASPNETCORE_ENVIRONMENT: Staging
+  DOTNET_ENVIRONMENT: Staging
+  ASPNETCORE_URLS: http://+:8080
+  ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=propertyapi_performance;Username=postgres;Password=${PERF_POSTGRES_PASSWORD:?required};Pooling=true;Maximum Pool Size=40;Timeout=15;Command Timeout=60
+  ConnectionStrings__Redis: redis:6379,abortConnect=false
+  Redis__ConnectionString: redis:6379,abortConnect=false
+  RateLimiting__Redis__Enabled: "true"
+  RateLimiting__Redis__InstanceName: "PropertyApiPerformance:"
+  RateLimiting__Redis__Policies__auth-login__PermitLimit: ${PERF_LIMIT_AUTH_LOGIN:-10000}
+  RateLimiting__Redis__Policies__auth-login__WindowSeconds: "5"
+  RateLimiting__Redis__Policies__auth-register__PermitLimit: ${PERF_LIMIT_AUTH_REGISTER:-10000}
+  RateLimiting__Redis__Policies__auth-register__WindowSeconds: "5"
+  RateLimiting__Redis__Policies__send-otp__PermitLimit: ${PERF_LIMIT_SEND_OTP:-10000}
+  RateLimiting__Redis__Policies__send-otp__WindowSeconds: "5"
+  RateLimiting__Redis__Policies__verify-otp__PermitLimit: ${PERF_LIMIT_VERIFY_OTP:-10000}
+  RateLimiting__Redis__Policies__verify-otp__WindowSeconds: "5"
+  RateLimiting__Redis__Policies__auth-refresh__PermitLimit: ${PERF_LIMIT_AUTH_REFRESH:-10000}
+  RateLimiting__Redis__Policies__auth-refresh__WindowSeconds: "5"
+  RateLimiting__Redis__Policies__public-search__PermitLimit: ${PERF_LIMIT_PUBLIC_SEARCH:-10000}
+  RateLimiting__Redis__Policies__public-search__WindowSeconds: "5"
+  RateLimiting__Redis__Policies__geo-search__PermitLimit: ${PERF_LIMIT_GEO_SEARCH:-10000}
+  RateLimiting__Redis__Policies__geo-search__WindowSeconds: "5"
+  RedisRateLimiting__ConnectionString: redis:6379,abortConnect=false
+  Jwt__Issuer: PropertyApi
+  Jwt__Audience: PropertyApiClient
+  Jwt__Key: ${PERF_JWT_KEY:?required}
+  Jwt__AccessTokenMinutes: "30"
+  Jwt__RefreshTokenDays: "30"
+  OtpSettings__SecretKey: ${PERF_OTP_SECRET_KEY:?required}
+  Security__PhoneLookupHmacKey: ${PERF_PHONE_HMAC_KEY:?required}
+  DataProtection__PersistKeysToDatabase: "true"
+  Staging__AllowHttpLocal: "true"
+  Staging__EnvironmentId: propertyapi-performance
+  Staging__DatabaseNameMarker: propertyapi_performance
+  Staging__RedisIsolationMarker: propertyapi-performance
+  Staging__StorageIsolationMarker: propertyapi-performance
+  Staging__ExternalNotificationsDisabled: "true"
+  Staging__TestSupport__Enabled: "true"
+  Staging__TestSupport__FixedOtp: ${PERF_FIXED_OTP:?required}
+  Staging__TestSupport__PhonePrefix: ${PERF_TEST_PHONE_PREFIX:?required}
+  Staging__TestSupport__CleanupSecret: ${PERF_CLEANUP_SECRET:?required}
+  Staging__TestSupport__UseInMemoryMedia: "true"
+  Deployment__CommitSha: ${PERF_COMMIT_SHA:-local-performance}
+  Deployment__Version: ${PERF_COMMIT_SHA:-local-performance}
+  Deployment__PublicBaseUrl: http://localhost:58080
+  Deployment__ProductionBaseUrl: https://production.invalid
+  Performance__ExposeInstanceId: "true"
+  Performance__ExposeDatabaseDiagnostics: "true"
+  ForwardedHeaders__Enabled: "true"
+  ForwardedHeaders__KnownNetworks__0: 172.29.250.0/24
+  ForwardedHeaders__AllowedHosts__0: load-balancer
+  ForwardedHeaders__AllowedHosts__1: localhost
+  Observability__Enabled: "false"
+  PhoneVerification__EnforcementEnabled: "false"
+  PhoneVerification__ReminderProcessingEnabled: "false"
+  CookieCsrf__Enabled: "false"
+  Cors__AllowedOrigins__0: http://localhost:58080
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - track_io_timing=on
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PERF_POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: propertyapi_performance
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d propertyapi_performance"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - performance-postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "56379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  api1:
+    build:
+      context: ..
+      dockerfile: PropertyApi/Dockerfile
+    environment:
+      <<: *api-environment
+      Performance__InstanceId: api-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  api2:
+    build:
+      context: ..
+      dockerfile: PropertyApi/Dockerfile
+    environment:
+      <<: *api-environment
+      Performance__InstanceId: api-2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  load-balancer:
+    image: nginx:1.27-alpine
+    ports:
+      - "58080:8080"
+    volumes:
+      - ./nginx.performance.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api1
+      - api2
+
+  k6:
+    image: grafana/k6:0.54.0
+    profiles: ["load"]
+    environment:
+      PERF_BASE_URL: http://load-balancer:8080
+      PERF_ENVIRONMENT: ${PERF_ENVIRONMENT:-CI}
+      PERF_EXPECTED_INSTANCE_COUNT: "2"
+      PERF_RUN_ID: ${PERF_RUN_ID:?required}
+      PERF_TEST_PHONE_PREFIX: ${PERF_TEST_PHONE_PREFIX:?required}
+      PERF_TEST_PASSWORD: ${PERF_TEST_PASSWORD:?required}
+      PERF_FIXED_OTP: ${PERF_FIXED_OTP:?required}
+      PERF_VIRTUAL_USERS: ${PERF_VIRTUAL_USERS:-10}
+      PERF_TEST_DURATION: ${PERF_TEST_DURATION:-30s}
+    volumes:
+      - ./:/performance:ro
+      - ../artifacts/performance:/artifacts/performance
+    working_dir: /performance/load-tests
+    depends_on:
+      - load-balancer
+
+volumes:
+  performance-postgres:
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.29.250.0/24

@@ -1,8 +1,12 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using PropertyApi.Application.Auth.Commands.VerifyPhoneOtp;
+using PropertyApi.Application.Auth.Orchestration;
+using PropertyApi.Application.Auth.Policies;
+using PropertyApi.Application.Auth.Services;
 using PropertyApi.Application.Auth.Models;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Users.Interfaces;
+using PropertyApi.Auth.Tests.TestHelpers;
 using PropertyApi.Domain.Users.Constants;
 
 namespace PropertyApi.Auth.Tests.Application.Commands;
@@ -341,20 +345,32 @@ public sealed class VerifyPhoneOtpCommandHandlerTests
         Mock<IUnitOfWork> unitOfWork)
     {
         var sessionIssuer =
-            new PhoneOtpSessionIssuer(
-                identityService.Object,
+            new AuthenticationSessionIssuer(
+                new PhoneSessionIdentityAdapter(identityService.Object),
                 tokenService.Object,
-                refreshTokenStore.Object,
-                NullLogger<PhoneOtpSessionIssuer>.Instance);
+                new RefreshTokenRepositoryAdapter(refreshTokenStore.Object),
+                Mock.Of<IJwtTokenSettings>(),
+                Mock.Of<IAuditLogService>(),
+                NullLogger<AuthenticationSessionIssuer>.Instance);
 
-        return new VerifyPhoneOtpCommandHandler(
+        var otp = new OtpConsumptionService(
             otpRepo.Object,
             otpService.Object,
+            NullLogger<OtpConsumptionService>.Instance);
+        var accountMutations = new PhoneAccountMutationCoordinator(
             identityService.Object,
             accounts.Object,
+            new PhoneOwnershipPolicy(),
+            unitOfWork.Object,
+            NullLogger<PhoneAccountMutationCoordinator>.Instance);
+        var orchestrator = new PhoneOtpAuthenticationOrchestrator(
+            otp,
+            accountMutations,
             sessionIssuer,
             unitOfWork.Object,
-            NullLogger<VerifyPhoneOtpCommandHandler>.Instance);
+            NullLogger<PhoneOtpAuthenticationOrchestrator>.Instance);
+
+        return new VerifyPhoneOtpCommandHandler(orchestrator);
     }
 
     private static VerifyPhoneOtpCommand Command(

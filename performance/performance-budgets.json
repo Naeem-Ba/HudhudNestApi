@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "approved": false,
+  "approval": {
+    "reason": "Initial fail-closed characterization budgets; approval requires three comparable measured runs.",
+    "approvedBy": null,
+    "approvedAtUtc": null
+  },
+  "environment": {
+    "minimumApiInstances": 2,
+    "minimumDatasetSize": 10000,
+    "requiredRepeatRuns": 3
+  },
+  "scenarios": {
+    "propertyList": {
+      "p95Milliseconds": 750,
+      "p99Milliseconds": 1500,
+      "minimumRequestsPerSecond": 20,
+      "maximumErrorRate": 0.01,
+      "maximumDatabaseMilliseconds": 500,
+      "maximumQueryCount": 3
+    },
+    "propertyDetail": {
+      "p95Milliseconds": 500,
+      "p99Milliseconds": 1000,
+      "minimumRequestsPerSecond": 25,
+      "maximumErrorRate": 0.01,
+      "maximumDatabaseMilliseconds": 350,
+      "maximumQueryCount": 5
+    },
+    "geographicSearch": {
+      "p95Milliseconds": 1200,
+      "p99Milliseconds": 2000,
+      "minimumRequestsPerSecond": 10,
+      "maximumErrorRate": 0.01,
+      "maximumDatabaseMilliseconds": 900,
+      "maximumQueryCount": 2
+    },
+    "authentication": {
+      "p95Milliseconds": 750,
+      "p99Milliseconds": 1500,
+      "maximumErrorRate": 0.01
+    }
+  },
+  "global": {
+    "maximumHttpErrorRate": 0.01,
+    "maximumServerErrorRate": 0.001,
+    "maximumFailedCheckRate": 0.001,
+    "maximumAuthenticationInvariantFailures": 0,
+    "maximumRateLimitOvershoot": 0
+  },
+  "relativeRegression": {
+    "p95Percent": 15,
+    "p99Percent": 20,
+    "throughputReductionPercent": 15,
+    "databaseTimePercent": 20,
+    "bufferReadPercent": 25
+  },
+  "queryPlans": {
+    "maximumSequentialScanRows": 1000,
+    "maximumTemporaryBlocks": 0,
+    "maximumEstimateErrorRatio": 10,
+    "requireSpatialIndex": true
+  }
+}

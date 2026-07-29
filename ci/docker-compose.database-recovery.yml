@@ -1,0 +1,104 @@
+name: propertyapi-database-recovery
+
+services:
+  source-postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: propertyapi_source
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d propertyapi_source"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  restore-postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "55433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  migrator:
+    build:
+      context: ..
+      dockerfile: ci/Dockerfile.migrator
+    environment:
+      DOTNET_ENVIRONMENT: RecoveryDrill
+      ASPNETCORE_ENVIRONMENT: RecoveryDrill
+      ConnectionStrings__DefaultConnection: Host=source-postgres;Port=5432;Database=propertyapi_source;Username=postgres;Password=postgres
+      Redis__Required: "false"
+    depends_on:
+      source-postgres:
+        condition: service_healthy
+
+  recovery-toolbox:
+    image: propertyapi-database-recovery:local
+    build:
+      context: ..
+      dockerfile: ci/Dockerfile.database-recovery
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@source-postgres:5432/propertyapi_source?sslmode=disable
+      RESTORE_ADMIN_DATABASE_URL: postgresql://postgres:postgres@restore-postgres:5432/postgres?sslmode=disable
+      RESTORE_TARGET_DATABASE_URL: postgresql://postgres:postgres@restore-postgres:5432/propertyapi_restore_drill?sslmode=disable
+      RESTORE_TARGET_ENVIRONMENT: recovery-drill
+      RESTORE_TARGET_DISPOSABLE: "true"
+      ALLOW_DESTRUCTIVE_RESTORE: "true"
+      BACKUP_OUTPUT_DIR: /workspace/artifacts/database-recovery
+      RESTORE_RESULT_DIR: /workspace/artifacts/database-recovery
+    volumes:
+      - ../scripts/database:/workspace/scripts/database:ro
+      - ../artifacts/database-recovery:/workspace/artifacts/database-recovery
+    depends_on:
+      source-postgres:
+        condition: service_healthy
+      restore-postgres:
+        condition: service_healthy
+
+  api-restored:
+    build:
+      context: ..
+      dockerfile: PropertyApi/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT: RecoveryDrill
+      ASPNETCORE_ENVIRONMENT: RecoveryDrill
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__DefaultConnection: Host=restore-postgres;Port=5432;Database=propertyapi_restore_drill;Username=postgres;Password=postgres
+      ConnectionStrings__Redis: redis:6379,abortConnect=false
+      Redis__Required: "true"
+      DataProtection__PersistKeysToDatabase: "true"
+      Jwt__Key: recovery-drill-only-64-character-key-never-use-in-production-12345678
+      Jwt__Issuer: PropertyApi.RecoveryDrill
+      Jwt__Audience: PropertyApi.RecoveryDrill
+      Cloudinary__CloudName: recovery-drill
+      Cloudinary__ApiKey: recovery-drill
+      Cloudinary__ApiSecret: recovery-drill
+      Cors__AllowedOrigins__0: http://localhost:4200
+      Database__ApplyMigrationsOnStartup: "false"
+      Database__SeedOnStartup: "false"
+      ForwardedHeaders__Enabled: "false"
+      PhoneVerification__ReminderProcessingEnabled: "false"
+    ports:
+      - "18081:8080"
+    depends_on:
+      restore-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy

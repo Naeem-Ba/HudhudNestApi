@@ -176,14 +176,9 @@ public sealed class RefreshTokenCommandHandler
 
                     if (!revoked)
                     {
-                        await _reuseHandler.HandleAsync(
-                            stored,
-                            request.IpAddress,
-                            tokenCt);
-
                         return RefreshTokenResult
                             .Unauthorized(
-                                "Refresh token reuse detected. All active sessions were revoked.");
+                                "Refresh token was already rotated by another request.");
                     }
 
                     await _refreshTokens.AddAsync(

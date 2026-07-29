@@ -112,24 +112,43 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup .NET ${{ env.DOTNET_VERSION }}
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('Directory.Packages.props', 'NuGet.config', '**/*.csproj', '**/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
       - name: Restore dependencies
         run: |
-          dotnet restore "${{ env.SOLUTION_PATH }}"
+          dotnet restore "${{ env.SOLUTION_PATH }}" --locked-mode
+
+      - name: Restore local .NET tools
+        run: |
+          dotnet tool restore
+
+      - name: Validate package governance
+        shell: pwsh
+        run: |
+          ./scripts/validate-package-governance.ps1 `
+            -RepositoryRoot $PWD.Path `
+            -SolutionPath "${{ env.SOLUTION_PATH }}" `
+            -PolicyPath "ci/package-policy.json" `
+            -OutputDirectory "artifacts/supply-chain"
+
+      - name: Validate GitHub Actions pinning
+        run: |
+          python scripts/validate-github-actions-pinning.py \
+            --repository-root . \
+            --output artifacts/supply-chain/action-pinning-report.json
 
       - name: Verify formatting
         run: |
@@ -409,6 +428,13 @@ jobs:
           --logger "console;verbosity=minimal"
           --logger "trx;LogFileName=architecture-tests.trx"
 
+      - name: Validate test result files
+        shell: pwsh
+        run: |
+          ./scripts/validate-test-results.ps1 `
+            -TestResultsRoot "artifacts/test-results" `
+            -OutputDirectory "artifacts/supply-chain"
+
       - name: Check coverage baseline
         shell: pwsh
         run: |
@@ -417,11 +443,17 @@ jobs:
             -BaselinePath "${{ env.COVERAGE_BASELINE_PATH }}" `
             -OutputDirectory "artifacts/coverage"
 
+      - name: Validate staged coverage thresholds
+        run: |
+          python scripts/validate-coverage-thresholds.py \
+            --repository-root . \
+            --coverage-root artifacts/test-results \
+            --policy ci/coverage-thresholds.json \
+            --output-directory artifacts/coverage
+
       - name: Generate coverage report
         run: |
-          dotnet tool install --global dotnet-reportgenerator-globaltool
-
-          reportgenerator \
+          dotnet tool run reportgenerator -- \
             -reports:"artifacts/test-results/**/coverage.cobertura.xml" \
             -targetdir:"artifacts/coverage/report" \
             -reporttypes:"HtmlInline;Cobertura;MarkdownSummaryGithub"
@@ -432,15 +464,16 @@ jobs:
 
       - name: Upload CI reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: ci-quality-gate-reports
+          name: ci-quality-gate-reports-${{ github.sha }}-${{ github.run_id }}
           if-no-files-found: warn
           retention-days: 14
           path: |
             artifacts/test-results/**
             artifacts/coverage/**
             artifacts/vulnerability/**
+            artifacts/supply-chain/**
 
 
   secret-scan:
@@ -450,12 +483,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
 
       - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -467,7 +500,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Check no build artifacts are tracked
         run: |

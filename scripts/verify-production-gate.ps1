@@ -56,6 +56,10 @@ $apiDockerfile = Read-RepositoryFile @("PropertyApi", "Dockerfile")
 $migratorDockerfile = Read-RepositoryFile @("ci", "Dockerfile.migrator")
 $compose = Read-RepositoryFile @("ci", "docker-compose.production-gate.yml")
 $dependencyInjection = Read-RepositoryFile @("PropertyApi.Infrastructure", "DependencyInjection.cs")
+$workflow = Read-RepositoryFile @(".github", "workflows", "production-gate.yml")
+$stagingSmoke = Read-RepositoryFile @("scripts", "smoke-staging.sh")
+$performanceWorkflow = Read-RepositoryFile @(".github", "workflows", "performance-validation.yml")
+$performanceRunner = Read-RepositoryFile @("scripts", "run-performance-tests.sh")
 
 Assert-Contains $program "UseForwardedHeaders" "Program.cs must apply forwarded headers before security middleware."
 Assert-Contains $program "UseHsts" "Program.cs must enable HSTS for production."
@@ -71,6 +75,26 @@ Assert-Contains $compose "DataProtection__PersistKeysToDatabase" "Production gat
 Assert-Contains $compose 'Redis__Required: "true"' "Production gate compose must require Redis for the API."
 Assert-Contains $compose "Cloudinary__CloudName" "Production gate compose must provide Cloudinary options for startup validation."
 Assert-NotContains $compose "Trust Server Certificate=true" "Production gate compose must not trust invalid database certificates."
+
+Assert-Contains $workflow "needs.staging-smoke.result == 'success'" "Production deployment must require a successful Staging job."
+Assert-Contains $workflow "needs.performance-validation.result == 'success'" "Production deployment must require successful concurrent performance validation."
+Assert-Contains $workflow "/api/operational/build-info" "Staging deployment must verify sanitized build metadata."
+Assert-Contains $workflow "STAGING_DEPLOY_HOOK_URL" "Staging deployment hook must be mandatory."
+Assert-NotContains $workflow "configured=false" "Staging configuration must not succeed through an optional configured=false path."
+Assert-NotContains $workflow "continue-on-error: true" "Mandatory release jobs must not continue on error."
+
+Assert-Contains $stagingSmoke "set -Eeuo pipefail" "Staging smoke script must use strict Bash error handling."
+Assert-Contains $stagingSmoke "PropertyApi.StagingSmokeTests.csproj" "Staging smoke script must run the complete .NET journey suite."
+Assert-Contains $stagingSmoke "staging-smoke-report.json" "Staging smoke script must require a JSON report."
+Assert-Contains $stagingSmoke "staging-smoke-junit.xml" "Staging smoke script must require a JUnit report."
+
+Assert-Contains $performanceWorkflow "run-performance-tests.sh" "Performance workflow must run the mandatory concurrent suite."
+Assert-Contains $performanceWorkflow "if-no-files-found: error" "Performance evidence must be mandatory."
+Assert-NotContains $performanceWorkflow "continue-on-error" "Mandatory performance validation must not continue on error."
+Assert-Contains $performanceRunner "docker compose" "Performance runner must create the isolated multi-service environment."
+Assert-Contains $performanceRunner "PERF_REQUIRE_APPROVED_BUDGETS" "Release performance budgets must fail closed until approved."
+Assert-Contains $performanceRunner "capture-pg-stat-statements.sh" "Performance runner must capture pg_stat_statements."
+Assert-Contains $performanceRunner "capture-query-plans.sh" "Performance runner must capture EXPLAIN ANALYZE plans."
 
 $status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
 

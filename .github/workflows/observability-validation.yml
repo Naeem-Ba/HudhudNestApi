@@ -1,0 +1,35 @@
+name: Observability Static Validation
+
+on:
+  pull_request:
+    paths:
+      - "PropertyApi/Observability/**"
+      - "observability/**"
+      - "scripts/verify-observability.sh"
+      - "tests/PropertyApi.Observability.Tests/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test tests/PropertyApi.Observability.Tests/PropertyApi.Observability.Tests.csproj
+      - run: jq -e . observability/grafana/dashboards/property-api-production.json >/dev/null
+      - run: docker compose -f observability/docker-compose.observability.yml config --quiet
+      - name: Validate collector
+        run: |
+          docker run --rm -v "$PWD/observability/otel-collector:/config:ro" \
+            otel/opentelemetry-collector-contrib:0.132.0 \
+            validate --config=/config/config.yaml
+      - name: Validate Prometheus and alert rules
+        run: |
+          docker run --rm -v "$PWD/observability/prometheus:/etc/prometheus:ro" \
+            --entrypoint promtool prom/prometheus:v3.5.0 \
+            check config /etc/prometheus/prometheus.yml

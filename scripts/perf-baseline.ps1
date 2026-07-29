@@ -13,6 +13,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+Write-Warning "This script is a sequential developer diagnostic, not the release-blocking concurrent load suite. Use scripts/run-performance-tests.sh for release evidence."
+
 Add-Type -AssemblyName System.Net.Http
 
 if ($WarmupRequests -lt 0) {

@@ -272,9 +272,9 @@ public sealed class RefreshTokenCommandHandlerTests
 
     [Fact(
         DisplayName =
-            "RefreshToken treats failed active-token revocation as reuse")]
+            "RefreshToken treats failed active-token revocation as a concurrent rotation")]
     public async Task
-        RevokeIfActiveReturnsFalse_RevokesActiveSessions_InvalidatesCache_AndDoesNotIssueTokens()
+        RevokeIfActiveReturnsFalse_DoesNotRevokeTheWinningConcurrentSession()
     {
         var userId =
             Guid.NewGuid();
@@ -354,15 +354,24 @@ public sealed class RefreshTokenCommandHandlerTests
 
         Assert.False(result.Success);
         Assert.Equal(
-            "Refresh token reuse detected. All active sessions were revoked.",
+            "Refresh token was already rotated by another request.",
             result.Message);
 
-        VerifyReuseHandling(
-            refreshTokens,
-            identityService,
-            cacheInvalidator,
-            auditLogs,
-            userId);
+        refreshTokens.Verify(x => x.RevokeActiveTokensForUserAsync(
+            It.IsAny<Guid>(),
+            It.IsAny<DateTime>(),
+            It.IsAny<string?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        cacheInvalidator.Verify(x => x.InvalidateAsync(
+            It.IsAny<Guid>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        auditLogs.Verify(x => x.LogAsync(
+            It.IsAny<Guid?>(),
+            It.IsAny<string>(),
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
 
         refreshTokens.Verify(x => x.AddAsync(
             It.IsAny<Guid>(),
