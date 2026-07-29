@@ -32,6 +32,41 @@ public sealed class OptionsValidationGuardTests
             exception.Message);
     }
 
+    [Fact(DisplayName = "Cloudinary options must support the standard CLOUDINARY_URL secret")]
+    public void CloudinaryOptions_Should_Bind_CloudinaryUrl()
+    {
+        var services = new ServiceCollection();
+        var configuration = CreateInfrastructureConfiguration(includeCloudinary: false);
+        configuration["CLOUDINARY_URL"] =
+            "cloudinary://api-key:api%2Fsecret@sample-cloud";
+
+        services.AddInfrastructure(configuration, new TestHostEnvironment());
+
+        using var provider = services.BuildServiceProvider();
+        var options = provider
+            .GetRequiredService<IOptions<CloudinaryOptions>>()
+            .Value;
+
+        Assert.Equal("sample-cloud", options.CloudName);
+        Assert.Equal("api-key", options.ApiKey);
+        Assert.Equal("api/secret", options.ApiSecret);
+    }
+
+    [Fact(DisplayName = "Cloudinary options must reject a malformed CLOUDINARY_URL secret")]
+    public void CloudinaryOptions_Should_Reject_Malformed_CloudinaryUrl()
+    {
+        var services = new ServiceCollection();
+        var configuration = CreateInfrastructureConfiguration(includeCloudinary: false);
+        configuration["CLOUDINARY_URL"] = "https://sample-cloud/credentials";
+
+        services.AddInfrastructure(configuration, new TestHostEnvironment());
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<CloudinaryOptions>>().Value);
+    }
+
     [Fact(DisplayName = "Cookie CSRF options must require an auth cookie name when enabled")]
     public void CookieCsrfOptions_Should_Validate_Cookie_Name_When_Enabled()
     {

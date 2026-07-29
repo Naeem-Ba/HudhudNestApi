@@ -24,6 +24,10 @@ internal static class MediaInfrastructureRegistration
 
         services.AddOptions<CloudinaryOptions>()
             .Bind(configuration.GetSection(CloudinaryOptions.SectionName))
+            .PostConfigure(options =>
+                ApplyCloudinaryUrlFallback(
+                    options,
+                    configuration["CLOUDINARY_URL"]))
             .Validate(
                 options =>
                     !string.IsNullOrWhiteSpace(options.CloudName) &&
@@ -37,5 +41,34 @@ internal static class MediaInfrastructureRegistration
             sp.GetRequiredService<CloudinaryMediaStorageService>());
 
         return services;
+    }
+
+    private static void ApplyCloudinaryUrlFallback(
+        CloudinaryOptions options,
+        string? cloudinaryUrl)
+    {
+        if (!string.IsNullOrWhiteSpace(options.CloudName) &&
+            !string.IsNullOrWhiteSpace(options.ApiKey) &&
+            !string.IsNullOrWhiteSpace(options.ApiSecret))
+        {
+            return;
+        }
+
+        if (!Uri.TryCreate(cloudinaryUrl, UriKind.Absolute, out var uri) ||
+            !string.Equals(uri.Scheme, "cloudinary", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(uri.Host))
+        {
+            return;
+        }
+
+        var separatorIndex = uri.UserInfo.IndexOf(':');
+        if (separatorIndex <= 0 || separatorIndex == uri.UserInfo.Length - 1)
+        {
+            return;
+        }
+
+        options.CloudName = Uri.UnescapeDataString(uri.Host);
+        options.ApiKey = Uri.UnescapeDataString(uri.UserInfo[..separatorIndex]);
+        options.ApiSecret = Uri.UnescapeDataString(uri.UserInfo[(separatorIndex + 1)..]);
     }
 }
