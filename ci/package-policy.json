@@ -29,7 +29,9 @@
     "coverlet.collector": "6.0.0"
   },
   "allowedVersionOverrides": [],
-  "allowedPreviewPackages": [],
+  "allowedPreviewPackages": [
+    "OpenTelemetry.Instrumentation.StackExchangeRedis"
+  ],
   "nonSolutionProjects": [
     {
       "path": "dbkeys_patch/PropertyApi.Infrastructure/PropertyApi.Infrastructure.csproj",
