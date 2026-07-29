@@ -57,7 +57,7 @@ function recordInstance(response) {
 
 function sendChallenge(phone) {
   const response = jsonPost('/api/auth/phone/registration/send-otp', { phoneNumber: phone });
-  const challengeId = response.status === 200 ? response.json('ChallengeId') : null;
+  const challengeId = response.status === 200 ? response.json('challengeId') : null;
   if (!challengeId) throw new Error('Could not create an isolated OTP race challenge.');
   return challengeId;
 }
@@ -89,7 +89,7 @@ export function setup() {
     const register = jsonPost(
       '/api/auth/phone/registration/verify',
       registrationPayload(challengeId, marker));
-    const refreshToken = register.status === 200 ? register.json('RefreshToken') : null;
+    const refreshToken = register.status === 200 ? register.json('refreshToken') : null;
     if (!refreshToken) throw new Error('Could not create a refresh-token race fixture.');
     return { raceAt, marker, refreshToken };
   }

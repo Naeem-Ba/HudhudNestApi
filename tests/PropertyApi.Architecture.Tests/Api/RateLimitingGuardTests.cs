@@ -53,6 +53,24 @@ public sealed class RateLimitingGuardTests
         Assert.Equal("auth-logout", attribute.PolicyName);
     }
 
+    [Theory(DisplayName = "Public property searches must use their distributed rate limiting policies")]
+    [InlineData(nameof(PropertiesController.GetAll), "public-search")]
+    [InlineData(nameof(PropertiesController.SearchNearby), "geo-search")]
+    public void PropertySearch_Should_Have_Distributed_RateLimit(
+        string methodName,
+        string expectedPolicy)
+    {
+        var method = typeof(PropertiesController).GetMethod(methodName);
+        Assert.NotNull(method);
+
+        var attribute = Assert.Single(method!.GetCustomAttributes(
+                typeof(EnableRateLimitingAttribute),
+                inherit: false)
+            .Cast<EnableRateLimitingAttribute>());
+
+        Assert.Equal(expectedPolicy, attribute.PolicyName);
+    }
+
     [Fact(DisplayName = "Program.cs must define local fallback auth policies and enable Redis rate limiting")]
     public void Program_Should_Define_Auth_RateLimit_Policies()
     {

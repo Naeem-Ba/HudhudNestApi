@@ -94,6 +94,28 @@ public sealed class PerformanceGateConfigurationTests
     }
 
     [Fact]
+    public void K6_contracts_use_the_APIs_camel_case_JSON_names()
+    {
+        var browse = File.ReadAllText(Repo("performance", "load-tests", "scenarios", "browse.js"));
+        var authRaces = File.ReadAllText(Repo("performance", "load-tests", "scenarios", "auth-races.js"));
+
+        Assert.Contains("response.json('items')", browse, StringComparison.Ordinal);
+        Assert.Contains("item.distanceMeters", browse, StringComparison.Ordinal);
+        Assert.DoesNotContain("response.json('Items')", browse, StringComparison.Ordinal);
+        Assert.Contains("response.json('challengeId')", authRaces, StringComparison.Ordinal);
+        Assert.Contains("register.json('refreshToken')", authRaces, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Ordinary_pushes_use_the_non_baseline_profile()
+    {
+        var workflow = File.ReadAllText(Repo(".github", "workflows", "performance-validation.yml"));
+
+        Assert.Contains("github.event_name == 'push') && 'pr'", workflow, StringComparison.Ordinal);
+        Assert.Contains("default: release", workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Data_generator_does_not_republish_properties_created_as_published()
     {
         var generator = File.ReadAllText(Repo(

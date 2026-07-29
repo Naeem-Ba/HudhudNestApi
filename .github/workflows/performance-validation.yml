@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 180
     env:
       PERF_ENVIRONMENT: CI
-      PERF_PROFILE: ${{ inputs.profile || (github.event_name == 'schedule' && 'staging') || (github.event_name == 'pull_request' && 'pr') || 'release' }}
+      PERF_PROFILE: ${{ inputs.profile || (github.event_name == 'schedule' && 'staging') || ((github.event_name == 'pull_request' || github.event_name == 'push') && 'pr') || 'release' }}
       PERF_COMMIT_SHA: ${{ github.sha }}
       PERF_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
       PERF_BASE_URL: http://localhost:58080
