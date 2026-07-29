@@ -4,9 +4,9 @@
     "net8.0": {
       "CloudinaryDotNet": {
         "type": "Direct",
-        "requested": "[1.27.9, )",
-        "resolved": "1.27.9",
-        "contentHash": "cQ3/+kHrA1SnwT6Bx6ZamJKKF/sb5Cl8uFAHTHpZ2HjdpfeCjSdfBRUA+aASOdbLGdL64jhLIEMaoWqXwAr9hQ==",
+        "requested": "[1.29.2, )",
+        "resolved": "1.29.2",
+        "contentHash": "4vrrx4N960MShjpKlsiRdl8eIHeT2UBn2X69d7b7C34M84lyoZT/ig4CkVCCb8fx5X95oaLE3wNv4tGJHHGnSA==",
         "dependencies": {
           "Newtonsoft.Json": "13.0.3",
           "System.Net.Http": "4.3.4",
