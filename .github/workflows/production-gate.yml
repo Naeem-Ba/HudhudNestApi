@@ -21,6 +21,7 @@ permissions:
 env:
   DOTNET_VERSION: 8.0.x
   COMPOSE_FILE: ci/docker-compose.production-gate.yml
+  PROPERTYAPI_IMAGE_TAG: production-gate
 
 concurrency:
   group: production-gate-${{ github.ref }}

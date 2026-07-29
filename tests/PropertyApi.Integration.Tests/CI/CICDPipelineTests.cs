@@ -175,6 +175,7 @@ public sealed class CICDPipelineTests
         var apiDockerfile = File.ReadAllText(Path.Combine(repoRoot, "PropertyApi", "Dockerfile"));
         var migratorDockerfile = File.ReadAllText(Path.Combine(repoRoot, "ci", "Dockerfile.migrator"));
         var compose = File.ReadAllText(Path.Combine(repoRoot, "ci", "docker-compose.production-gate.yml"));
+        var workflow = File.ReadAllText(Path.Combine(repoRoot, ".github", "workflows", "production-gate.yml"));
 
         Assert.Contains("Directory.Packages.props", apiDockerfile);
         Assert.Contains("NuGet.config", apiDockerfile);
@@ -182,6 +183,8 @@ public sealed class CICDPipelineTests
         Assert.Contains("--locked-mode", migratorDockerfile);
         Assert.Contains("image: propertyapi-api:${PROPERTYAPI_IMAGE_TAG:-production-gate}", compose);
         Assert.Contains("image: propertyapi-migrator:${PROPERTYAPI_IMAGE_TAG:-production-gate}", compose);
+        Assert.Contains("PROPERTYAPI_IMAGE_TAG: production-gate", workflow);
+        Assert.Contains("propertyapi-api:${PROPERTYAPI_IMAGE_TAG}", workflow);
     }
 
     [Fact(DisplayName = "Supply-chain security assets must be present")]
