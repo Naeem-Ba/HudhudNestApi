@@ -1,3 +1,4 @@
+using System.Text.Json;
 using PropertyApi.Observability;
 using Xunit;
 
@@ -45,6 +46,23 @@ public sealed class ProductionConfigurationTests
         Assert.False(PropertyApiObservabilityValidator.IsValidProductionConfiguration(options));
     }
 
+    [Fact]
+    public void Testing_environment_disables_observability_hosted_services()
+    {
+        var repositoryRoot = FindRepositoryRoot();
+        var settingsPath = Path.Combine(
+            repositoryRoot,
+            "PropertyApi",
+            "appsettings.Testing.json");
+
+        using var document = JsonDocument.Parse(File.ReadAllText(settingsPath));
+
+        Assert.False(document.RootElement
+            .GetProperty("Observability")
+            .GetProperty("Enabled")
+            .GetBoolean());
+    }
+
     private static PropertyApiObservabilityOptions ValidOptions() => new()
     {
         Enabled = true,
@@ -60,4 +78,22 @@ public sealed class ProductionConfigurationTests
             RequireAuthentication = true
         }
     };
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "PropertyApi.sln")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new InvalidOperationException(
+            "Could not locate repository root containing PropertyApi.sln.");
+    }
 }
