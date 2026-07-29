@@ -199,17 +199,9 @@ foreach ($projectFile in $projectFiles) {
     })
 }
 
-foreach ($expectedTestPackage in $policy.testPackages.PSObject.Properties) {
-    $packageName = $expectedTestPackage.Name
-    $expectedVersion = [string] $expectedTestPackage.Value
-
+foreach ($packageName in @($policy.requiredTestPackages)) {
     if (-not $centralVersions.ContainsKey($packageName)) {
         $failures.Add("Required test package $packageName is missing from Directory.Packages.props.")
-        continue
-    }
-
-    if ($centralVersions[$packageName] -ne $expectedVersion) {
-        $failures.Add("Test package $packageName must be $expectedVersion but is $($centralVersions[$packageName]).")
     }
 }
 

@@ -22,12 +22,12 @@
     "requireHttps": true,
     "allowCredentialsInRepository": false
   },
-  "testPackages": {
-    "Microsoft.NET.Test.Sdk": "17.8.0",
-    "xunit": "2.6.6",
-    "xunit.runner.visualstudio": "2.5.6",
-    "coverlet.collector": "6.0.0"
-  },
+  "requiredTestPackages": [
+    "Microsoft.NET.Test.Sdk",
+    "xunit",
+    "xunit.runner.visualstudio",
+    "coverlet.collector"
+  ],
   "allowedVersionOverrides": [],
   "allowedPreviewPackages": [
     "OpenTelemetry.Instrumentation.StackExchangeRedis"

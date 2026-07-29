@@ -9,6 +9,7 @@ PropertyApi uses NuGet Central Package Management through `Directory.Packages.pr
 - Project-specific metadata such as `PrivateAssets` and `IncludeAssets` stays in the project file.
 - `VersionOverride` is disabled through `CentralPackageVersionOverrideEnabled=false`.
 - Floating, ranged, and preview versions are not allowed unless explicitly approved in `ci/package-policy.json`.
+- `ci/package-policy.json` lists required test packages by name only; their versions have a single source of truth in `Directory.Packages.props` and are made reproducible by lock files.
 
 ## Test Stack
 

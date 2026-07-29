@@ -114,9 +114,11 @@ public sealed class CICDPipelineTests
         Assert.Contains("<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>", centralPackages);
         Assert.Contains("<CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled>", centralPackages);
         Assert.Contains("<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>", buildProps);
-        Assert.Contains("\"Microsoft.NET.Test.Sdk\": \"17.8.0\"", policy);
-        Assert.Contains("\"xunit\": \"2.6.6\"", policy);
-        Assert.Contains("\"xunit.runner.visualstudio\": \"2.5.6\"", policy);
+        Assert.Contains("\"requiredTestPackages\"", policy);
+        Assert.Contains("\"Microsoft.NET.Test.Sdk\"", policy);
+        Assert.Contains("\"xunit\"", policy);
+        Assert.Contains("\"xunit.runner.visualstudio\"", policy);
+        Assert.Contains("\"coverlet.collector\"", policy);
         Assert.Contains("https://api.nuget.org/v3/index.json", nugetConfig);
 
         var solutionProjects = GetSolutionProjectPaths(repoRoot);
