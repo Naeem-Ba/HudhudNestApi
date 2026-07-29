@@ -18,6 +18,7 @@
     { "migrationId": "20260707145048_AddPhoneNumberLookupHash", "classification": "HIGH_RISK", "recovery": "Forward-fix lookup hashes; preserve encrypted source data." },
     { "migrationId": "20260709063950_RebindBusinessUserRelationshipsToUserAccounts", "classification": "HIGH_RISK", "recovery": "Restore pre-migration backup if relationship rebind is invalid." },
     { "migrationId": "20260709114331_CutOverIdentityToApplicationUser", "classification": "DESTRUCTIVE", "recovery": "Restore pre-migration backup; database downgrade is forbidden." },
-    { "migrationId": "20260716192200_AddPhonePasswordAuthenticationAndReverification", "classification": "HIGH_RISK", "recovery": "Application rollback or forward-fix; restore only for corrupt data." }
+    { "migrationId": "20260716192200_AddPhonePasswordAuthenticationAndReverification", "classification": "HIGH_RISK", "recovery": "Application rollback or forward-fix; restore only for corrupt data." },
+    { "migrationId": "20260728211500_AddPublishedPropertyGeoLocationPartialIndex", "classification": "HIGH_RISK", "recovery": "Drop the partial index concurrently if query-plan regression occurs; no data restore is required." }
   ]
 }

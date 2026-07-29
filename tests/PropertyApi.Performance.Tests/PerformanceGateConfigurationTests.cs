@@ -93,6 +93,21 @@ public sealed class PerformanceGateConfigurationTests
         Assert.DoesNotContain("continue-on-error", workflow, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Data_generator_does_not_republish_properties_created_as_published()
+    {
+        var generator = File.ReadAllText(Repo(
+            "tools",
+            "PropertyApi.PerformanceDataGenerator",
+            "Program.cs"));
+
+        Assert.DoesNotContain("property.Publish();", generator, StringComparison.Ordinal);
+        Assert.Contains(
+            "Property(nameof(property.PublishedAt)).CurrentValue = property.CreatedAt",
+            generator,
+            StringComparison.Ordinal);
+    }
+
     private static IConfiguration Configuration(IDictionary<string, string?> values) =>
         new ConfigurationBuilder().AddInMemoryCollection(values).Build();
 

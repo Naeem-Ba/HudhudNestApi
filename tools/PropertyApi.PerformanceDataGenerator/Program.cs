@@ -102,7 +102,6 @@ for (var offset = 0; offset < options.PropertyCount; offset += options.BatchSize
             : null;
         property.CreatedAt = anchor.AddMinutes(index % 525_600);
         property.UpdatedAt = property.CreatedAt;
-        property.Publish();
         db.Entry(property).Property(nameof(property.PublishedAt)).CurrentValue = property.CreatedAt;
         db.Entry(property).Property(nameof(property.UpdatedAt)).CurrentValue = property.CreatedAt;
         properties.Add(property);
