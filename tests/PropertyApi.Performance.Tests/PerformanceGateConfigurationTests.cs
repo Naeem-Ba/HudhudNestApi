@@ -94,16 +94,18 @@ public sealed class PerformanceGateConfigurationTests
     }
 
     [Fact]
-    public void K6_contracts_use_the_APIs_camel_case_JSON_names()
+    public void K6_contracts_use_the_APIs_configured_Pascal_case_JSON_names()
     {
         var browse = File.ReadAllText(Repo("performance", "load-tests", "scenarios", "browse.js"));
         var authRaces = File.ReadAllText(Repo("performance", "load-tests", "scenarios", "auth-races.js"));
+        var program = File.ReadAllText(Repo("PropertyApi", "Program.cs"));
 
-        Assert.Contains("response.json('items')", browse, StringComparison.Ordinal);
-        Assert.Contains("item.distanceMeters", browse, StringComparison.Ordinal);
-        Assert.DoesNotContain("response.json('Items')", browse, StringComparison.Ordinal);
-        Assert.Contains("response.json('challengeId')", authRaces, StringComparison.Ordinal);
-        Assert.Contains("register.json('refreshToken')", authRaces, StringComparison.Ordinal);
+        Assert.Contains("PropertyNamingPolicy = null", program, StringComparison.Ordinal);
+        Assert.Contains("response.json('Items')", browse, StringComparison.Ordinal);
+        Assert.Contains("item.DistanceMeters", browse, StringComparison.Ordinal);
+        Assert.DoesNotContain("response.json('items')", browse, StringComparison.Ordinal);
+        Assert.Contains("response.json('ChallengeId')", authRaces, StringComparison.Ordinal);
+        Assert.Contains("register.json('RefreshToken')", authRaces, StringComparison.Ordinal);
     }
 
     [Fact]
