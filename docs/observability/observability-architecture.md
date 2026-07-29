@@ -10,7 +10,10 @@ provisioned Tempo and Prometheus data sources.
 The collector OTLP ports are internal Docker-network ports. Only Grafana,
 Prometheus, Tempo query API, and the API test port are published by the local
 stack. Production must use TLS to an authenticated or private-network collector;
-credentials come from `Observability__Otlp__Headers` in the secret store.
+credentials come from `Observability__Otlp__Headers` in the secret store. OTLP export is optional;
+when no endpoint is configured, local structured logging, correlation, tracing, and metrics remain
+enabled without an external exporter. Any production OTLP endpoint must use HTTPS, and configured
+authentication requirements remain fail-closed.
 
 Staging and Production use distinct `deployment.environment.name`, service
 version, commit SHA, collectors, storage, credentials, and retention policies.

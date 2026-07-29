@@ -15,22 +15,15 @@ public sealed class ProductionConfigurationTests
     }
 
     [Theory]
-    [InlineData(null, "1.0.0", "Production", false)]
-    [InlineData("not-a-uri", "1.0.0", "Production", false)]
-    [InlineData("http://collector:4317", "1.0.0", "Production", false)]
-    [InlineData("https://collector:4317", null, "Production", false)]
-    [InlineData("https://collector:4317", "1.0.0", "Staging", false)]
-    [InlineData("https://collector:4317", "1.0.0", "Production", true)]
-    public void Invalid_production_configuration_is_rejected(
-        string? endpoint,
-        string? version,
-        string environment,
+    [InlineData("not-a-uri", false)]
+    [InlineData("http://collector:4317", false)]
+    [InlineData("https://collector:4317", true)]
+    public void Invalid_production_otlp_configuration_is_rejected(
+        string endpoint,
         bool requireMissingAuthentication)
     {
         var options = ValidOptions();
         options.Otlp.Endpoint = endpoint;
-        options.ServiceVersion = version;
-        options.Environment = environment;
         options.Otlp.RequireAuthentication = requireMissingAuthentication;
         options.Otlp.Headers = requireMissingAuthentication ? null : "authorization=test";
 
@@ -44,6 +37,19 @@ public sealed class ProductionConfigurationTests
         options.Tracing.SamplingRatio = 0;
 
         Assert.False(PropertyApiObservabilityValidator.IsValidProductionConfiguration(options));
+    }
+
+    [Fact]
+    public void Production_configuration_without_external_otlp_export_is_valid()
+    {
+        var options = ValidOptions();
+        options.ServiceVersion = null;
+        options.Environment = null;
+        options.Otlp.Endpoint = null;
+        options.Otlp.Headers = null;
+        options.Otlp.RequireAuthentication = false;
+
+        Assert.True(PropertyApiObservabilityValidator.IsValidProductionConfiguration(options));
     }
 
     [Fact]

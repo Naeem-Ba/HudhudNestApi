@@ -40,8 +40,9 @@ public static class PropertyApiObservabilityExtensions
                 "Observability:Metrics:ExportIntervalMilliseconds must be between 1000 and 300000.")
             .Validate(options => !builder.Environment.IsProduction() ||
                 PropertyApiObservabilityValidator.IsValidProductionConfiguration(options),
-                "Production observability requires Enabled=true, Environment=Production, a service version, " +
-                "an HTTPS OTLP endpoint, and authentication headers when RequireAuthentication=true.")
+                "Production observability requires Enabled=true with tracing and metrics enabled. " +
+                "When OTLP is configured, its endpoint must use HTTPS and authentication headers are " +
+                "required when RequireAuthentication=true.")
             .ValidateOnStart();
 
         ConfigureLogging(builder);
@@ -139,8 +140,16 @@ public static class PropertyApiObservabilityExtensions
         WebApplicationBuilder builder,
         PropertyApiObservabilityOptions options)
     {
-        var environment = options.Environment ?? builder.Environment.EnvironmentName;
-        var serviceVersion = options.ServiceVersion ?? "development";
+        var environment = string.IsNullOrWhiteSpace(options.Environment)
+            ? builder.Environment.EnvironmentName
+            : options.Environment;
+        var commitSha = !string.IsNullOrWhiteSpace(options.GitCommitSha)
+            ? options.GitCommitSha
+            : Environment.GetEnvironmentVariable("RENDER_GIT_COMMIT")
+              ?? Environment.GetEnvironmentVariable("GITHUB_SHA");
+        var serviceVersion = string.IsNullOrWhiteSpace(options.ServiceVersion)
+            ? commitSha ?? "development"
+            : options.ServiceVersion;
         var instanceId = Environment.GetEnvironmentVariable("RENDER_INSTANCE_ID")
             ?? Environment.GetEnvironmentVariable("HOSTNAME")
             ?? Environment.MachineName;
@@ -153,10 +162,6 @@ public static class PropertyApiObservabilityExtensions
             ["service.instance.id"] = instanceId,
             ["deployment.environment.name"] = environment
         };
-
-        var commitSha = options.GitCommitSha
-            ?? Environment.GetEnvironmentVariable("RENDER_GIT_COMMIT")
-            ?? Environment.GetEnvironmentVariable("GITHUB_SHA");
 
         if (!string.IsNullOrWhiteSpace(commitSha))
         {
