@@ -180,6 +180,10 @@ public sealed class CICDPipelineTests
         Assert.Contains("Directory.Packages.props", apiDockerfile);
         Assert.Contains("NuGet.config", apiDockerfile);
         Assert.Contains("--locked-mode", apiDockerfile);
+        Assert.Contains(
+            "mcr.microsoft.com/dotnet/aspnet:8.0-jammy-chiseled-extra AS runtime",
+            apiDockerfile);
+        Assert.Contains("USER $APP_UID", apiDockerfile);
         Assert.Contains("--locked-mode", migratorDockerfile);
         Assert.Contains("image: propertyapi-api:${PROPERTYAPI_IMAGE_TAG:-production-gate}", compose);
         Assert.Contains("image: propertyapi-migrator:${PROPERTYAPI_IMAGE_TAG:-production-gate}", compose);
