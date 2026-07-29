@@ -60,7 +60,7 @@ jobs:
       backup_id: ${{ steps.recovery-evidence.outputs.backup_id }}
       ef_core_migration: ${{ steps.recovery-evidence.outputs.ef_core_migration }}
     env:
-      PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL || secrets.DATABASE_URL }}
       BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
       BACKUP_STORAGE_URI: ${{ secrets.BACKUP_STORAGE_URI }}
       AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
@@ -113,7 +113,7 @@ jobs:
         if: ${{ inputs.fresh_backup != false }}
         shell: bash
         env:
-          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL || secrets.DATABASE_URL }}
           BACKUP_REQUIRE_REMOTE_UPLOAD: "true"
           BACKUP_ID: production-predeploy-${{ github.run_id }}-${{ github.run_attempt }}
         run: |

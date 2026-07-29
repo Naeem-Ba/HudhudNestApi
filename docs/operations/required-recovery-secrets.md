@@ -4,7 +4,8 @@ Configure values in protected GitHub environments; never commit values.
 
 | Name | Scope |
 |---|---|
-| `PRODUCTION_DATABASE_URL` | Source backup connection; use a least-privilege backup account where provider capabilities permit |
+| `PRODUCTION_DATABASE_URL` | Preferred source backup connection; use a least-privilege backup account where provider capabilities permit |
+| `DATABASE_URL` | Backward-compatible fallback for `PRODUCTION_DATABASE_URL`; configure only one of these names |
 | `BACKUP_ENCRYPTION_KEY` | High-entropy GPG passphrase stored separately from object storage credentials |
 | `BACKUP_STORAGE_URI` | Private `s3://bucket/prefix` destination |
 | `BACKUP_AWS_ACCESS_KEY_ID` | Least-privilege object storage identity |

@@ -65,6 +65,19 @@ public sealed class DatabaseRecoveryAssetsTests
     }
 
     [Fact]
+    public void Backup_workflow_supports_database_url_fallback_and_publishes_preflight_failure_evidence()
+    {
+        var workflow = Read(".github/workflows/database-backup.yml");
+
+        Assert.Contains(
+            "secrets.PRODUCTION_DATABASE_URL || secrets.DATABASE_URL",
+            workflow);
+        Assert.Contains("preflight-result.json", workflow);
+        Assert.Contains("missingSecret", workflow);
+        Assert.Contains("if-no-files-found: error", workflow);
+    }
+
+    [Fact]
     public void Production_gate_must_require_actual_database_recovery()
     {
         var text = Read(".github/workflows/production-gate.yml");
