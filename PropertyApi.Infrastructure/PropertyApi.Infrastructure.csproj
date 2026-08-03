@@ -15,6 +15,7 @@
     <PackageReference Include="CloudinaryDotNet" />
     <PackageReference Include="Google.Apis.Auth" />
     <!-- Security-patched overrides for transitive IdentityModel/DataProtection dependencies. -->
+    <PackageReference Include="MediatR" />
     <PackageReference Include="Microsoft.Bcl.Memory" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" />
