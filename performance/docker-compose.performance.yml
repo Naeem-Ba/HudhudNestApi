@@ -107,6 +107,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
 
   api2:
     build:
@@ -120,6 +126,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
 
   load-balancer:
     image: nginx:1.27-alpine
@@ -128,8 +140,16 @@ services:
     volumes:
       - ./nginx.performance.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - api1
-      - api2
+      api1:
+        condition: service_healthy
+      api2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
 
   k6:
     image: grafana/k6:0.54.0
@@ -149,7 +169,8 @@ services:
       - ../artifacts/performance:/artifacts/performance
     working_dir: /performance/load-tests
     depends_on:
-      - load-balancer
+      load-balancer:
+        condition: service_healthy
 
 volumes:
   performance-postgres:
