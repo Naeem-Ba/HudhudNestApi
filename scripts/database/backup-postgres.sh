@@ -11,6 +11,17 @@ done
 
 OUTPUT_DIR="${BACKUP_OUTPUT_DIR:-${REPOSITORY_ROOT}/artifacts/database-backup}"
 mkdir -p "${OUTPUT_DIR}"
+
+WORK_DIR="$(create_private_temp_dir)"
+
+# Configure a writable home for GnuPG when running in containers.
+export HOME="${WORK_DIR}"
+export GNUPGHOME="${WORK_DIR}/.gnupg"
+
+mkdir -p "${GNUPGHOME}"
+chmod 700 "${GNUPGHOME}"
+
+mkdir -p "${OUTPUT_DIR}"
 WORK_DIR="$(create_private_temp_dir)"
 cleanup() {
   rm -rf -- "${WORK_DIR}"
@@ -68,11 +79,19 @@ done < "${DATABASE_SCRIPTS_DIR}/critical-tables.txt"
 [ "$(jq 'length' <<<"${COUNTS_JSON}")" -eq "${EXPECTED_TABLE_COUNT}" ] || fail \
   "Critical table row-count manifest is incomplete."
 
-gpg --batch --yes --pinentry-mode loopback \
+gpg \
+  --homedir "${GNUPGHOME}" \
+  --batch \
+  --yes \
+  --pinentry-mode loopback \
   --passphrase-file "${PASSPHRASE_FILE}" \
   --symmetric --cipher-algo AES256 \
   --output "${ARCHIVE_FILE}" "${RAW_DUMP}"
-gpg --batch --yes --pinentry-mode loopback \
+gpg \
+  --homedir "${GNUPGHOME}" \
+  --batch \
+  --yes \
+  --pinentry-mode loopback \
   --passphrase-file "${PASSPHRASE_FILE}" \
   --symmetric --cipher-algo AES256 \
   --output "${GLOBALS_FILE}" "${RAW_GLOBALS}"
