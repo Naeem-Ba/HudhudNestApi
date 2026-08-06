@@ -1,16 +1,25 @@
 name: propertyapi-production-gate
 
+# ---------------------------------------------------------------------------
+# Single source of truth for the database name.
+# Every service below reads ${PROPERTYAPI_GATE_DB} instead of a hardcoded
+# string. Set it in ci/.env.production-gate (see .env.production-gate.example)
+# or export it in the shell / GitHub Actions env before running this file.
+# ---------------------------------------------------------------------------
+
+x-db-name: &db-name ${PROPERTYAPI_GATE_DB:-propertyapi_gate}
+
 services:
   postgres:
     image: postgis/postgis:16-3.4
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: propertyapi_staging_gate
+      POSTGRES_USER: ${PROPERTYAPI_GATE_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${PROPERTYAPI_GATE_DB_PASSWORD:-postgres}
+      POSTGRES_DB: *db-name
     healthcheck:
       test:
         - CMD-SHELL
-        - pg_isready -U postgres -d propertyapi_staging_gate
+        - pg_isready -U ${PROPERTYAPI_GATE_DB_USER:-postgres} -d ${PROPERTYAPI_GATE_DB:-propertyapi_gate}
       interval: 5s
       timeout: 3s
       retries: 20
@@ -40,7 +49,7 @@ services:
     environment:
       DOTNET_ENVIRONMENT: Staging
       ASPNETCORE_ENVIRONMENT: Staging
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=propertyapi_staging_gate;Username=postgres;Password=postgres
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${PROPERTYAPI_GATE_DB:-propertyapi_gate};Username=${PROPERTYAPI_GATE_DB_USER:-postgres};Password=${PROPERTYAPI_GATE_DB_PASSWORD:-postgres}
       Redis__Required: "false"
     depends_on:
       postgres:
@@ -55,19 +64,17 @@ services:
       DOTNET_ENVIRONMENT: Staging
       ASPNETCORE_ENVIRONMENT: Staging
       ASPNETCORE_HTTP_PORTS: "8080"
-
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=propertyapi_staging_gate;Username=postgres;Password=postgres
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${PROPERTYAPI_GATE_DB:-propertyapi_gate};Username=${PROPERTYAPI_GATE_DB_USER:-postgres};Password=${PROPERTYAPI_GATE_DB_PASSWORD:-postgres}
       ConnectionStrings__Redis: redis:6379,abortConnect=false
       Redis__ConnectionString: redis:6379,abortConnect=false
       Redis__Required: "true"
-
       Deployment__CommitSha: local-smoke
       Deployment__Version: local-production-gate
       Deployment__PublicBaseUrl: http://127.0.0.1:18080
       Deployment__ProductionBaseUrl: https://production.invalid
       Staging__AllowHttpLocal: "true"
       Staging__EnvironmentId: local-isolated-staging
-      Staging__DatabaseNameMarker: staging
+      Staging__DatabaseNameMarker: ${PROPERTYAPI_GATE_DB:-propertyapi_gate}
       Staging__RedisIsolationMarker: local-staging-redis
       Staging__StorageIsolationMarker: local-in-memory-smoke-media
       Staging__ExternalNotificationsDisabled: "true"
@@ -76,27 +83,19 @@ services:
       Staging__TestSupport__PhonePrefix: "+155500"
       Staging__TestSupport__CleanupSecret: local-staging-cleanup-secret-at-least-32-characters
       Staging__TestSupport__UseInMemoryMedia: "true"
-
       DataProtection__PersistKeysToDatabase: "true"
-
       Jwt__Key: ci-only-64-character-development-key-change-before-any-real-deployment-1234
       Jwt__Issuer: PropertyApi.CI
       Jwt__Audience: PropertyApi.CI
-
       Cloudinary__CloudName: ci
       Cloudinary__ApiKey: ci
       Cloudinary__ApiSecret: ci
-
       Cors__AllowedOrigins__0: http://localhost:4200
-
       Database__ApplyMigrationsOnStartup: "false"
       Database__SeedOnStartup: "false"
-
       ForwardedHeaders__Enabled: "false"
-
     ports:
       - "18080:8080"
-
     depends_on:
       postgres:
         condition: service_healthy
