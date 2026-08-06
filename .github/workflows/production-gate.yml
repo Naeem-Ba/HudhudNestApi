@@ -391,13 +391,27 @@ jobs:
       - name: Run database migrator
         run: |
           set -euo pipefail
-
-          docker compose \
+ 
+          max_attempts=5
+          attempt=1
+ 
+          until docker compose \
             -f "${COMPOSE_FILE}" \
             run \
             --rm \
             --no-deps \
-            migrator
+            migrator; do
+ 
+            if [ "${attempt}" -ge "${max_attempts}" ]; then
+              echo "::error::Migrator failed after ${max_attempts} attempts."
+              docker compose -f "${COMPOSE_FILE}" logs --no-color postgres
+              exit 1
+            fi
+ 
+            echo "Migrator attempt ${attempt}/${max_attempts} failed (likely Postgres not fully ready). Retrying in 5s..."
+            attempt=$((attempt + 1))
+            sleep 5
+          done
 
       - name: Verify applied migrations
         run: |
