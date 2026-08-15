@@ -26,7 +26,7 @@ public class Property : AuditableEntity
     public string City { get; set; } = string.Empty;
     public string? Region { get; set; }          // State / Governorate / Province
     /// <summary>ISO 3166-1 alpha-2 country code (e.g. "DE", "SY", "US").</summary>
-    public string CountryCode { get; set; } = "DE";
+    public string CountryCode { get; set; } = "SY";
     public string? PostalCode { get; set; }
 
     // -- Geo Coordinates ----------------------------------------
