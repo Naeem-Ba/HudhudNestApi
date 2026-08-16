@@ -124,6 +124,9 @@ jobs:
             --prefix "${S3_PREFIX:+${S3_PREFIX}/}backups/" \
             --max-items 5 \
             --output json || echo "RESULT: list-objects-v2 failed with exit code $?"
+          echo "Parsed bucket name: [${S3_BUCKET}]"
+          echo "Parsed prefix: [${S3_PREFIX}]"
+          
       - name: Publish non-sensitive backup evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
