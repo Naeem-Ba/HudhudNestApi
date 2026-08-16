@@ -90,7 +90,40 @@ jobs:
             --env RETENTION_APPLY \
             propertyapi-database-recovery:local \
             bash /workspace/scripts/database/apply-retention.sh
+            
+      - name: DEBUG - connectivity verification (temporary, remove after diagnosis)
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+          BACKUP_AWS_REGION: ${{ secrets.BACKUP_AWS_REGION }}
+          BACKUP_S3_ENDPOINT_URL: ${{ secrets.BACKUP_S3_ENDPOINT_URL }}
+          BACKUP_STORAGE_URI: ${{ secrets.BACKUP_STORAGE_URI }}
+        run: |
+          set -euo pipefail
+          source scripts/database/common.sh
+          parse_s3_uri "${BACKUP_STORAGE_URI}"
+          aws_arguments
 
+          echo "== Step 1: network reachability =="
+          curl -sv --max-time 10 "${BACKUP_S3_ENDPOINT_URL:-https://s3.amazonaws.com}" 2>&1 | tail -15 || true
+
+          echo "== Step 2: credentials check =="
+          aws "${AWS_ARGS[@]}" sts get-caller-identity || echo "STS failed or unsupported — not necessarily an error for non-AWS providers"
+
+          echo "== Step 3: bucket existence =="
+          if aws "${AWS_ARGS[@]}" s3api head-bucket --bucket "${S3_BUCKET}"; then
+            echo "RESULT: Bucket exists and is accessible."
+          else
+            echo "RESULT: head-bucket failed with exit code $?"
+          fi
+
+          echo "== Step 4: prefix listing =="
+          aws "${AWS_ARGS[@]}" s3api list-objects-v2 \
+            --bucket "${S3_BUCKET}" \
+            --prefix "${S3_PREFIX:+${S3_PREFIX}/}backups/" \
+            --max-items 5 \
+            --output json || echo "RESULT: list-objects-v2 failed with exit code $?"
       - name: Publish non-sensitive backup evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
