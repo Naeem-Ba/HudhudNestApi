@@ -14,11 +14,18 @@ cleanup() { rm -rf -- "${WORK_DIR}"; }
 trap cleanup EXIT INT TERM
 OBJECTS_JSON="${WORK_DIR}/objects.json"
 DELETE_KEYS="${WORK_DIR}/delete-keys.txt"
-aws "${AWS_ARGS[@]}" s3api list-objects-v2 \
+if ! aws "${AWS_ARGS[@]}" s3api list-objects-v2 \
   --bucket "${S3_BUCKET}" \
   --prefix "${S3_PREFIX:+${S3_PREFIX}/}backups/" \
-  --output json > "${OBJECTS_JSON}"
-
+  --output json > "${OBJECTS_JSON}" 2> "${WORK_DIR}/list-error.log"; then
+  if grep -q "NoSuchKey" "${WORK_DIR}/list-error.log"; then
+    log "Storage backend returned NoSuchKey for an empty prefix listing (known non-standard S3-compatible behavior). Treating as no objects."
+    echo '{"Contents": []}' > "${OBJECTS_JSON}"
+  else
+    cat "${WORK_DIR}/list-error.log" >&2
+    fail "list-objects-v2 failed."
+  fi
+fi
 python3 - "${OBJECTS_JSON}" "${DELETE_KEYS}" <<'PY'
 import datetime as dt
 import json

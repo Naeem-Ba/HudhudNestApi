@@ -17,7 +17,7 @@ jobs:
     name: Encrypted PostgreSQL Backup
     runs-on: ubuntu-latest
     environment: production-recovery
-    timeout-minutes: 45
+    timeout-minutes: 1440
     env:
       DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL || secrets.DATABASE_URL }}
       BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
