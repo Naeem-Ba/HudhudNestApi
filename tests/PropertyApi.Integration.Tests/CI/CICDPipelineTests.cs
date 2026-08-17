@@ -57,10 +57,10 @@ public sealed class CICDPipelineTests
         var ciYaml = File.ReadAllText(Path.Combine(repoRoot, ".github", "workflows", "ci.yml"));
         var productionYaml = File.ReadAllText(Path.Combine(repoRoot, ".github", "workflows", "production-gate.yml"));
 
-        Assert.Contains("actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5", ciYaml);
-        Assert.Contains("actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6", ciYaml);
-        Assert.Contains("actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5", productionYaml);
-        Assert.Contains("actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6", productionYaml);
+        Assert.Contains("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0", ciYaml);
+        Assert.Contains("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1", ciYaml);
+        Assert.Contains("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0", productionYaml);
+        Assert.Contains("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1", productionYaml);
     }
 
     [Fact(DisplayName = "CI quality gate scripts and baseline must be present")]
