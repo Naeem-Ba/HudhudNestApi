@@ -1085,9 +1085,10 @@
         "dependencies": {
           "CloudinaryDotNet": "[1.27.9, )",
           "Google.Apis.Auth": "[1.75.0, )",
+          "MediatR": "[12.4.1, )",
           "Microsoft.AspNetCore.DataProtection.EntityFrameworkCore": "[8.0.11, )",
           "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[8.0.11, )",
-          "Microsoft.Bcl.Memory": "[9.0.18, )",
+          "Microsoft.Bcl.Memory": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore": "[8.0.11, )",
           "Microsoft.Extensions.Caching.StackExchangeRedis": "[8.0.11, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[8.0.11, )",
@@ -1209,9 +1210,9 @@
       },
       "Microsoft.Bcl.Memory": {
         "type": "CentralTransitive",
-        "requested": "[9.0.18, )",
-        "resolved": "9.0.18",
-        "contentHash": "D6ygTjzk2Um7aT93f4N+q3+jCvY7VgTRVtU9qTKxEjubrpPoxEvRTTSLFJf27QP01LUj81xlPTTC7AVjrX3p+Q=="
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "/PxGfVdy8P15x9TUyAyWfzR92DcRVRCMs4nMnVS6bldRaDTJJPG9ECJPlF0lbkeZdqwM5eSkOQ214YwvcimAWQ=="
       },
       "Microsoft.EntityFrameworkCore": {
         "type": "CentralTransitive",
