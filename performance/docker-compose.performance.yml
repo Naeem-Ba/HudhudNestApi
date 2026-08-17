@@ -156,7 +156,14 @@ services:
       wait-for-apis:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/"]
+      # The API only maps /health/live and /health/ready (see
+      # PropertyApi/Health/HealthEndpointExtensions.cs) -- there is no
+      # handler for bare "/", so it 404s. "wget --spider" treats any
+      # non-2xx response as failure, so probing "/" made this healthcheck
+      # fail on every single check even though nginx was correctly
+      # proxying to healthy api1/api2 instances, permanently marking the
+      # container unhealthy and blocking every dependent k6 run.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/health/ready"]
       interval: 3s
       timeout: 3s
       retries: 15
