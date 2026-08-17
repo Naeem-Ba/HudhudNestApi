@@ -526,20 +526,37 @@ jobs:
         run: |
           set -euo pipefail
 
-          uid="$(
+          # The runtime image (mcr.microsoft.com/dotnet/aspnet:8.0-jammy-chiseled-extra)
+          # is a distroless-style image: it has no shell and no coreutils, so
+          # `docker compose exec api id -u` fails with "executable file not
+          # found in $PATH" (exit 127). Instead, read the effective user Docker
+          # actually started the container's process with, which reflects the
+          # Dockerfile's `USER $APP_UID` (and any compose-level override, if
+          # one is ever added) without needing to exec anything inside the
+          # container.
+
+          api_container_id="$(
             docker compose \
               -f "${COMPOSE_FILE}" \
-              exec \
-              -T \
-              api \
-              id -u
+              ps \
+              -q \
+              api
           )"
 
-          uid="$(echo "${uid}" | tr -d '[:space:]')"
+          if [ -z "${api_container_id}" ]; then
+            echo "API container was not found."
+            exit 1
+          fi
 
-          echo "API container UID: ${uid}"
+          uid="$(
+            docker inspect \
+              --format '{{.Config.User}}' \
+              "${api_container_id}"
+          )"
 
-          if [ "${uid}" = "0" ]; then
+          echo "API container configured user: ${uid}"
+
+          if [ -z "${uid}" ] || [ "${uid}" = "0" ] || [ "${uid}" = "root" ]; then
             echo "API container is running as root."
             exit 1
           fi
@@ -1185,16 +1202,39 @@ jobs:
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
         run: |
           set -euo pipefail
-          [ -n "${RENDER_API_KEY:-}" ]
-          [[ "${RENDER_SERVICE_ID:-}" =~ ^srv-[A-Za-z0-9]+$ ]]
+
+          if [ -z "${RENDER_API_KEY:-}" ]; then
+            echo "::error::RENDER_API_KEY is not set. Add it as a secret on the 'production-release' GitHub environment (Settings -> Environments -> production-release)."
+            exit 1
+          fi
+
+          if [[ ! "${RENDER_SERVICE_ID:-}" =~ ^srv-[A-Za-z0-9]+$ ]]; then
+            echo "::error::RENDER_SERVICE_ID is not set or is not in the expected 'srv-...' format. Add it as a secret on the 'production-release' GitHub environment."
+            exit 1
+          fi
+
           auth_file="$(mktemp)"
           trap 'rm -f "${auth_file}"' EXIT
           chmod 600 "${auth_file}"
           printf 'header = "Authorization: Bearer %s"\nheader = "Accept: application/json"\n' "${RENDER_API_KEY}" > "${auth_file}"
-          curl --fail --silent --show-error --config "${auth_file}" \
-            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys?limit=20" > render-deploys.json
+
+          if ! curl --fail --silent --show-error --config "${auth_file}" \
+            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys?limit=20" > render-deploys.json; then
+            echo "::error::Could not list deploys for Render service ${RENDER_SERVICE_ID}. Verify RENDER_API_KEY has access to this service and RENDER_SERVICE_ID is correct."
+            exit 1
+          fi
+
           previous_deploy_id="$(jq -r '[.. | objects | select(.status? == "live" or .status? == "deactivated") | .id? | select(. != null)] | first // empty' render-deploys.json)"
-          [ -n "${previous_deploy_id}" ]
+
+          if [ -z "${previous_deploy_id}" ]; then
+            # No prior live/deactivated deploy exists yet. Treat this as the
+            # first-ever production release for this service instead of
+            # permanently blocking deployment (a previous "known-good" deploy
+            # can never exist before the first one happens).
+            echo "::warning::No previous live/deactivated Render deploy was found for ${RENDER_SERVICE_ID}. Treating this run as the first production release."
+            previous_deploy_id="none-first-deploy"
+          fi
+
           echo "PREVIOUS_KNOWN_GOOD_DEPLOY_ID=${previous_deploy_id}" >> "${GITHUB_ENV}"
 
       - name: Enforce successful recovery validation
