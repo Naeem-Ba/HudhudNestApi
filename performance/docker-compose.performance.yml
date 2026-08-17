@@ -130,7 +130,7 @@ services:
       "
       echo 'Waiting for api1...';
       i=0;
-      until curl -fsS http://api1:8080/health >/dev/null 2>&1; do
+      until curl -fsS http://api1:8080/health/ready >/dev/null 2>&1; do
         i=$$((i+1));
         if [ $$i -ge 60 ]; then echo 'api1 did not become ready in time'; exit 1; fi;
         sleep 1;
@@ -138,7 +138,7 @@ services:
       echo 'api1 is ready.';
       echo 'Waiting for api2...';
       i=0;
-      until curl -fsS http://api2:8080/health >/dev/null 2>&1; do
+      until curl -fsS http://api2:8080/health/ready >/dev/null 2>&1; do
         i=$$((i+1));
         if [ $$i -ge 60 ]; then echo 'api2 did not become ready in time'; exit 1; fi;
         sleep 1;
