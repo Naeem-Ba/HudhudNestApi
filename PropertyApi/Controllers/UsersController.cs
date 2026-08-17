@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Mvc;
 using PropertyApi.Application.Users.Commands.ChangePassword;
 using PropertyApi.Application.Users.Commands.DeleteUser;
 using PropertyApi.Application.Users.Commands.UpdateUser;
-using PropertyApi.Application.Users.Queries.GetAllUsers;
 using PropertyApi.Application.Users.Queries.GetCurrentUser;
 using PropertyApi.Application.Users.Queries.GetUserById;
 
@@ -42,16 +41,12 @@ public sealed class UsersController : ControllerBase
         return user is null ? NotFound() : Ok(user);
     }
 
-    [HttpGet]
-    [Authorize(Roles = "Admin")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetAll(CancellationToken ct)
-    {
-        var users = await _sender.Send(new GetAllUsersQuery(), ct);
-        return Ok(users);
-    }
+    // 🗑️ إزالة: كان هنا GET /api/users (Admin، بلا ترقيم صفحات) — أُزيل لأنه
+    // كان مكرَّراً وظيفياً مع GET /api/admin/users (AdminController.GetUsers)
+    // الذي يوفّر نفس البيانات مع ترقيم صفحات، وهو المُستخدَم فعلياً بالواجهة.
+    // فحصتُ الاستخدام قبل الحذف: GetAllUsersQuery لم يكن مُستدعى من أي مكان
+    // آخر بالباك اند (Controller وحيد فقط)، والواجهة لا تستهلكه إطلاقاً.
+    // القرار وليس حذف عشوائي: تقليل السطح العام غير المُستخدَم لتسهيل الصيانة.
 
     [HttpPut("me")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
