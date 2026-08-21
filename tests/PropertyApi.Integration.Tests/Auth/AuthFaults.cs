@@ -128,6 +128,7 @@ internal sealed class FaultingPureIdentityService
                 request,
                 ct);
 
+#pragma warning disable CS0618
     public Task<bool> CheckPasswordAsync(
         Guid identityId,
         string password,
@@ -135,6 +136,37 @@ internal sealed class FaultingPureIdentityService
         => ((ILoginIdentityService)_inner).CheckPasswordAsync(
             identityId,
             password,
+            ct);
+#pragma warning restore CS0618
+
+    public Task<LoginPasswordVerificationResult> VerifyPasswordWithLockoutAsync(
+        Guid identityId,
+        string password,
+        CancellationToken ct = default)
+        => ((ILoginIdentityService)_inner).VerifyPasswordWithLockoutAsync(
+            identityId,
+            password,
+            ct);
+
+    public Task<bool> IsLockedOutAsync(
+        Guid identityId,
+        CancellationToken ct = default)
+        => ((ILoginIdentityService)_inner).IsLockedOutAsync(
+            identityId,
+            ct);
+
+    public Task<int> GetAccessFailedCountAsync(
+        Guid identityId,
+        CancellationToken ct = default)
+        => ((ILoginIdentityService)_inner).GetAccessFailedCountAsync(
+            identityId,
+            ct);
+
+    public Task<DateTimeOffset?> GetLockoutEndAsync(
+        Guid identityId,
+        CancellationToken ct = default)
+        => ((ILoginIdentityService)_inner).GetLockoutEndAsync(
+            identityId,
             ct);
 
     public Task<IReadOnlyList<string>> GetRolesAsync(

@@ -41,6 +41,16 @@ public interface IMessageRepository
         CancellationToken ct = default);
 
     /// <summary>
+    /// يتحقق من وجود أي رسالة بين مستخدمَين، عبر كل العقارات (بعكس
+    /// <see cref="ConversationExistsAsync"/> المرتبطة بعقار واحد) — مطلوب
+    /// لشرط "زيارة مكتملة أو مراسلة" قبل السماح بتقييم مستخدم آخر.
+    /// </summary>
+    Task<bool> HasAnyConversationAsync(
+        Guid userId1,
+        Guid userId2,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Count unread messages for a user.
     /// </summary>
     Task<int> CountUnreadAsync(Guid receiverId, CancellationToken ct = default);

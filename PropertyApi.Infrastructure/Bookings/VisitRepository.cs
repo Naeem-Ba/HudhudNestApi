@@ -38,6 +38,18 @@ public sealed class VisitRepository : IVisitRepository
             .OrderByDescending(v => v.ProposedAt)
             .ToListAsync(ct);
 
+    // ✅ إصلاح: راجع تعليق IVisitRepository — يجمع زياراتي كزائر مع طلبات
+    // الزيارة الواصلة لعقاراتي كمالك، باستعلام واحد بدل تجاهل الاتجاه الثاني.
+    public async Task<IReadOnlyList<VisitRequest>> GetByRequesterOrOwnerIdAsync(
+        Guid userId, CancellationToken ct = default)
+        => await _db.VisitRequests
+            .Include(v => v.Property)
+                .ThenInclude(p => p!.Images)
+            .Include(v => v.Requester)
+            .Where(v => v.RequesterId == userId || v.Property!.OwnerId == userId)
+            .OrderByDescending(v => v.ProposedAt)
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyList<VisitRequest>> GetByPropertyIdAsync(
         Guid propertyId, CancellationToken ct = default)
         => await _db.VisitRequests
@@ -57,5 +69,18 @@ public sealed class VisitRepository : IVisitRepository
                 v.RequesterId == requesterId &&
                 v.Status == VisitStatus.Completed,
                 cancellationToken);
+    }
+
+    public async Task<bool> HasCompletedVisitWithOwnerAsync(
+        Guid raterId,
+        Guid ratedOwnerId,
+        CancellationToken ct = default)
+    {
+        return await _db.VisitRequests
+            .AnyAsync(v =>
+                v.RequesterId == raterId &&
+                v.Status == VisitStatus.Completed &&
+                v.Property!.OwnerId == ratedOwnerId,
+                ct);
     }
 }

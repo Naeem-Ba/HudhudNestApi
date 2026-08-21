@@ -1,4 +1,5 @@
 ﻿using MediatR;
+using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Bookings.DTOs;
 using PropertyApi.Application.Bookings.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
@@ -16,17 +17,20 @@ public sealed class RequestVisitCommandHandler : IRequestHandler<RequestVisitCom
     private readonly IUnitOfWork _uow;
     private readonly INotificationService _notifications;
     private readonly IPropertyReadRepository _properties;
+    private readonly ILogger<RequestVisitCommandHandler> _logger;
 
     public RequestVisitCommandHandler(
         IVisitRepository visits,
         IUnitOfWork uow,
         INotificationService notifications,
-        IPropertyReadRepository properties)
+        IPropertyReadRepository properties,
+        ILogger<RequestVisitCommandHandler> logger)
     {
         _visits = visits;
         _uow = uow;
         _notifications = notifications;
         _properties = properties;
+        _logger = logger;
     }
 
     public async Task<VisitDto> Handle(RequestVisitCommand request, CancellationToken ct)
@@ -65,13 +69,37 @@ public sealed class RequestVisitCommandHandler : IRequestHandler<RequestVisitCom
         await _visits.AddAsync(visit, ct);
         await _uow.SaveChangesAsync(ct);
 
-        await _notifications.NotifyPropertyUpdateAsync(
-            recipientId: property.OwnerId,
-            propertyId: property.Id,
-            propertyTitle: property.Title,
-            type: NotificationType.VisitRequested,
-            detail: $"{request.VisitorName} requested a visit scheduled for {request.ProposedAt:dd/MM/yyyy HH:mm}.",
-            ct: ct);
+        /*
+         * ✅ إصلاح: توصيل الإشعار للمالك ليس حرجًا — طلب الزيارة نفسه
+         * تم حفظه بنجاح في السطر أعلاه بالفعل. سابقًا كان هذا الاستدعاء
+         * بدون try/catch (خلافًا لنفس النمط الموجود في
+         * SendMessageCommandHandler)، فإذا فشل SignalR أو أي جزء من
+         * الإشعار لأي سبب، كان الاستثناء يتسبب بإفشال طلب
+         * POST /api/Visits بأكمله (٥٠٠) رغم أن الزيارة محفوظة فعليًا —
+         * وهذا بالضبط ما يفسّر شكوى "طلب الزيارة لم يصل ابدًا": الزائر
+         * كان يرى رسالة خطأ رغم أن الطلب وصل وحُفظ في قاعدة البيانات.
+         */
+        try
+        {
+            await _notifications.NotifyPropertyUpdateAsync(
+                recipientId: property.OwnerId,
+                propertyId: property.Id,
+                propertyTitle: property.Title,
+                type: NotificationType.VisitRequested,
+                detail: $"{request.VisitorName} requested a visit scheduled for {request.ProposedAt:dd/MM/yyyy HH:mm}.",
+                ct: ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to create/send visit-request notification. " +
+                "VisitId={VisitId}, PropertyId={PropertyId}, OwnerId={OwnerId}, RequesterId={RequesterId}",
+                visit.Id,
+                property.Id,
+                property.OwnerId,
+                request.RequesterId);
+        }
 
         return new VisitDto(
             Id: visit.Id,
@@ -88,7 +116,9 @@ public sealed class RequestVisitCommandHandler : IRequestHandler<RequestVisitCom
             OwnerNote: visit.OwnerNote,
             RespondedAt: visit.RespondedAt,
             Status: visit.Status,
-            CreatedAt: visit.CreatedAt);
+            CreatedAt: visit.CreatedAt,
+            // ✅ إصلاح: كان غائبًا — راجع تعليق VisitDto.cs
+            OwnerId: property.OwnerId);
     }
 }
 

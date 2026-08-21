@@ -22,6 +22,21 @@ public sealed class PropertyDto
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
 
+    // Structured location (Phase-0 follow-up). BUG FIX: these existed on the
+    // Property entity but were never mapped into this DTO, so every response
+    // silently dropped them — the property-form edit page could never restore
+    // a previously-saved governorate/district/neighborhood/property type.
+    public int? GovernorateId { get; set; }
+    public int? DistrictId { get; set; }
+    public string? DistrictText { get; set; }
+    public int? NeighborhoodId { get; set; }
+    public string? NeighborhoodText { get; set; }
+    public int? PropertyTypeId { get; set; }
+
+    // BUG FIX: same issue for the "still available?" staleness feature — the
+    // frontend banner reads this field, but it was never in the response.
+    public DateTime? LastConfirmedAvailableAt { get; set; }
+
     // Listing
     public string ListingType { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;

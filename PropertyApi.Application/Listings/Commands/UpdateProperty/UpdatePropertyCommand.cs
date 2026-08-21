@@ -24,6 +24,14 @@ public sealed record UpdatePropertyCommand(
     string? CountryCode,
     string? PostalCode,
 
+    // Structured location (tech-debt cleanup — see Phase-0 notes)
+    int? GovernorateId,
+    int? DistrictId,
+    string? DistrictText,
+    int? NeighborhoodId,
+    string? NeighborhoodText,
+    int? PropertyTypeId,
+
     // Geo
     decimal? Latitude,
     decimal? Longitude,

@@ -1,4 +1,5 @@
 ﻿using MediatR;
+using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Domain.Listings.Entities;
@@ -17,11 +18,19 @@ public sealed class CreatePropertyCommandHandler
 {
     private readonly IPropertyRepository _repo;
     private readonly IUnitOfWork _uow;
+    private readonly ILocationSuggestionService _locationSuggestions;
+    private readonly ILogger<CreatePropertyCommandHandler> _logger;
 
-    public CreatePropertyCommandHandler(IPropertyRepository repo, IUnitOfWork uow)
+    public CreatePropertyCommandHandler(
+        IPropertyRepository repo,
+        IUnitOfWork uow,
+        ILocationSuggestionService locationSuggestions,
+        ILogger<CreatePropertyCommandHandler> logger)
     {
         _repo = repo;
         _uow = uow;
+        _locationSuggestions = locationSuggestions;
+        _logger = logger;
     }
 
     public async Task<Guid> Handle(
@@ -43,6 +52,12 @@ public sealed class CreatePropertyCommandHandler
         property.City = request.City;
         property.Region = request.Region;
         property.PostalCode = request.PostalCode;
+        property.GovernorateId = request.GovernorateId;
+        property.DistrictId = request.DistrictId;
+        property.DistrictText = request.DistrictText;
+        property.NeighborhoodId = request.NeighborhoodId;
+        property.NeighborhoodText = request.NeighborhoodText;
+        property.PropertyTypeId = request.PropertyTypeId;
         property.Latitude = request.Latitude;
         property.Longitude = request.Longitude;
         property.ColdRent = request.ColdRent;
@@ -75,7 +90,38 @@ public sealed class CreatePropertyCommandHandler
         await _repo.AddAsync(property, cancellationToken);
         await _uow.SaveChangesAsync(cancellationToken);
 
+        // Best-effort — a manually-typed district/neighborhood name becomes a
+        // suggestion for admin review (see LocationSuggestion's doc comment).
+        // Deliberately never allowed to fail the actual listing save: this
+        // runs after the property is already committed, and any exception
+        // here is swallowed (with a log) rather than surfaced to the user.
+        await TrySubmitLocationSuggestionsAsync(property, cancellationToken);
+
         return property.Id;
+    }
+
+    private async Task TrySubmitLocationSuggestionsAsync(Property property, CancellationToken ct)
+    {
+        try
+        {
+            if (property.DistrictId is null && !string.IsNullOrWhiteSpace(property.DistrictText) && property.GovernorateId.HasValue)
+            {
+                await _locationSuggestions.SubmitDistrictSuggestionAsync(
+                    property.GovernorateId.Value, property.DistrictText, property.OwnerId, property.Id, ct);
+            }
+
+            if (property.NeighborhoodId is null && !string.IsNullOrWhiteSpace(property.NeighborhoodText) && property.DistrictId.HasValue)
+            {
+                await _locationSuggestions.SubmitNeighborhoodSuggestionAsync(
+                    property.DistrictId.Value, property.NeighborhoodText, property.OwnerId, property.Id, ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to submit location suggestion for property {PropertyId} — listing was still saved successfully.",
+                property.Id);
+        }
     }
 }
 

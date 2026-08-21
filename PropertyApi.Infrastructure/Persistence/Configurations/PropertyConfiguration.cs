@@ -44,6 +44,15 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
         builder.Property(p => p.PostalCode)
             .HasMaxLength(20);
 
+        // Manual fallbacks for governorates/districts with no seeded
+        // Districts/Neighborhoods rows — see Property.DistrictText's and
+        // Property.NeighborhoodText's doc comments.
+        builder.Property(p => p.DistrictText)
+            .HasMaxLength(150);
+
+        builder.Property(p => p.NeighborhoodText)
+            .HasMaxLength(150);
+
         // -- Geo: decimal(9,6) gives precision to ~0.11m ------
         builder.Property(p => p.Latitude)
             .HasColumnType("decimal(9,6)");
@@ -209,5 +218,9 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
         // Composite index for the most common filtered search
         builder.HasIndex(p => new { p.CountryCode, p.City, p.Status, p.IsPublished, p.IsDeleted })
             .HasDatabaseName("IX_Properties_Search");
+
+        // Phase-0 "freshness" feature — supports a future background job that finds
+        // published listings not confirmed available in the last N days.
+        builder.HasIndex(p => p.LastConfirmedAvailableAt);
     }
 }

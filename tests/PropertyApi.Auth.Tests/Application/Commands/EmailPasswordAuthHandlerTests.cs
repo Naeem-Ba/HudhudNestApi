@@ -1,3 +1,4 @@
+using Moq;
 using Microsoft.Extensions.Logging.Abstractions;
 using PropertyApi.Application.Auth.Commands.ForgotPassword;
 using PropertyApi.Application.Auth.Commands.Login;
@@ -73,11 +74,11 @@ public sealed class LoginCommandHandlerTests
 
         identityService
             .Setup(
-                x => x.CheckPasswordAsync(
+                x => x.VerifyPasswordWithLockoutAsync(
                     user.Id,
                     "Password123",
                     It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .ReturnsAsync(LoginPasswordVerificationResult.Success);
 
         identityService
             .Setup(
@@ -160,6 +161,8 @@ public sealed class LoginCommandHandlerTests
                     It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
+        var securityAlerts = new Mock<ISecurityAlertService>();
+
         var handler =
             new LoginCommandHandler(
                 identityService.Object,
@@ -171,7 +174,8 @@ public sealed class LoginCommandHandlerTests
                     auditLogs.Object,
                     NullLogger<AuthenticationSessionIssuer>.Instance),
                 NullLogger<LoginCommandHandler>
-                    .Instance);
+                    .Instance,
+                securityAlerts.Object);
 
         // Act
         var result =
@@ -203,8 +207,10 @@ public sealed class LoginCommandHandlerTests
                 It.IsAny<CancellationToken>()),
             Times.Once);
 
+        // Password verification must go through the lockout-aware path; CheckPasswordAsync
+        // bypasses AccessFailedCount/LockoutEnd entirely.
         identityService.Verify(
-            x => x.CheckPasswordAsync(
+            x => x.VerifyPasswordWithLockoutAsync(
                 user.Id,
                 "Password123",
                 It.IsAny<CancellationToken>()),
@@ -295,17 +301,19 @@ public sealed class LoginCommandHandlerTests
 
         identityService
             .Setup(
-                x => x.CheckPasswordAsync(
+                x => x.VerifyPasswordWithLockoutAsync(
                     user.Id,
                     "wrong",
                     It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .ReturnsAsync(LoginPasswordVerificationResult.InvalidPassword);
 
         var tokenService =
             new Mock<ITokenService>();
 
         var refreshRepo =
             new Mock<IRefreshTokenRepository>();
+
+        var securityAlerts = new Mock<ISecurityAlertService>();
 
         var handler =
             new LoginCommandHandler(
@@ -318,7 +326,8 @@ public sealed class LoginCommandHandlerTests
                     Mock.Of<IAuditLogService>(),
                     NullLogger<AuthenticationSessionIssuer>.Instance),
                 NullLogger<LoginCommandHandler>
-                    .Instance);
+                    .Instance,
+                securityAlerts.Object);
 
         // Act
         var result =
@@ -336,7 +345,7 @@ public sealed class LoginCommandHandlerTests
             result.Message);
 
         identityService.Verify(
-            x => x.CheckPasswordAsync(
+            x => x.VerifyPasswordWithLockoutAsync(
                 user.Id,
                 "wrong",
                 It.IsAny<CancellationToken>()),

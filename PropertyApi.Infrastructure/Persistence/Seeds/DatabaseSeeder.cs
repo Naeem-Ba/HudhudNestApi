@@ -52,6 +52,7 @@ public static class DatabaseSeeder
 
                 await CurrencySeed.SeedAsync(context);
                 await GovernoratesSeed.SeedAsync(context);
+                await NeighborhoodsSeed.SeedAsync(context);
                 await PropertyTypesSeed.SeedAsync(context);
                 await ApplicationRolesSeed.SeedAsync(roleManager);
 
@@ -67,6 +68,7 @@ public static class DatabaseSeeder
 
         await CurrencySeed.SeedAsync(context);
         await GovernoratesSeed.SeedAsync(context);
+        await NeighborhoodsSeed.SeedAsync(context);
         await PropertyTypesSeed.SeedAsync(context);
         await ApplicationRolesSeed.SeedAsync(roleManager);
     }

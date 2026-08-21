@@ -33,6 +33,16 @@ public static class PropertyMapper
         Latitude = p.Latitude,
         Longitude = p.Longitude,
 
+        // Structured location + freshness — see PropertyDto's doc comments
+        // for why these were missing before this pass.
+        GovernorateId = p.GovernorateId,
+        DistrictId = p.DistrictId,
+        DistrictText = p.DistrictText,
+        NeighborhoodId = p.NeighborhoodId,
+        NeighborhoodText = p.NeighborhoodText,
+        PropertyTypeId = p.PropertyTypeId,
+        LastConfirmedAvailableAt = p.LastConfirmedAvailableAt,
+
         // Listing
         ListingType = p.ListingType.ToString(),
         Status = p.Status.ToString(),

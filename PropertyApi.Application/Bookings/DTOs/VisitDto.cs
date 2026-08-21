@@ -2,6 +2,11 @@
 
 namespace PropertyApi.Application.Bookings.DTOs;
 
+// ✅ إصلاح: أُضيف OwnerId — كان غائبًا تمامًا عن هذا الـ DTO رغم أن الواجهة
+// الأمامية (visits.page.ts: canManageAsOwner/canComplete) تعتمد على
+// visit.ownerId === currentUserId لإظهار أزرار "قبول/رفض/إغلاق" لمالك
+// العقار. بدون هذا الحقل تصل القيمة undefined دائمًا فتُقارَن خطأً بمعرّف
+// المستخدم ولا تظهر الأزرار أبدًا حتى لو وصل الطلب لصندوق المالك أصلاً.
 public sealed record VisitDto(
     Guid Id,
     Guid PropertyId,
@@ -17,6 +22,7 @@ public sealed record VisitDto(
     string? OwnerNote,
     DateTime? RespondedAt,
     VisitStatus Status,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    Guid OwnerId
 );
 

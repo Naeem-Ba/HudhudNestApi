@@ -21,6 +21,28 @@ public interface INotificationService
         string detail,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Phase-0, Task 3 — notifies a user that a newly published property matched
+    /// one of their saved searches. Called by SavedSearchMatchHostedService.
+    /// </summary>
+    Task NotifySavedSearchMatchAsync(
+        Guid recipientId,
+        Guid propertyId,
+        string propertyTitle,
+        string savedSearchName,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Notifies a user that another user rated them (new UserRating). Called
+    /// by RateUserCommandHandler after the rating is persisted.
+    /// </summary>
+    Task NotifyUserRatedAsync(
+        Guid recipientId,
+        Guid raterId,
+        string raterName,
+        double overallScore,
+        CancellationToken ct = default);
+
     Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(
         Guid userId,
         int page,

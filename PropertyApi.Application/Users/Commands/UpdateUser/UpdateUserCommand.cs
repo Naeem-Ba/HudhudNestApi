@@ -16,6 +16,8 @@ public sealed record UpdateUserCommand(
     string? ProfileImageUrl,
     string? PreferredLanguage,
     string? PreferredCurrency,
-    string? CountryCode
+    string? CountryCode,
+    string? Bio = null,
+    string? ContactInfo = null
 ) : IRequest<UserDto?>;
 

@@ -68,7 +68,147 @@ public sealed class PropertyRepository : IPropertyRepository
             .Include(p => p.Images.Where(i => i.IsMain))
             .AsQueryable();
 
-        // -- Filters -------------------------------------------
+        query = ApplyFilter(query, filter);
+
+        // -- Count (before pagination) -------------------------
+        var totalCount = await query.CountAsync(ct);
+
+        // -- Sort ---------------------------------------------
+        query = (filter.SortBy?.ToLower(), filter.SortDescending) switch
+        {
+            ("createdat", true) => query.OrderByDescending(p => p.CreatedAt),
+            ("createdat", false) => query.OrderBy(p => p.CreatedAt),
+            ("purchaseprice", true) => query.OrderByDescending(p => p.PurchasePrice),
+            ("purchaseprice", false) => query.OrderBy(p => p.PurchasePrice),
+            ("coldrent", true) => query.OrderByDescending(p => p.ColdRent),
+            ("coldrent", false) => query.OrderBy(p => p.ColdRent),
+            ("area", true) => query.OrderByDescending(p => p.Area),
+            ("area", false) => query.OrderBy(p => p.Area),
+            _ => query.OrderByDescending(p => p.CreatedAt)
+        };
+
+        // -- Paginate -----------------------------------------
+        var page = Math.Max(filter.Page, 1);
+        var pageSize = Math.Clamp(filter.PageSize, 1, 100);
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return new PagedResult<Property>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
+
+    public async Task<IReadOnlyList<Property>> GetByOwnerAsync(
+        Guid ownerId,
+        CancellationToken ct = default)
+    {
+        return await _db.Properties
+            .AsNoTracking()
+            .Where(p => p.OwnerId == ownerId)
+            .Include(p => p.Images.Where(i => i.IsMain))
+            .OrderByDescending(p => p.CreatedAt)
+            .ToListAsync(ct);
+    }
+
+    public async Task<bool> ExistsAsync(Guid id, CancellationToken ct = default)
+    {
+        return await _db.Properties.AnyAsync(p => p.Id == id, ct);
+    }
+
+    public async Task<(int SoldCount, int RentedCount)> GetDealCountsByOwnerAsync(
+        Guid ownerId,
+        CancellationToken ct = default)
+    {
+        // Two lightweight COUNT queries instead of pulling rows into memory —
+        // this only ever needs to run against the public profile page, where
+        // the owner can have hundreds of historical listings.
+        var soldCount = await _db.Properties
+            .AsNoTracking()
+            .CountAsync(p => p.OwnerId == ownerId && p.Status == PropertyStatus.Sold, ct);
+
+        var rentedCount = await _db.Properties
+            .AsNoTracking()
+            .CountAsync(p => p.OwnerId == ownerId && p.Status == PropertyStatus.Rented, ct);
+
+        return (soldCount, rentedCount);
+    }
+
+    public async Task<IReadOnlyList<Property>> FindPotentialDuplicatesAsync(
+        int neighborhoodId,
+        ListingType listingType,
+        decimal? price,
+        decimal? area,
+        decimal maxTolerancePercent,
+        CancellationToken ct = default)
+    {
+        var query = _db.Properties
+            .AsNoTracking()
+            .Where(p =>
+                p.NeighborhoodId == neighborhoodId &&
+                p.ListingType == listingType &&
+                p.IsPublished);
+
+        // Price tolerance — uses the field relevant to the listing type, same rule
+        // GetPagedAsync/ApplyFilter uses for price range filtering.
+        if (price.HasValue && price.Value > 0)
+        {
+            var minPrice = price.Value * (1 - maxTolerancePercent / 100m);
+            var maxPrice = price.Value * (1 + maxTolerancePercent / 100m);
+
+            query = listingType switch
+            {
+                ListingType.ForRent => query.Where(p =>
+                    (p.ColdRent >= minPrice && p.ColdRent <= maxPrice) ||
+                    (p.WarmRent >= minPrice && p.WarmRent <= maxPrice)),
+                ListingType.ForSale => query.Where(p =>
+                    p.PurchasePrice >= minPrice && p.PurchasePrice <= maxPrice),
+                _ => query.Where(p =>
+                    (p.ColdRent >= minPrice && p.ColdRent <= maxPrice) ||
+                    (p.WarmRent >= minPrice && p.WarmRent <= maxPrice) ||
+                    (p.PurchasePrice >= minPrice && p.PurchasePrice <= maxPrice))
+            };
+        }
+
+        if (area.HasValue && area.Value > 0)
+        {
+            var minArea = area.Value * (1 - maxTolerancePercent / 100m);
+            var maxArea = area.Value * (1 + maxTolerancePercent / 100m);
+            query = query.Where(p => p.Area >= minArea && p.Area <= maxArea);
+        }
+
+        return await query
+            .OrderByDescending(p => p.CreatedAt)
+            .Take(20) // Advisory check only — never needs to return more than a handful of candidates
+            .ToListAsync(ct);
+    }
+
+    public void Update(Property property)
+    {
+        _db.Properties.Update(property);
+    }
+
+    public void Remove(Property property)
+    {
+        // Soft delete is handled in AppDbContext.SaveChangesAsync()
+        // Calling Remove() here will be intercepted and converted to IsDeleted=true
+        _db.Properties.Remove(property);
+    }
+
+    /// <summary>
+    /// Applies all PropertyFilterDto filter clauses to an IQueryable&lt;Property&gt;.
+    /// Extracted out of GetPagedAsync (Phase-0 tech-debt cleanup) so the
+    /// SavedSearchMatchHostedService can reuse the exact same search rules
+    /// instead of re-implementing (and inevitably drifting from) them.
+    /// Public/static and side-effect free — safe to call from other repositories/services.
+    /// </summary>
+    public static IQueryable<Property> ApplyFilter(IQueryable<Property> query, PropertyFilterDto filter)
+    {
         if (!string.IsNullOrWhiteSpace(filter.CountryCode))
             query = query.Where(p => p.CountryCode == filter.CountryCode.ToUpperInvariant());
 
@@ -77,6 +217,22 @@ public sealed class PropertyRepository : IPropertyRepository
 
         if (!string.IsNullOrWhiteSpace(filter.Region))
             query = query.Where(p => EF.Functions.ILike(p.Region!, $"%{filter.Region}%"));
+
+        // Structured location filters take precedence in matching accuracy over the
+        // free-text City/Region filters above — callers may pass both, in which case
+        // both are applied (AND'ed) since a client could combine a governorate filter
+        // with an unrelated free-text refinement.
+        if (filter.GovernorateId.HasValue)
+            query = query.Where(p => p.GovernorateId == filter.GovernorateId.Value);
+
+        if (filter.DistrictId.HasValue)
+            query = query.Where(p => p.DistrictId == filter.DistrictId.Value);
+
+        if (filter.NeighborhoodId.HasValue)
+            query = query.Where(p => p.NeighborhoodId == filter.NeighborhoodId.Value);
+
+        if (filter.PropertyTypeId.HasValue)
+            query = query.Where(p => p.PropertyTypeId == filter.PropertyTypeId.Value);
 
         if (filter.ListingType.HasValue)
             query = query.Where(p => p.ListingType == filter.ListingType.Value);
@@ -157,66 +313,6 @@ public sealed class PropertyRepository : IPropertyRepository
             (property.ExpiresAt == null ||
              property.ExpiresAt > now));
 
-        // -- Count (before pagination) -------------------------
-        var totalCount = await query.CountAsync(ct);
-
-        // -- Sort ---------------------------------------------
-        query = (filter.SortBy?.ToLower(), filter.SortDescending) switch
-        {
-            ("createdat", true) => query.OrderByDescending(p => p.CreatedAt),
-            ("createdat", false) => query.OrderBy(p => p.CreatedAt),
-            ("purchaseprice", true) => query.OrderByDescending(p => p.PurchasePrice),
-            ("purchaseprice", false) => query.OrderBy(p => p.PurchasePrice),
-            ("coldrent", true) => query.OrderByDescending(p => p.ColdRent),
-            ("coldrent", false) => query.OrderBy(p => p.ColdRent),
-            ("area", true) => query.OrderByDescending(p => p.Area),
-            ("area", false) => query.OrderBy(p => p.Area),
-            _ => query.OrderByDescending(p => p.CreatedAt)
-        };
-
-        // -- Paginate -----------------------------------------
-        var page = Math.Max(filter.Page, 1);
-        var pageSize = Math.Clamp(filter.PageSize, 1, 100);
-        var items = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(ct);
-
-        return new PagedResult<Property>
-        {
-            Items = items,
-            TotalCount = totalCount,
-            Page = page,
-            PageSize = pageSize
-        };
-    }
-
-    public async Task<IReadOnlyList<Property>> GetByOwnerAsync(
-        Guid ownerId,
-        CancellationToken ct = default)
-    {
-        return await _db.Properties
-            .AsNoTracking()
-            .Where(p => p.OwnerId == ownerId)
-            .Include(p => p.Images.Where(i => i.IsMain))
-            .OrderByDescending(p => p.CreatedAt)
-            .ToListAsync(ct);
-    }
-
-    public async Task<bool> ExistsAsync(Guid id, CancellationToken ct = default)
-    {
-        return await _db.Properties.AnyAsync(p => p.Id == id, ct);
-    }
-
-    public void Update(Property property)
-    {
-        _db.Properties.Update(property);
-    }
-
-    public void Remove(Property property)
-    {
-        // Soft delete is handled in AppDbContext.SaveChangesAsync()
-        // Calling Remove() here will be intercepted and converted to IsDeleted=true
-        _db.Properties.Remove(property);
+        return query;
     }
 }

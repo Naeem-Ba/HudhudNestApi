@@ -15,6 +15,7 @@ using PropertyApi.Domain.Bookings.Entities;
 using PropertyApi.Domain.Reviews.Entities;
 using PropertyApi.Domain.Lookups.Entities;
 using PropertyApi.Domain.Transactions.Entities;
+using PropertyApi.Domain.Search.Entities;
 using PropertyApi.Infrastructure.Identity.Entities;
 using PropertyApi.Infrastructure.Security.DataProtection;
 
@@ -49,6 +50,7 @@ public sealed class AppDbContext
     // -- DbSets --------------------------------------------------
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
     public DbSet<Property> Properties => Set<Property>();
+    public DbSet<PropertyPriceHistory> PropertyPriceHistories => Set<PropertyPriceHistory>();
     public DbSet<PropertyImage> PropertyImages => Set<PropertyImage>();
     public DbSet<Amenity> Amenities => Set<Amenity>();
     public DbSet<PropertyAmenity> PropertyAmenities => Set<PropertyAmenity>();
@@ -61,14 +63,17 @@ public sealed class AppDbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<VisitRequest> VisitRequests => Set<VisitRequest>();
     public DbSet<PropertyReview> PropertyReviews => Set<PropertyReview>();
+    public DbSet<UserRating> UserRatings => Set<UserRating>();
     public DbSet<Currency> Currencies => Set<Currency>();
     public DbSet<Governorate> Governorates => Set<Governorate>();
     public DbSet<District> Districts => Set<District>();
     public DbSet<Neighborhood> Neighborhoods => Set<Neighborhood>();
     public DbSet<PropertyType> PropertyTypes => Set<PropertyType>();
+    public DbSet<LocationSuggestion> LocationSuggestions => Set<LocationSuggestion>();
     public DbSet<SaleDetails> SaleDetails => Set<SaleDetails>();
     public DbSet<RentalDetails> RentalDetails => Set<RentalDetails>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
+    public DbSet<SavedSearch> SavedSearches => Set<SavedSearch>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
@@ -104,6 +109,7 @@ public sealed class AppDbContext
         builder.Entity<Notification>().HasQueryFilter(n => !n.IsDeleted);
         builder.Entity<VisitRequest>().HasQueryFilter(v => !v.IsDeleted);
         builder.Entity<PropertyReview>().HasQueryFilter(r => !r.IsDeleted);
+        builder.Entity<UserRating>().HasQueryFilter(r => !r.IsDeleted);
         builder.Entity<Transaction>().HasQueryFilter(e => !e.IsDeleted);
 
         builder.Entity<Favorite>().HasQueryFilter(favorite => !favorite.Property.IsDeleted);
@@ -152,6 +158,21 @@ public sealed class AppDbContext
             .HasConversion(new DataProtectionStringConverter(
                 _dataProtectionProvider,
                 SensitiveDataProtectionPurposes.UserTaxNumber));
+
+        // ✅ جديد — نبذة تعريفية + عنوان/تواصل بالملف الشخصي العام. غير مشفَّرة
+        // عمداً (بعكس WhatsAppNumber/TaxNumber أعلاه): المستخدم يكتبها بنفسه
+        // ليعرضها علنًا لأي زائر، فلا معنى لتشفيرها في قاعدة البيانات.
+        account.Property(u => u.Bio)
+            .HasMaxLength(2000);
+
+        account.Property(u => u.ContactInfo)
+            .HasMaxLength(500);
+
+        // ✅ جديد — يخزّن Cloudinary PublicId لصورة الحساب الحالية كي نستطيع
+        // حذفها من التخزين السحابي عند رفع صورة جديدة (نفس نمط PropertyImage.PublicId).
+        // غير مشفَّر: ليس بيانًا حساسًا، وهو معرّف داخلي لمزوّد التخزين فقط.
+        account.Property(u => u.ProfileImagePublicId)
+            .HasMaxLength(300);
     }
     // -- Auto-stamp UpdatedAt on every save ----------------------
     public override async Task<int> SaveChangesAsync(

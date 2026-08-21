@@ -17,6 +17,14 @@ public sealed class PropertyFilterDto
     public string? City { get; set; }
     public string? Region { get; set; }
 
+    // Structured location filters (tech-debt cleanup — see Phase-0 notes).
+    // Prefer these over the free-text City/Region filters above when available:
+    // they match against the FK id instead of doing a substring/ILIKE scan.
+    public int? GovernorateId { get; set; }
+    public int? DistrictId { get; set; }
+    public int? NeighborhoodId { get; set; }
+    public int? PropertyTypeId { get; set; }
+
     // Type / Status
     public ListingType? ListingType { get; set; }
     public PropertyStatus? Status { get; set; }

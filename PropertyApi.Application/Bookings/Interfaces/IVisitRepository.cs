@@ -34,6 +34,17 @@ public interface IVisitRepository
         Guid requesterId,
         CancellationToken ct = default);
 
+    // ✅ إصلاح: كانت GetMyVisitsQueryHandler تستدعي GetByRequesterIdAsync
+    // فقط — أي أن "زياراتي" كانت تعني حصريًا "الزيارات التي طلبتُها كزائر"،
+    // ولا تتضمن أبدًا "طلبات الزيارة التي وصلتني كمالك عقار". هذا كان السبب
+    // الحقيقي وراء عدم وصول طلبات الزيارة لحساب البائع: الطلب كان يُحفَظ
+    // بنجاح بقاعدة البيانات، لكن استعلام /Visits/mine لم يكن يجلبه إطلاقًا
+    // لأن المالك ليس هو مُقدِّم الطلب (RequesterId). هذه الدالة الجديدة تجمع
+    // الاتجاهين معًا في استعلام واحد.
+    Task<IReadOnlyList<VisitRequest>> GetByRequesterOrOwnerIdAsync(
+        Guid userId,
+        CancellationToken ct = default);
+
     Task<IReadOnlyList<VisitRequest>> GetByPropertyIdAsync(
         Guid propertyId,
         CancellationToken ct = default);
@@ -50,5 +61,17 @@ public interface IVisitRepository
     Task<bool> HasCompletedVisitAsync(
         Guid propertyId,
         Guid userId,
+        CancellationToken ct = default);
+
+    // ✅ جديد — مطلوب لشرط "زيارة مكتملة أو مراسلة" قبل تقييم مستخدم آخر.
+    /// <summary>
+    /// يتحقق مما إذا كان <paramref name="raterId"/> قد أتمَّ زيارة (Status = Completed)
+    /// لأي عقار من عقارات <paramref name="ratedOwnerId"/> — بعكس
+    /// <see cref="HasCompletedVisitAsync"/> المرتبطة بعقار واحد بعينه، هذه الدالة
+    /// تفحص عبر كل عقارات المالك لأن تقييم المستخدم ليس مرتبطاً بعقار محدد.
+    /// </summary>
+    Task<bool> HasCompletedVisitWithOwnerAsync(
+        Guid raterId,
+        Guid ratedOwnerId,
         CancellationToken ct = default);
 }

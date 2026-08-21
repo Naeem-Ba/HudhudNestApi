@@ -8,6 +8,7 @@ using PropertyApi.Application.Auth.Commands.SocialLogin;
 using PropertyApi.Application.Auth.Commands.RefreshToken;
 using PropertyApi.Application.Auth.Commands.VerifyPhoneOtp;
 using PropertyApi.Application.Auth.Abstractions;
+using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Orchestration;
 using PropertyApi.Application.Auth.Policies;
 using PropertyApi.Application.Auth.Services;
@@ -60,6 +61,20 @@ public static class DependencyInjection
         services.AddSingleton<IPhoneVerificationPolicy, PhoneVerificationPolicy>();
         services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<IPropertyOwnershipService, PropertyOwnershipService>();
+
+        // Password security service
+        // Validates password complexity and checks against breach databases
+        services.AddScoped<IPasswordSecurityService>(provider =>
+        {
+            var httpClient = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(5)
+            };
+            httpClient.DefaultRequestHeaders.Add("User-Agent", "PropertyApi-PasswordValidator/1.0");
+
+            var logger = provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PasswordSecurityService>>();
+            return new PasswordSecurityService(httpClient, logger);
+        });
 
         return services;
     }

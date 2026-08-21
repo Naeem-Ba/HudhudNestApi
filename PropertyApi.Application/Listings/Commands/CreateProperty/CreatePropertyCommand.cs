@@ -19,6 +19,19 @@ public sealed record CreatePropertyCommand(
     string? Region,
     string CountryCode,
     string? PostalCode,
+
+    // Structured location (tech-debt cleanup — see Phase-0 notes). Optional so
+    // legacy clients that still only send free-text City/Region keep working.
+    int? GovernorateId,
+    int? DistrictId,
+    // Manual fallback when DistrictId has no matching seeded row for the
+    // chosen governorate — see Property.DistrictText.
+    string? DistrictText,
+    int? NeighborhoodId,
+    // Manual fallback when NeighborhoodId has no matching seeded row for the
+    // chosen district — see Property.NeighborhoodText.
+    string? NeighborhoodText,
+    int? PropertyTypeId,
     decimal? Latitude,
     decimal? Longitude,
     decimal? ColdRent,

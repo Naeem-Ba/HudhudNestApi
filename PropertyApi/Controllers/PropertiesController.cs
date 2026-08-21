@@ -4,7 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 using PropertyApi.Application.Listings.DTOs;
+using PropertyApi.Application.Listings.Commands.ConfirmPropertyAvailability;
 using PropertyApi.Application.Listings.Commands.CreateProperty;
+using PropertyApi.Application.Listings.Queries.CheckPotentialDuplicateProperty;
 using PropertyApi.Application.Listings.Commands.DeleteProperty;
 using PropertyApi.Application.Listings.Commands.UpdateProperty;
 using PropertyApi.Application.Listings.Commands.PublishProperty;
@@ -112,6 +114,36 @@ public sealed class PropertiesController : ControllerBase
         return Ok(result);
     }
 
+    // ── GET /api/properties/check-duplicate ──────────────────────
+    // Advisory only — never blocks. Called by the frontend before final submit
+    // (property-form) to surface a dismissible "this might already exist" prompt.
+    // See CheckPotentialDuplicatePropertyQuery for why this is a Query, not a
+    // blocking CreatePropertyCommandValidator rule.
+    [HttpGet("check-duplicate")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> CheckDuplicate(
+        [FromQuery] int? neighborhoodId,
+        [FromQuery] decimal? area,
+        [FromQuery] decimal? price,
+        [FromQuery] ListingType listingType,
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var result = await _mediator.Send(
+            new CheckPotentialDuplicatePropertyQuery(
+                userId.Value,
+                neighborhoodId,
+                area,
+                price,
+                listingType),
+            ct);
+
+        return Ok(result);
+    }
+
     // ── POST /api/properties ─────────────────────────────────────
     [HttpPost]
     [Authorize]
@@ -198,6 +230,28 @@ public sealed class PropertiesController : ControllerBase
 
         await _mediator.Send(
             new PublishPropertyCommand(
+                id,
+                userId.Value,
+                User.IsInRole(RoleNames.Admin)),
+            ct);
+
+        return NoContent();
+    }
+
+    // ── PATCH /api/properties/{id}/confirm-availability ─────────
+    // Phase-0, Task 2 — single-tap "still available?" confirmation.
+    [HttpPatch("{id:guid}/confirm-availability")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ConfirmAvailability(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await _mediator.Send(
+            new ConfirmPropertyAvailabilityCommand(
                 id,
                 userId.Value,
                 User.IsInRole(RoleNames.Admin)),

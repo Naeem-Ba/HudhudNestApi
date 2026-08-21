@@ -15,7 +15,9 @@ public sealed class GetMyVisitsQueryHandler
     public async Task<IReadOnlyList<VisitDto>> Handle(
         GetMyVisitsQuery request, CancellationToken ct)
     {
-        var visits = await _visits.GetByRequesterIdAsync(request.UserId, ct);
+        // ✅ إصلاح: كانت GetByRequesterIdAsync — راجع تعليق IVisitRepository.
+        // "زياراتي" الآن تعني: ما طلبتُه كزائر + ما وصلني كمالك عقار.
+        var visits = await _visits.GetByRequesterOrOwnerIdAsync(request.UserId, ct);
 
         return visits
             .Where(v => request.StatusFilter is null || v.Status == request.StatusFilter)
@@ -36,7 +38,9 @@ public sealed class GetMyVisitsQueryHandler
                 OwnerNote: v.OwnerNote,
                 RespondedAt: v.RespondedAt,
                 Status: v.Status,
-                CreatedAt: v.CreatedAt))
+                CreatedAt: v.CreatedAt,
+                // ✅ إصلاح: كان غائبًا — راجع تعليق VisitDto.cs
+                OwnerId: v.Property?.OwnerId ?? Guid.Empty))
             .ToList()
             .AsReadOnly();
     }

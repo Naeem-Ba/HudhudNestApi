@@ -477,6 +477,10 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Property<int?>("DistrictId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("DistrictText")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
                     b.Property<byte?>("ElectricityHoursPerDay")
                         .HasColumnType("smallint");
 
@@ -571,6 +575,9 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Property<int?>("KitchenCount")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("LastConfirmedAvailableAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<decimal?>("Latitude")
                         .HasColumnType("decimal(9,6)");
 
@@ -604,6 +611,10 @@ namespace PropertyApi.Infrastructure.Migrations
 
                     b.Property<int?>("NeighborhoodId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("NeighborhoodText")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
 
                     b.Property<Guid>("OwnerId")
                         .HasColumnType("uuid");
@@ -719,6 +730,8 @@ namespace PropertyApi.Infrastructure.Migrations
 
                     b.HasIndex("IsVerified");
 
+                    b.HasIndex("LastConfirmedAvailableAt");
+
                     b.HasIndex("LegalStatus");
 
                     b.HasIndex("ListingType");
@@ -822,6 +835,57 @@ namespace PropertyApi.Infrastructure.Migrations
                         .HasFilter("\"IsMain\" = true");
 
                     b.ToTable("PropertyImages", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.PropertyPriceHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("ChangedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal?>("NewValue")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("OldValue")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("PriceField")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid>("PropertyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PropertyId", "ChangedAt");
+
+                    b.ToTable("PropertyPriceHistories", (string)null);
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.RentalDetails", b =>
@@ -1091,6 +1155,74 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.HasIndex("IsActive");
 
                     b.ToTable("Governorates", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Lookups.Entities.LocationSuggestion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<int>("ParentId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("PropertyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("ResultingEntityId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReviewNotes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("SubmittedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PropertyId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("SubmittedByUserId");
+
+                    b.HasIndex("Type", "ParentId", "Status");
+
+                    b.ToTable("LocationSuggestions", (string)null);
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.Lookups.Entities.Neighborhood", b =>
@@ -1387,6 +1519,147 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.ToTable("PropertyReviews", (string)null);
                 });
 
+            modelBuilder.Entity("PropertyApi.Domain.Reviews.Entities.UserRating", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Credibility")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("RatedUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RaterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ResponseSpeed")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Safety")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Transparency")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RatedUserId");
+
+                    b.HasIndex("RaterId");
+
+                    b.HasIndex("RatedUserId", "RaterId")
+                        .IsUnique();
+
+                    b.ToTable("UserRatings", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Search.Entities.SavedSearch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("CountryCode")
+                        .HasMaxLength(2)
+                        .HasColumnType("character(2)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CurrencyCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int?>("DistrictId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("GovernorateId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastMatchedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ListingType")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal?>("MaxArea")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal?>("MaxPrice")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("MaxRooms")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("MinArea")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal?>("MinPrice")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("MinRooms")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<int?>("NeighborhoodId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PropertyTypeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Region")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LastMatchedAt");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("SavedSearches", (string)null);
+                });
+
             modelBuilder.Entity("PropertyApi.Domain.Transactions.Entities.Transaction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1426,8 +1699,8 @@ namespace PropertyApi.Infrastructure.Migrations
 
                     b.Property<string>("PaymentMethod")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<Guid>("PropertyId")
                         .HasColumnType("uuid");
@@ -1441,18 +1714,16 @@ namespace PropertyApi.Infrastructure.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
                         .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasDefaultValue("Pending");
+                        .HasColumnType("character varying(30)");
 
                     b.Property<DateTime>("TransactedAt")
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("TransactionType")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp without time zone");
@@ -1481,6 +1752,14 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Bio")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ContactInfo")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("CountryCode")
                         .HasMaxLength(2)
@@ -1514,6 +1793,10 @@ namespace PropertyApi.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
+
+                    b.Property<string>("ProfileImagePublicId")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
 
                     b.Property<string>("ProfileImageUrl")
                         .HasMaxLength(2048)
@@ -1931,6 +2214,17 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Navigation("Property");
                 });
 
+            modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.PropertyPriceHistory", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Listings.Entities.Property", "Property")
+                        .WithMany()
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Property");
+                });
+
             modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.RentalDetails", b =>
                 {
                     b.HasOne("PropertyApi.Domain.Listings.Entities.Property", "Property")
@@ -1978,6 +2272,20 @@ namespace PropertyApi.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Governorate");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Lookups.Entities.LocationSuggestion", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Listings.Entities.Property", null)
+                        .WithMany()
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("SubmittedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.Lookups.Entities.Neighborhood", b =>
@@ -2044,6 +2352,34 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Navigation("Property");
 
                     b.Navigation("Reviewer");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Reviews.Entities.UserRating", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", "RatedUser")
+                        .WithMany()
+                        .HasForeignKey("RatedUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", "Rater")
+                        .WithMany()
+                        .HasForeignKey("RaterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("RatedUser");
+
+                    b.Navigation("Rater");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Search.Entities.SavedSearch", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PropertyApi.Infrastructure.Identity.Entities.RefreshToken", b =>

@@ -9,6 +9,7 @@ internal static class LookupInfrastructureRegistration
         this IServiceCollection services)
     {
         services.AddScoped<ICommonLookupService, CommonLookupService>();
+        services.AddScoped<ILocationSuggestionService, LocationSuggestionService>();
 
         return services;
     }

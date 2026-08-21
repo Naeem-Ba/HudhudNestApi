@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Commands.ForgotPassword;
 using PropertyApi.Application.Auth.Commands.Login;
 using PropertyApi.Application.Auth.Commands.Logout;
@@ -10,6 +11,8 @@ using PropertyApi.Application.Auth.Commands.RefreshToken;
 using PropertyApi.Application.Auth.Commands.Register;
 using PropertyApi.Application.Auth.Commands.ResetPassword;
 using PropertyApi.Application.Auth.Commands.SocialLogin;
+using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Auth.Models;
 
 namespace PropertyApi.Controllers;
 
@@ -19,9 +22,18 @@ namespace PropertyApi.Controllers;
 public sealed class AuthController : ControllerBase
 {
     private readonly ISender _sender;
+    private readonly ILoginIdentityService _identity;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(ISender sender)
-        => _sender = sender;
+    public AuthController(
+        ISender sender,
+        ILoginIdentityService identity,
+        ILogger<AuthController> logger)
+    {
+        _sender = sender;
+        _identity = identity;
+        _logger = logger;
+    }
 
     // POST /api/auth/register
     [HttpPost("register")]
@@ -53,31 +65,78 @@ public sealed class AuthController : ControllerBase
         });
     }
 
-    // POST /api/auth/login
+    /// <summary>
+    /// Authenticates a user with email and password.
+    /// Returns comprehensive security information including attempt counts and lockout status.
+    /// Status codes: 200 Success, 401 Invalid Credentials, 423 Account Locked.
+    /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
     [EnableRateLimiting("auth-login")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Login(
+    [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status423Locked)]
+    public async Task<ActionResult<LoginResponseDto>> Login(
         [FromBody] LoginRequest dto,
         CancellationToken ct)
     {
-        var result = await _sender.Send(new LoginCommand(
-            Email: dto.Email,
-            Password: dto.Password,
-            IpAddress: GetClientIp()), ct);
-
-        if (!result.Success)
-            return Unauthorized(new { message = result.Message });
-
-        return Ok(new
+        if (!ModelState.IsValid)
         {
-            accessToken = result.AccessToken,
-            refreshToken = result.RefreshToken,
-            expiresIn = result.ExpiresIn
-        });
+            return BadRequest(new LoginResponseDto
+            {
+                Success = false,
+                StatusCode = 400,
+                Message = "Invalid request parameters",
+                ErrorCode = LoginErrorCodes.InvalidRequest
+            });
+        }
+
+        try
+        {
+            var ipAddress = GetClientIp();
+            var result = await _sender.Send(new LoginCommand(
+                Email: dto.Email,
+                Password: dto.Password,
+                IpAddress: ipAddress), ct);
+
+            if (result.Success)
+            {
+                _logger.LogInformation("User {Email} logged in successfully from IP {IpAddress}",
+                    dto.Email, ipAddress);
+
+                var response = LoginResponseDto.CreateSuccess(
+                    result.AccessToken,
+                    result.RefreshToken,
+                    result.ExpiresIn);
+
+                return Ok(response);
+            }
+
+            // Login failed - return error response with security details
+            var errorResponse = await GetFailedLoginResponse(dto.Email, ct);
+            return StatusCode(errorResponse.StatusCode, errorResponse);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during login for email {Email}", dto.Email);
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new LoginResponseDto
+                {
+                    Success = false,
+                    StatusCode = 500,
+                    Message = "An error occurred during login. Please try again later.",
+                    ErrorCode = LoginErrorCodes.ServerError,
+                    ErrorType = LoginErrorType.ServerError,
+                    RecommendedAction = "contact-support"
+                });
+        }
     }
+
+    // NOTE: an anonymous GET /auth/check-lockout endpoint was deliberately NOT added.
+    // Answering "is this email locked?" without credentials distinguishes registered from
+    // unregistered addresses and hands attackers a free user-enumeration oracle. The login
+    // response already carries isAccountLocked/lockoutEndTimeUtc for the caller that just
+    // proved it knows the address, which is the only caller entitled to that answer.
 
     // POST /api/auth/forgot-password
     [HttpPost("forgot-password")]
@@ -244,8 +303,52 @@ public sealed class AuthController : ControllerBase
             expiresIn = result.ExpiresIn
         });
     }
+
+    // ============ Helper Methods ============
+
+    private async Task<LoginResponseDto> GetFailedLoginResponse(
+        string email,
+        CancellationToken cancellationToken)
+    {
+        var account = await _identity.FindByEmailAsync(email, cancellationToken);
+        if (account == null)
+        {
+            return LoginResponseDto.CreateInvalidCredentials();
+        }
+
+        var isLocked = await _identity.IsLockedOutAsync(account.IdentityId, cancellationToken);
+        var failedCount = await _identity.GetAccessFailedCountAsync(account.IdentityId, cancellationToken);
+        var lockoutEnd = await _identity.GetLockoutEndAsync(account.IdentityId, cancellationToken);
+
+        if (isLocked && lockoutEnd.HasValue)
+        {
+            return LoginResponseDto.CreateAccountLocked(lockoutEnd.Value.DateTime, failedCount);
+        }
+
+        return LoginResponseDto.CreateInvalidCredentials(failedCount);
+    }
+
     private string? GetClientIp()
-        => HttpContext.Connection.RemoteIpAddress?.ToString();
+    {
+        // Check for IP from X-Forwarded-For header (for proxies/load balancers)
+        if (Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor))
+        {
+            var ips = forwardedFor.ToString().Split(',');
+            if (ips.Length > 0 && !string.IsNullOrWhiteSpace(ips[0]))
+            {
+                return ips[0].Trim();
+            }
+        }
+
+        // Check for IP from X-Real-IP header
+        if (Request.Headers.TryGetValue("X-Real-IP", out var realIp))
+        {
+            return realIp.ToString();
+        }
+
+        // Fall back to remote IP
+        return HttpContext.Connection.RemoteIpAddress?.ToString();
+    }
 }
 
 // HTTP request DTOs kept in API layer to preserve the public API shape.
@@ -278,7 +381,4 @@ public sealed record ResetPasswordRequest(
     string Token,
     string NewPassword,
     string ConfirmPassword);
-
-
-
 

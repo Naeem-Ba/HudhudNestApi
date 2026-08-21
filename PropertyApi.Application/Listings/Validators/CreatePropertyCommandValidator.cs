@@ -53,6 +53,36 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
             .MaximumLength(20)
             .When(x => x.PostalCode is not null);
 
+        // Structured location — mandatory as of this pass (see
+        // docs/phase-0-implementation.md section 9): the free-text City/Region
+        // inputs were dropped from the Angular form in favor of these
+        // governorate/district selects, so they must now always be present.
+        // NeighborhoodId stays optional (seed coverage is Damascus/Homs/
+        // Latakia only) — NeighborhoodText is the manual fallback everywhere
+        // else, also optional (a listing may simply not specify one).
+        RuleFor(x => x.GovernorateId)
+            .NotNull()
+            .WithMessage("Governorate is required.");
+
+        // District: pick from the seeded list (DistrictId) OR type a name not
+        // in the list yet (DistrictText) — see LocationSuggestion. At least
+        // one must be present; both is fine too (DistrictId wins downstream).
+        RuleFor(x => x)
+            .Must(x => x.DistrictId.HasValue || !string.IsNullOrWhiteSpace(x.DistrictText))
+            .WithMessage("District is required — select one from the list, or type its name if it isn't listed.");
+
+        RuleFor(x => x.DistrictText)
+            .MaximumLength(150)
+            .When(x => x.DistrictText is not null);
+
+        RuleFor(x => x.NeighborhoodText)
+            .MaximumLength(150)
+            .When(x => x.NeighborhoodText is not null);
+
+        RuleFor(x => x.PropertyTypeId)
+            .NotNull()
+            .WithMessage("Property type is required.");
+
         RuleFor(x => x.CountryCode)
             .NotEmpty()
             .Length(2)
