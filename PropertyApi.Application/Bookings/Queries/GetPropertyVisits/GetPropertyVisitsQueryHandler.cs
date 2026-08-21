@@ -46,7 +46,9 @@ public sealed class GetPropertyVisitsQueryHandler
                 OwnerNote: v.OwnerNote,
                 RespondedAt: v.RespondedAt,
                 Status: v.Status,
-                CreatedAt: v.CreatedAt))
+                CreatedAt: v.CreatedAt,
+                // ✅ إصلاح: كان غائبًا — راجع تعليق VisitDto.cs
+                OwnerId: property.OwnerId))
             .ToList()
             .AsReadOnly();
     }

@@ -132,6 +132,83 @@ public sealed class NotificationService : INotificationService
             type);
     }
 
+    public async Task NotifySavedSearchMatchAsync(
+        Guid recipientId,
+        Guid propertyId,
+        string propertyTitle,
+        string savedSearchName,
+        CancellationToken ct = default)
+    {
+        if (recipientId == Guid.Empty)
+        {
+            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
+
+        if (propertyId == Guid.Empty)
+        {
+            throw new ArgumentException("Property id is required.", nameof(propertyId));
+        }
+
+        var title = string.IsNullOrWhiteSpace(propertyTitle)
+            ? "العقار"
+            : propertyTitle.Trim();
+
+        var searchName = string.IsNullOrWhiteSpace(savedSearchName)
+            ? "بحثك المحفوظ"
+            : savedSearchName.Trim();
+
+        var notification = new Notification
+        {
+            RecipientId = recipientId,
+            Type = NotificationType.SavedSearchMatch,
+            Message = $"عقار جديد '{title}' يطابق '{searchName}'.",
+            PropertyId = propertyId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await PersistAndPushAsync(notification, ct);
+
+        _logger.LogInformation(
+            "Saved search match notification created. RecipientId={RecipientId}, PropertyId={PropertyId}",
+            recipientId,
+            propertyId);
+    }
+
+    public async Task NotifyUserRatedAsync(
+        Guid recipientId,
+        Guid raterId,
+        string raterName,
+        double overallScore,
+        CancellationToken ct = default)
+    {
+        if (recipientId == Guid.Empty)
+        {
+            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
+
+        var safeRaterName = string.IsNullOrWhiteSpace(raterName)
+            ? "مستخدم"
+            : raterName.Trim();
+
+        var notification = new Notification
+        {
+            RecipientId = recipientId,
+            Type = NotificationType.UserRated,
+            Message = $"قيّمك {safeRaterName} بمتوسط {overallScore:0.0}/5 على صفحتك الشخصية.",
+            RelatedEntityId = raterId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await PersistAndPushAsync(notification, ct);
+
+        _logger.LogInformation(
+            "User-rated notification created. RecipientId={RecipientId}, RaterId={RaterId}",
+            recipientId,
+            raterId);
+    }
+
     public async Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(
         Guid userId,
         int page,

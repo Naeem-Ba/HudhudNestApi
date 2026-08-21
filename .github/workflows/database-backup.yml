@@ -105,6 +105,10 @@ jobs:
           parse_s3_uri "${BACKUP_STORAGE_URI}"
           aws_arguments
 
+          WORK_DIR="$(create_private_temp_dir)"
+          trap 'rm -rf -- "${WORK_DIR}"' EXIT
+          OBJECTS_JSON="${WORK_DIR}/objects.json"
+
           echo "== Step 1: network reachability =="
           curl -sv --max-time 10 "${BACKUP_S3_ENDPOINT_URL:-https://s3.amazonaws.com}" 2>&1 | tail -15 || true
 

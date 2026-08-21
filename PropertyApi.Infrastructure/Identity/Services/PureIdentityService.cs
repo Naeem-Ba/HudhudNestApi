@@ -33,10 +33,19 @@ public sealed class PureIdentityService : IIdentityCapabilityAdapter
     public Task<IdentityAccountSnapshot?> FindByPhoneNumberAsync(string phone, CancellationToken ct = default) => _reader.FindByPhoneNumberAsync(phone, ct);
     public Task<IdentityOperationResult> CreateAsync(CreateIdentityAccount request, CancellationToken ct = default) => _creator.CreateAsync(request, ct);
     public Task<IdentityOperationResult> AddLoginAsync(Guid id, string provider, string key, string display, CancellationToken ct = default) => _access.AddLoginAsync(id, provider, key, display, ct);
+    public Task<LoginPasswordVerificationResult> VerifyPasswordWithLockoutAsync(Guid id, string password, CancellationToken ct = default) =>
+        _access.VerifyPasswordWithLockoutAsync(id, password, ct);
+
+#pragma warning disable CS0618
+    [Obsolete("Use VerifyPasswordWithLockoutAsync instead to include account lockout protection.")]
     public Task<bool> CheckPasswordAsync(Guid id, string password, CancellationToken ct = default) => _access.CheckPasswordAsync(id, password, ct);
+#pragma warning restore CS0618
     public Task<IReadOnlyList<string>> GetRolesAsync(Guid id, CancellationToken ct = default) => _access.GetRolesAsync(id, ct);
     public Task<IdentityOperationResult> AddToRoleAsync(Guid id, string role, CancellationToken ct = default) => _access.AddToRoleAsync(id, role, ct);
     public Task<IdentityOperationResult> RecordSuccessfulLoginAsync(Guid id, DateTime at, CancellationToken ct = default) => _access.RecordSuccessfulLoginAsync(id, at, ct);
+    public Task<bool> IsLockedOutAsync(Guid id, CancellationToken ct = default) => _access.IsLockedOutAsync(id, ct);
+    public Task<int> GetAccessFailedCountAsync(Guid id, CancellationToken ct = default) => _access.GetAccessFailedCountAsync(id, ct);
+    public Task<DateTimeOffset?> GetLockoutEndAsync(Guid id, CancellationToken ct = default) => _access.GetLockoutEndAsync(id, ct);
     public Task<IdentityOperationResult> ConfirmPhoneNumberAsync(Guid id, DateTime at, CancellationToken ct = default) => _credentials.ConfirmPhoneNumberAsync(id, at, ct);
     public Task<IdentityOperationResult> UpdateSecurityStampAsync(Guid id, CancellationToken ct = default) => _credentials.UpdateSecurityStampAsync(id, ct);
     public Task<string> GeneratePasswordResetTokenAsync(Guid id, CancellationToken ct = default) => _credentials.GeneratePasswordResetTokenAsync(id, ct);

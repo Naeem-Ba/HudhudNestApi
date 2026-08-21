@@ -92,6 +92,20 @@ public sealed class PropertyOwnershipServiceTests
         public Task<bool> ExistsAsync(Guid id, CancellationToken ct = default)
             => Task.FromResult(id == _property.Id);
 
+        public Task<(int SoldCount, int RentedCount)> GetDealCountsByOwnerAsync(
+            Guid ownerId,
+            CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task<IReadOnlyList<Property>> FindPotentialDuplicatesAsync(
+            int neighborhoodId,
+            ListingType listingType,
+            decimal? price,
+            decimal? area,
+            decimal maxTolerancePercent,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<Property>>(Array.Empty<Property>());
+
         public void Update(Property property)
         {
         }

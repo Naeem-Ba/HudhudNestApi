@@ -154,8 +154,18 @@ public sealed class UpdateUserCommandHandler
                     : NormalizeNullable(
                         request.ProfileImageUrl);
 
+            // ✅ إذا لم يتغيّر رابط الصورة، نحافظ على PublicId الحالي (قد يكون
+            // من رفع سابق عبر /me/avatar). أما لو وصل رابط جديد من هذا المسار
+            // تحديدًا (نص حر عبر PUT /users/me)، فلا نملك PublicId له — هذا
+            // المسار لا يمرّ عبر IMediaStorageService، بعكس UploadUserAvatarCommandHandler.
+            var effectiveProfileImagePublicId =
+                request.ProfileImageUrl is null
+                    ? account.ProfileImagePublicId
+                    : null;
+
             account.UpdateProfileImage(
                 effectiveProfileImageUrl,
+                effectiveProfileImagePublicId,
                 now);
 
             var effectiveLanguage =
@@ -183,6 +193,23 @@ public sealed class UpdateUserCommandHandler
                 effectiveLanguage,
                 effectiveCurrency,
                 effectiveCountryCode,
+                now);
+
+            var effectiveBio =
+                request.Bio is null
+                    ? account.Bio
+                    : NormalizeNullable(
+                        request.Bio);
+
+            var effectiveContactInfo =
+                request.ContactInfo is null
+                    ? account.ContactInfo
+                    : NormalizeNullable(
+                        request.ContactInfo);
+
+            account.UpdateAboutInfo(
+                effectiveBio,
+                effectiveContactInfo,
                 now);
 
             await _unitOfWork.SaveChangesAsync(
@@ -246,6 +273,12 @@ public sealed class UpdateUserCommandHandler
 
             CountryCode =
                 account.CountryCode,
+
+            Bio =
+                account.Bio,
+
+            ContactInfo =
+                account.ContactInfo,
 
             EmailConfirmed =
                 updatedIdentity.EmailConfirmed,

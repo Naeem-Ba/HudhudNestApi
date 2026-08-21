@@ -57,6 +57,14 @@ public sealed class UpdatePropertyCommandValidator
             .MaximumLength(20)
             .When(command => command.PostalCode is not null);
 
+        RuleFor(command => command.DistrictText)
+            .MaximumLength(150)
+            .When(command => command.DistrictText is not null);
+
+        RuleFor(command => command.NeighborhoodText)
+            .MaximumLength(150)
+            .When(command => command.NeighborhoodText is not null);
+
         RuleFor(command => command.CurrencyCode)
             .Length(3)
             .Must(currencyCode => currencyCode is not null && ValidCurrencyCodes.Contains(currencyCode))

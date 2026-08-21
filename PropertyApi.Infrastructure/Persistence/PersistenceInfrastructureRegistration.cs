@@ -44,11 +44,18 @@ internal static class PersistenceInfrastructureRegistration
 
         services.AddIdentity<ApplicationUser, InfrastructureApplicationRole>(options =>
         {
+            // Password Policy
             options.Password.RequireDigit = true;
             options.Password.RequiredLength = 8;
             options.Password.RequireNonAlphanumeric = false;
             options.Password.RequireUppercase = true;
             options.User.RequireUniqueEmail = false;
+
+            // Account Lockout Policy - متوازي مع تحديد المعدل القائم على IP
+            // يحمي الحساب نفسه من محاولات التخمين الموزعة عبر عناوين IP متعددة
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+            options.Lockout.MaxFailedAccessAttempts = 5;
+            options.Lockout.AllowedForNewUsers = true;
         })
         .AddEntityFrameworkStores<AppDbContext>()
         .AddDefaultTokenProviders();

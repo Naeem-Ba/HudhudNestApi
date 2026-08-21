@@ -99,6 +99,10 @@ internal static class AuthInfrastructureRegistration
         services.AddScoped<IdentityAccountCreator>();
         services.AddScoped<IdentityAccessService>();
         services.AddScoped<IdentityCredentialService>();
+
+        services.AddScoped<SecurityAlertEmailService>();
+        services.AddScoped<ISecurityAlertService>(
+            sp => sp.GetRequiredService<SecurityAlertEmailService>());
 #pragma warning disable CS0618 // Compatibility facade is intentionally registered during staged migration.
         services.AddScoped<IIdentityCapabilityAdapter, PureIdentityService>();
 #pragma warning restore CS0618

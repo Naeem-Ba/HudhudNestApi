@@ -19,6 +19,9 @@ public sealed class UserDto
     public string PreferredCurrency { get; set; } = "EUR";
     public string? CountryCode { get; set; }
 
+    public string? Bio { get; set; }
+    public string? ContactInfo { get; set; }
+
     public bool EmailConfirmed { get; set; }
     public DateTime CreatedAt { get; set; }
 

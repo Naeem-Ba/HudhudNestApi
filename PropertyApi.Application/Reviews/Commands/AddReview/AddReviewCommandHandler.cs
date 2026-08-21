@@ -15,6 +15,7 @@
 //   الـ property object للتحقق من OwnerId أولاً.
 // ═══════════════════════════════════════════════════════════════
 using MediatR;
+using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Application.Reviews.DTOs;
@@ -35,19 +36,22 @@ public sealed class AddReviewCommandHandler
     private readonly IUnitOfWork _uow;
     private readonly INotificationService _notifications;
     private readonly IVisitRepository _visits;     // ✅ جديد
+    private readonly ILogger<AddReviewCommandHandler> _logger;
 
     public AddReviewCommandHandler(
         IPropertyReviewRepository reviews,
         IPropertyReadRepository properties,
         IUnitOfWork uow,
         INotificationService notifications,
-        IVisitRepository visits)               // ✅ جديد — حقن عبر DI
+        IVisitRepository visits,               // ✅ جديد — حقن عبر DI
+        ILogger<AddReviewCommandHandler> logger)
     {
         _reviews = reviews;
         _properties = properties;
         _uow = uow;
         _notifications = notifications;
         _visits = visits;              // ✅ جديد
+        _logger = logger;
     }
 
     public async Task<PropertyReviewDto> Handle(
@@ -95,13 +99,30 @@ public sealed class AddReviewCommandHandler
         await _uow.SaveChangesAsync(ct);
 
         // ── إرسال إشعار لمالك العقار ─────────────────────────────────────
-        await _notifications.NotifyPropertyUpdateAsync(
-            recipientId: property.OwnerId,
-            propertyId: property.Id,
-            propertyTitle: property.Title,
-            type: NotificationType.ReviewAdded,
-            detail: $"تم إضافة تقييم جديد ({request.Rating}/5) لعقارك.",
-            ct: ct);
+        // ✅ إصلاح: غير حرج — التقييم محفوظ بالفعل بالسطر أعلاه. لُفّ بـ
+        // try/catch (نفس نمط SendMessageCommandHandler) بعد أن تبيّن أن هذا
+        // الاستدعاء كان بدون حماية ويُسقط POST /api/Reviews بأكمله عند أي
+        // فشل بالإشعار (نفس فئة الخلل الذي أُصلح في RequestVisitCommandHandler).
+        try
+        {
+            await _notifications.NotifyPropertyUpdateAsync(
+                recipientId: property.OwnerId,
+                propertyId: property.Id,
+                propertyTitle: property.Title,
+                type: NotificationType.ReviewAdded,
+                detail: $"تم إضافة تقييم جديد ({request.Rating}/5) لعقارك.",
+                ct: ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to create/send review-added notification. " +
+                "ReviewId={ReviewId}, PropertyId={PropertyId}, ReviewerId={ReviewerId}",
+                review.Id,
+                property.Id,
+                request.ReviewerId);
+        }
 
         return new PropertyReviewDto(
             Id: review.Id,

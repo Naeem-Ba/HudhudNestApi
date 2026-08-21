@@ -116,6 +116,18 @@ public sealed class MessageRepository : IMessageRepository
             ct);
     }
 
+    public async Task<bool> HasAnyConversationAsync(
+        Guid userId1,
+        Guid userId2,
+        CancellationToken ct = default)
+    {
+        return await _db.Messages.AnyAsync(
+            message =>
+                (message.SenderId == userId1 && message.ReceiverId == userId2) ||
+                (message.SenderId == userId2 && message.ReceiverId == userId1),
+            ct);
+    }
+
     public async Task<int> CountUnreadAsync(
         Guid receiverId,
         CancellationToken ct = default)

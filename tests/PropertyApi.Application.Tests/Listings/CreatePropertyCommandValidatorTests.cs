@@ -54,6 +54,16 @@ public sealed class CreatePropertyCommandValidatorTests
         Region: null,
         CountryCode: "DE",
         PostalCode: "10709",
+        // Phase-0 follow-up: Governorate/District/PropertyType are now
+        // required (see CreatePropertyCommandValidator), so the "valid
+        // command" fixture must supply them — NeighborhoodId/NeighborhoodText
+        // stay optional/null, matching real-world coverage gaps.
+        GovernorateId: 1,
+        DistrictId: 1,
+        DistrictText: null,
+        NeighborhoodId: null,
+        NeighborhoodText: null,
+        PropertyTypeId: 1,
         Latitude: null,
         Longitude: null,
         ColdRent: 1200m,

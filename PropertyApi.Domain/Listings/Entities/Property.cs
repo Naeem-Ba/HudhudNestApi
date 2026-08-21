@@ -77,6 +77,15 @@ public class Property : AuditableEntity
     public DateTime? PublishedAt { get; private set; }
     public DateTime? ExpiresAt { get; set; }
 
+    /// <summary>
+    /// Last time the owner explicitly confirmed this listing is still available.
+    /// Phase-0 "freshness" feature: the frontend shows a staleness banner (and the
+    /// search/matching logic can eventually deprioritize) listings that have gone
+    /// too long (30 days) without confirmation. Null means never confirmed —
+    /// treated the same as stale.
+    /// </summary>
+    public DateTime? LastConfirmedAvailableAt { get; private set; }
+
 
     // ── الموقع الجغرافي المنظَّم ──────────────────────────────────────
 
@@ -87,7 +96,30 @@ public class Property : AuditableEntity
     /// </summary>
     public int? GovernorateId { get; set; }
     public int? DistrictId { get; set; }
+
+    /// <summary>
+    /// Manual fallback name when the listing's district isn't in the seeded
+    /// Districts table (a small locality not in the ~65-district seed — see
+    /// GovernoratesSeed.cs). Mutually exclusive in intent with DistrictId
+    /// (the frontend clears one when the other is set). Setting this
+    /// auto-submits a LocationSuggestion for admin review — see
+    /// LocationSuggestionService.
+    /// </summary>
+    public string? DistrictText { get; set; }
+
     public int? NeighborhoodId { get; set; }
+
+    /// <summary>
+    /// Manual fallback name when the listing's neighborhood isn't in the
+    /// seeded Neighborhoods table (true for most of Syria today — see
+    /// NeighborhoodsSeed.cs for which districts are actually covered).
+    /// Mutually exclusive in intent with NeighborhoodId (the frontend clears
+    /// one when the other is set) but nothing at this layer enforces that;
+    /// treat NeighborhoodId as authoritative when both are present. Setting
+    /// this auto-submits a LocationSuggestion for admin review — see
+    /// LocationSuggestionService.
+    /// </summary>
+    public string? NeighborhoodText { get; set; }
 
     /// <summary>
     /// أقرب علامة مميزة — جوهري في سوريا.
@@ -276,6 +308,17 @@ public class Property : AuditableEntity
     public void ChangeStatus(PropertyStatus newStatus)
     {
         Status = newStatus;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Owner explicitly confirms the listing is still available. Cheap, single-tap
+    /// action from the frontend — resets the staleness clock without requiring a
+    /// full edit. See LastConfirmedAvailableAt.
+    /// </summary>
+    public void ConfirmStillAvailable()
+    {
+        LastConfirmedAvailableAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
 }

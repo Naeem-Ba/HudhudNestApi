@@ -7,6 +7,7 @@ using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Domain.Users.Entities;
+using System.Text.RegularExpressions;
 
 namespace PropertyApi.Application.Auth.Commands.Register;
 
@@ -262,8 +263,13 @@ public sealed class RegisterCommandHandler
 public sealed class RegisterCommandValidator
     : AbstractValidator<RegisterCommand>
 {
-    public RegisterCommandValidator()
+    private readonly IPasswordSecurityService _passwordSecurityService;
+
+    public RegisterCommandValidator(
+        IPasswordSecurityService passwordSecurityService)
     {
+        _passwordSecurityService = passwordSecurityService;
+
         RuleFor(x => x.FirstName)
             .NotEmpty()
             .MaximumLength(100);
@@ -286,6 +292,36 @@ public sealed class RegisterCommandValidator
 
         RuleFor(x => x.Password)
             .NotEmpty()
-            .MinimumLength(8);
+            .WithMessage("Password is required.")
+            .MinimumLength(8)
+            .WithMessage("Password must be at least 8 characters long.")
+            .MustAsync(ValidatePasswordSecurityAsync)
+            .WithMessage("Password does not meet security requirements.");
+    }
+
+    /// <summary>
+    /// Async validation for password complexity and breach screening.
+    /// </summary>
+    private async Task<bool> ValidatePasswordSecurityAsync(
+        string password,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(password))
+        {
+            return false;
+        }
+
+        var result = await _passwordSecurityService.ValidatePasswordAsync(
+            password,
+            cancellationToken);
+
+        if (!result.IsValid && result.Errors.Any())
+        {
+            // Store the detailed error message for the validation context
+            throw new ValidationException(
+                string.Join(" ", result.Errors));
+        }
+
+        return result.IsValid;
     }
 }

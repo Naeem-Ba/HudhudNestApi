@@ -14,7 +14,17 @@ internal sealed class SocialSessionIdentityAdapter : ILoginIdentityService
         _inner.RecordSuccessfulLoginAsync(id, at, ct);
     public Task<IdentityAccountSnapshot?> FindByEmailAsync(string email, CancellationToken ct = default) =>
         throw new NotSupportedException();
+#pragma warning disable CS0618
     public Task<bool> CheckPasswordAsync(Guid id, string password, CancellationToken ct = default) =>
+        throw new NotSupportedException();
+#pragma warning restore CS0618
+    public Task<LoginPasswordVerificationResult> VerifyPasswordWithLockoutAsync(Guid id, string password, CancellationToken ct = default) =>
+        throw new NotSupportedException();
+    public Task<bool> IsLockedOutAsync(Guid id, CancellationToken ct = default) =>
+        throw new NotSupportedException();
+    public Task<int> GetAccessFailedCountAsync(Guid id, CancellationToken ct = default) =>
+        throw new NotSupportedException();
+    public Task<DateTimeOffset?> GetLockoutEndAsync(Guid id, CancellationToken ct = default) =>
         throw new NotSupportedException();
 }
 
@@ -28,7 +38,17 @@ internal sealed class PhoneSessionIdentityAdapter : ILoginIdentityService
         Task.FromResult(IdentityOperationResult.Success());
     public Task<IdentityAccountSnapshot?> FindByEmailAsync(string email, CancellationToken ct = default) =>
         throw new NotSupportedException();
+#pragma warning disable CS0618
     public Task<bool> CheckPasswordAsync(Guid id, string password, CancellationToken ct = default) =>
+        throw new NotSupportedException();
+#pragma warning restore CS0618
+    public Task<LoginPasswordVerificationResult> VerifyPasswordWithLockoutAsync(Guid id, string password, CancellationToken ct = default) =>
+        throw new NotSupportedException();
+    public Task<bool> IsLockedOutAsync(Guid id, CancellationToken ct = default) =>
+        throw new NotSupportedException();
+    public Task<int> GetAccessFailedCountAsync(Guid id, CancellationToken ct = default) =>
+        throw new NotSupportedException();
+    public Task<DateTimeOffset?> GetLockoutEndAsync(Guid id, CancellationToken ct = default) =>
         throw new NotSupportedException();
 }
 

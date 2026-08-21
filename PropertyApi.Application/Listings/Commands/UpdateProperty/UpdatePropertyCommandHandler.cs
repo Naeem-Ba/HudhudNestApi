@@ -6,6 +6,11 @@ using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Notifications.Enums;
 
+// Phase-0, Task 2: price-history snapshots are written in this handler, in the
+// SAME SaveChangesAsync as the property update. Do not move this into the
+// NotifyChangesAsync try/catch below — history must persist even if the
+// (best-effort) notification push fails.
+
 namespace PropertyApi.Application.Listings.Commands.UpdateProperty;
 
 /// <summary>
@@ -17,21 +22,27 @@ public sealed class UpdatePropertyCommandHandler
 {
     private readonly IPropertyRepository _repo;
     private readonly IPropertyOwnershipService _ownership;
+    private readonly IPropertyPriceHistoryRepository _priceHistory;
     private readonly IUnitOfWork _uow;
     private readonly INotificationService _notifications;
+    private readonly ILocationSuggestionService _locationSuggestions;
     private readonly ILogger<UpdatePropertyCommandHandler> _logger;
 
     public UpdatePropertyCommandHandler(
         IPropertyRepository repo,
         IPropertyOwnershipService ownership,
+        IPropertyPriceHistoryRepository priceHistory,
         IUnitOfWork uow,
         INotificationService notifications,
+        ILocationSuggestionService locationSuggestions,
         ILogger<UpdatePropertyCommandHandler> logger)
     {
         _repo = repo;
         _ownership = ownership;
+        _priceHistory = priceHistory;
         _uow = uow;
         _notifications = notifications;
+        _locationSuggestions = locationSuggestions;
         _logger = logger;
     }
 
@@ -64,6 +75,13 @@ public sealed class UpdatePropertyCommandHandler
         if (request.CountryCode is not null) property.CountryCode = request.CountryCode.ToUpperInvariant();
         if (request.CurrencyCode is not null) property.CurrencyCode = request.CurrencyCode.ToUpperInvariant();
 
+        if (request.GovernorateId.HasValue) property.GovernorateId = request.GovernorateId;
+        if (request.DistrictId.HasValue) property.DistrictId = request.DistrictId;
+        if (request.DistrictText is not null) property.DistrictText = request.DistrictText;
+        if (request.NeighborhoodId.HasValue) property.NeighborhoodId = request.NeighborhoodId;
+        if (request.NeighborhoodText is not null) property.NeighborhoodText = request.NeighborhoodText;
+        if (request.PropertyTypeId.HasValue) property.PropertyTypeId = request.PropertyTypeId;
+
         if (request.Latitude.HasValue) property.Latitude = request.Latitude;
         if (request.Longitude.HasValue) property.Longitude = request.Longitude;
         if (request.ColdRent.HasValue) property.ColdRent = request.ColdRent;
@@ -95,6 +113,14 @@ public sealed class UpdatePropertyCommandHandler
                 property.Unpublish();
         }
 
+        await RecordPriceChangesAsync(
+            property,
+            oldColdRent,
+            oldWarmRent,
+            oldPurchasePrice,
+            request.RequestingUserId,
+            cancellationToken);
+
         _repo.Update(property);
         await _uow.SaveChangesAsync(cancellationToken);
 
@@ -118,7 +144,64 @@ public sealed class UpdatePropertyCommandHandler
                 property.OwnerId);
         }
 
+        try
+        {
+            if (property.DistrictId is null && !string.IsNullOrWhiteSpace(property.DistrictText) && property.GovernorateId.HasValue)
+            {
+                await _locationSuggestions.SubmitDistrictSuggestionAsync(
+                    property.GovernorateId.Value, property.DistrictText, request.RequestingUserId, property.Id, cancellationToken);
+            }
+
+            if (property.NeighborhoodId is null && !string.IsNullOrWhiteSpace(property.NeighborhoodText) && property.DistrictId.HasValue)
+            {
+                await _locationSuggestions.SubmitNeighborhoodSuggestionAsync(
+                    property.DistrictId.Value, property.NeighborhoodText, request.RequestingUserId, property.Id, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to submit location suggestion for property {PropertyId} — update was still saved successfully.",
+                property.Id);
+        }
+
         return true;
+    }
+
+    /// <summary>
+    /// Writes one PropertyPriceHistory row per price field that actually changed.
+    /// Queued on the same UnitOfWork as the property update itself (SaveChangesAsync
+    /// is called once, after this method returns) so history and the property row
+    /// are always consistent — never lands "half saved".
+    /// </summary>
+    private async Task RecordPriceChangesAsync(
+        Property property,
+        decimal? oldColdRent,
+        decimal? oldWarmRent,
+        decimal? oldPurchasePrice,
+        Guid changedByUserId,
+        CancellationToken cancellationToken)
+    {
+        if (property.ColdRent != oldColdRent)
+        {
+            await _priceHistory.AddAsync(
+                PropertyPriceHistory.Create(property.Id, nameof(property.ColdRent), oldColdRent, property.ColdRent, property.CurrencyCode, changedByUserId),
+                cancellationToken);
+        }
+
+        if (property.WarmRent != oldWarmRent)
+        {
+            await _priceHistory.AddAsync(
+                PropertyPriceHistory.Create(property.Id, nameof(property.WarmRent), oldWarmRent, property.WarmRent, property.CurrencyCode, changedByUserId),
+                cancellationToken);
+        }
+
+        if (property.PurchasePrice != oldPurchasePrice)
+        {
+            await _priceHistory.AddAsync(
+                PropertyPriceHistory.Create(property.Id, nameof(property.PurchasePrice), oldPurchasePrice, property.PurchasePrice, property.CurrencyCode, changedByUserId),
+                cancellationToken);
+        }
     }
 
     private async Task NotifyChangesAsync(

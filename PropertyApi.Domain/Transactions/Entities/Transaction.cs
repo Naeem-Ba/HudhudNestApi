@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -6,14 +6,15 @@ using System.Threading.Tasks;
 
 using PropertyApi.Domain.Common.Entities;
 using PropertyApi.Domain.Common.Exceptions;
+using PropertyApi.Domain.Transactions.Enums;
 
 namespace PropertyApi.Domain.Transactions.Entities;
 
 /// <summary>
-/// سجل مالي لكل عملية مرتبطة بعقار.
-/// لماذا؟ لضمان مسار مراجعة مالي كامل (Audit Trail).
-/// ExchangeRateUsed مهم جداً: يحفظ سعر الصرف وقت العملية
-/// حتى لو تغيّر السعر لاحقاً.
+/// Financial record for a single transaction tied to a property.
+/// Why? To guarantee a full financial audit trail.
+/// ExchangeRateUsed is important: it freezes the exchange rate at the time
+/// of the transaction even if the live rate changes later.
 /// </summary>
 public class Transaction : BaseEntity
 {
@@ -22,27 +23,24 @@ public class Transaction : BaseEntity
     public Guid PayerId { get; private set; }
     public Guid ReceiverId { get; private set; }
 
-    /// <summary>Deposit / RentPayment / SalePayment / Refund / CommissionFee</summary>
-    public string TransactionType { get; private set; } = string.Empty;
+    public TransactionType TransactionType { get; private set; }
 
     public decimal Amount { get; private set; }
     public int CurrencyId { get; private set; }
 
-    /// <summary>المبلغ بالدولار — يُحسب فورياً من سعر الصرف الحالي ويُخزَّن</summary>
+    /// <summary>Amount in USD — computed immediately from the exchange rate in effect and stored.</summary>
     public decimal AmountInUSD { get; private set; }
 
     /// <summary>
-    /// سعر الصرف وقت تنفيذ العملية.
-    /// هذا مختلف عن BasePriceInUSD في Property:
-    /// هنا نحفظه لأن المعاملة المالية تحتاج snapshot تاريخية.
+    /// Exchange rate at the moment the transaction was executed.
+    /// This is different from BasePriceInUSD on Property: here we keep it
+    /// because a financial transaction needs a historical snapshot.
     /// </summary>
     public decimal ExchangeRateUsed { get; private set; }
 
-    /// <summary>Cash / BankTransfer / SyriatelCash / Online</summary>
-    public string PaymentMethod { get; private set; } = string.Empty;
+    public TransactionPaymentMethod PaymentMethod { get; private set; }
 
-    /// <summary>Pending / Completed / Failed / Refunded</summary>
-    public string Status { get; private set; } = "Pending";
+    public TransactionStatus Status { get; private set; } = TransactionStatus.Pending;
 
     public string? ReferenceNumber { get; private set; }
     public string? Notes { get; private set; }
@@ -54,11 +52,11 @@ public class Transaction : BaseEntity
         Guid propertyId,
         Guid payerId,
         Guid receiverId,
-        string transactionType,
+        TransactionType transactionType,
         decimal amount,
         int currencyId,
         decimal exchangeRateToUSD,
-        string paymentMethod,
+        TransactionPaymentMethod paymentMethod,
         Guid? bookingId = null,
         string? referenceNumber = null)
     {
@@ -80,12 +78,12 @@ public class Transaction : BaseEntity
             PaymentMethod = paymentMethod,
             BookingId = bookingId,
             ReferenceNumber = referenceNumber,
-            Status = "Pending",
+            Status = TransactionStatus.Pending,
             TransactedAt = DateTime.UtcNow
         };
     }
 
-    public void MarkCompleted() => Status = "Completed";
-    public void MarkFailed() => Status = "Failed";
-    public void MarkRefunded() => Status = "Refunded";
+    public void MarkCompleted() => Status = TransactionStatus.Completed;
+    public void MarkFailed() => Status = TransactionStatus.Failed;
+    public void MarkRefunded() => Status = TransactionStatus.Refunded;
 }
