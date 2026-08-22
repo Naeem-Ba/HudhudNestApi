@@ -49,6 +49,7 @@ public sealed class StagingTestSupportController : ControllerBase
     }
 
     [HttpPost("cleanup")]
+    [AllowAnonymous] // Not a JWT endpoint: IsAuthorizedTestSupportRequest gates it on Staging + a constant-time secret compare.
     public async Task<IActionResult> Cleanup(
         [FromBody] StagingSmokeCleanupRequest request,
         CancellationToken ct)

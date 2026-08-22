@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Abstractions;
@@ -41,13 +41,16 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
     private readonly ILoginIdentityService _identity;
     private readonly IAuthenticationSessionIssuer _sessions;
     private readonly ILogger<LoginCommandHandler> _logger;
-    private readonly ISecurityAlertService _securityAlerts;
+    private readonly ISecurityAlertDispatcher _securityAlerts;
 
+    // Takes the dispatcher, not ISecurityAlertService. Sending an email from here meant
+    // either awaiting SMTP inside the login request or discarding the task and racing
+    // scope disposal; the queue removes that choice.
     public LoginCommandHandler(
         ILoginIdentityService identity,
         IAuthenticationSessionIssuer sessions,
         ILogger<LoginCommandHandler> logger,
-        ISecurityAlertService securityAlerts)
+        ISecurityAlertDispatcher securityAlerts)
     {
         _identity = identity;
         _sessions = sessions;
@@ -63,7 +66,12 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
         var identity = await _identity.FindByEmailAsync(email, cancellationToken);
         if (identity is null || identity.IsDeleted)
         {
-            _logger.LogWarning("User not found or deleted for email: {Email}", email);
+            // Spend the same hashing time a real verification would, so "no such
+            // account" cannot be told from "wrong password" by response time alone.
+            // Returning here without hashing was a free user-enumeration oracle.
+            await _identity.VerifyDummyPasswordAsync(cancellationToken);
+
+            _logger.LogWarning("Login failed: no active account for the submitted address.");
             return LoginResult.InvalidCredentials();
         }
 
@@ -78,13 +86,17 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
                 failedCount,
                 lockoutEnd);
 
-            // Send account locked notification email (best effort - don't fail login if email fails)
-            _ = _securityAlerts.SendAccountLockedAlertAsync(
-                identity.Email,
-                identity.UserName,
-                lockoutEnd.HasValue ? lockoutEnd.Value.DateTime : (DateTime?)null,
-                request.IpAddress,
-                cancellationToken).ConfigureAwait(false);
+            // A locked account also returned before hashing anything, which made it the
+            // fastest of the three outcomes and therefore identifiable on its own.
+            await _identity.VerifyDummyPasswordAsync(cancellationToken);
+
+            // Hand the alert to the background dispatcher. This used to be
+            // `_ = SendAccountLockedAlertAsync(...)`, a discarded task holding a scoped
+            // ISecurityAlertService and its DbContext past the end of the request scope.
+            QueueAccountLockedAlert(
+                identity,
+                lockoutEnd?.DateTime,
+                request.IpAddress);
 
             return LoginResult.InvalidCredentials();
         }
@@ -104,13 +116,11 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
                 failedCount,
                 passwordVerificationResult);
 
-            // Send security alert emails based on failed attempt count
-            // Best effort - don't fail login if email sending fails
-            _ = SendSecurityAlertEmailAsync(
+            // Same change as the lockout path: queue rather than discard a running task.
+            QueueFailedLoginAlert(
                 identity,
                 failedCount,
-                request.IpAddress,
-                cancellationToken);
+                request.IpAddress);
 
             return LoginResult.InvalidCredentials();
         }
@@ -131,42 +141,53 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
     }
 
     /// <summary>
-    /// Sends appropriate security alert emails based on failed attempt count.
+    /// Queues the "your account is locked" alert, when there is an address to send it to.
+    /// </summary>
+    private void QueueAccountLockedAlert(
+        IdentityAccountSnapshot user,
+        DateTime? lockoutEnd,
+        string? ipAddress)
+    {
+        // Phone-only accounts exist and have nowhere to deliver an email alert.
+        if (string.IsNullOrWhiteSpace(user.Email) ||
+            string.IsNullOrWhiteSpace(user.UserName))
+        {
+            return;
+        }
+
+        _securityAlerts.Enqueue(new SecurityAlertRequest(
+            SecurityAlertKind.AccountLocked,
+            UserEmail: user.Email,
+            UserName: user.UserName,
+            IpAddress: ipAddress,
+            LockoutEnd: lockoutEnd));
+    }
+
+    /// <summary>
+    /// Queues the appropriate security alert based on failed attempt count.
     /// Alert levels:
     /// - 3 attempts: Warning email
     /// - 4 attempts: Critical warning with password change request
     /// </summary>
-    private async Task SendSecurityAlertEmailAsync(
+    private void QueueFailedLoginAlert(
         IdentityAccountSnapshot user,
         int failedAttemptCount,
-        string? ipAddress,
-        CancellationToken cancellationToken)
+        string? ipAddress)
     {
-        try
+        if (failedAttemptCount is not (3 or 4) ||
+            string.IsNullOrWhiteSpace(user.Email) ||
+            string.IsNullOrWhiteSpace(user.UserName))
         {
-            if (failedAttemptCount is 3 or 4 &&
-                !string.IsNullOrWhiteSpace(user.Email) &&
-                !string.IsNullOrWhiteSpace(user.UserName))
-            {
-                // Send warning/critical alert
-                await _securityAlerts.SendFailedLoginAttemptAlertAsync(
-                    user.Email!,
-                    user.UserName!,
-                    failedAttemptCount,
-                    ipAddress,
-                    DateTime.UtcNow,
-                    cancellationToken);
-            }
+            return;
         }
-        catch (Exception ex)
-        {
-            // Log but don't throw - email is best effort
-            _logger.LogError(
-                ex,
-                "Failed to send security alert email for user {UserId} with {FailedCount} failed attempts",
-                user.IdentityId,
-                failedAttemptCount);
-        }
+
+        _securityAlerts.Enqueue(new SecurityAlertRequest(
+            SecurityAlertKind.FailedLoginAttempt,
+            UserEmail: user.Email,
+            UserName: user.UserName,
+            IpAddress: ipAddress,
+            FailedAttemptCount: failedAttemptCount,
+            AttemptTimeUtc: DateTime.UtcNow));
     }
 }
 

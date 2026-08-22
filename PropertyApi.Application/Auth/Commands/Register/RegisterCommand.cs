@@ -295,33 +295,49 @@ public sealed class RegisterCommandValidator
             .WithMessage("Password is required.")
             .MinimumLength(8)
             .WithMessage("Password must be at least 8 characters long.")
-            .MustAsync(ValidatePasswordSecurityAsync)
-            .WithMessage("Password does not meet security requirements.");
+            .CustomAsync(ValidatePasswordSecurityAsync);
     }
 
     /// <summary>
     /// Async validation for password complexity and breach screening.
+    ///
+    /// BUG FIX: this used to `throw new ValidationException(...)` from inside a
+    /// MustAsync rule. That type is FluentValidation's — not the application's
+    /// own Common.Exceptions.ValidationException that ExceptionHandlingMiddleware
+    /// knows about — so every weak or breached password escaped the validation
+    /// pipeline and surfaced to the caller as HTTP 500 instead of 422, and the
+    /// per-rule messages produced by IPasswordSecurityService never reached the
+    /// client at all. A validator reports failures through the context; it does
+    /// not throw.
     /// </summary>
-    private async Task<bool> ValidatePasswordSecurityAsync(
+    private async Task ValidatePasswordSecurityAsync(
         string password,
+        ValidationContext<RegisterCommand> context,
         CancellationToken cancellationToken)
     {
+        // NotEmpty/MinimumLength above already reported their own failures for
+        // these; re-running the security check would only add noise.
         if (string.IsNullOrEmpty(password))
         {
-            return false;
+            return;
         }
 
         var result = await _passwordSecurityService.ValidatePasswordAsync(
             password,
             cancellationToken);
 
-        if (!result.IsValid && result.Errors.Any())
+        if (result.IsValid)
         {
-            // Store the detailed error message for the validation context
-            throw new ValidationException(
-                string.Join(" ", result.Errors));
+            return;
         }
 
-        return result.IsValid;
+        // Surface every individual reason (length, character classes, breach)
+        // rather than collapsing them into one opaque message.
+        foreach (var error in result.Errors)
+        {
+            context.AddFailure(
+                nameof(RegisterCommand.Password),
+                error);
+        }
     }
 }

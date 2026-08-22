@@ -368,6 +368,48 @@ jobs:
 
           SQL
 
+      # A "failing tests block the merge" guarantee is only as good as the set of
+      # tests that actually run. dotnet test already fails the job on a red test
+      # (no continue-on-error anywhere in this workflow), but a test project that
+      # is never invoked can go red indefinitely without anyone noticing. This step
+      # fails when a project under tests/ is neither run below nor explicitly
+      # delegated to another workflow, so adding a new suite forces that decision.
+      - name: Every test project must have an owner
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          owned="
+          PropertyApi.Application.Tests|this job
+          PropertyApi.Auth.Tests|this job
+          PropertyApi.Integration.Tests|this job
+          PropertyApi.Architecture.Tests|this job
+          PropertyApi.Observability.Tests|this job
+          PropertyApi.Concurrency.Tests|performance-validation.yml
+          PropertyApi.Performance.Tests|performance-validation.yml
+          PropertyApi.StagingSmokeTests|runs against a deployed Staging environment
+          "
+
+          missing=""
+          for project in tests/*/*.csproj; do
+            suite="$(basename "$(dirname "$project")")"
+            owner="$(printf '%s\n' "$owned" | grep "^${suite}|" | cut -d'|' -f2 || true)"
+
+            if [ -z "$owner" ]; then
+              missing="$missing $suite"
+            else
+              echo "  $suite -> $owner"
+            fi
+          done
+
+          if [ -n "$missing" ]; then
+            echo "::error::Test projects with no owning workflow:$missing"
+            echo "Run them in this job, or record which workflow owns them in this step."
+            exit 1
+          fi
+
+          echo "All test projects are accounted for."
+
       - name: Run Application tests
         run: >
           dotnet test
@@ -430,7 +472,26 @@ jobs:
           --logger "console;verbosity=minimal"
           --logger "trx;LogFileName=architecture-tests.trx"
 
+      # observability-validation.yml also runs these, but it is path-filtered to
+      # PropertyApi/Observability/** and observability/**. A change anywhere else
+      # that breaks them would not trigger it, so they run here unconditionally too.
+      - name: Run Observability tests
+        run: >
+          dotnet test
+          tests/PropertyApi.Observability.Tests/PropertyApi.Observability.Tests.csproj
+          --configuration Release
+          --no-build
+          --no-restore
+          --collect:"XPlat Code Coverage"
+          --results-directory artifacts/test-results/observability
+          --logger "console;verbosity=minimal"
+          --logger "trx;LogFileName=observability-tests.trx"
+
+      # if: always() so the .trx-based gate still reports when an earlier suite
+      # failed. The job is already red at that point; this makes the summary say
+      # which suite and how many tests, instead of stopping at the first failure.
       - name: Validate test result files
+        if: always()
         shell: pwsh
         run: |
           ./scripts/validate-test-results.ps1 `

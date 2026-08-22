@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Domain.Enums;
 
@@ -37,6 +38,7 @@ public sealed class EnumController : ControllerBase
     /// GET /api/enums/STATUS
     /// </summary>
     [HttpGet("{name}")]
+    [AllowAnonymous] // Public enum metadata used to render forms.
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public IActionResult Get(string name)
@@ -67,6 +69,7 @@ public sealed class EnumController : ControllerBase
     /// Returns all supported enum groups.
     /// </summary>
     [HttpGet]
+    [AllowAnonymous] // Public enum metadata used to render forms.
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult GetAll()
     {

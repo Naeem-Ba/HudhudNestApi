@@ -20,6 +20,7 @@ internal sealed class SocialSessionIdentityAdapter : ILoginIdentityService
 #pragma warning restore CS0618
     public Task<LoginPasswordVerificationResult> VerifyPasswordWithLockoutAsync(Guid id, string password, CancellationToken ct = default) =>
         throw new NotSupportedException();
+    public Task VerifyDummyPasswordAsync(CancellationToken ct = default) => Task.CompletedTask;
     public Task<bool> IsLockedOutAsync(Guid id, CancellationToken ct = default) =>
         throw new NotSupportedException();
     public Task<int> GetAccessFailedCountAsync(Guid id, CancellationToken ct = default) =>
@@ -44,6 +45,7 @@ internal sealed class PhoneSessionIdentityAdapter : ILoginIdentityService
 #pragma warning restore CS0618
     public Task<LoginPasswordVerificationResult> VerifyPasswordWithLockoutAsync(Guid id, string password, CancellationToken ct = default) =>
         throw new NotSupportedException();
+    public Task VerifyDummyPasswordAsync(CancellationToken ct = default) => Task.CompletedTask;
     public Task<bool> IsLockedOutAsync(Guid id, CancellationToken ct = default) =>
         throw new NotSupportedException();
     public Task<int> GetAccessFailedCountAsync(Guid id, CancellationToken ct = default) =>

@@ -15,6 +15,7 @@ public sealed class PasswordSecurityServiceTests
 {
     private readonly Mock<HttpMessageHandler> _httpHandlerMock;
     private readonly HttpClient _httpClient;
+    private readonly PwnedPasswordsCircuitBreaker _circuitBreaker;
     private readonly IPasswordSecurityService _service;
 
     public PasswordSecurityServiceTests()
@@ -23,7 +24,14 @@ public sealed class PasswordSecurityServiceTests
         _httpClient = new HttpClient(_httpHandlerMock.Object);
         var loggerMock = new Mock<ILogger<PasswordSecurityService>>();
 
-        _service = new PasswordSecurityService(_httpClient, loggerMock.Object);
+        // A fresh breaker per test: closed, with no failures carried over from a
+        // neighbouring test.
+        _circuitBreaker = new PwnedPasswordsCircuitBreaker(TimeProvider.System);
+
+        _service = new PasswordSecurityService(
+            _httpClient,
+            loggerMock.Object,
+            _circuitBreaker);
     }
 
     #region Length Tests
@@ -116,7 +124,13 @@ public sealed class PasswordSecurityServiceTests
     public async Task ValidatePasswordAsync_WithMultipleComplexityViolations_ReturnsAllErrors()
     {
         // Arrange
-        var password = "pass";
+        // BUG FIX: the previous password here was "pass", which is entirely lowercase --
+        // so the assertion that a *lowercase* error is reported could never hold, and the
+        // test failed for a defect it had invented rather than one in the service.
+        // "PASS" violates four rules at once (too short, no lowercase, no digit, no
+        // special character), which is what this test exists to prove: every violation is
+        // reported, not just the first one.
+        var password = "PASS";
 
         // Act
         var result = await _service.ValidatePasswordAsync(password);
@@ -125,9 +139,9 @@ public sealed class PasswordSecurityServiceTests
         Assert.False(result.IsValid);
         Assert.True(result.Errors.Count >= 4, $"Expected at least 4 errors, got {result.Errors.Count}");
         Assert.Contains(result.Errors, e => e.Contains("8", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(result.Errors, e => e.Contains("uppercase", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(result.Errors, e => e.Contains("lowercase", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(result.Errors, e => e.Contains("digit", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Errors, e => e.Contains("special character", StringComparison.OrdinalIgnoreCase));
     }
 
     #endregion
@@ -239,25 +253,159 @@ public sealed class PasswordSecurityServiceTests
 
     #region Common Passwords Tests
 
+    // BUG FIX: these used to be one [Theory] asserting that four weak passwords are
+    // rejected, with no HTTP mock at all. Three of them pass the character-class rules
+    // and are only caught by breach screening -- and with an un-stubbed handler that
+    // screening fails open, so the test asserted a rejection that never happened. The
+    // two mechanisms are now separated so each one is actually exercised.
+
     [Theory]
-    [InlineData("12345678")]        // Sequential numbers
-    [InlineData("Qwerty123!")]       // Keyboard pattern
-    [InlineData("Password1!")]       // Too common
-    [InlineData("Aa123456!")]        // Too simple
-    public async Task ValidatePasswordAsync_WithCommonWeakPatterns_ShouldFailComplexity(string password)
+    [InlineData("12345678")]   // digits only: no uppercase, no lowercase, no special
+    [InlineData("abcdefgh")]   // letters only: no uppercase, no digit, no special
+    public async Task ValidatePasswordAsync_WithLocallyWeakPatterns_FailsWithoutCallingBreachApi(string password)
     {
+        // No API mock on purpose: character-class rules must reject these offline,
+        // and ValidatePasswordAsync returns early without ever reaching the network.
+
         // Act
         var result = await _service.ValidatePasswordAsync(password);
 
         // Assert
-        // Note: These will fail at complexity check before breach check
-        // (except "Password1!" which would theoretically pass complexity but fail at breach)
         Assert.False(result.IsValid);
+
+        _httpHandlerMock
+            .Protected()
+            .Verify(
+                "SendAsync",
+                Times.Never(),
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("Qwerty123!")]   // keyboard pattern as the base word
+    [InlineData("Password1!")]   // common base word plus decoration
+    [InlineData("PASSWORD!")]    // same word, different case
+    [InlineData("Aa123456!")]    // six sequential digits
+    [InlineData("Xy!aaaaa1")]    // five repeated characters
+    public async Task ValidatePasswordAsync_WithCommonPatterns_RejectedLocallyWithoutCallingBreachApi(string password)
+    {
+        // These pass every character-class rule, so before the local pattern checks the
+        // only thing standing between them and a new account was breach screening --
+        // which fails open, and so accepted them whenever Have I Been Pwned was
+        // unreachable. Rejecting them locally removes that external dependency, and
+        // asserting the API was never called is what proves the check is local.
+
+        // Act
+        var result = await _service.ValidatePasswordAsync(password);
+
+        // Assert
+        Assert.False(result.IsValid);
+
+        _httpHandlerMock
+            .Protected()
+            .Verify(
+                "SendAsync",
+                Times.Never(),
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("MyPassword123!")]        // a real word in front changes the guess space
+    [InlineData("SecurePass123!")]
+    [InlineData("StrongPass!123")]
+    [InlineData("Complex$Pass99")]
+    [InlineData("UniqueP@ssw0rdXyz789")]
+    public async Task ValidatePasswordAsync_WithStrongPasswords_NotCaughtByPatternRules(string password)
+    {
+        // The guard against the rules above being too eager. Every value here is a
+        // password a real user could reasonably pick, and several are fixtures other
+        // suites register with -- if a pattern rule starts rejecting these, it is the
+        // rule that is wrong.
+
+        // Arrange
+        MockSuccessfulApiResponse();
+
+        // Act
+        var result = await _service.ValidatePasswordAsync(password);
+
+        // Assert
+        Assert.True(
+            result.IsValid,
+            $"'{password}' should be accepted but was rejected: {string.Join(" | ", result.Errors)}");
+    }
+
+    #endregion
+
+    #region Breach-screening circuit breaker
+
+    [Fact]
+    public async Task ValidatePasswordAsync_AfterRepeatedApiFailures_StopsCallingTheApi()
+    {
+        // Arrange
+        MockApiFailure();
+        const string password = "UniqueP@ssw0rdXyz789";
+
+        // Act: enough consecutive failures to trip the breaker, then more calls.
+        for (var i = 0; i < PwnedPasswordsCircuitBreaker.FailureThreshold; i++)
+        {
+            var duringOutage = await _service.ValidatePasswordAsync(password);
+            Assert.True(duringOutage.IsValid, "Screening must fail open, not block registration.");
+        }
+
+        var afterTripping = await _service.ValidatePasswordAsync(password);
+
+        // Assert: still fails open, but no longer pays for a call that cannot succeed.
+        Assert.True(afterTripping.IsValid);
+
+        _httpHandlerMock
+            .Protected()
+            .Verify(
+                "SendAsync",
+                Times.Exactly(PwnedPasswordsCircuitBreaker.FailureThreshold),
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ValidatePasswordAsync_WithHealthyApi_KeepsCircuitClosed()
+    {
+        // Arrange
+        MockSuccessfulApiResponse();
+        const string password = "UniqueP@ssw0rdXyz789";
+
+        // Act
+        for (var i = 0; i < PwnedPasswordsCircuitBreaker.FailureThreshold + 2; i++)
+        {
+            Assert.True((await _service.ValidatePasswordAsync(password)).IsValid);
+        }
+
+        // Assert: a healthy API is called every time.
+        _httpHandlerMock
+            .Protected()
+            .Verify(
+                "SendAsync",
+                Times.Exactly(PwnedPasswordsCircuitBreaker.FailureThreshold + 2),
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>());
     }
 
     #endregion
 
     #region Helper Methods
+
+    /// <summary>
+    /// The k-anonymity suffix the service looks for: SHA-1 of the password,
+    /// uppercase hex, minus the 5-character prefix it sends to the API.
+    /// </summary>
+    private static string Sha1Suffix(string password)
+    {
+        var hash = System.Security.Cryptography.SHA1.HashData(
+            System.Text.Encoding.UTF8.GetBytes(password));
+
+        return Convert.ToHexString(hash)[5..];
+    }
 
     private void MockSuccessfulApiResponse()
     {
@@ -285,9 +433,17 @@ public sealed class PasswordSecurityServiceTests
 
     private void MockBreachedPasswordResponse(string password)
     {
-        // Simulate a response containing the password hash
+        // BUG FIX: this used to ignore its `password` argument and return two
+        // hardcoded suffixes that could never match SHA-1(password), so the
+        // "breached password is rejected" test was asserting against a response
+        // that simulated a *clean* password. Build the range response the way
+        // api.pwnedpasswords.com actually would: the real 35-character suffix of
+        // the password's SHA-1, plus unrelated entries around it.
+        var suffix = Sha1Suffix(password);
+
         var content = new StringContent(
             "0001E4C9F3F0FD769557CF48C4D68D5E4D0:1\n" +
+            $"{suffix}:42\n" +
             "0005A671C18E6E6D51B6C6469B0FF6F9DBA:2\n",
             System.Text.Encoding.UTF8,
             "text/plain");

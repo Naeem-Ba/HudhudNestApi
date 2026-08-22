@@ -65,4 +65,21 @@ public static class ApplicationTelemetry
             new KeyValuePair<string, object?>("outcome", outcome),
             new KeyValuePair<string, object?>("authentication_method", method));
     }
+
+    private static readonly Counter<long> BreachScreeningCounter =
+        Meter.CreateCounter<long>(
+            "auth.password_breach_screening",
+            unit: "checks",
+            description:
+                "Password breach-screening attempts by outcome. Screening fails open, so " +
+                "'unavailable' and 'circuit_open' mean passwords were accepted without " +
+                "being checked -- alert on those rather than reading silence as safety.");
+
+    /// <summary>
+    /// Outcome is one of: clean, breached, unavailable, circuit_open.
+    /// </summary>
+    public static void RecordPasswordBreachScreening(string outcome)
+        => BreachScreeningCounter.Add(
+            1,
+            new KeyValuePair<string, object?>("outcome", outcome));
 }

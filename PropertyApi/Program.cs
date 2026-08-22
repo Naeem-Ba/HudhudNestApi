@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -236,6 +237,27 @@ builder.Services
 
 builder.Services.AddAuthorization(options =>
 {
+    // SECURITY FIX: default-deny.
+    //
+    // Without a fallback policy, ASP.NET Core leaves an endpoint that carries no
+    // [Authorize] and no [AllowAnonymous] open to anonymous callers. Being public was
+    // therefore the result of forgetting an attribute, not of deciding anything --
+    // one missed attribute in a future review would silently publish an endpoint, and
+    // nothing in the build or the test suite would notice.
+    //
+    // With this policy the default is reversed: an unannotated endpoint returns 401,
+    // and every public endpoint has to say [AllowAnonymous] out loud. All 107 existing
+    // endpoints were audited before this was switched on; the 13 that were public by
+    // omission now carry the attribute explicitly, and PublicEndpointPolicyTests fails
+    // the build if a new endpoint is added without an explicit decision either way.
+    //
+    // Note this only governs endpoint routing. Health checks call .AllowAnonymous()
+    // themselves, and the Swagger middleware runs before UseAuthorization, so neither
+    // is affected.
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+
     options.AddPolicy(RoleNames.Agent, policy =>
         policy.RequireRole(RoleNames.Agent));
 });
@@ -550,7 +572,6 @@ app.UseRouting();
 app.UseCors("DefaultCors");
 
 app.UseAuthentication();
-app.UseMiddleware<PropertyApi.Security.LegacyPhoneOtpDeprecationMiddleware>();
 app.UseMiddleware<PropertyApi.Security.PhoneVerificationRestrictionMiddleware>();
 
 if (useRedisRateLimiting)

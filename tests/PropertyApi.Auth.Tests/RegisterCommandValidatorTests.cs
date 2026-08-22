@@ -18,6 +18,20 @@ public sealed class RegisterCommandValidatorTests
     public RegisterCommandValidatorTests()
     {
         _passwordSecurityServiceMock = new Mock<IPasswordSecurityService>();
+
+        // Default: any password the test does not care about passes security screening.
+        //
+        // Without this, Moq returns a completed Task whose Result is null for every
+        // un-stubbed call, so the validator's password rule threw NullReferenceException
+        // and every FirstName/LastName/Email test failed for a reason that had nothing
+        // to do with what it was asserting. Tests that exercise password screening
+        // override this with their own Setup for their specific password.
+        _passwordSecurityServiceMock
+            .Setup(x => x.ValidatePasswordAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(PasswordValidationResult.Success());
+
         _validator = new RegisterCommandValidator(_passwordSecurityServiceMock.Object);
     }
 

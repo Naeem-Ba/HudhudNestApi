@@ -148,6 +148,9 @@ internal sealed class FaultingPureIdentityService
             password,
             ct);
 
+    public Task VerifyDummyPasswordAsync(CancellationToken ct = default)
+        => ((ILoginIdentityService)_inner).VerifyDummyPasswordAsync(ct);
+
     public Task<bool> IsLockedOutAsync(
         Guid identityId,
         CancellationToken ct = default)

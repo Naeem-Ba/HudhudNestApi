@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text.Json;
+
 namespace PropertyApi.Integration.Tests.CI;
 
 public sealed class CICDPipelineTests
@@ -218,6 +221,84 @@ public sealed class CICDPipelineTests
         foreach (var file in requiredFiles)
         {
             Assert.True(File.Exists(file), $"Required supply-chain asset was not found: {file}");
+        }
+    }
+
+    [Fact(DisplayName = "Vulnerability exception policy must be enforced, not merely declared")]
+    public void VulnerabilityExceptionPolicy_Should_Be_Read_By_TheGate()
+    {
+        // vulnerability-exceptions.json declares exceptionsRequireOwner,
+        // exceptionsRequireExpiration and exceptionsRequireRemediationIssue. Asserting
+        // the file exists -- which the test above does -- says nothing about whether
+        // anything acts on it, and for a long time nothing did: the baseline carried 17
+        // suppressions with no owner, no date and no issue, and the gate passed every
+        // build. This pins the gate to actually reading the policy and applying it.
+        var repoRoot = FindRepositoryRoot();
+        var gate = File.ReadAllText(Path.Combine(repoRoot, "ci", "check-vulnerable-packages.ps1"));
+
+        Assert.Contains("vulnerability-exceptions.json", gate, StringComparison.Ordinal);
+
+        foreach (var flag in new[]
+                 {
+                     "exceptionsRequireOwner",
+                     "exceptionsRequireExpiration",
+                     "exceptionsRequireRemediationIssue",
+                     "wildcardExceptionsAllowed"
+                 })
+        {
+            Assert.True(
+                gate.Contains(flag, StringComparison.Ordinal),
+                $"check-vulnerable-packages.ps1 does not act on the '{flag}' policy flag, " +
+                "so vulnerability-exceptions.json is documentation rather than a gate.");
+        }
+
+        // A suppression whose advisory no longer appears in the scan has to be removed,
+        // otherwise the baseline only ever grows and the gate reports "passed with
+        // baseline" over a clean scan.
+        Assert.Contains("staleAdvisories", gate, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "Every accepted advisory must carry owner, expiry and remediation issue")]
+    public void VulnerabilityBaseline_Entries_Should_Be_FullyGoverned()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var baselinePath = Path.Combine(repoRoot, "ci", "vulnerability-baseline.json");
+
+        using var document = JsonDocument.Parse(File.ReadAllText(baselinePath));
+
+        if (!document.RootElement.TryGetProperty("acceptedAdvisories", out var accepted))
+        {
+            Assert.Fail("vulnerability-baseline.json has no 'acceptedAdvisories' array.");
+            return;
+        }
+
+        foreach (var entry in accepted.EnumerateArray())
+        {
+            var id = entry.TryGetProperty("id", out var idValue) ? idValue.GetString() : null;
+            Assert.False(string.IsNullOrWhiteSpace(id), "An accepted advisory has no 'id'.");
+
+            foreach (var field in new[] { "package", "reason", "owner", "expiresOn", "remediationIssue" })
+            {
+                Assert.True(
+                    entry.TryGetProperty(field, out var value) &&
+                    !string.IsNullOrWhiteSpace(value.GetString()),
+                    $"Accepted advisory '{id}' is missing '{field}'. Shipping a known " +
+                    "vulnerability requires naming who owns it, when the exception ends, " +
+                    "and where its removal is tracked.");
+            }
+
+            Assert.True(
+                DateTime.TryParseExact(
+                    entry.GetProperty("expiresOn").GetString(),
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var expiresOn),
+                $"Accepted advisory '{id}' has an unparseable 'expiresOn'. Use YYYY-MM-DD.");
+
+            Assert.True(
+                expiresOn.Date >= DateTime.UtcNow.Date,
+                $"Accepted advisory '{id}' expired on {expiresOn:yyyy-MM-dd}.");
         }
     }
 

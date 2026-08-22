@@ -103,6 +103,16 @@ internal static class AuthInfrastructureRegistration
         services.AddScoped<SecurityAlertEmailService>();
         services.AddScoped<ISecurityAlertService>(
             sp => sp.GetRequiredService<SecurityAlertEmailService>());
+
+        // One singleton serving two roles: the queue that request handlers write to, and
+        // the hosted worker that drains it. Registered by instance so both resolve to the
+        // same object -- AddHostedService<T>() alone would create a second one, and alerts
+        // enqueued on the singleton would sit in a channel nobody reads.
+        services.AddSingleton<SecurityAlertBackgroundService>();
+        services.AddSingleton<ISecurityAlertDispatcher>(
+            sp => sp.GetRequiredService<SecurityAlertBackgroundService>());
+        services.AddHostedService(
+            sp => sp.GetRequiredService<SecurityAlertBackgroundService>());
 #pragma warning disable CS0618 // Compatibility facade is intentionally registered during staged migration.
         services.AddScoped<IIdentityCapabilityAdapter, PureIdentityService>();
 #pragma warning restore CS0618
