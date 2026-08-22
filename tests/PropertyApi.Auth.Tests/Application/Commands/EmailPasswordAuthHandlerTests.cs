@@ -161,7 +161,7 @@ public sealed class LoginCommandHandlerTests
                     It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var securityAlerts = new Mock<ISecurityAlertService>();
+        var securityAlerts = new Mock<ISecurityAlertDispatcher>();
 
         var handler =
             new LoginCommandHandler(
@@ -313,7 +313,7 @@ public sealed class LoginCommandHandlerTests
         var refreshRepo =
             new Mock<IRefreshTokenRepository>();
 
-        var securityAlerts = new Mock<ISecurityAlertService>();
+        var securityAlerts = new Mock<ISecurityAlertDispatcher>();
 
         var handler =
             new LoginCommandHandler(

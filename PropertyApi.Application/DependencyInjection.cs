@@ -62,18 +62,22 @@ public static class DependencyInjection
         services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<IPropertyOwnershipService, PropertyOwnershipService>();
 
-        // Password security service
-        // Validates password complexity and checks against breach databases
-        services.AddScoped<IPasswordSecurityService>(provider =>
-        {
-            var httpClient = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(5)
-            };
-            httpClient.DefaultRequestHeaders.Add("User-Agent", "PropertyApi-PasswordValidator/1.0");
+        // Password security service.
+        // Validates password complexity, rejects common patterns locally, and screens
+        // against Have I Been Pwned.
+        //
+        // The breaker is a singleton on purpose: it counts consecutive failures across
+        // requests, which a scoped instance could never see.
+        services.AddSingleton<PwnedPasswordsCircuitBreaker>();
 
-            var logger = provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PasswordSecurityService>>();
-            return new PasswordSecurityService(httpClient, logger);
+        // Was `new HttpClient(...)` inside a scoped factory: one client per request
+        // scope, never disposed, so sockets accumulated in TIME_WAIT and DNS changes
+        // were never picked up. AddHttpClient pools the handler -- the same pattern
+        // already used for AppleTokenVerifier, HttpSmsService and Cloudinary.
+        services.AddHttpClient<IPasswordSecurityService, PasswordSecurityService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(5);
+            client.DefaultRequestHeaders.Add("User-Agent", "PropertyApi-PasswordValidator/1.0");
         });
 
         return services;

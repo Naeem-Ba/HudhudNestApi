@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using PropertyApi.Application.Amenities.Queries.GetAmenities;
@@ -14,6 +15,7 @@ public sealed class AmenitiesController : ControllerBase
         => _sender = sender;
 
     [HttpGet]
+    [AllowAnonymous] // Public amenity lookup: consumed by the search filters before sign-in.
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {

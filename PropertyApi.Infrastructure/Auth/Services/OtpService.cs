@@ -1,4 +1,5 @@
-﻿using System.Security.Cryptography;
+﻿using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using PropertyApi.Application.Auth.Interfaces;
@@ -47,13 +48,18 @@ public sealed class OtpService : IOtpService
     /// </summary>
     public (string otp, string hash) Generate()
     {
-        // RandomNumberGenerator → آمن تشفيرياً (أقوى من Random)
-        var bytes = new byte[4];
-        RandomNumberGenerator.Fill(bytes);
-
-        // نحوّله لرقم من 0-999999 ثم نملأه بالأصفار لنضمن 6 أرقام
-        var number = Math.Abs(BitConverter.ToInt32(bytes, 0)) % 1_000_000;
-        var otp = number.ToString("D6"); // "D6" = 6 أرقام مع أصفار إذا لزم
+        // إصلاح: كان الكود يستعمل Math.Abs(BitConverter.ToInt32(bytes, 0)) % 1_000_000
+        // وفيه عيبان:
+        //   • Math.Abs(int.MinValue) يرمي OverflowException — احتمال 1 من 2^32 لكل
+        //     توليد، أي فشل إرسال OTP عشوائي غير قابل لإعادة الإنتاج.
+        //   • باقي القسمة على 10^6 يُدخِل انحيازاً: القيم دون 483,648 أكثر احتمالاً.
+        //
+        // GetInt32 يعالج الاثنين معاً — توزيع منتظم بلا استثناء، ولا يزال
+        // عشوائياً آمناً تشفيرياً (نفس مصدر RandomNumberGenerator).
+        // "D6" = ستة أرقام مع أصفار بادئة إذا لزم.
+        var otp = RandomNumberGenerator
+            .GetInt32(0, 1_000_000)
+            .ToString("D6", CultureInfo.InvariantCulture);
 
         var hash = ComputeHash(otp);
 

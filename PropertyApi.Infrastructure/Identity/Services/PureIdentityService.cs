@@ -35,6 +35,7 @@ public sealed class PureIdentityService : IIdentityCapabilityAdapter
     public Task<IdentityOperationResult> AddLoginAsync(Guid id, string provider, string key, string display, CancellationToken ct = default) => _access.AddLoginAsync(id, provider, key, display, ct);
     public Task<LoginPasswordVerificationResult> VerifyPasswordWithLockoutAsync(Guid id, string password, CancellationToken ct = default) =>
         _access.VerifyPasswordWithLockoutAsync(id, password, ct);
+    public Task VerifyDummyPasswordAsync(CancellationToken ct = default) => _access.VerifyDummyPasswordAsync(ct);
 
 #pragma warning disable CS0618
     [Obsolete("Use VerifyPasswordWithLockoutAsync instead to include account lockout protection.")]

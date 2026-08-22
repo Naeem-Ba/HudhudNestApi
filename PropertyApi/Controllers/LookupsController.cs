@@ -17,21 +17,25 @@ public sealed class LookupsController : ControllerBase
     }
 
     [HttpGet("amenities")]
+    [AllowAnonymous] // Public reference data.
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAmenities(CancellationToken ct)
         => Ok(await _lookups.GetAmenitiesAsync(ct));
 
     [HttpGet("categories")]
+    [AllowAnonymous] // Public reference data.
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCategories(CancellationToken ct)
         => Ok(await _lookups.GetCategoriesAsync(ct));
 
     [HttpGet("property-types")]
+    [AllowAnonymous] // Public reference data.
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPropertyTypes(CancellationToken ct)
         => Ok(await _lookups.GetPropertyTypesAsync(ct));
 
     [HttpGet("cities")]
+    [AllowAnonymous] // Public reference data.
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCities(CancellationToken ct)
         => Ok(await _lookups.GetCitiesAsync(ct));
@@ -42,11 +46,13 @@ public sealed class LookupsController : ControllerBase
     // ICommonLookupService for the full explanation.
 
     [HttpGet("governorates")]
+    [AllowAnonymous] // Public reference data.
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetGovernorates([FromQuery] string countryCode, CancellationToken ct)
         => Ok(await _lookups.GetGovernoratesAsync(string.IsNullOrWhiteSpace(countryCode) ? "SY" : countryCode, ct));
 
     [HttpGet("districts")]
+    [AllowAnonymous] // Public reference data.
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetDistricts([FromQuery] int governorateId, CancellationToken ct)
@@ -58,6 +64,7 @@ public sealed class LookupsController : ControllerBase
     }
 
     [HttpGet("neighborhoods")]
+    [AllowAnonymous] // Public reference data.
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetNeighborhoods([FromQuery] int districtId, CancellationToken ct)
@@ -75,6 +82,7 @@ public sealed class LookupsController : ControllerBase
     /// see LookupsApiService on the frontend).
     /// </summary>
     [HttpGet("property-type-catalog")]
+    [AllowAnonymous] // Public reference data.
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPropertyTypeCatalog(CancellationToken ct)
         => Ok(await _lookups.GetPropertyTypeCatalogAsync(ct));

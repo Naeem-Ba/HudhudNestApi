@@ -45,7 +45,7 @@ public sealed class ExceptionHandlingMiddleware
         }
         catch (ValidationException ex)
         {
-            // 422 — fluentvalidation errors from ValidationBehavior
+            // 422 ï¿½ fluentvalidation errors from ValidationBehavior
             _logger.LogWarning("Validation errors: {@Errors}", ex.Errors);
 
             await WriteJson(context, StatusCodes.Status422UnprocessableEntity, new
@@ -53,6 +53,32 @@ public sealed class ExceptionHandlingMiddleware
                 title = "Validation Error",
                 status = StatusCodes.Status422UnprocessableEntity,
                 errors = ex.Errors
+            });
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            // Safety net. ValidationBehavior normally converts FluentValidation
+            // results into the application's own ValidationException above, so
+            // reaching here means a validator threw from inside a rule instead
+            // of reporting through the context (see RegisterCommandValidator).
+            // Without this catch such a throw became an opaque HTTP 500 â€” the
+            // caller lost the reason their input was rejected.
+            _logger.LogWarning(
+                "A validator threw FluentValidation.ValidationException instead of reporting " +
+                "failures through the validation context for {Method} {Path}. Errors: {@Errors}",
+                context.Request.Method,
+                context.Request.Path,
+                ex.Errors.Select(failure => failure.ErrorMessage));
+
+            var errors = ex.Errors
+                .GroupBy(failure => failure.PropertyName, failure => failure.ErrorMessage)
+                .ToDictionary(group => group.Key, group => group.ToArray());
+
+            await WriteJson(context, StatusCodes.Status422UnprocessableEntity, new
+            {
+                title = "Validation Error",
+                status = StatusCodes.Status422UnprocessableEntity,
+                errors
             });
         }
         catch (NotFoundException ex)
@@ -96,7 +122,7 @@ public sealed class ExceptionHandlingMiddleware
         }
         catch (DomainException ex)
         {
-            // 400 — business rule violation from Domain layer
+            // 400 ï¿½ business rule violation from Domain layer
             _logger.LogWarning("Domain error: {Message}", ex.Message);
 
             await WriteJson(context, StatusCodes.Status400BadRequest, new
@@ -108,7 +134,7 @@ public sealed class ExceptionHandlingMiddleware
         }
         catch (UnauthorizedAccessException ex)
         {
-            // 403 — ownership check failed in handler
+            // 403 ï¿½ ownership check failed in handler
             _logger.LogWarning(
                 "Unauthorized access: {Message}",
                 ex.Message);

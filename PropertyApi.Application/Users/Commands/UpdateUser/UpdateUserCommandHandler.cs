@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Users.DTOs;
 using PropertyApi.Application.Users.Interfaces;
@@ -80,7 +81,11 @@ public sealed class UpdateUserCommandHandler
             string.IsNullOrWhiteSpace(
                 effectivePhoneNumber))
         {
-            throw new InvalidOperationException(
+            // Was InvalidOperationException, which ExceptionHandlingMiddleware could
+            // only turn into a 500. This is the caller's input being wrong, not the
+            // server failing, so it belongs in the 422 validation channel.
+            throw new ValidationException(
+                nameof(UpdateUserCommand.PhoneNumber),
                 "PhoneNumber is required for agents.");
         }
 
@@ -116,10 +121,18 @@ public sealed class UpdateUserCommandHandler
                     await _unitOfWork.RollbackTransactionAsync(
                         cancellationToken);
 
-                    throw new InvalidOperationException(
-                        string.Join(
-                            " | ",
-                            phoneResult.Errors));
+                    // Translate the stable codes SetPhoneNumberAsync returns into the
+                    // right HTTP channel. Previously every one of these -- including
+                    // "that number belongs to someone else" -- became an
+                    // InvalidOperationException and reached the caller as a 500.
+                    throw phoneResult.Errors.Contains("PHONE_NUMBER_ALREADY_IN_USE")
+                        ? new ConflictException(
+                            "That phone number is already registered to another account.")
+                        : new ValidationException(
+                            nameof(UpdateUserCommand.PhoneNumber),
+                            phoneResult.Errors.Contains("PHONE_NUMBER_INVALID")
+                                ? "Phone number must be in international E.164 format, for example +963911234567."
+                                : string.Join(" | ", phoneResult.Errors));
                 }
             }
 

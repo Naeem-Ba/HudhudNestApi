@@ -59,4 +59,16 @@ public interface ILoginIdentityService
     Task<DateTimeOffset?> GetLockoutEndAsync(
         Guid identityId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Runs one password hash verification against a fixed dummy hash and discards the
+    /// result.
+    ///
+    /// Login used to return as soon as the email was not found, without hashing
+    /// anything. Password hashing is deliberately expensive, so "no such account"
+    /// answered measurably faster than "wrong password" -- a timing oracle that let an
+    /// attacker enumerate registered addresses without ever seeing a different status
+    /// code. Calling this on the not-found path makes both paths pay the same cost.
+    /// </summary>
+    Task VerifyDummyPasswordAsync(CancellationToken ct = default);
 }

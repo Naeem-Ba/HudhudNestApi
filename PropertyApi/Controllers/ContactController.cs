@@ -22,6 +22,7 @@ public sealed class ContactController : ControllerBase
         => _sender = sender;
 
     [HttpPost]
+    [AllowAnonymous] // Public contact form; abuse is bounded by the "contact" rate-limit policy.
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]

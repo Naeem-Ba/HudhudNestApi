@@ -13,6 +13,39 @@ public sealed class IdentityAccessService
     private readonly UserManager<ApplicationUser> _users;
     public IdentityAccessService(UserManager<ApplicationUser> users) => _users = users;
 
+    /// <summary>
+    /// A throwaway user carrying a real password hash, used only to spend the same
+    /// hashing time on the "email not found" path that a real verification spends.
+    /// The hash is produced once from a value no one can log in with, since this user
+    /// is never persisted and never matched against a request.
+    /// </summary>
+    private static readonly Lazy<(ApplicationUser User, string Hash)> DummyCredential =
+        new(() =>
+        {
+            var user = new ApplicationUser { Id = Guid.Empty, UserName = "dummy" };
+            var hash = new PasswordHasher<ApplicationUser>()
+                .HashPassword(user, "not-a-real-password-" + Guid.NewGuid().ToString("N"));
+
+            return (user, hash);
+        });
+
+    /// <summary>
+    /// Burns one password-hash verification and discards the result, so that a login
+    /// attempt for an address that does not exist takes about as long as one for an
+    /// address that does. See ILoginIdentityService.VerifyDummyPasswordAsync.
+    /// </summary>
+    public Task VerifyDummyPasswordAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        var (user, hash) = DummyCredential.Value;
+
+        // The result is intentionally unused: the work is the point, not the answer.
+        _ = _users.PasswordHasher.VerifyHashedPassword(user, hash, "attempt");
+
+        return Task.CompletedTask;
+    }
+
     public async Task<IdentityOperationResult> AddLoginAsync(
         Guid id, string provider, string key, string displayName, CancellationToken ct)
     {

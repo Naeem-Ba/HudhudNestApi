@@ -11,7 +11,6 @@ using PropertyApi.Application.Auth.Commands.RefreshToken;
 using PropertyApi.Application.Auth.Commands.Register;
 using PropertyApi.Application.Auth.Commands.ResetPassword;
 using PropertyApi.Application.Auth.Commands.SocialLogin;
-using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
 
 namespace PropertyApi.Controllers;
@@ -22,16 +21,17 @@ namespace PropertyApi.Controllers;
 public sealed class AuthController : ControllerBase
 {
     private readonly ISender _sender;
-    private readonly ILoginIdentityService _identity;
     private readonly ILogger<AuthController> _logger;
 
+    // ILoginIdentityService was injected only so the login failure path could look the
+    // account up and report its attempt count and lockout state. That lookup is gone
+    // (see the Login method), and with it the controller's reason to reach past MediatR
+    // into the identity store at all.
     public AuthController(
         ISender sender,
-        ILoginIdentityService identity,
         ILogger<AuthController> logger)
     {
         _sender = sender;
-        _identity = identity;
         _logger = logger;
     }
 
@@ -67,15 +67,18 @@ public sealed class AuthController : ControllerBase
 
     /// <summary>
     /// Authenticates a user with email and password.
-    /// Returns comprehensive security information including attempt counts and lockout status.
-    /// Status codes: 200 Success, 401 Invalid Credentials, 423 Account Locked.
+    ///
+    /// Every failure -- unknown address, wrong password, locked account -- answers with
+    /// the same 401 and the same body, so the response cannot be used to discover which
+    /// addresses are registered. Lockout state reaches the account owner by email.
+    ///
+    /// Status codes: 200 Success, 401 Authentication failed.
     /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
     [EnableRateLimiting("auth-login")]
     [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status423Locked)]
     public async Task<ActionResult<LoginResponseDto>> Login(
         [FromBody] LoginRequest dto,
         CancellationToken ct)
@@ -101,8 +104,9 @@ public sealed class AuthController : ControllerBase
 
             if (result.Success)
             {
-                _logger.LogInformation("User {Email} logged in successfully from IP {IpAddress}",
-                    dto.Email, ipAddress);
+                _logger.LogInformation(
+                    "Login succeeded from IP {IpAddress}.",
+                    ipAddress);
 
                 var response = LoginResponseDto.CreateSuccess(
                     result.AccessToken,
@@ -112,13 +116,27 @@ public sealed class AuthController : ControllerBase
                 return Ok(response);
             }
 
-            // Login failed - return error response with security details
-            var errorResponse = await GetFailedLoginResponse(dto.Email, ct);
-            return StatusCode(errorResponse.StatusCode, errorResponse);
+            // SECURITY FIX: every failure now answers with one identical 401.
+            //
+            // This used to call GetFailedLoginResponse, which looked the account up and
+            // then branched: a registered address came back with its real
+            // failedAttemptCount, or with 423 Locked when it was locked out, while an
+            // unregistered one came back with a bare 401. Status code and body together
+            // told an anonymous caller whether an address had an account -- the exact
+            // oracle the comment below this method says was deliberately avoided by not
+            // shipping a check-lockout endpoint. It leaked through the login response
+            // instead.
+            //
+            // Attempt counts and lockout state are still reported to the account owner,
+            // through the security alert emails LoginCommandHandler sends. Dropping the
+            // lookup also removes four database round-trips from every failed login.
+            return StatusCode(
+                StatusCodes.Status401Unauthorized,
+                LoginResponseDto.CreateInvalidCredentials());
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during login for email {Email}", dto.Email);
+            _logger.LogError(ex, "Error during login.");
             return StatusCode(StatusCodes.Status500InternalServerError,
                 new LoginResponseDto
                 {
@@ -134,9 +152,13 @@ public sealed class AuthController : ControllerBase
 
     // NOTE: an anonymous GET /auth/check-lockout endpoint was deliberately NOT added.
     // Answering "is this email locked?" without credentials distinguishes registered from
-    // unregistered addresses and hands attackers a free user-enumeration oracle. The login
-    // response already carries isAccountLocked/lockoutEndTimeUtc for the caller that just
-    // proved it knows the address, which is the only caller entitled to that answer.
+    // unregistered addresses and hands attackers a free user-enumeration oracle.
+    //
+    // The login response used to carry isAccountLocked/lockoutEndTimeUtc on the theory
+    // that whoever submitted the address had already proved they knew it. That was
+    // wrong: submitting an address proves nothing, so the login response was the same
+    // oracle by a different route. It now answers identically either way, and lockout
+    // state is delivered to the account owner's inbox instead.
 
     // POST /api/auth/forgot-password
     [HttpPost("forgot-password")]
@@ -306,49 +328,18 @@ public sealed class AuthController : ControllerBase
 
     // ============ Helper Methods ============
 
-    private async Task<LoginResponseDto> GetFailedLoginResponse(
-        string email,
-        CancellationToken cancellationToken)
-    {
-        var account = await _identity.FindByEmailAsync(email, cancellationToken);
-        if (account == null)
-        {
-            return LoginResponseDto.CreateInvalidCredentials();
-        }
-
-        var isLocked = await _identity.IsLockedOutAsync(account.IdentityId, cancellationToken);
-        var failedCount = await _identity.GetAccessFailedCountAsync(account.IdentityId, cancellationToken);
-        var lockoutEnd = await _identity.GetLockoutEndAsync(account.IdentityId, cancellationToken);
-
-        if (isLocked && lockoutEnd.HasValue)
-        {
-            return LoginResponseDto.CreateAccountLocked(lockoutEnd.Value.DateTime, failedCount);
-        }
-
-        return LoginResponseDto.CreateInvalidCredentials(failedCount);
-    }
-
+    // SECURITY FIX: this used to read X-Forwarded-For / X-Real-IP straight off the
+    // request. Those headers are attacker-controlled, so anyone could forge the IP
+    // recorded in audit logs, on RefreshToken.CreatedByIp, and in the "sign-in from
+    // a new location" security alerts sent to users.
+    //
+    // The trusted value is already available here: AddTrustedForwardedHeaders
+    // configures a KnownProxies/KnownNetworks allowlist (mandatory in Staging and
+    // Production) and app.UseForwardedHeaders() has resolved RemoteIpAddress from
+    // it before the request reaches this controller. Reading the raw header bypassed
+    // that whole trust boundary. This now matches UsersController/PropertiesController.
     private string? GetClientIp()
-    {
-        // Check for IP from X-Forwarded-For header (for proxies/load balancers)
-        if (Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor))
-        {
-            var ips = forwardedFor.ToString().Split(',');
-            if (ips.Length > 0 && !string.IsNullOrWhiteSpace(ips[0]))
-            {
-                return ips[0].Trim();
-            }
-        }
-
-        // Check for IP from X-Real-IP header
-        if (Request.Headers.TryGetValue("X-Real-IP", out var realIp))
-        {
-            return realIp.ToString();
-        }
-
-        // Fall back to remote IP
-        return HttpContext.Connection.RemoteIpAddress?.ToString();
-    }
+        => HttpContext.Connection.RemoteIpAddress?.ToString();
 }
 
 // HTTP request DTOs kept in API layer to preserve the public API shape.

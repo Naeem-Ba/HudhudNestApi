@@ -1,4 +1,4 @@
-using System.Security.Claims;
+ï»¿using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -32,127 +32,35 @@ public sealed class PhoneAuthController : ControllerBase
     public PhoneAuthController(ISender mediator)
         => _mediator = mediator;
 
+
     // ----------------------------------------------------------
-    // POST /api/auth/phone/send-otp
+    // Removed: POST /api/auth/phone/send-otp
+    // Removed: POST /api/auth/phone/verify
     // ----------------------------------------------------------
-    /// <summary>????? ??? OTP ???? ??????</summary>
-    /// <remarks>
-    /// ?????? ?????? ?? ????? ??????? ?? ??????.
-    /// ?????? ???????? ????? SMS ????? ??? ??? ????? ?? 6 ?????.
-    ///
-    /// **??????:**
-    /// - 3 ????? ??? ???? ?? ???? ???? ?????
-    /// - 10 ????? ??? ???? ?? ????? ?? ??? ??? IP
-    ///
-    /// **????:**
-    /// ```json
-    /// POST /api/auth/phone/send-otp
-    /// { "phoneNumber": "+963911234567" }
-    /// ```
-    /// </remarks>
+    // The legacy "OTP is the credential" flow was replaced by
+    // PhonePasswordAuthController (registration/send-otp, registration/verify,
+    // login, password-reset/*). Its two actions are gone.
+    //
+    // 410 is kept rather than letting the routes 404, because an integration test
+    // and any still-deployed client both rely on "permanently gone" being told
+    // apart from "wrong URL".
+    //
+    // SECURITY FIX: that 410 used to come from LegacyPhoneOtpDeprecationMiddleware,
+    // which compared Request.Path to two literal strings *outside* routing. Routing
+    // matches a trailing slash, a literal comparison does not, so a request to
+    // /api/auth/phone/send-otp/ walked straight past the guard and reached the live
+    // legacy action. Routing now owns the decision, so there is no string to slip past.
     [HttpPost("phone/send-otp")]
-    [AllowAnonymous]
-    [EnableRateLimiting("send-otp")]  // ????? ??? ?? Program.cs
-    [ProducesResponseType(typeof(SendOtpResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> SendOtp(
-        [FromBody] SendOtpRequest request,
-        CancellationToken ct)
-    {
-        var command = new SendPhoneOtpCommand(
-            PhoneNumber: request.PhoneNumber,
-            Purpose: request.Purpose,
-            IpAddress: HttpContext.Connection.RemoteIpAddress?.ToString());
-
-        var result = await _mediator.Send(command, ct);
-
-        if (!result.Success)
-        {
-            // 429 = Too Many Requests (?? ???????)
-            var statusCode = result.ErrorCode == "RATE_LIMITED"
-                ? StatusCodes.Status429TooManyRequests
-                : StatusCodes.Status400BadRequest;
-
-            return StatusCode(statusCode, new ErrorResponse(
-                result.ErrorCode ?? "ERROR",
-                result.ErrorMessage ?? "??? ???"));
-        }
-
-        return Ok(new SendOtpResponse(
-            Message: "?? ????? ??? ?????? ?????.",
-            ExpiresInSeconds: 300 // 5 ?????
-        ));
-    }
-
-    // ----------------------------------------------------------
-    // POST /api/auth/phone/verify
-    // ----------------------------------------------------------
-    /// <summary>?????? ?? ??? OTP ??????? ?? ???????</summary>
-    /// <remarks>
-    /// ?????? ??????? ????????.
-    ///
-    /// **????????? 1 — ?????? ????:**
-    /// - ????? ???? ???? ????????
-    /// - IsNewUser = true ?? ?????????
-    ///
-    /// **????????? 2 — ?????? ?????:**
-    /// - ????? ???? ?????
-    /// - IsNewUser = false ?? ?????????
-    ///
-    /// **????:**
-    /// ```json
-    /// POST /api/auth/phone/verify
-    /// {
-    ///   "phoneNumber": "+963911234567",
-    ///   "code": "123456",
-    ///   "firstName": "????",  // ??????? ?????????? ?????
-    ///   "lastName":  "??????"
-    /// }
-    /// ```
-    /// </remarks>
     [HttpPost("phone/verify")]
     [AllowAnonymous]
-    [EnableRateLimiting("verify-otp")]
-    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> VerifyOtp(
-        [FromBody] VerifyOtpRequest request,
-        CancellationToken ct)
-    {
-        var command = new VerifyPhoneOtpCommand(
-    PhoneNumber: request.PhoneNumber,
-    Code: request.Code,
-    Purpose: request.Purpose,
-    FirstName: request.FirstName,
-    LastName: request.LastName,
-    IpAddress: HttpContext.Connection.RemoteIpAddress?.ToString());
-
-
-        var result = await _mediator.Send(command, ct);
-
-        if (!result.Success)
+    [ApiExplorerSettings(IgnoreApi = true)]
+    [ProducesResponseType(StatusCodes.Status410Gone)]
+    public IActionResult LegacyPhoneOtpFlowRemoved()
+        => StatusCode(StatusCodes.Status410Gone, new
         {
-            var statusCode = result.ErrorCode switch
-            {
-                "OTP_WRONG" => StatusCodes.Status401Unauthorized,
-                "OTP_INVALID" => StatusCodes.Status401Unauthorized,
-                _ => StatusCodes.Status400BadRequest,
-            };
-
-            return StatusCode(statusCode, new ErrorResponse(
-                result.ErrorCode ?? "ERROR",
-                result.ErrorMessage ?? "??? ??????"));
-        }
-
-        return Ok(new AuthResponse(
-            IsNewUser: result.IsNewUser,
-            AccessToken: result.AccessToken!,
-            RefreshToken: result.RefreshToken!,
-            ExpiresAt: result.AccessTokenExpiresAt!.Value,
-            User: MapToUserDto(result.User!)));
-    }
+            code = "PHONE_OTP_FLOW_DEPRECATED",
+            message = "Use the phone registration or password login endpoints."
+        });
 
     // ----------------------------------------------------------
     // POST /api/auth/email/add
