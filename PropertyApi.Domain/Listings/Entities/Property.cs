@@ -72,6 +72,16 @@ public class Property : AuditableEntity
     public Guid OwnerId { get; set; }
     public UserAccount? Owner { get; set; }
 
+    /// <summary>
+    /// المكتب العقاري الذي نُشر الإعلان باسمه — null للمالك المستقل، وهو حال كل
+    /// الإعلانات القائمة.
+    ///
+    /// هذا حقل إضافي بجانب OwnerId لا بديل عنه: الملكية والمسؤولية تبقيان للمستخدم،
+    /// والمكتب مجرد نسبة تُعرض ويمكن التصفية بها. لا يوجد فلتر عام عليه، فلا استعلام
+    /// قائم يتأثر، ومغادرة المستخدم لمكتبه لا تحذف إعلاناته ولا تُخفيها.
+    /// </summary>
+    public Guid? AgencyId { get; private set; }
+
     // -- Publishing ---------------------------------------------
     public bool IsPublished { get; private set; } = true;
     public DateTime? PublishedAt { get; private set; }
@@ -216,9 +226,16 @@ public class Property : AuditableEntity
     public DateTime? VerifiedAt { get; set; }
     public Guid? VerifiedByUserId { get; set; }
 
-    /// <summary>إعلان مميز (مدفوع)</summary>
-    public bool IsFeatured { get; set; }
-    public DateTime? FeaturedUntil { get; set; }
+    /// <summary>
+    /// إعلان مميز (مدفوع) — يُرفع في ترتيب نتائج البحث طوال المدة المدفوعة.
+    ///
+    /// كان هذان الحقلان معطَّلين تماماً: لا كود يقرؤهما ولا يكتبهما، فهرس وحيد فقط.
+    /// صارا الآن محكومَين بـ MarkFeatured/ClearFeatured وبمسار دفع، ولذلك أُغلقت
+    /// الواضعات (setters): تمييز إعلان صار نتيجة معاملة مالية مكتملة، لا إسناداً
+    /// يستطيع أي مُعالِج تنفيذه.
+    /// </summary>
+    public bool IsFeatured { get; private set; }
+    public DateTime? FeaturedUntil { get; private set; }
 
     // ── Navigation الجديدة ────────────────────────────────────────────
 
@@ -410,4 +427,80 @@ public class Property : AuditableEntity
         DeletedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
+
+    // -- Agency attribution --------------------------------------
+
+    /// <summary>
+    /// Attributes the listing to an agency, or clears the attribution when passed null.
+    /// </summary>
+    /// <remarks>
+    /// Attribution only. The listing's owner, its visibility and every permission check
+    /// are unchanged — nothing in this codebase grants access on the strength of a shared
+    /// AgencyId, because a Property still belongs to its OwnerId.
+    /// </remarks>
+    public void SetAgency(Guid? agencyId)
+    {
+        AgencyId = agencyId == Guid.Empty ? null : agencyId;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    // -- Featured placement (paid) -------------------------------
+
+    /// <summary>
+    /// Promotes the listing for a paid period, measured from <paramref name="fromUtc"/>.
+    /// </summary>
+    /// <remarks>
+    /// Called only after a FeaturedListingFee transaction has been marked Completed. Like
+    /// ExtendPublication, the window runs from the moment of payment rather than from any
+    /// previous FeaturedUntil, so a late payer gets the full period they bought.
+    ///
+    /// Buying again while still featured EXTENDS from the later of "now" and the current
+    /// FeaturedUntil, so a second purchase adds to the remaining time instead of throwing
+    /// it away. Anything else would quietly charge someone for days they already owned.
+    /// </remarks>
+    /// <exception cref="DomainException">
+    /// If the listing is expired or deleted. Promoting a listing that is not visible would
+    /// take money for a placement nobody can see.
+    /// </exception>
+    public void MarkFeatured(TimeSpan period, DateTime fromUtc)
+    {
+        if (period <= TimeSpan.Zero)
+            throw new DomainException("Featured period must be positive.");
+
+        if (IsDeleted)
+            throw new DomainException("لا يمكن تمييز إعلان محذوف.");
+
+        if (Status == PropertyStatus.Expired)
+            throw new DomainException("لا يمكن تمييز إعلان منتهٍ — مدّد الإعلان أولاً.");
+
+        var startsFrom = FeaturedUntil is { } until && until > fromUtc
+            ? until
+            : fromUtc;
+
+        IsFeatured = true;
+        FeaturedUntil = startsFrom.Add(period);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Ends the featured placement. Called by the scheduler once FeaturedUntil has passed,
+    /// and by an admin reversing a placement.
+    /// </summary>
+    /// <remarks>
+    /// FeaturedUntil is kept rather than nulled: it is the record of what was paid for and
+    /// when it ran out. IsFeatured alone decides whether the listing is promoted today.
+    /// </remarks>
+    public void ClearFeatured()
+    {
+        IsFeatured = false;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Whether the listing should be promoted at <paramref name="asOfUtc"/>. Guards against
+    /// the state where IsFeatured is still true but the paid window has already elapsed —
+    /// the sweep clears that within its interval, and read paths must not wait for it.
+    /// </summary>
+    public bool IsCurrentlyFeatured(DateTime asOfUtc)
+        => IsFeatured && FeaturedUntil is { } until && until > asOfUtc;
 }

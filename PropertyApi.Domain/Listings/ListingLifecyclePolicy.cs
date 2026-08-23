@@ -55,4 +55,21 @@ public static class ListingLifecyclePolicy
     /// </summary>
     public static DateTime DeletionDueAt(DateTime expiresAtUtc)
         => expiresAtUtc.Add(GracePeriodBeforeDeletion);
+
+    // -- Featured placement --------------------------------------
+    //
+    // Same reasoning as above: a customer is shown this price and this duration before
+    // they pay, so both belong next to the terms they are sold alongside.
+
+    /// <summary>
+    /// How long one paid featured placement lasts. Shorter than PublicationPeriod on
+    /// purpose — promotion is a boost, not the listing's lifetime, and a placement that
+    /// outlived the listing itself would be sold time that cannot be delivered.
+    /// </summary>
+    public static readonly TimeSpan FeaturedPeriod = TimeSpan.FromDays(30);
+
+    /// <summary>
+    /// Price, in USD, of promoting one listing for one FeaturedPeriod.
+    /// </summary>
+    public const decimal FeaturedListingFeeUsd = 5.00m;
 }

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using PropertyApi.Application.Agencies.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Commands.ConfirmListingExtensionPayment;
@@ -324,6 +325,7 @@ public sealed class ListingLifecycleTests
     private static CreatePropertyCommandHandler CreatePropertyHandler(Mock<IPropertyRepository> repository)
         => new(
             repository.Object,
+            Mock.Of<IAgencyRepository>(),
             Mock.Of<IUnitOfWork>(),
             Mock.Of<ILocationSuggestionService>(),
             NullLogger<CreatePropertyCommandHandler>.Instance);
@@ -331,17 +333,17 @@ public sealed class ListingLifecycleTests
     private static RequestListingExtensionCommandHandler RequestExtensionHandler(
         Property property,
         Transaction? existingPendingFee,
-        out Mock<IListingExtensionRepository> extensions)
+        out Mock<IListingFeeRepository> extensions)
     {
         var properties = new Mock<IPropertyRepository>();
         properties
             .Setup(x => x.GetByIdAsync(property.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(property);
 
-        extensions = new Mock<IListingExtensionRepository>();
+        extensions = new Mock<IListingFeeRepository>();
         extensions
-            .Setup(x => x.GetPendingExtensionFeeAsync(
-                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetPendingFeeAsync(
+                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<TransactionType>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(existingPendingFee);
         extensions
             .Setup(x => x.GetUsdCurrencyAsync(It.IsAny<CancellationToken>()))
@@ -358,7 +360,7 @@ public sealed class ListingLifecycleTests
         Property property,
         Transaction fee)
     {
-        var extensions = new Mock<IListingExtensionRepository>();
+        var extensions = new Mock<IListingFeeRepository>();
         extensions
             .Setup(x => x.GetByIdAsync(fee.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(fee);
