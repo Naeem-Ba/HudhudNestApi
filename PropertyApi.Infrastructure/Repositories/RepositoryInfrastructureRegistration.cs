@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using PropertyApi.Application.Admin.Interfaces;
+using PropertyApi.Application.Agencies.Interfaces;
 using PropertyApi.Application.Analytics.Interfaces;
 using PropertyApi.Application.Bookings.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
@@ -41,7 +42,8 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IPropertyPriceHistoryRepository, PropertyPriceHistoryRepository>();
         services.AddScoped<ISavedSearchRepository, SavedSearchRepository>();
         services.AddHostedService<SavedSearchMatchHostedService>();
-        services.AddScoped<IListingExtensionRepository, ListingExtensionRepository>();
+        services.AddScoped<IListingFeeRepository, ListingFeeRepository>();
+        services.AddScoped<IAgencyRepository, AgencyRepository>();
         services.AddHostedService<ListingExpiryHostedService>();
         services.AddScoped<IPropertyImageRepository, PropertyImageRepository>();
         services.AddScoped<IFavoriteRepository, FavoriteRepository>();

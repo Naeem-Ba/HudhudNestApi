@@ -54,6 +54,11 @@ public sealed class PublicEndpointPolicyTests
             "ReviewsController.GetPropertyReviews",
             "AnalyticsController.GetMarketInsights",
 
+            // Public agency page: the office behind a listing, same rationale as the
+            // public seller profile below. Members are shown by display name and avatar
+            // only — no contact details, no email addresses.
+            "AgenciesController.GetBySlug",
+
             // Public seller profile: "who am I about to contact?".
             "UsersController.GetProfile",
             "UsersController.GetRatings",

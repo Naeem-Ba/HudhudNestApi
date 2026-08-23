@@ -17,6 +17,8 @@ public static class ApplicationRolesSeed
             new ApplicationRole(RoleNames.Admin, "مدير المنصة"),
             new ApplicationRole(RoleNames.Agent, "وسيط عقاري"),
             new ApplicationRole(RoleNames.User, "مستخدم"),
+            new ApplicationRole(RoleNames.AgencyOwner, "مالك مكتب عقاري"),
+            new ApplicationRole(RoleNames.AgencyAgent, "موظف مكتب عقاري"),
         };
 
         foreach (var role in roles)

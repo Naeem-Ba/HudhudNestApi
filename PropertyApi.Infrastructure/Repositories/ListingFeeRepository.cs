@@ -6,18 +6,19 @@ using PropertyApi.Infrastructure.Persistence;
 
 namespace PropertyApi.Infrastructure.Repositories;
 
-public sealed class ListingExtensionRepository : IListingExtensionRepository
+public sealed class ListingFeeRepository : IListingFeeRepository
 {
     private readonly AppDbContext _db;
 
-    public ListingExtensionRepository(AppDbContext db)
+    public ListingFeeRepository(AppDbContext db)
     {
         _db = db;
     }
 
-    public async Task<Transaction?> GetPendingExtensionFeeAsync(
+    public async Task<Transaction?> GetPendingFeeAsync(
         Guid propertyId,
         Guid payerId,
+        TransactionType transactionType,
         CancellationToken ct = default)
     {
         // Tracked, not AsNoTracking: the caller may hand this straight back as a quote, but
@@ -28,7 +29,7 @@ public sealed class ListingExtensionRepository : IListingExtensionRepository
             .Where(t =>
                 t.PropertyId == propertyId &&
                 t.PayerId == payerId &&
-                t.TransactionType == TransactionType.ListingExtensionFee &&
+                t.TransactionType == transactionType &&
                 t.Status == TransactionStatus.Pending)
             .OrderByDescending(t => t.TransactedAt)
             .FirstOrDefaultAsync(ct);
@@ -60,7 +61,7 @@ public sealed class ListingExtensionRepository : IListingExtensionRepository
             // recording a fee against a guessed currency id would corrupt the financial
             // audit trail, so fail loudly instead.
             throw new InvalidOperationException(
-                "USD currency row is missing. CurrencySeed must run before listing extension fees can be recorded.");
+                "USD currency row is missing. CurrencySeed must run before listing fees can be recorded.");
         }
 
         return (usd.Id, usd.ExchangeRateToUSD);

@@ -50,6 +50,19 @@ public sealed class UserAccount
     /// <summary>عنوان ومعلومات تواصل حرة (نص) يختار المستخدم عرضها بملفه العام.</summary>
     public string? ContactInfo { get; private set; }
 
+    /// <summary>
+    /// المكتب العقاري الذي يعمل تحته هذا المستخدم — null للمستخدم المستقل، وهو
+    /// الوضع الافتراضي لكل الحسابات القائمة.
+    ///
+    /// هذا انتماء تنظيمي لا عزل بيانات: لا يوجد أي فلتر عام على هذا الحقل، والعقار
+    /// يبقى مملوكاً لـ OwnerId كما كان. أي استعلام يريد التقييد بالمكتب عليه أن
+    /// يذكره صراحةً.
+    /// </summary>
+    public Guid? AgencyId { get; private set; }
+
+    /// <summary>متى انضم المستخدم إلى مكتبه الحالي — يُمسح عند مغادرته.</summary>
+    public DateTime? AgencyJoinedAt { get; private set; }
+
     public DateTime CreatedAt { get; private set; }
 
     public DateTime UpdatedAt { get; private set; }
@@ -218,6 +231,55 @@ public sealed class UserAccount
                 : countryCode
                     .Trim()
                     .ToUpperInvariant();
+
+        UpdatedAt =
+            utcNow;
+    }
+
+    /// <summary>
+    /// يربط الحساب بمكتب عقاري. يرفض الانضمام إذا كان المستخدم عضواً في مكتب آخر
+    /// بالفعل: عضوية واحدة في كل وقت، وإلا صار سؤال "أي مكتب يمثّله هذا الوسيط في
+    /// هذا الإعلان؟" بلا جواب واحد.
+    /// </summary>
+    public void JoinAgency(
+        Guid agencyId,
+        DateTime utcNow)
+    {
+        if (agencyId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Agency id is required.",
+                nameof(agencyId));
+        }
+
+        if (AgencyId is not null && AgencyId != agencyId)
+        {
+            throw new InvalidOperationException(
+                "User already belongs to another agency.");
+        }
+
+        AgencyId =
+            agencyId;
+
+        AgencyJoinedAt =
+            utcNow;
+
+        UpdatedAt =
+            utcNow;
+    }
+
+    /// <summary>
+    /// يفكّ ارتباط الحساب بمكتبه. لا يمسّ عقارات المستخدم إطلاقاً — هي مملوكة له لا
+    /// للمكتب، وتبقى منشورة بعد مغادرته.
+    /// </summary>
+    public void LeaveAgency(
+        DateTime utcNow)
+    {
+        AgencyId =
+            null;
+
+        AgencyJoinedAt =
+            null;
 
         UpdatedAt =
             utcNow;

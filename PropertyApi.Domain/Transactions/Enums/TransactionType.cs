@@ -28,4 +28,15 @@ public enum TransactionType
     /// listing owner and the receiver is the platform, not a counterparty in a deal.
     /// </summary>
     ListingExtensionFee = 5,
+
+    /// <summary>
+    /// One-off fee an owner pays to promote a single listing to featured placement for
+    /// one FeaturedPeriod. Like ListingExtensionFee the payer is the listing owner and the
+    /// receiver is the platform.
+    ///
+    /// Kept distinct from ListingExtensionFee even though both are platform fees paid by an
+    /// owner: they buy different things, cost different amounts, and a refund or dispute has
+    /// to be able to say which one it concerns.
+    /// </summary>
+    FeaturedListingFee = 6,
 }

@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using PropertyApi.Domain.Agencies.Entities;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Listings.Enums;
@@ -209,6 +210,23 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
         builder.HasIndex(p => p.FurnishingStatus);
         builder.HasIndex(p => p.IsFeatured);
         builder.HasIndex(p => p.IsVerified);
+
+        // The featured sweep looks for listings still flagged featured whose paid window has
+        // already elapsed. Filtered to the flagged rows, which are a small minority of the
+        // table — an unfiltered index here would be almost entirely `false`.
+        builder.HasIndex(p => p.FeaturedUntil)
+            .HasDatabaseName("IX_Properties_FeaturedUntil_Active")
+            .HasFilter("\"IsFeatured\" = true");
+
+        // Agency attribution. Nullable and null for every listing that exists today.
+        builder.HasOne<Agency>()
+            .WithMany()
+            .HasForeignKey(p => p.AgencyId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasIndex(p => p.AgencyId)
+            .HasDatabaseName("IX_Properties_AgencyId")
+            .HasFilter("\"AgencyId\" IS NOT NULL");
         builder.HasIndex(p => p.PriceCurrencyId);
 
         // Composite index للبحث في السوق السوري

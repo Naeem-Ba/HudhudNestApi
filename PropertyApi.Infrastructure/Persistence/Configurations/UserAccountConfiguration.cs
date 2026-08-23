@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using PropertyApi.Domain.Agencies.Entities;
 using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Infrastructure.Persistence.Configurations;
@@ -48,5 +49,18 @@ public sealed class UserAccountConfiguration
             .IsFixedLength();
 
         builder.HasIndex(x => x.CountryCode);
+
+        // Agency membership. Nullable, and null for every account that exists today —
+        // belonging to an agency is opt-in and adds nothing to an independent user.
+        builder.HasOne<Agency>()
+            .WithMany()
+            .HasForeignKey(x => x.AgencyId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Filtered: the vast majority of rows have no agency, and only the ones that do are
+        // ever looked up this way (listing an agency's members, counting them).
+        builder.HasIndex(x => x.AgencyId)
+            .HasDatabaseName("IX_UserAccounts_AgencyId")
+            .HasFilter("\"AgencyId\" IS NOT NULL");
     }
 }

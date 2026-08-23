@@ -18,13 +18,13 @@ namespace PropertyApi.Application.Listings.Commands.ConfirmListingExtensionPayme
 public sealed class ConfirmListingExtensionPaymentCommandHandler
     : IRequestHandler<ConfirmListingExtensionPaymentCommand, DateTime>
 {
-    private readonly IListingExtensionRepository _extensions;
+    private readonly IListingFeeRepository _extensions;
     private readonly IPropertyRepository _properties;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<ConfirmListingExtensionPaymentCommandHandler> _logger;
 
     public ConfirmListingExtensionPaymentCommandHandler(
-        IListingExtensionRepository extensions,
+        IListingFeeRepository extensions,
         IPropertyRepository properties,
         IUnitOfWork unitOfWork,
         ILogger<ConfirmListingExtensionPaymentCommandHandler> logger)

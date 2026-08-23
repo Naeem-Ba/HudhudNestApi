@@ -4,9 +4,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 using PropertyApi.Application.Listings.DTOs;
+using PropertyApi.Application.Listings.Commands.ConfirmFeaturedListingPayment;
 using PropertyApi.Application.Listings.Commands.ConfirmListingExtensionPayment;
 using PropertyApi.Application.Listings.Commands.ConfirmPropertyAvailability;
 using PropertyApi.Application.Listings.Commands.CreateProperty;
+using PropertyApi.Application.Listings.Commands.RequestFeaturedListing;
 using PropertyApi.Application.Listings.Commands.RequestListingExtension;
 using PropertyApi.Application.Listings.Queries.CheckPotentialDuplicateProperty;
 using PropertyApi.Application.Listings.Commands.DeleteProperty;
@@ -308,6 +310,53 @@ public sealed class PropertiesController : ControllerBase
             ct);
 
         return Ok(new { expiresAt = newExpiresAt });
+    }
+
+    // ── POST /api/properties/{id}/featured ───────────────────────
+    // Owner asks to promote one listing to featured placement for a fee.
+    //
+    // 202 Accepted for the same reason as the extension endpoint above: this records what
+    // the owner owes and nothing more. The listing is NOT promoted by this call.
+    [HttpPost("{id:guid}/featured")]
+    [Authorize]
+    [ProducesResponseType(typeof(FeaturedListingQuoteDto), StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RequestFeatured(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var quote = await _mediator.Send(
+            new RequestFeaturedListingCommand(id, userId.Value),
+            ct);
+
+        return Accepted(quote);
+    }
+
+    // ── POST /api/properties/featured/{transactionId}/confirm ────
+    // Settles a pending featured fee and promotes the listing.
+    //
+    // Admin-only, for the same reason the extension confirmation is: with no gateway, this
+    // is the only thing that can turn an unpaid fee into a paid one. Exposed to the owner it
+    // would make featured placement free.
+    [HttpPost("featured/{transactionId:guid}/confirm")]
+    [Authorize(Roles = RoleNames.Admin)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ConfirmFeaturedPayment(Guid transactionId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var featuredUntil = await _mediator.Send(
+            new ConfirmFeaturedListingPaymentCommand(transactionId, userId.Value),
+            ct);
+
+        return Ok(new { featuredUntil });
     }
 
     // ── Helper ───────────────────────────────────────────────────
