@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 using PropertyApi.Application.Listings.DTOs;
+using PropertyApi.Application.Listings.Commands.ConfirmListingExtensionPayment;
 using PropertyApi.Application.Listings.Commands.ConfirmPropertyAvailability;
 using PropertyApi.Application.Listings.Commands.CreateProperty;
+using PropertyApi.Application.Listings.Commands.RequestListingExtension;
 using PropertyApi.Application.Listings.Queries.CheckPotentialDuplicateProperty;
 using PropertyApi.Application.Listings.Commands.DeleteProperty;
 using PropertyApi.Application.Listings.Commands.UpdateProperty;
@@ -258,6 +260,54 @@ public sealed class PropertiesController : ControllerBase
             ct);
 
         return NoContent();
+    }
+
+    // ── POST /api/properties/{id}/extension ──────────────────────
+    // Owner asks to extend one expired (or nearly expired) listing for a fee.
+    //
+    // 202 Accepted, not 200 OK, and deliberately so: this records what the owner owes and
+    // nothing more. The listing is NOT extended by this call. No payment gateway exists in
+    // this system, so the fee stays Pending until something settles it — today an
+    // administrator via the endpoint below, later a gateway callback.
+    [HttpPost("{id:guid}/extension")]
+    [Authorize]
+    [ProducesResponseType(typeof(ListingExtensionQuoteDto), StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RequestExtension(Guid id, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var quote = await _mediator.Send(
+            new RequestListingExtensionCommand(id, userId.Value),
+            ct);
+
+        return Accepted(quote);
+    }
+
+    // ── POST /api/properties/extension/{transactionId}/confirm ───
+    // Settles a pending extension fee and grants the listing another publication period.
+    //
+    // Admin-only because it is the only way to turn an unpaid fee into a paid one while
+    // there is no gateway. Exposing it to the owner would make the fee optional.
+    [HttpPost("extension/{transactionId:guid}/confirm")]
+    [Authorize(Roles = RoleNames.Admin)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ConfirmExtensionPayment(Guid transactionId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var newExpiresAt = await _mediator.Send(
+            new ConfirmListingExtensionPaymentCommand(transactionId, userId.Value),
+            ct);
+
+        return Ok(new { expiresAt = newExpiresAt });
     }
 
     // ── Helper ───────────────────────────────────────────────────

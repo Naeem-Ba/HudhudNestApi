@@ -15,6 +15,7 @@ using PropertyApi.Application.Users.Messaging.Interfaces;
 using PropertyApi.Infrastructure.Admin;
 using PropertyApi.Infrastructure.Analytics;
 using PropertyApi.Infrastructure.Bookings;
+using PropertyApi.Infrastructure.Listings;
 using PropertyApi.Infrastructure.Notifications;
 using PropertyApi.Infrastructure.Reviews;
 using PropertyApi.Infrastructure.Search;
@@ -40,6 +41,8 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IPropertyPriceHistoryRepository, PropertyPriceHistoryRepository>();
         services.AddScoped<ISavedSearchRepository, SavedSearchRepository>();
         services.AddHostedService<SavedSearchMatchHostedService>();
+        services.AddScoped<IListingExtensionRepository, ListingExtensionRepository>();
+        services.AddHostedService<ListingExpiryHostedService>();
         services.AddScoped<IPropertyImageRepository, PropertyImageRepository>();
         services.AddScoped<IFavoriteRepository, FavoriteRepository>();
         services.AddScoped<IContactMessageRepository, ContactMessageRepository>();

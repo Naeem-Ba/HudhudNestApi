@@ -78,6 +78,16 @@ public class Property : AuditableEntity
     public DateTime? ExpiresAt { get; set; }
 
     /// <summary>
+    /// When the owner was last warned that this listing is about to expire. Null means
+    /// no warning is outstanding for the current publication window.
+    ///
+    /// This exists purely for idempotency: ListingExpiryHostedService sweeps on a timer,
+    /// so without a stamp every sweep inside the warning window would raise another
+    /// notification. Cleared by ExtendPublication() so the next window warns again.
+    /// </summary>
+    public DateTime? ExpiryWarningSentAt { get; private set; }
+
+    /// <summary>
     /// Last time the owner explicitly confirmed this listing is still available.
     /// Phase-0 "freshness" feature: the frontend shows a staleness banner (and the
     /// search/matching logic can eventually deprioritize) listings that have gone
@@ -319,6 +329,85 @@ public class Property : AuditableEntity
     public void ConfirmStillAvailable()
     {
         LastConfirmedAvailableAt = DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    // -- Listing lifecycle (publication window) ------------------
+    //
+    // Search already hides a listing whose ExpiresAt has passed (PropertyRepository
+    // filters on it), so these methods are not what makes an expired listing invisible.
+    // What they add is the part that was missing: a durable status the owner can see and
+    // act on, a one-shot warning, and a grace clock that ends in deletion.
+
+    /// <summary>
+    /// Records that the owner has been warned about the approaching expiry, so the
+    /// scheduler does not warn again for this publication window.
+    /// </summary>
+    public void MarkExpiryWarningSent()
+    {
+        ExpiryWarningSentAt = DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Transitions a listing whose publication window has elapsed into Expired and takes
+    /// it off the public site. Called only by ListingExpiryHostedService.
+    /// </summary>
+    /// <exception cref="DomainException">
+    /// If ExpiresAt is null. A listing with no expiry date has no window to have elapsed,
+    /// and silently expiring it would delete a listing that was never on a clock.
+    /// </exception>
+    public void MarkExpired()
+    {
+        if (ExpiresAt is null)
+            throw new DomainException("Cannot expire a listing that has no ExpiresAt.");
+
+        Status = PropertyStatus.Expired;
+        IsPublished = false;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Grants another publication window — the effect of a paid single-listing extension.
+    /// Restores the listing to Available and republishes it.
+    /// </summary>
+    /// <remarks>
+    /// The new window is measured from <paramref name="fromUtc"/> rather than from the old
+    /// ExpiresAt: an owner who pays two weeks into the grace period gets a full period from
+    /// the day they paid, not a period already partly spent.
+    /// </remarks>
+    public void ExtendPublication(TimeSpan period, DateTime fromUtc)
+    {
+        if (period <= TimeSpan.Zero)
+            throw new DomainException("Extension period must be positive.");
+
+        ExpiresAt = fromUtc.Add(period);
+        ExpiryWarningSentAt = null;
+        Status = PropertyStatus.Available;
+        IsPublished = true;
+        PublishedAt ??= fromUtc;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Deletes an expired listing once its grace period has run out.
+    /// </summary>
+    /// <remarks>
+    /// Soft delete, deliberately. This sets the same IsDeleted flag MarkAsDeleted() uses,
+    /// which the global query filter on Property already honours, so the listing vanishes
+    /// from every read path while the row survives for audit and recovery. Nothing in this
+    /// codebase physically removes a Property — even repository Remove() is intercepted and
+    /// converted to IsDeleted=true — and an automated sweep is the last place to break that.
+    ///
+    /// DeletedByUserId is left null because no user deleted this; the scheduler did.
+    /// </remarks>
+    public void MarkExpiredListingDeletedBySystem()
+    {
+        if (Status != PropertyStatus.Expired)
+            throw new DomainException("Only an expired listing can be deleted by the expiry sweep.");
+
+        IsDeleted = true;
+        DeletedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
 }

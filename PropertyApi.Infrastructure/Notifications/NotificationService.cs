@@ -345,6 +345,96 @@ public sealed class NotificationService : INotificationService
         return deleted;
     }
 
+    public async Task NotifyListingExpiringSoonAsync(
+        Guid recipientId,
+        Guid propertyId,
+        string propertyTitle,
+        int daysRemaining,
+        CancellationToken ct = default)
+    {
+        if (recipientId == Guid.Empty)
+        {
+            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
+
+        if (propertyId == Guid.Empty)
+        {
+            throw new ArgumentException("Property id is required.", nameof(propertyId));
+        }
+
+        var title = string.IsNullOrWhiteSpace(propertyTitle)
+            ? "العقار"
+            : propertyTitle.Trim();
+
+        // Clamp rather than trust: a clock skew or a sweep that runs late must never
+        // produce "ينتهي خلال -2 يوم" in a message a customer reads.
+        var days = Math.Max(daysRemaining, 0);
+
+        var notification = new Notification
+        {
+            RecipientId = recipientId,
+            Type = NotificationType.ListingExpiringSoon,
+            Message = days == 0
+                ? $"ينتهي نشر إعلانك '{title}' اليوم. مدِّده للإبقاء عليه ظاهراً."
+                : $"ينتهي نشر إعلانك '{title}' خلال {days} يوماً. مدِّده للإبقاء عليه ظاهراً.",
+            PropertyId = propertyId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await PersistAndPushAsync(notification, ct);
+
+        _logger.LogInformation(
+            "Listing expiring-soon notification created. RecipientId={RecipientId}, PropertyId={PropertyId}, DaysRemaining={Days}",
+            recipientId,
+            propertyId,
+            days);
+    }
+
+    public async Task NotifyListingExpiredAsync(
+        Guid recipientId,
+        Guid propertyId,
+        string propertyTitle,
+        int graceDaysRemaining,
+        CancellationToken ct = default)
+    {
+        if (recipientId == Guid.Empty)
+        {
+            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
+
+        if (propertyId == Guid.Empty)
+        {
+            throw new ArgumentException("Property id is required.", nameof(propertyId));
+        }
+
+        var title = string.IsNullOrWhiteSpace(propertyTitle)
+            ? "العقار"
+            : propertyTitle.Trim();
+
+        var graceDays = Math.Max(graceDaysRemaining, 0);
+
+        var notification = new Notification
+        {
+            RecipientId = recipientId,
+            Type = NotificationType.ListingExpired,
+            Message =
+                $"انتهت مدة نشر إعلانك '{title}' ولم يعد ظاهراً في نتائج البحث. " +
+                $"أمامك {graceDays} يوماً لتمديده قبل حذفه.",
+            PropertyId = propertyId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await PersistAndPushAsync(notification, ct);
+
+        _logger.LogInformation(
+            "Listing expired notification created. RecipientId={RecipientId}, PropertyId={PropertyId}, GraceDaysRemaining={GraceDays}",
+            recipientId,
+            propertyId,
+            graceDays);
+    }
+
     private async Task PersistAndPushAsync(
         Notification notification,
         CancellationToken ct)

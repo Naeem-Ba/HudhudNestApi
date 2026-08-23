@@ -1,7 +1,9 @@
 ﻿using MediatR;
 using Microsoft.Extensions.Logging;
+using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
+using PropertyApi.Domain.Listings;
 using PropertyApi.Domain.Listings.Entities;
 
 namespace PropertyApi.Application.Listings.Commands.CreateProperty;
@@ -37,6 +39,8 @@ public sealed class CreatePropertyCommandHandler
         CreatePropertyCommand request,
         CancellationToken cancellationToken)
     {
+        await EnsureListingQuotaAvailableAsync(request.OwnerId, cancellationToken);
+
         // Factory method — the ONLY correct way to create a Property.
         // Throws DomainException if invariants are violated.
         var property = Property.Create(
@@ -98,6 +102,38 @@ public sealed class CreatePropertyCommandHandler
         await TrySubmitLocationSuggestionsAsync(property, cancellationToken);
 
         return property.Id;
+    }
+
+    /// <summary>
+    /// Enforces the free-tier active-listing limit.
+    /// </summary>
+    /// <remarks>
+    /// There is no Subscription entity in this domain yet, so there is no way to ask "which
+    /// plan is this user on" — every account is therefore treated as free tier. That is the
+    /// honest state of the system, not a simplification: the moment a paid plan exists, this
+    /// is the single place that has to learn about it, and the check becomes
+    /// "quota = plan.ListingLimit" instead of the constant below.
+    ///
+    /// Consequence worth being explicit about: an existing owner who already holds more than
+    /// the limit keeps every listing they have — nothing is retroactively removed — but
+    /// cannot create another until they are back under it.
+    /// </remarks>
+    private async Task EnsureListingQuotaAvailableAsync(Guid ownerId, CancellationToken ct)
+    {
+        var activeListings = await _repo.CountActiveListingsByOwnerAsync(ownerId, ct);
+
+        if (activeListings < ListingLifecyclePolicy.FreeTierActiveListingLimit)
+            return;
+
+        _logger.LogInformation(
+            "Listing creation blocked by free-tier quota. OwnerId={OwnerId}, Active={Active}, Limit={Limit}",
+            ownerId,
+            activeListings,
+            ListingLifecyclePolicy.FreeTierActiveListingLimit);
+
+        throw new ConflictException(
+            $"الخطة المجانية تسمح بإعلان واحد نشط فقط. لديك حالياً {activeListings}. " +
+            "احذف إعلاناً قائماً أو رقِّ خطتك لإضافة إعلان جديد.");
     }
 
     private async Task TrySubmitLocationSuggestionsAsync(Property property, CancellationToken ct)
