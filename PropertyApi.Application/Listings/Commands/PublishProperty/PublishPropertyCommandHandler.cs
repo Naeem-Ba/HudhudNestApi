@@ -3,14 +3,13 @@ using FluentValidation.Results;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
+using PropertyApi.Domain.Listings;
 
 namespace PropertyApi.Application.Listings.Commands.PublishProperty;
 
 public sealed class PublishPropertyCommandHandler
     : IRequestHandler<PublishPropertyCommand>
 {
-    private static readonly TimeSpan DefaultPublicationPeriod = TimeSpan.FromDays(90);
-
     private readonly IPropertyRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
 
@@ -50,8 +49,10 @@ public sealed class PublishPropertyCommandHandler
         var now = DateTime.UtcNow;
         property.Publish();
 
+        // Publication period now comes from ListingLifecyclePolicy so the scheduler, the
+        // extension flow, and this handler cannot disagree about how long "3 months" is.
         if (property.ExpiresAt is null || property.ExpiresAt <= now)
-            property.ExpiresAt = now.Add(DefaultPublicationPeriod);
+            property.ExpiresAt = now.Add(ListingLifecyclePolicy.PublicationPeriod);
 
         _repository.Update(property);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

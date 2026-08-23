@@ -34,6 +34,19 @@ public interface IPropertyRepository
         CancellationToken ct = default);
 
     /// <summary>
+    /// Counts this owner's listings that consume their plan quota.
+    ///
+    /// "Active" excludes deleted listings and excludes Expired ones: an expired listing
+    /// sitting in its grace window must not block the owner from posting something new,
+    /// or the quota would silently punish them for a listing they can no longer show.
+    /// Unpublished drafts DO count — otherwise the limit is trivially bypassed by never
+    /// pressing publish.
+    /// </summary>
+    Task<int> CountActiveListingsByOwnerAsync(
+        Guid ownerId,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Advisory potential-duplicate lookup (Phase-0, Task 4). Returns published,
     /// non-deleted properties in the same neighborhood and listing type whose price
     /// and/or area fall within +/-maxTolerancePercent of the supplied values. Returns

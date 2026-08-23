@@ -222,5 +222,19 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
         // Phase-0 "freshness" feature — supports a future background job that finds
         // published listings not confirmed available in the last N days.
         builder.HasIndex(p => p.LastConfirmedAvailableAt);
+
+        // Drives all three phases of ListingExpiryHostedService, each of which filters on
+        // Status plus an ExpiresAt range. Status leads because it is the more selective of
+        // the two once the bulk of rows settle into Available/Expired, and because the
+        // delete phase filters Status equality before the date range.
+        builder.HasIndex(p => new { p.Status, p.ExpiresAt })
+            .HasDatabaseName("IX_Properties_Status_ExpiresAt");
+
+        // The warning phase looks for listings that have no warning stamp yet. A filtered
+        // index keeps this to the rows that can still match instead of the whole table —
+        // every listing already warned drops out of the index entirely.
+        builder.HasIndex(p => p.ExpiresAt)
+            .HasDatabaseName("IX_Properties_ExpiresAt_PendingWarning")
+            .HasFilter("\"ExpiryWarningSentAt\" IS NULL");
     }
 }

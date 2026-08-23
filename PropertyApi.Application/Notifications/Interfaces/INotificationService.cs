@@ -43,6 +43,30 @@ public interface INotificationService
         double overallScore,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Warns the owner that a listing's publication window is about to close, and how many
+    /// days are left. Called by ListingExpiryHostedService once per publication window.
+    /// </summary>
+    Task NotifyListingExpiringSoonAsync(
+        Guid recipientId,
+        Guid propertyId,
+        string propertyTitle,
+        int daysRemaining,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Tells the owner a listing has expired, is no longer visible, and how many days remain
+    /// before it is deleted. This is the message the paid-extension flow hangs off, so the
+    /// grace window must be stated in it — an owner who does not know the deadline cannot act
+    /// on it. Called by ListingExpiryHostedService.
+    /// </summary>
+    Task NotifyListingExpiredAsync(
+        Guid recipientId,
+        Guid propertyId,
+        string propertyTitle,
+        int graceDaysRemaining,
+        CancellationToken ct = default);
+
     Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(
         Guid userId,
         int page,

@@ -139,6 +139,21 @@ public sealed class PropertyRepository : IPropertyRepository
         return (soldCount, rentedCount);
     }
 
+    public async Task<int> CountActiveListingsByOwnerAsync(
+        Guid ownerId,
+        CancellationToken ct = default)
+    {
+        // Deleted listings are already excluded by the global query filter on Property
+        // (AppDbContext: HasQueryFilter(e => !e.IsDeleted)), so only Expired needs an
+        // explicit exclusion here — an expired listing in its grace window must not hold
+        // the owner's single free slot hostage.
+        return await _db.Properties
+            .AsNoTracking()
+            .CountAsync(
+                p => p.OwnerId == ownerId && p.Status != PropertyStatus.Expired,
+                ct);
+    }
+
     public async Task<IReadOnlyList<Property>> FindPotentialDuplicatesAsync(
         int neighborhoodId,
         ListingType listingType,

@@ -21,4 +21,11 @@ public enum TransactionType
 
     /// <summary>Platform/agent commission fee.</summary>
     CommissionFee = 4,
+
+    /// <summary>
+    /// One-off fee a free-tier owner pays to extend a single expired listing for
+    /// another publication period. Unlike every other member here, the payer is the
+    /// listing owner and the receiver is the platform, not a counterparty in a deal.
+    /// </summary>
+    ListingExtensionFee = 5,
 }
