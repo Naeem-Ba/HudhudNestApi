@@ -74,18 +74,7 @@ public sealed class PropertyRepository : IPropertyRepository
         var totalCount = await query.CountAsync(ct);
 
         // -- Sort ---------------------------------------------
-        query = (filter.SortBy?.ToLower(), filter.SortDescending) switch
-        {
-            ("createdat", true) => query.OrderByDescending(p => p.CreatedAt),
-            ("createdat", false) => query.OrderBy(p => p.CreatedAt),
-            ("purchaseprice", true) => query.OrderByDescending(p => p.PurchasePrice),
-            ("purchaseprice", false) => query.OrderBy(p => p.PurchasePrice),
-            ("coldrent", true) => query.OrderByDescending(p => p.ColdRent),
-            ("coldrent", false) => query.OrderBy(p => p.ColdRent),
-            ("area", true) => query.OrderByDescending(p => p.Area),
-            ("area", false) => query.OrderBy(p => p.Area),
-            _ => query.OrderByDescending(p => p.CreatedAt)
-        };
+        query = ApplySort(query, filter, DateTime.UtcNow);
 
         // -- Paginate -----------------------------------------
         var page = Math.Max(filter.Page, 1);
@@ -329,5 +318,53 @@ public sealed class PropertyRepository : IPropertyRepository
              property.ExpiresAt > now));
 
         return query;
+    }
+
+    /// <summary>
+    /// Applies the result ordering, including paid featured placement.
+    ///
+    /// Featured listings are promoted in the DEFAULT ordering ONLY. When the caller asked for
+    /// an explicit ordering — cheapest first, largest area — that ordering is honoured exactly
+    /// as asked: a paid placement must never make "cheapest first" untrue.
+    ///
+    /// nowUtc is a parameter rather than DateTime.UtcNow read inline, so the ordering is
+    /// deterministic under test and identical across the count and page queries of one request.
+    ///
+    /// No index backs the featured key. It is a time-dependent expression, and a PostgreSQL
+    /// expression index requires an IMMUTABLE function — now() is not one. Deliberate, not an
+    /// oversight: the featured rows are a small minority and the filtered index on
+    /// FeaturedUntil already serves the sweep.
+    ///
+    /// Public/static and side-effect free, mirroring ApplyFilter — that is what lets
+    /// PropertySortOrderTests exercise the real rule with no database.
+    /// </summary>
+    public static IQueryable<Property> ApplySort(
+        IQueryable<Property> query,
+        PropertyFilterDto filter,
+        DateTime nowUtc)
+    {
+        // Property.CurrentlyFeatured is the SQL-translatable twin of the domain's
+        // IsCurrentlyFeatured — a listing whose paid window has already elapsed is not
+        // promoted, even in the hours before the sweep clears its flag.
+        var featuredFirst = Property.CurrentlyFeatured(nowUtc);
+
+        return (filter.SortBy?.ToLowerInvariant(), filter.SortDescending) switch
+        {
+            ("purchaseprice", true) => query.OrderByDescending(p => p.PurchasePrice),
+            ("purchaseprice", false) => query.OrderBy(p => p.PurchasePrice),
+            ("coldrent", true) => query.OrderByDescending(p => p.ColdRent),
+            ("coldrent", false) => query.OrderBy(p => p.ColdRent),
+            ("area", true) => query.OrderByDescending(p => p.Area),
+            ("area", false) => query.OrderBy(p => p.Area),
+
+            // Newest-first is the default the vast majority of traffic sees, and the only
+            // place a paid placement outranks the requested order.
+            ("createdat", false) => query
+                .OrderByDescending(featuredFirst)
+                .ThenBy(p => p.CreatedAt),
+            _ => query
+                .OrderByDescending(featuredFirst)
+                .ThenByDescending(p => p.CreatedAt)
+        };
     }
 }
