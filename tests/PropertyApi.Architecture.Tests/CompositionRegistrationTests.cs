@@ -1,9 +1,12 @@
+using MediatR;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
+using PropertyApi.Application;
 using PropertyApi.Application.Admin.Interfaces;
+using PropertyApi.Application.Auth.Commands.Register;
 using PropertyApi.Application.Analytics.Interfaces;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Bookings.Interfaces;
@@ -106,6 +109,51 @@ public sealed class CompositionRegistrationTests
         AssertScoped<PostGisHealthCheck>(services);
         AssertSingleton<IDistributedCache>(services);
         AssertHostedService<ProductionStartupValidator>(services);
+    }
+
+    [Fact]
+    public void Register_handler_resolves_from_the_real_container()
+    {
+        // Every other test in this class reads service descriptors; none of them
+        // ever constructs anything. The handler unit tests are no help either --
+        // they hand RegisterCommandHandler its dependencies directly, so they stay
+        // green whatever the container does or does not know.
+        //
+        // That leaves one question unasked: after a dependency is added to a
+        // handler, can the container still build it? This asks it. A registration
+        // missed while wiring up a new collaborator fails here, at build time,
+        // instead of as a 500 on somebody's first sign-up.
+        var services =
+            new ServiceCollection();
+
+        var configuration =
+            CreateConfiguration();
+
+        // WebApplicationBuilder registers both of these for the real host; a bare
+        // ServiceCollection does not, and services that take IConfiguration or an
+        // ILogger cannot be activated without them.
+        services.AddLogging();
+
+        services.AddSingleton(configuration);
+
+        services.AddApplication();
+
+        services.AddInfrastructure(
+            configuration,
+            new TestHostEnvironment());
+
+        using var provider =
+            services.BuildServiceProvider();
+
+        using var scope =
+            provider.CreateScope();
+
+        var handler =
+            scope.ServiceProvider
+                .GetRequiredService<
+                    IRequestHandler<RegisterCommand, RegisterResult>>();
+
+        Assert.IsType<RegisterCommandHandler>(handler);
     }
 
     private static void AssertScoped<TService>(

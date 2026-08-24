@@ -70,6 +70,9 @@ public sealed class RegisterCommandHandler
 
     private readonly IUnitOfWork _unitOfWork;
 
+    private readonly IEmailVerificationService
+        _emailVerification;
+
     private readonly ILogger<RegisterCommandHandler>
         _logger;
 
@@ -77,11 +80,13 @@ public sealed class RegisterCommandHandler
         IRegisterIdentityService identity,
         IUserAccountRepository accounts,
         IUnitOfWork unitOfWork,
+        IEmailVerificationService emailVerification,
         ILogger<RegisterCommandHandler> logger)
     {
         _identity = identity;
         _accounts = accounts;
         _unitOfWork = unitOfWork;
+        _emailVerification = emailVerification;
         _logger = logger;
     }
 
@@ -237,6 +242,17 @@ public sealed class RegisterCommandHandler
                 "Identity {IdentityId} and UserAccount registered successfully.",
                 userId);
 
+            /*
+             * 5. Address confirmation.
+             *
+             * After the commit, never before it: the account is what the confirmation
+             * refers to, and a mail server is not something to hold a database
+             * transaction open across.
+             */
+            await SendConfirmationEmailAsync(
+                userId,
+                email);
+
             return RegisterResult.Ok(
                 userId);
         }
@@ -251,6 +267,52 @@ public sealed class RegisterCommandHandler
                 "Atomic registration failed.");
 
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Mints a confirmation token and mails the link, and lets no failure out.
+    ///
+    /// By the time this runs the registration is committed: the account exists, the
+    /// user can sign in, and an unconfirmed address is simply unconfirmed -- login
+    /// does not gate on it. Rethrowing would report a sign-up that succeeded as one
+    /// that failed, and send the user back to register again against an email that
+    /// is now taken, which is a worse outcome than a missing message.
+    ///
+    /// The request's CancellationToken is deliberately not threaded through. It is
+    /// cancelled when the client goes away, and a user who closes the tab the instant
+    /// after submitting has still registered and still needs the link. The same
+    /// reasoning already governs the rollback path above.
+    /// </summary>
+    private async Task SendConfirmationEmailAsync(
+        Guid identityId,
+        string email)
+    {
+        try
+        {
+            var token =
+                await _identity
+                    .GenerateEmailConfirmationTokenAsync(
+                        identityId,
+                        CancellationToken.None);
+
+            await _emailVerification
+                .SendVerificationLinkAsync(
+                    email,
+                    token,
+                    CancellationToken.None);
+
+            _logger.LogInformation(
+                "Confirmation link sent for identity {IdentityId}.",
+                identityId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Identity {IdentityId} registered, but the confirmation email could "
+                + "not be sent. The account stays unconfirmed until it is resent.",
+                identityId);
         }
     }
 
