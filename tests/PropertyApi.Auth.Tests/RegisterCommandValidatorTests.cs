@@ -203,7 +203,9 @@ public sealed class RegisterCommandValidatorTests
 
         _passwordSecurityServiceMock
             .Setup(x => x.ValidatePasswordAsync("password123!", default))
-            .ReturnsAsync(PasswordValidationResult.Failure("Password must contain at least one uppercase letter (A-Z)."));
+            .ReturnsAsync(PasswordValidationResult.Failure(new PasswordValidationError(
+                PasswordErrorCodes.NoUppercase,
+                "Password must contain at least one uppercase letter (A-Z).")));
 
         // Act
         var result = await _validator.TestValidateAsync(command);
@@ -245,14 +247,51 @@ public sealed class RegisterCommandValidatorTests
 
         _passwordSecurityServiceMock
             .Setup(x => x.ValidatePasswordAsync("Password123!", default))
-            .ReturnsAsync(PasswordValidationResult.Failure(
-                "This password has been exposed in known data breaches. Please choose a different password."));
+            .ReturnsAsync(PasswordValidationResult.Failure(new PasswordValidationError(
+                PasswordErrorCodes.Breached,
+                "This password has been exposed in known data breaches. " +
+                "Please choose a different password.")));
 
         // Act
         var result = await _validator.TestValidateAsync(command);
 
         // Assert
         result.ShouldHaveValidationErrorFor(x => x.Password);
+    }
+
+    /// <summary>
+    /// The regression guard for the bug that sent English prose to Arabic and German
+    /// users: the validator must carry the service's stable code onto the failure, since
+    /// that code is the only thing a localised client can translate. Asserting only that
+    /// "a Password error occurred" -- as the fact above does -- passed happily while the
+    /// code was being dropped on the floor.
+    /// </summary>
+    [Fact]
+    public async Task Validate_WithBreachedPassword_CarriesTheStableErrorCodeOntoTheFailure()
+    {
+        // Arrange
+        var command = new RegisterCommand(
+            FirstName: "John",
+            LastName: "Doe",
+            Email: "john@example.com",
+            Password: "Password123!");
+
+        _passwordSecurityServiceMock
+            .Setup(x => x.ValidatePasswordAsync("Password123!", default))
+            .ReturnsAsync(PasswordValidationResult.Failure(new PasswordValidationError(
+                PasswordErrorCodes.Breached,
+                "This password has been exposed in known data breaches. " +
+                "Please choose a different password.")));
+
+        // Act
+        var result = await _validator.TestValidateAsync(command);
+
+        // Assert
+        var failure = Assert.Single(
+            result.Errors,
+            error => error.PropertyName == nameof(RegisterCommand.Password));
+
+        Assert.Equal(PasswordErrorCodes.Breached, failure.ErrorCode);
     }
 
     [Fact]
@@ -268,10 +307,18 @@ public sealed class RegisterCommandValidatorTests
         _passwordSecurityServiceMock
             .Setup(x => x.ValidatePasswordAsync("weak", default))
             .ReturnsAsync(PasswordValidationResult.Failure(
-                "Password must be at least 8 characters long.",
-                "Password must contain at least one uppercase letter (A-Z).",
-                "Password must contain at least one digit (0-9).",
-                "Password must contain at least one special character: !@#$%^&*()_+-=[]{}|;:',.<>?/~`"));
+                new PasswordValidationError(
+                    PasswordErrorCodes.TooShort,
+                    "Password must be at least 8 characters long."),
+                new PasswordValidationError(
+                    PasswordErrorCodes.NoUppercase,
+                    "Password must contain at least one uppercase letter (A-Z)."),
+                new PasswordValidationError(
+                    PasswordErrorCodes.NoDigit,
+                    "Password must contain at least one digit (0-9)."),
+                new PasswordValidationError(
+                    PasswordErrorCodes.NoSpecialCharacter,
+                    "Password must contain at least one special character: !@#$%^&*()_+-=[]{}|;:',.<>?/~`")));
 
         // Act
         var result = await _validator.TestValidateAsync(command);
@@ -318,8 +365,12 @@ public sealed class RegisterCommandValidatorTests
         _passwordSecurityServiceMock
             .Setup(x => x.ValidatePasswordAsync("weak", default))
             .ReturnsAsync(PasswordValidationResult.Failure(
-                "Password must be at least 8 characters long.",
-                "Password must contain at least one uppercase letter (A-Z)."));
+                new PasswordValidationError(
+                    PasswordErrorCodes.TooShort,
+                    "Password must be at least 8 characters long."),
+                new PasswordValidationError(
+                    PasswordErrorCodes.NoUppercase,
+                    "Password must contain at least one uppercase letter (A-Z).")));
 
         // Act
         var result = await _validator.TestValidateAsync(command);

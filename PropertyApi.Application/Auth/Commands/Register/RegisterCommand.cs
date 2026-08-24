@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using FluentValidation.Results;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
@@ -333,11 +334,20 @@ public sealed class RegisterCommandValidator
 
         // Surface every individual reason (length, character classes, breach)
         // rather than collapsing them into one opaque message.
+        //
+        // The stable code travels with the message because the code is what a client
+        // can translate. Sending the English sentence on its own is how Arabic and
+        // German users came to read "This password has been exposed in known data
+        // breaches" verbatim: the Angular app had nothing else to key a lookup off,
+        // so it printed the server's prose.
         foreach (var error in result.Errors)
         {
-            context.AddFailure(
+            context.AddFailure(new ValidationFailure(
                 nameof(RegisterCommand.Password),
-                error);
+                error.Message)
+            {
+                ErrorCode = error.Code
+            });
         }
     }
 }
