@@ -144,6 +144,101 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.ToTable("UserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("PropertyApi.Domain.Agencies.Entities.Agency", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("ContactPhone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("character(2)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LicenseNumber")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("LogoPublicId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Agencies_OwnerUserId")
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Agencies_Slug")
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.HasIndex("CountryCode", "City")
+                        .HasDatabaseName("IX_Agencies_CountryCode_City");
+
+                    b.ToTable("Agencies", (string)null);
+                });
+
             modelBuilder.Entity("PropertyApi.Domain.Audit.Entities.AuditLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -411,6 +506,9 @@ namespace PropertyApi.Infrastructure.Migrations
 
                     b.Property<decimal?>("AdditionalCosts")
                         .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid?>("AgencyId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("AgentId")
                         .HasColumnType("uuid");
@@ -711,6 +809,10 @@ namespace PropertyApi.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AgencyId")
+                        .HasDatabaseName("IX_Properties_AgencyId")
+                        .HasFilter("\"AgencyId\" IS NOT NULL");
+
                     b.HasIndex("AgentId");
 
                     b.HasIndex("City");
@@ -724,6 +826,10 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.HasIndex("ExpiresAt")
                         .HasDatabaseName("IX_Properties_ExpiresAt_PendingWarning")
                         .HasFilter("\"ExpiryWarningSentAt\" IS NULL");
+
+                    b.HasIndex("FeaturedUntil")
+                        .HasDatabaseName("IX_Properties_FeaturedUntil_Active")
+                        .HasFilter("\"IsFeatured\" = true");
 
                     b.HasIndex("FurnishingStatus");
 
@@ -1763,6 +1869,12 @@ namespace PropertyApi.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AgencyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("AgencyJoinedAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<string>("Bio")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -1824,6 +1936,10 @@ namespace PropertyApi.Infrastructure.Migrations
                         .HasColumnType("character varying(1024)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AgencyId")
+                        .HasDatabaseName("IX_UserAccounts_AgencyId")
+                        .HasFilter("\"AgencyId\" IS NOT NULL");
 
                     b.HasIndex("CountryCode");
 
@@ -2143,6 +2259,11 @@ namespace PropertyApi.Infrastructure.Migrations
 
             modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.Property", b =>
                 {
+                    b.HasOne("PropertyApi.Domain.Agencies.Entities.Agency", null)
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", "Agent")
                         .WithMany()
                         .HasForeignKey("AgentId")
@@ -2390,6 +2511,14 @@ namespace PropertyApi.Infrastructure.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Users.Entities.UserAccount", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Agencies.Entities.Agency", null)
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("PropertyApi.Infrastructure.Identity.Entities.RefreshToken", b =>

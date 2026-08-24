@@ -1,15 +1,15 @@
-﻿// NEW FILE: Extracts MapToDto() from GetPropertyByIdQueryHandler.
+// Property -> PropertyDto mapping.
 //
-// WHY: Having MapToDto() as an internal static method on a query handler
-//      and calling it from another handler creates coupling between handlers.
-//      A dedicated mapper is the correct pattern.
+// WHY IT LIVES HERE: it started life as an internal static method on a query handler, which
+// other handlers then reached into — coupling handlers to each other, and letting a second
+// copy drift out of sync with this one for months. A dedicated mapper is the correct pattern,
+// and having exactly one is the point.
 //
 // USAGE:
 //   using PropertyApi.Application.Listings.Mappers;
-//   var dto = PropertyMapper.ToDto(property);
-//
-// MIGRATION: Update GetPropertyByIdQueryHandler and GetPropertiesListQueryHandler
-//            to call PropertyMapper.ToDto() instead of GetPropertyByIdQueryHandler.MapToDto()
+//   var dto = PropertyMapper.ToDto(property);            // clock = DateTime.UtcNow
+//   var dto = PropertyMapper.ToDto(property, asOfUtc);   // fixed clock, for tests and pages
+
 
 using PropertyApi.Application.Listings.DTOs;
 using PropertyApi.Domain.Listings.Entities;
@@ -18,7 +18,16 @@ namespace PropertyApi.Application.Listings.Mappers;
 
 public static class PropertyMapper
 {
-    public static PropertyDto ToDto(Property p) => new()
+    /// <summary>
+    /// The single Property -> PropertyDto mapping. There used to be a second one
+    /// (GetPropertyByIdQueryHandler.MapToDto) serving the public detail and list endpoints,
+    /// and it silently fell seven fields behind this one — the structured-location fix landed
+    /// here and never there. It has been deleted; every caller goes through this method now.
+    ///
+    /// asOfUtc is injectable so the featured window can be evaluated at a fixed instant in
+    /// tests, and so a whole page of results is mapped against one clock reading.
+    /// </summary>
+    public static PropertyDto ToDto(Property p, DateTime? asOfUtc = null) => new()
     {
         Id = p.Id,
         Title = p.Title,
@@ -74,6 +83,10 @@ public static class PropertyMapper
         IsPublished = p.IsPublished,
         PublishedAt = p.PublishedAt,
         ExpiresAt = p.ExpiresAt,
+
+        // Paid featured placement — effective value, not the raw flag. See PropertyDto.
+        IsFeatured = p.IsCurrentlyFeatured(asOfUtc ?? DateTime.UtcNow),
+        FeaturedUntil = p.FeaturedUntil,
 
         // Timestamps
         CreatedAt = p.CreatedAt,

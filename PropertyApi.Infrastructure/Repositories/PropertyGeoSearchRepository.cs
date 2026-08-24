@@ -127,6 +127,15 @@ SELECT
         p."Area",
         p."OwnerId",
         p."CreatedAt",
+        -- Effective featured state, evaluated the same way Property.CurrentlyFeatured does:
+        -- the flag alone is not enough, because the sweep that clears a lapsed window only
+        -- runs every six hours. Badge only — the ORDER BY below stays proximity-first.
+        (
+            p."IsFeatured"
+            AND p."FeaturedUntil" IS NOT NULL
+            AND p."FeaturedUntil" > now()
+        ) AS "IsFeatured",
+        p."FeaturedUntil",
         trim(coalesce(ua."FirstName", '') || ' ' || coalesce(ua."LastName", '')) AS "OwnerName",
         main_image."Url" AS "MainImageUrl",
         ST_Distance(
@@ -193,6 +202,8 @@ ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
                     OwnerId = reader.GetGuid(reader.GetOrdinal("OwnerId")),
                     OwnerName = GetNullableString(reader, "OwnerName") ?? string.Empty,
                     MainImageUrl = GetNullableString(reader, "MainImageUrl"),
+                    IsFeatured = reader.GetBoolean(reader.GetOrdinal("IsFeatured")),
+                    FeaturedUntil = GetNullableDateTime(reader, "FeaturedUntil"),
                     DistanceMeters = Convert.ToDouble(reader["DistanceMeters"]),
                     CreatedAt = reader.GetDateTime(reader.GetOrdinal("CreatedAt"))
                 });
@@ -337,5 +348,11 @@ ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
     {
         var ordinal = reader.GetOrdinal(name);
         return reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
+    }
+
+    private static DateTime? GetNullableDateTime(IDataRecord reader, string name)
+    {
+        var ordinal = reader.GetOrdinal(name);
+        return reader.IsDBNull(ordinal) ? null : reader.GetDateTime(ordinal);
     }
 }

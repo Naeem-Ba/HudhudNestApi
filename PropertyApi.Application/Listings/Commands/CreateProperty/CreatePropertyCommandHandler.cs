@@ -1,5 +1,6 @@
 ﻿using MediatR;
 using Microsoft.Extensions.Logging;
+using PropertyApi.Application.Agencies.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
@@ -19,17 +20,20 @@ public sealed class CreatePropertyCommandHandler
     : IRequestHandler<CreatePropertyCommand, Guid>
 {
     private readonly IPropertyRepository _repo;
+    private readonly IAgencyRepository _agencies;
     private readonly IUnitOfWork _uow;
     private readonly ILocationSuggestionService _locationSuggestions;
     private readonly ILogger<CreatePropertyCommandHandler> _logger;
 
     public CreatePropertyCommandHandler(
         IPropertyRepository repo,
+        IAgencyRepository agencies,
         IUnitOfWork uow,
         ILocationSuggestionService locationSuggestions,
         ILogger<CreatePropertyCommandHandler> logger)
     {
         _repo = repo;
+        _agencies = agencies;
         _uow = uow;
         _locationSuggestions = locationSuggestions;
         _logger = logger;
@@ -89,6 +93,20 @@ public sealed class CreatePropertyCommandHandler
                     AmenityId = amenityId
                 });
             }
+        }
+
+        // Attribute the listing to the owner's agency, if they belong to one. Read from the
+        // owner's account rather than accepted from the request: a client that could name
+        // the agency could attribute its listing to somebody else's office.
+        //
+        // Attribution is captured once, at creation. It is NOT re-derived later, so a
+        // listing keeps the badge of the agency it was published under even if its owner
+        // moves on — which is what the listing's history actually was.
+        var ownerAccount = await _agencies.GetUserAccountAsync(request.OwnerId, cancellationToken);
+
+        if (ownerAccount?.AgencyId is { } agencyId)
+        {
+            property.SetAgency(agencyId);
         }
 
         await _repo.AddAsync(property, cancellationToken);

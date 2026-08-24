@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using PropertyApi.Domain.Agencies.Entities;
 using PropertyApi.Domain.Audit.Entities;
 using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Messaging.Entities;
@@ -49,6 +50,7 @@ public sealed class AppDbContext
 
     // -- DbSets --------------------------------------------------
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
+    public DbSet<Agency> Agencies => Set<Agency>();
     public DbSet<Property> Properties => Set<Property>();
     public DbSet<PropertyPriceHistory> PropertyPriceHistories => Set<PropertyPriceHistory>();
     public DbSet<PropertyImage> PropertyImages => Set<PropertyImage>();

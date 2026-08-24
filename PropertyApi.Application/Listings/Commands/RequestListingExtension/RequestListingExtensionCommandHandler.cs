@@ -35,13 +35,13 @@ public sealed class RequestListingExtensionCommandHandler
     private static readonly Guid PlatformReceiverId = Guid.Empty;
 
     private readonly IPropertyRepository _properties;
-    private readonly IListingExtensionRepository _extensions;
+    private readonly IListingFeeRepository _extensions;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<RequestListingExtensionCommandHandler> _logger;
 
     public RequestListingExtensionCommandHandler(
         IPropertyRepository properties,
-        IListingExtensionRepository extensions,
+        IListingFeeRepository extensions,
         IUnitOfWork unitOfWork,
         ILogger<RequestListingExtensionCommandHandler> logger)
     {
@@ -87,9 +87,10 @@ public sealed class RequestListingExtensionCommandHandler
                 "انتهت مهلة استرجاع هذا الإعلان ولم يعد التمديد ممكناً.");
         }
 
-        var existing = await _extensions.GetPendingExtensionFeeAsync(
+        var existing = await _extensions.GetPendingFeeAsync(
             property.Id,
             request.RequestingUserId,
+            TransactionType.ListingExtensionFee,
             cancellationToken);
 
         if (existing is not null)

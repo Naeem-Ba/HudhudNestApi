@@ -67,6 +67,13 @@ public sealed class PropertyDto
     public DateTime? PublishedAt { get; set; }
     public DateTime? ExpiresAt { get; set; }
 
+    // Paid featured placement. IsFeatured is the EFFECTIVE value at response time, not the
+    // raw column: the sweep that clears a lapsed flag runs every six hours, so between sweeps
+    // the row can still say true for a window that has already expired. FeaturedUntil is the
+    // raw value — it is the record of what was paid for and when it runs out.
+    public bool IsFeatured { get; set; }
+    public DateTime? FeaturedUntil { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

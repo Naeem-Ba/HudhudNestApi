@@ -98,13 +98,19 @@ public sealed class ListingExpiryHostedService : BackgroundService
         var expired = await ExpireElapsedAsync(db, notifications, now, ct);
         var deleted = await DeleteAfterGraceAsync(db, now, ct);
 
-        if (warned + expired + deleted > 0)
+        // Independent of the three phases above and ordered last only because it is the
+        // cheapest: a listing can lose its featured placement while its publication window
+        // is still running, and expiring can happen while a placement is still paid for.
+        var unfeatured = await ClearElapsedFeaturedAsync(db, now, ct);
+
+        if (warned + expired + deleted + unfeatured > 0)
         {
             _logger.LogInformation(
-                "Listing expiry sweep complete. Warned={Warned}, Expired={Expired}, Deleted={Deleted}.",
+                "Listing expiry sweep complete. Warned={Warned}, Expired={Expired}, Deleted={Deleted}, Unfeatured={Unfeatured}.",
                 warned,
                 expired,
-                deleted);
+                deleted,
+                unfeatured);
         }
     }
 
@@ -220,6 +226,45 @@ public sealed class ListingExpiryHostedService : BackgroundService
         foreach (var property in candidates)
         {
             property.MarkExpiredListingDeletedBySystem();
+        }
+
+        await db.SaveChangesAsync(ct);
+        return candidates.Count;
+    }
+
+    /// <summary>
+    /// Phase 4 — end featured placements whose paid window has elapsed.
+    /// </summary>
+    /// <remarks>
+    /// Read paths do not depend on this running: Property.IsCurrentlyFeatured(now) compares
+    /// FeaturedUntil itself, so a listing stops being promoted the moment its window ends
+    /// regardless of when the sweep next runs. This phase exists to keep the stored flag
+    /// honest — an IsFeatured column that stays true for weeks after the placement lapsed
+    /// makes every report and every index built on it wrong.
+    ///
+    /// FeaturedUntil is deliberately left in place. It is the record of what was paid for
+    /// and when it ran out; clearing it would erase the only trace of a completed purchase
+    /// outside the Transactions table.
+    ///
+    /// No notification is sent. Unlike listing expiry, nothing is lost that the owner must
+    /// act on within a deadline — the listing itself is untouched and still published.
+    /// </remarks>
+    private static async Task<int> ClearElapsedFeaturedAsync(
+        AppDbContext db,
+        DateTime now,
+        CancellationToken ct)
+    {
+        var candidates = await db.Properties
+            .Where(p =>
+                p.IsFeatured &&
+                (p.FeaturedUntil == null || p.FeaturedUntil <= now))
+            .OrderBy(p => p.FeaturedUntil)
+            .Take(MaxItemsPerPhase)
+            .ToListAsync(ct);
+
+        foreach (var property in candidates)
+        {
+            property.ClearFeatured();
         }
 
         await db.SaveChangesAsync(ct);
