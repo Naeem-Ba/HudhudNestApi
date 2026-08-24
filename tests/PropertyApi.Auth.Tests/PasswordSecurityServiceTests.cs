@@ -44,7 +44,7 @@ public sealed class PasswordSecurityServiceTests
 
         // Assert
         Assert.False(result.IsValid);
-        Assert.Contains("required", result.Errors[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(PasswordErrorCodes.Required, result.Errors[0].Code);
     }
 
     [Theory]
@@ -57,7 +57,7 @@ public sealed class PasswordSecurityServiceTests
 
         // Assert
         Assert.False(result.IsValid);
-        Assert.Contains("at least 8", result.Errors[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(PasswordErrorCodes.TooShort, result.Errors[0].Code);
     }
 
     #endregion
@@ -75,7 +75,7 @@ public sealed class PasswordSecurityServiceTests
 
         // Assert
         Assert.False(result.IsValid);
-        Assert.Contains("uppercase", result.Errors[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(PasswordErrorCodes.NoUppercase, result.Errors[0].Code);
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public sealed class PasswordSecurityServiceTests
 
         // Assert
         Assert.False(result.IsValid);
-        Assert.Contains("lowercase", result.Errors[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(PasswordErrorCodes.NoLowercase, result.Errors[0].Code);
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public sealed class PasswordSecurityServiceTests
 
         // Assert
         Assert.False(result.IsValid);
-        Assert.Contains("digit", result.Errors[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(PasswordErrorCodes.NoDigit, result.Errors[0].Code);
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public sealed class PasswordSecurityServiceTests
 
         // Assert
         Assert.False(result.IsValid);
-        Assert.Contains("special character", result.Errors[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(PasswordErrorCodes.NoSpecialCharacter, result.Errors[0].Code);
     }
 
     [Fact]
@@ -138,10 +138,10 @@ public sealed class PasswordSecurityServiceTests
         // Assert
         Assert.False(result.IsValid);
         Assert.True(result.Errors.Count >= 4, $"Expected at least 4 errors, got {result.Errors.Count}");
-        Assert.Contains(result.Errors, e => e.Contains("8", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(result.Errors, e => e.Contains("lowercase", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(result.Errors, e => e.Contains("digit", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(result.Errors, e => e.Contains("special character", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Errors, e => e.Code == PasswordErrorCodes.TooShort);
+        Assert.Contains(result.Errors, e => e.Code == PasswordErrorCodes.NoLowercase);
+        Assert.Contains(result.Errors, e => e.Code == PasswordErrorCodes.NoDigit);
+        Assert.Contains(result.Errors, e => e.Code == PasswordErrorCodes.NoSpecialCharacter);
     }
 
     #endregion
@@ -201,8 +201,7 @@ public sealed class PasswordSecurityServiceTests
 
         // Assert
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.Contains("breached", StringComparison.OrdinalIgnoreCase) ||
-                                            e.Contains("data breach", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Errors, e => e.Code == PasswordErrorCodes.Breached);
     }
 
     [Fact]
