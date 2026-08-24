@@ -1,16 +1,14 @@
-﻿using MediatR;
+using MediatR;
 using PropertyApi.Application.Listings.DTOs;
 using PropertyApi.Application.Listings.Interfaces;
-using PropertyApi.Application.Listings.Queries.GetPropertyById;
+using PropertyApi.Application.Listings.Mappers;
 using PropertyApi.Application.Properties.DTOs;
 
 namespace PropertyApi.Application.Listings.Queries.GetPropertiesList;
 
 /// <summary>
-/// BUG FIX: Was an empty "internal class GetPropertiesListQueryHandler {}" — completely missing.
-///
-/// NOTE: Uses GetPropertyByIdQueryHandler.MapToDto() to avoid duplicating mapping logic.
-/// If you later add AutoMapper or Mapster, replace the MapToDto call.
+/// Public, paginated listing search. Filtering, and the featured-first default ordering,
+/// happen in the repository — this handler only shapes the result.
 /// </summary>
 public sealed class GetPropertiesListQueryHandler
     : IRequestHandler<GetPropertiesListQuery, PagedResult<PropertyDto>>
@@ -28,10 +26,14 @@ public sealed class GetPropertiesListQueryHandler
             request.Filter,
             cancellationToken);
 
+        // One clock reading for the whole page: two listings whose featured windows straddle
+        // "now" must not be judged against two different instants within one response.
+        var asOfUtc = DateTime.UtcNow;
+
         return new PagedResult<PropertyDto>
         {
             Items = pagedProperties.Items
-                            .Select(GetPropertyByIdQueryHandler.MapToDto)
+                            .Select(property => PropertyMapper.ToDto(property, asOfUtc))
                             .ToList()
                             .AsReadOnly(),
             TotalCount = pagedProperties.TotalCount,
@@ -40,4 +42,3 @@ public sealed class GetPropertiesListQueryHandler
         };
     }
 }
-

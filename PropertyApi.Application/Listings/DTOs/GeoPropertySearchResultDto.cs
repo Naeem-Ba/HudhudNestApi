@@ -29,6 +29,20 @@ public sealed class GeoPropertySearchResultDto
     public string OwnerName { get; set; } = string.Empty;
     public string? MainImageUrl { get; set; }
 
+    /// <summary>
+    /// Paid featured placement, so the map can badge the listing. Computed in SQL against
+    /// now(), so a window that has already elapsed reads false even before the six-hourly
+    /// sweep clears the column.
+    ///
+    /// Map results are NOT reordered by this. The nearest-candidates CTE truncates to the
+    /// closest page of rows via the KNN operator before anything else runs, so promoting a
+    /// featured listing would mean promoting only those that happened to fall inside that
+    /// window — and "nearest first" would stop being true. Proximity is the contract of this
+    /// endpoint; the badge is what featured buys here.
+    /// </summary>
+    public bool IsFeatured { get; set; }
+    public DateTime? FeaturedUntil { get; set; }
+
     /// <summary>Distance from the requested point in meters.</summary>
     public double DistanceMeters { get; set; }
 

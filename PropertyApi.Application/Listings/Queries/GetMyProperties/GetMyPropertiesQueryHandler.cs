@@ -21,6 +21,10 @@ public sealed class GetMyPropertiesQueryHandler
             request.OwnerId,
             cancellationToken);
 
-        return properties.Select(PropertyMapper.ToDto).ToList();
+        // One clock reading for the whole list, so two listings whose featured windows
+        // straddle "now" are not judged against two different instants in one response.
+        var asOfUtc = DateTime.UtcNow;
+
+        return properties.Select(property => PropertyMapper.ToDto(property, asOfUtc)).ToList();
     }
 }

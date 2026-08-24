@@ -5,6 +5,7 @@ using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Commands.ConfirmFeaturedListingPayment;
 using PropertyApi.Application.Listings.Commands.RequestFeaturedListing;
 using PropertyApi.Application.Listings.Interfaces;
+using PropertyApi.Application.Listings.Mappers;
 using PropertyApi.Domain.Common.Exceptions;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Listings;
@@ -269,6 +270,77 @@ public sealed class FeaturedListingTests
     }
 
     // ── Helpers ──────────────────────────────────────────────────
+
+    // ── Delivery: the placement has to be visible and to rank ────
+    //
+    // Everything above proves the money is handled correctly. These prove the buyer gets
+    // something for it. Before this, IsFeatured was written by the payment path and read by
+    // nothing at all — no query, no sort, no DTO — so a paid placement changed nothing a
+    // single user could see.
+
+    [Fact]
+    public void CurrentlyFeaturedExpression_AgreesWithDomainMethod_InEveryReachableState()
+    {
+        var now = new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc);
+        var predicate = Property.CurrentlyFeatured(now).Compile();
+
+        var neverFeatured = CreatePublishedListing();
+
+        var activelyFeatured = CreatePublishedListing();
+        activelyFeatured.MarkFeatured(TimeSpan.FromDays(30), now.AddDays(-1));
+
+        // Paid window elapsed, flag not yet cleared — the sweep runs every six hours, so this
+        // is a state real rows sit in, not a hypothetical.
+        var lapsedButStillFlagged = CreatePublishedListing();
+        lapsedButStillFlagged.MarkFeatured(TimeSpan.FromDays(30), now.AddDays(-31));
+
+        var sweptClear = CreatePublishedListing();
+        sweptClear.MarkFeatured(TimeSpan.FromDays(30), now.AddDays(-31));
+        sweptClear.ClearFeatured();
+
+        Property[] states =
+            [neverFeatured, activelyFeatured, lapsedButStillFlagged, sweptClear];
+
+        foreach (var property in states)
+        {
+            Assert.Equal(property.IsCurrentlyFeatured(now), predicate(property));
+        }
+
+        // And the expression must actually discriminate — an expression that returned false
+        // for everything would satisfy the agreement check above without doing anything.
+        Assert.True(predicate(activelyFeatured));
+        Assert.False(predicate(neverFeatured));
+        Assert.False(predicate(lapsedButStillFlagged));
+        Assert.False(predicate(sweptClear));
+    }
+
+    [Fact]
+    public void Dto_ReportsActiveFeaturedPlacement()
+    {
+        var now = new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc);
+        var property = CreatePublishedListing();
+        property.MarkFeatured(TimeSpan.FromDays(30), now);
+
+        var dto = PropertyMapper.ToDto(property, now.AddDays(1));
+
+        Assert.True(dto.IsFeatured);
+        Assert.Equal(now.AddDays(30), dto.FeaturedUntil);
+    }
+
+    [Fact]
+    public void Dto_DoesNotReportFeatured_OnceThePaidWindowHasElapsed()
+    {
+        var start = new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc);
+        var property = CreatePublishedListing();
+        property.MarkFeatured(TimeSpan.FromDays(30), start);
+
+        // One minute past expiry, hours before the sweep would clear the column.
+        var dto = PropertyMapper.ToDto(property, start.AddDays(30).AddMinutes(1));
+
+        Assert.True(property.IsFeatured);   // the raw column still says yes
+        Assert.False(dto.IsFeatured);       // what the client is told does not
+        Assert.Equal(start.AddDays(30), dto.FeaturedUntil);
+    }
 
     private static Property CreatePublishedListing()
     {

@@ -1,4 +1,5 @@
-﻿using PropertyApi.Domain.Common.Entities;
+﻿using System.Linq.Expressions;
+using PropertyApi.Domain.Common.Entities;
 using PropertyApi.Domain.Common.Exceptions;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Listings.Enums;
@@ -503,4 +504,20 @@ public class Property : AuditableEntity
     /// </summary>
     public bool IsCurrentlyFeatured(DateTime asOfUtc)
         => IsFeatured && FeaturedUntil is { } until && until > asOfUtc;
+
+    /// <summary>
+    /// The SQL-translatable twin of <see cref="IsCurrentlyFeatured"/>, for use as an ORDER BY
+    /// or WHERE key on IQueryable&lt;Property&gt;. EF Core cannot translate a method call on the
+    /// entity, so the rule is deliberately expressed twice — the two sit adjacent so drift is
+    /// visible, and PropertySortOrderTests asserts they agree.
+    ///
+    /// The explicit null check is load-bearing: without it the generated SQL yields NULL for a
+    /// row with IsFeatured = true and FeaturedUntil = NULL, and PostgreSQL's ORDER BY ... DESC
+    /// puts NULLs first — silently promoting exactly the wrong rows.
+    /// </summary>
+    public static Expression<Func<Property, bool>> CurrentlyFeatured(DateTime asOfUtc)
+        => property =>
+            property.IsFeatured &&
+            property.FeaturedUntil != null &&
+            property.FeaturedUntil > asOfUtc;
 }
