@@ -54,7 +54,7 @@ public sealed class PasswordSecurityService : IPasswordSecurityService
         string password,
         CancellationToken cancellationToken = default)
     {
-        var errors = new List<string>();
+        var errors = new List<PasswordValidationError>();
 
         // 1. Check basic requirements
         var basicErrors = ValidateBasicRequirements(password);
@@ -96,44 +96,56 @@ public sealed class PasswordSecurityService : IPasswordSecurityService
     /// <summary>
     /// Validates basic password complexity requirements.
     /// </summary>
-    private static List<string> ValidateBasicRequirements(string password)
+    private static List<PasswordValidationError> ValidateBasicRequirements(string password)
     {
-        var errors = new List<string>();
+        var errors = new List<PasswordValidationError>();
 
         if (string.IsNullOrEmpty(password))
         {
-            errors.Add("Password is required.");
+            errors.Add(new PasswordValidationError(
+                PasswordErrorCodes.Required,
+                "Password is required."));
             return errors;
         }
 
         // Length check
         if (password.Length < MinimumLength)
         {
-            errors.Add($"Password must be at least {MinimumLength} characters long.");
+            errors.Add(new PasswordValidationError(
+                PasswordErrorCodes.TooShort,
+                $"Password must be at least {MinimumLength} characters long."));
         }
 
         // Uppercase check
         if (!password.Any(char.IsUpper))
         {
-            errors.Add("Password must contain at least one uppercase letter (A-Z).");
+            errors.Add(new PasswordValidationError(
+                PasswordErrorCodes.NoUppercase,
+                "Password must contain at least one uppercase letter (A-Z)."));
         }
 
         // Lowercase check
         if (!password.Any(char.IsLower))
         {
-            errors.Add("Password must contain at least one lowercase letter (a-z).");
+            errors.Add(new PasswordValidationError(
+                PasswordErrorCodes.NoLowercase,
+                "Password must contain at least one lowercase letter (a-z)."));
         }
 
         // Digit check
         if (!password.Any(char.IsDigit))
         {
-            errors.Add("Password must contain at least one digit (0-9).");
+            errors.Add(new PasswordValidationError(
+                PasswordErrorCodes.NoDigit,
+                "Password must contain at least one digit (0-9)."));
         }
 
         // Special character check
         if (!password.Any(c => SpecialCharacters.Contains(c)))
         {
-            errors.Add($"Password must contain at least one special character: {SpecialCharacters}");
+            errors.Add(new PasswordValidationError(
+                PasswordErrorCodes.NoSpecialCharacter,
+                $"Password must contain at least one special character: {SpecialCharacters}"));
         }
 
         return errors;
@@ -146,9 +158,9 @@ public sealed class PasswordSecurityService : IPasswordSecurityService
     private static readonly char[] DecorationCharacters =
         ("0123456789" + SpecialCharacters).ToCharArray();
 
-    private static List<string> ValidateCommonPatterns(string password)
+    private static List<PasswordValidationError> ValidateCommonPatterns(string password)
     {
-        var errors = new List<string>();
+        var errors = new List<PasswordValidationError>();
 
         // One combined trim, not digits-then-symbols: trimming in two passes leaves
         // "Password1!" as "Password1", because the trailing '!' shields the '1' from
@@ -157,16 +169,18 @@ public sealed class PasswordSecurityService : IPasswordSecurityService
 
         if (CommonBaseWords.Contains(core))
         {
-            errors.Add(
+            errors.Add(new PasswordValidationError(
+                PasswordErrorCodes.CommonWord,
                 "Password is based on a commonly used word. Adding digits or symbols to " +
-                "it does not make it harder to guess.");
+                "it does not make it harder to guess."));
         }
 
         if (HasLongRun(password))
         {
-            errors.Add(
+            errors.Add(new PasswordValidationError(
+                PasswordErrorCodes.LongRun,
                 $"Password contains a run of more than {MaximumRunLength} sequential or " +
-                "repeated characters.");
+                "repeated characters."));
         }
 
         return errors;
@@ -207,7 +221,7 @@ public sealed class PasswordSecurityService : IPasswordSecurityService
     /// Checks if password exists in Have I Been Pwned database using k-anonymity.
     /// https://haveibeenpwned.com/API/v3
     /// </summary>
-    private async Task<string?> CheckBreachedPasswordAsync(
+    private async Task<PasswordValidationError?> CheckBreachedPasswordAsync(
         string password,
         CancellationToken cancellationToken)
     {
@@ -261,7 +275,10 @@ public sealed class PasswordSecurityService : IPasswordSecurityService
 
                 ApplicationTelemetry.RecordPasswordBreachScreening("breached");
 
-                return "This password has been exposed in known data breaches. Please choose a different password.";
+                return new PasswordValidationError(
+                    PasswordErrorCodes.Breached,
+                    "This password has been exposed in known data breaches. " +
+                    "Please choose a different password.");
             }
 
             ApplicationTelemetry.RecordPasswordBreachScreening("clean");

@@ -52,7 +52,12 @@ public sealed class ExceptionHandlingMiddleware
             {
                 title = "Validation Error",
                 status = StatusCodes.Status422UnprocessableEntity,
-                errors = ex.Errors
+                errors = ex.Errors,
+
+                // Same shape as "errors", aligned index-for-index, carrying the stable
+                // code for each message so a localised client can translate rather than
+                // print the server's English.
+                errorCodes = ex.ErrorCodes
             });
         }
         catch (FluentValidation.ValidationException ex)
@@ -70,15 +75,24 @@ public sealed class ExceptionHandlingMiddleware
                 context.Request.Path,
                 ex.Errors.Select(failure => failure.ErrorMessage));
 
-            var errors = ex.Errors
-                .GroupBy(failure => failure.PropertyName, failure => failure.ErrorMessage)
-                .ToDictionary(group => group.Key, group => group.ToArray());
+            var grouped = ex.Errors
+                .GroupBy(failure => failure.PropertyName)
+                .ToList();
+
+            var errors = grouped.ToDictionary(
+                group => group.Key,
+                group => group.Select(failure => failure.ErrorMessage).ToArray());
+
+            var errorCodes = grouped.ToDictionary(
+                group => group.Key,
+                group => group.Select(failure => failure.ErrorCode ?? string.Empty).ToArray());
 
             await WriteJson(context, StatusCodes.Status422UnprocessableEntity, new
             {
                 title = "Validation Error",
                 status = StatusCodes.Status422UnprocessableEntity,
-                errors
+                errors,
+                errorCodes
             });
         }
         catch (NotFoundException ex)
