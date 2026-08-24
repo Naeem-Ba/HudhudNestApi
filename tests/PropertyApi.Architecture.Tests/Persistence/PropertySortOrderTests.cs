@@ -136,11 +136,18 @@ public sealed class PropertySortOrderTests
         Assert.Contains("\"CreatedAt\" DESC", orderBy);
     }
 
+    /// <summary>
+    /// Passing a null sort key is deliberate, and three of the facts above depend on it.
+    /// PropertyFilterDto.SortBy is annotated non-nullable and carries a "CreatedAt" default,
+    /// but the annotation is advisory at runtime: a request body with an explicit null writes
+    /// one straight through it. That is precisely the case ApplySort's null-conditional call
+    /// guards, so the suppression below asserts the hostile input rather than hiding it.
+    /// </summary>
     private static string[] Sort(Property[] listings, string? sortBy, bool descending)
         => PropertyRepository
             .ApplySort(
                 listings.AsQueryable(),
-                new PropertyFilterDto { SortBy = sortBy, SortDescending = descending },
+                new PropertyFilterDto { SortBy = sortBy!, SortDescending = descending },
                 Now)
             .Select(property => property.Title)
             .ToArray();
