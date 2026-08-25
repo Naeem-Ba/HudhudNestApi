@@ -20,6 +20,35 @@ updates:
           - "coverlet*"
           - "Moq"
 
+    # Major-version bars, not version freezes. Patches and minors still flow --
+    # which is where security fixes for this stack land -- and every bar below
+    # names the condition that lifts it.
+    ignore:
+      # Directory.Build.props targets net8.0 for all 15 projects. These packages
+      # are versioned in lockstep with the framework, so a major bump is a
+      # framework migration wearing a dependency bump's clothes. #60 proposed
+      # exactly that: EF Core 9.0.19 next to EF Core Tools 10.0.11 -- internally
+      # inconsistent before it is even incompatible, and EF Core 10 requires
+      # net10.0. Lift all four when the TargetFramework moves.
+      - dependency-name: "Microsoft.AspNetCore.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Npgsql*"
+        update-types: ["version-update:semver-major"]
+
+      # MediatR 13+ is not a maintenance upgrade, it is a licence change:
+      # 12.5.0 is Apache-2.0, 14.2.0 ships a file licence with
+      # requireLicenseAcceptance. It also demands
+      # Microsoft.Extensions.{DependencyInjection,Logging}.Abstractions 10.0.0
+      # even in its own net8.0 dependency group, against the 8.0.x pinned here.
+      # Merged in #48, reverted in #54, proposed again in #62. 74 files use
+      # IRequestHandler. Lift only on a deliberate licensing decision.
+      - dependency-name: "MediatR"
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
