@@ -1,8 +1,10 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Mail;
+using System.Net.Mime;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Common.Models;
 using IdentityEmailSender = Microsoft.AspNetCore.Identity.UI.Services.IEmailSender;
 
 namespace PropertyApi.Infrastructure.Email;
@@ -21,10 +23,17 @@ public sealed class SmtpEmailSender
         _logger = logger;
     }
 
-    public async Task SendEmailAsync(
+    public Task SendEmailAsync(
         string email,
         string subject,
         string htmlMessage)
+        => SendEmailAsync(
+            new EmailMessage(email, subject, htmlMessage),
+            CancellationToken.None);
+
+    public async Task SendEmailAsync(
+        EmailMessage message,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(_options.SmtpHost))
         {
@@ -36,15 +45,36 @@ public sealed class SmtpEmailSender
             ? _options.Username
             : _options.From;
 
-        using var message = new MailMessage
+        using var mail = new MailMessage
         {
-            From = new MailAddress(from),
-            Subject = subject,
-            Body = htmlMessage,
-            IsBodyHtml = true
+            From = string.IsNullOrWhiteSpace(_options.FromName)
+                ? new MailAddress(from)
+                : new MailAddress(from, _options.FromName),
+            Subject = message.Subject
         };
 
-        message.To.Add(email);
+        if (string.IsNullOrWhiteSpace(message.Text))
+        {
+            mail.Body = message.Html;
+            mail.IsBodyHtml = true;
+        }
+        else
+        {
+            // multipart/alternative, least-capable rendering first, as RFC 2046 orders it.
+            mail.AlternateViews.Add(
+                AlternateView.CreateAlternateViewFromString(
+                    message.Text,
+                    null,
+                    MediaTypeNames.Text.Plain));
+
+            mail.AlternateViews.Add(
+                AlternateView.CreateAlternateViewFromString(
+                    message.Html,
+                    null,
+                    MediaTypeNames.Text.Html));
+        }
+
+        mail.To.Add(message.To);
 
         using var client = new SmtpClient(
             _options.SmtpHost,
@@ -56,6 +86,6 @@ public sealed class SmtpEmailSender
                 _options.Password)
         };
 
-        await client.SendMailAsync(message);
+        await client.SendMailAsync(mail, ct);
     }
 }

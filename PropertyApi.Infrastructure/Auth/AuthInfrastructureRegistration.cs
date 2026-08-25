@@ -135,6 +135,9 @@ internal static class AuthInfrastructureRegistration
         services.AddScoped<IRegisterIdentityService>(
             sp => (IRegisterIdentityService)
                 sp.GetRequiredService<IIdentityCapabilityAdapter>());
+        services.AddScoped<IResendConfirmationIdentityService>(
+            sp => (IResendConfirmationIdentityService)
+                sp.GetRequiredService<IIdentityCapabilityAdapter>());
         services.AddScoped<ILoginIdentityService>(
             sp => (ILoginIdentityService)
                 sp.GetRequiredService<IIdentityCapabilityAdapter>());
@@ -194,39 +197,206 @@ internal static class AuthInfrastructureRegistration
     {
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IPasswordResetUrlBuilder, PasswordResetUrlBuilder>();
+        services.AddScoped<IEmailConfirmationUrlBuilder, EmailConfirmationUrlBuilder>();
         services.AddScoped<IJwtTokenSettings, JwtTokenSettings>();
         services.AddHostedService<OtpCleanupHostedService>();
         services.AddScoped<PhoneNumberLookupHashBackfill>();
     }
+
+    private const string ConsoleEmailProvider = "Console";
+    private const string SmtpEmailProvider = "Smtp";
+    private const string ResendEmailProvider = "Resend";
 
     private static void AddEmailServices(
         IServiceCollection services,
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        services.Configure<EmailOptions>(
-            configuration.GetSection(EmailOptions.SectionName));
+        var provider =
+            ResolveEmailProvider(
+                configuration,
+                environment);
 
-        if (environment.IsProduction())
+        services.AddOptions<EmailOptions>()
+            .Bind(configuration.GetSection(EmailOptions.SectionName))
+            .Validate(
+                options =>
+                    string.IsNullOrWhiteSpace(options.Provider) ||
+                    IsKnownEmailProvider(options.Provider),
+                "Email:Provider must be Console, Smtp or Resend.")
+            .ValidateOnStart();
+
+        switch (provider)
         {
-            services.AddScoped<SmtpEmailSender>();
+            case ResendEmailProvider:
+                AddResendEmailSender(
+                    services,
+                    configuration);
+                break;
 
-            services.AddScoped<IdentityEmailSender>(
-                sp => sp.GetRequiredService<SmtpEmailSender>());
+            case SmtpEmailProvider:
+                AddAliasedEmailSender<SmtpEmailSender>(
+                    services);
+                break;
 
-            services.AddScoped<IApplicationEmailSender>(
-                sp => sp.GetRequiredService<SmtpEmailSender>());
+            default:
+                // Logging a message to the console instead of delivering it is a
+                // development convenience. Reaching Production with it selected means
+                // nobody would ever receive a confirmation link, and nothing would say so
+                // -- refuse to start rather than fail silently for the next release.
+                if (environment.IsProduction())
+                {
+                    throw new InvalidOperationException(
+                        "Email:Provider must be Smtp or Resend in Production; Console only logs messages.");
+                }
+
+                AddAliasedEmailSender<ConsoleEmailSender>(
+                    services);
+                break;
         }
-        else
+
+        ValidateConfirmationLinkOrigin(
+            configuration,
+            environment);
+    }
+
+    /// <summary>
+    /// Asks the URL builder its question at startup, while the answer can still stop a
+    /// deployment.
+    ///
+    /// The confirmation link is otherwise built lazily, inside a send that both callers
+    /// deliberately swallow. A Production instance configured with no trusted origin -- or
+    /// with the plain-HTTP default that ships in appsettings.json -- would register
+    /// accounts, log an error nobody is watching, and mail nothing at all.
+    /// </summary>
+    private static void ValidateConfirmationLinkOrigin(
+        IConfiguration configuration,
+        IHostEnvironment environment)
+    {
+        if (!environment.IsProduction())
         {
-            services.AddScoped<ConsoleEmailSender>();
-
-            services.AddScoped<IdentityEmailSender>(
-                sp => sp.GetRequiredService<ConsoleEmailSender>());
-
-            services.AddScoped<IApplicationEmailSender>(
-                sp => sp.GetRequiredService<ConsoleEmailSender>());
+            return;
         }
+
+        // Built rather than re-checked, so there is one set of rules and not two.
+        _ = new EmailConfirmationUrlBuilder(configuration, environment)
+            .Build(Guid.Empty, "startup-validation");
+    }
+
+    private static string ResolveEmailProvider(
+        IConfiguration configuration,
+        IHostEnvironment environment)
+    {
+        var configured =
+            configuration[$"{EmailOptions.SectionName}:Provider"];
+
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return NormalizeEmailProvider(configured);
+        }
+
+        // Unset, keep the rule this method used to apply on its own, so an environment
+        // that has never heard of Email:Provider behaves exactly as it did before.
+        return environment.IsProduction()
+            ? SmtpEmailProvider
+            : ConsoleEmailProvider;
+    }
+
+    private static bool IsKnownEmailProvider(
+        string provider)
+        => NormalizeEmailProvider(provider) is
+            ConsoleEmailProvider or
+            SmtpEmailProvider or
+            ResendEmailProvider;
+
+    private static string NormalizeEmailProvider(
+        string provider)
+    {
+        var trimmed = provider.Trim();
+
+        if (string.Equals(trimmed, ConsoleEmailProvider, StringComparison.OrdinalIgnoreCase))
+            return ConsoleEmailProvider;
+
+        if (string.Equals(trimmed, SmtpEmailProvider, StringComparison.OrdinalIgnoreCase))
+            return SmtpEmailProvider;
+
+        if (string.Equals(trimmed, ResendEmailProvider, StringComparison.OrdinalIgnoreCase))
+            return ResendEmailProvider;
+
+        return trimmed;
+    }
+
+    private static void AddResendEmailSender(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddOptions<ResendEmailOptions>()
+            .Bind(configuration.GetSection(ResendEmailOptions.SectionName))
+            .Validate(
+                options => !string.IsNullOrWhiteSpace(options.ApiKey),
+                "Email:Resend:ApiKey is required when Email:Provider is Resend.")
+            .Validate(
+                options =>
+                    Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var uri) &&
+                    uri.Scheme == Uri.UriSchemeHttps,
+                "Email:Resend:BaseUrl must be a valid absolute HTTPS URL.")
+            .Validate(
+                options => options.TimeoutSeconds is > 0 and <= 120,
+                "Email:Resend:TimeoutSeconds must be between 1 and 120.")
+            .ValidateOnStart();
+
+        services.AddOptions<EmailOptions>()
+            .Bind(configuration.GetSection(EmailOptions.SectionName))
+            .Validate(
+                options => !string.IsNullOrWhiteSpace(options.From),
+                "Email:From is required when Email:Provider is Resend.")
+            .ValidateOnStart();
+
+        var resendOptions =
+            configuration
+                .GetSection(ResendEmailOptions.SectionName)
+                .Get<ResendEmailOptions>()
+            ?? new ResendEmailOptions();
+
+        services.AddHttpClient<ResendEmailSender>(client =>
+        {
+            client.BaseAddress =
+                new Uri(
+                    resendOptions.BaseUrl.TrimEnd('/') + "/");
+
+            client.Timeout =
+                TimeSpan.FromSeconds(resendOptions.TimeoutSeconds);
+        });
+
+        AddEmailSenderAliases<ResendEmailSender>(services);
+    }
+
+    private static void AddAliasedEmailSender<TSender>(
+        IServiceCollection services)
+        where TSender : class, IdentityEmailSender, IApplicationEmailSender
+    {
+        services.AddScoped<TSender>();
+
+        AddEmailSenderAliases<TSender>(services);
+    }
+
+    /// <summary>
+    /// Publishes one sender under both contracts.
+    ///
+    /// The aliases are registered Scoped even when the sender behind them is not:
+    /// AddHttpClient registers its typed client Transient, and CompositionRegistrationTests
+    /// pins IApplicationEmailSender to a scoped lifetime. Resolving through these factories
+    /// keeps that promise whatever lifetime the concrete type happens to have.
+    /// </summary>
+    private static void AddEmailSenderAliases<TSender>(
+        IServiceCollection services)
+        where TSender : class, IdentityEmailSender, IApplicationEmailSender
+    {
+        services.AddScoped<IdentityEmailSender>(
+            sp => sp.GetRequiredService<TSender>());
+
+        services.AddScoped<IApplicationEmailSender>(
+            sp => sp.GetRequiredService<TSender>());
     }
 
     private static void AddSmsAndOtpServices(

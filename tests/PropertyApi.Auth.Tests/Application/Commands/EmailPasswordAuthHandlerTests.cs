@@ -447,6 +447,7 @@ public sealed class RegisterCommandHandlerTests
                 identity.Object,
                 accounts.Object,
                 unitOfWork,
+                Mock.Of<IEmailVerificationService>(),
                 NullLogger<RegisterCommandHandler>.Instance);
 
         // Act
@@ -517,17 +518,29 @@ public sealed class RegisterCommandHandlerTests
             .ReturnsAsync(
                 IdentityOperationResult.Success());
 
+        identity
+            .Setup(
+                x => x.GenerateEmailConfirmationTokenAsync(
+                    It.IsAny<Guid>(),
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                "confirmation-token");
+
         var accounts =
             new Mock<IUserAccountRepository>();
 
         var unitOfWork =
             Mock.Of<IUnitOfWork>();
 
+        var emailVerification =
+            new Mock<IEmailVerificationService>();
+
         var handler =
             new RegisterCommandHandler(
                 identity.Object,
                 accounts.Object,
                 unitOfWork,
+                emailVerification.Object,
                 NullLogger<RegisterCommandHandler>.Instance);
 
         // Act
@@ -585,6 +598,104 @@ public sealed class RegisterCommandHandlerTests
             x => x.AddToRoleAsync(
                 createdUserId,
                 RoleNames.User,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        // The link goes to the normalized address, not the mixed-case one typed in.
+        emailVerification.Verify(
+            x => x.SendVerificationLinkAsync(
+                "naeem@example.com",
+                "confirmation-token",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact(
+        DisplayName =
+            "Register succeeds even when the confirmation email cannot be sent")]
+    public async Task MailFailure_StillReturnsSuccess()
+    {
+        // Arrange
+        //
+        // Reporting a committed registration as a failure is the worst outcome on
+        // offer: the user tries again and collides with the email they just claimed
+        // seconds earlier. A refused SMTP connection leaves an unconfirmed account,
+        // which is exactly what an unconfirmed account is for.
+        var identity =
+            new Mock<IRegisterIdentityService>();
+
+        identity
+            .Setup(
+                x => x.FindByEmailAsync(
+                    "naeem@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                (IdentityAccountSnapshot?)null);
+
+        identity
+            .Setup(
+                x => x.CreateAsync(
+                    It.IsAny<CreateIdentityAccount>(),
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                IdentityOperationResult.Success());
+
+        identity
+            .Setup(
+                x => x.AddToRoleAsync(
+                    It.IsAny<Guid>(),
+                    RoleNames.User,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                IdentityOperationResult.Success());
+
+        identity
+            .Setup(
+                x => x.GenerateEmailConfirmationTokenAsync(
+                    It.IsAny<Guid>(),
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                "confirmation-token");
+
+        var emailVerification =
+            new Mock<IEmailVerificationService>();
+
+        emailVerification
+            .Setup(
+                x => x.SendVerificationLinkAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+            .ThrowsAsync(
+                new InvalidOperationException(
+                    "SMTP host refused the connection."));
+
+        var handler =
+            new RegisterCommandHandler(
+                identity.Object,
+                new Mock<IUserAccountRepository>().Object,
+                Mock.Of<IUnitOfWork>(),
+                emailVerification.Object,
+                NullLogger<RegisterCommandHandler>.Instance);
+
+        // Act
+        var result =
+            await handler.Handle(
+                new RegisterCommand(
+                    "Naeem",
+                    "Bazzazeh",
+                    "naeem@example.com",
+                    "Password123"),
+                CancellationToken.None);
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.NotNull(result.UserId);
+
+        emailVerification.Verify(
+            x => x.SendVerificationLinkAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }

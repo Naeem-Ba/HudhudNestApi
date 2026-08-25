@@ -1,9 +1,9 @@
-﻿using System.Net;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.UI.Services;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Common.Models;
+using PropertyApi.Infrastructure.Email.Templates;
 using PropertyApi.Infrastructure.Identity.Entities;
 
 namespace PropertyApi.Infrastructure.Auth.Services;
@@ -11,32 +11,32 @@ namespace PropertyApi.Infrastructure.Auth.Services;
 public sealed class EmailVerificationService : IEmailVerificationService
 {
     private readonly UserManager<ApplicationUser> _userManager;
-    private readonly IEmailSender _emailSender;
-    private readonly IConfiguration _configuration;
+    private readonly IApplicationEmailSender _emailSender;
+    private readonly IEmailConfirmationUrlBuilder _urlBuilder;
     private readonly ILogger<EmailVerificationService> _logger;
 
     public EmailVerificationService(
         UserManager<ApplicationUser> userManager,
-        IEmailSender emailSender,
-        IConfiguration configuration,
+        IApplicationEmailSender emailSender,
+        IEmailConfirmationUrlBuilder urlBuilder,
         ILogger<EmailVerificationService> logger)
     {
         _userManager = userManager;
         _emailSender = emailSender;
-        _configuration = configuration;
+        _urlBuilder = urlBuilder;
         _logger = logger;
     }
 
     public async Task SendVerificationLinkAsync(
         string email,
-        string token,
+        string verificationToken,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(email))
             throw new ArgumentException("Email is required.", nameof(email));
 
-        if (string.IsNullOrWhiteSpace(token))
-            throw new ArgumentException("Verification token is required.", nameof(token));
+        if (string.IsNullOrWhiteSpace(verificationToken))
+            throw new ArgumentException("Verification token is required.", nameof(verificationToken));
 
         var user = await _userManager.FindByEmailAsync(email);
 
@@ -49,28 +49,15 @@ public sealed class EmailVerificationService : IEmailVerificationService
             return;
         }
 
-        var frontendBaseUrl =
-            _configuration["Frontend:BaseUrl"] ??
-            _configuration["App:FrontendBaseUrl"] ??
-            "http://localhost:4200";
-
-        var encodedEmail = WebUtility.UrlEncode(email);
-        var encodedToken = WebUtility.UrlEncode(token);
-
         var verificationUrl =
-            $"{frontendBaseUrl.TrimEnd('/')}/auth/verify-email" +
-            $"?userId={user.Id}&email={encodedEmail}&token={encodedToken}";
-
-        var htmlBody = $"""
-            <p>Hello,</p>
-            <p>Please confirm your email address by clicking the link below:</p>
-            <p><a href="{verificationUrl}">Confirm email</a></p>
-            <p>If you did not request this, you can ignore this email.</p>
-            """;
+            _urlBuilder.Build(user.Id, verificationToken);
 
         await _emailSender.SendEmailAsync(
-            email,
-            "Confirm your email",
-            htmlBody);
+            new EmailMessage(
+                email,
+                EmailConfirmationTemplate.Subject,
+                EmailConfirmationTemplate.BuildHtml(verificationUrl),
+                EmailConfirmationTemplate.BuildText(verificationUrl)),
+            ct);
     }
 }

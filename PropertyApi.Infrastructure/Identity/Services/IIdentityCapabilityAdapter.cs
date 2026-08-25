@@ -13,6 +13,7 @@ public interface IIdentityCapabilityAdapter
         IRefreshTokenIdentityService,
         IPhoneOtpIdentityService,
         IRegisterIdentityService,
+        IResendConfirmationIdentityService,
         ILoginIdentityService,
         IResetPasswordIdentityService,
         ILogoutIdentityService,
