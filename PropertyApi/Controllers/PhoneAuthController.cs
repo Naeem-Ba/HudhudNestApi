@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.Auth.Commands.AddEmail;
+using PropertyApi.Application.Auth.Commands.ResendConfirmationEmail;
 using PropertyApi.Application.Auth.Commands.SendPhoneOtp;
 using PropertyApi.Application.Auth.Commands.VerifyEmail;
 using PropertyApi.Application.Auth.Commands.VerifyPhoneOtp;
@@ -88,7 +89,7 @@ public sealed class PhoneAuthController : ControllerBase
         // ?????? ????? ???????? ?? ??? JWT Token
         var userId = GetCurrentUserId();
         if (userId is null)
-            return Unauthorized(new ErrorResponse("UNAUTHORIZED", "??? ????."));
+            return Unauthorized(new ErrorResponse("UNAUTHORIZED", "غير مصرّح."));
 
         var command = new AddEmailCommand(userId.Value, request.Email);
         var result = await _mediator.Send(command, ct);
@@ -96,10 +97,10 @@ public sealed class PhoneAuthController : ControllerBase
         if (!result.Success)
             return BadRequest(new ErrorResponse(
                 result.ErrorCode ?? "ERROR",
-                result.ErrorMessage ?? "??? ????? ??????"));
+                result.ErrorMessage ?? "تعذّر إضافة البريد."));
 
         return Ok(new MessageResponse(
-            "?? ????? ????? ???? ?????? ??????????. ???? ?? ????? ??????."));
+            "تم إرسال رابط تأكيد البريد الإلكتروني. تفقّد صندوق الوارد."));
     }
 
     // ----------------------------------------------------------
@@ -129,7 +130,40 @@ public sealed class PhoneAuthController : ControllerBase
         if (!result.Success)
             return BadRequest(new ErrorResponse("VERIFY_FAILED", result.ErrorMessage!));
 
-        return Ok(new MessageResponse("?? ????? ????? ?????????? ?????!"));
+        return Ok(new MessageResponse("تم تأكيد بريدك الإلكتروني بنجاح."));
+    }
+
+    // ----------------------------------------------------------
+    // POST /api/auth/email/resend-confirmation
+    // ----------------------------------------------------------
+    /// <summary>Sends the email-confirmation link again.</summary>
+    /// <remarks>
+    /// Anonymous by necessity: the caller is someone who cannot finish signing up because
+    /// the first link never arrived, and gating this on a token would exclude exactly the
+    /// accounts that need it.
+    ///
+    /// The response is identical whether the address is unknown, already confirmed, or
+    /// was just sent to, so it cannot be used to discover which addresses hold accounts.
+    ///
+    /// ```json
+    /// POST /api/auth/email/resend-confirmation
+    /// { "email": "ahmed@example.com" }
+    /// ```
+    /// </remarks>
+    [HttpPost("email/resend-confirmation")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth-password-reset")]
+    [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> ResendConfirmation(
+        [FromBody] ResendConfirmationRequest request,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new ResendConfirmationEmailCommand(request.Email),
+            ct);
+
+        return Ok(new MessageResponse(result.Message));
     }
 
     // -- ???? ??????: ??????? ????? ???????? ?? ??? JWT --------
@@ -168,6 +202,8 @@ public sealed record VerifyOtpRequest(
 public sealed record AddEmailRequest(string Email);
 
 public sealed record VerifyEmailRequest(Guid UserId, string Token);
+
+public sealed record ResendConfirmationRequest(string Email);
 
 // -- Responses -------------------------------------------------
 public sealed record SendOtpResponse(string Message, int ExpiresInSeconds);

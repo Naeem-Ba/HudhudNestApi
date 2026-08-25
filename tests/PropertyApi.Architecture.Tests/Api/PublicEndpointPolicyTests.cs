@@ -38,6 +38,13 @@ public sealed class PublicEndpointPolicyTests
             "AuthController.SocialLoginApple",
             "PhoneAuthController.LegacyPhoneOtpFlowRemoved",
             "PhoneAuthController.VerifyEmail",
+
+            // Resending a confirmation link: the caller is stuck precisely because they
+            // cannot confirm, so they hold no token. The response is identical for known
+            // and unknown addresses, and the "auth-password-reset" rate-limit policy
+            // bounds abuse.
+            "PhoneAuthController.ResendConfirmation",
+
             "PhonePasswordAuthController.SendRegistrationOtp",
             "PhonePasswordAuthController.Register",
             "PhonePasswordAuthController.Login",
