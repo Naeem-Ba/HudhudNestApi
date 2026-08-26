@@ -87,10 +87,13 @@ public sealed class PublicEndpointPolicyTests
             "ContactController.Submit",
 
             // Operational surface.
-            "OperationalController.BuildInfo",
             "ObservabilitySyntheticController.Execute",
 
             // Staging-only, and gated on their own checks rather than on a JWT.
+            // BuildInfo moved here in RELEASE-BLOCKERS-AR.md B-8 — it used to answer anyone
+            // with real infrastructure detail (migration state, PostGIS availability, Staging's
+            // isolation markers); it now shares StagingTestSupportAuthorization's secret gate.
+            "OperationalController.BuildInfo",
             "StagingTestSupportController.GetMedia",
             "StagingTestSupportController.Cleanup"
         };

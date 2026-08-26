@@ -63,6 +63,7 @@ public sealed class SavedSearchCommandHandlerTests
         public Task BeginTransactionAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task CommitTransactionAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task RollbackTransactionAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task AcquireAdvisoryLockAsync(long key, CancellationToken ct = default) => Task.CompletedTask;
         public void Dispose()
         {
         }

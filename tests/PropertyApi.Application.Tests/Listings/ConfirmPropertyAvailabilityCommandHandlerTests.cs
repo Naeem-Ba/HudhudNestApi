@@ -65,6 +65,7 @@ public sealed class ConfirmPropertyAvailabilityCommandHandlerTests
         public Task BeginTransactionAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task CommitTransactionAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task RollbackTransactionAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task AcquireAdvisoryLockAsync(long key, CancellationToken ct = default) => Task.CompletedTask;
         public void Dispose()
         {
         }
@@ -107,6 +108,11 @@ public sealed class ConfirmPropertyAvailabilityCommandHandlerTests
 
         public Task<int> CountActiveListingsByOwnerAsync(
             Guid ownerId,
+            CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task<int> CountActiveListingsByAgencyAsync(
+            Guid agencyId,
             CancellationToken ct = default)
             => throw new NotImplementedException();
 

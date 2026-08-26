@@ -3,16 +3,19 @@ using Moq;
 using PropertyApi.Application.Agencies.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Listings;
 using PropertyApi.Application.Listings.Commands.ConfirmListingExtensionPayment;
 using PropertyApi.Application.Listings.Commands.CreateProperty;
 using PropertyApi.Application.Listings.Commands.RequestListingExtension;
 using PropertyApi.Application.Listings.Interfaces;
+using PropertyApi.Application.Listings.Mappers;
 using PropertyApi.Domain.Common.Exceptions;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Listings;
 using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Transactions.Entities;
 using PropertyApi.Domain.Transactions.Enums;
+using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Tests.Listings;
 
@@ -165,6 +168,201 @@ public sealed class ListingLifecycleTests
         repository.Verify(
             x => x.AddAsync(It.IsAny<Property>(), It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    // ── Application: agency-pooled quota (RELEASE-BLOCKERS-AR.md B-3) ─────
+
+    [Fact]
+    public async Task CreateProperty_ForAgencyMemberAtAgencyLimit_IsRejected()
+    {
+        var ownerId = Guid.NewGuid();
+        var agencyId = Guid.NewGuid();
+
+        var agencies = new Mock<IAgencyRepository>();
+        agencies
+            .Setup(x => x.GetUserAccountAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(BuildAccountInAgency(ownerId, agencyId));
+
+        var repository = new Mock<IPropertyRepository>();
+        repository
+            .Setup(x => x.CountActiveListingsByAgencyAsync(agencyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(50);
+
+        var handler = CreatePropertyHandler(repository, agencies, new FakeListingQuotaPolicy(50));
+
+        // The individual limit (1) must NOT apply here — only the agency-pooled count does.
+        await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
+            ValidCreateCommand() with { OwnerId = ownerId },
+            CancellationToken.None));
+
+        repository.Verify(
+            x => x.CountActiveListingsByOwnerAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        repository.Verify(
+            x => x.AddAsync(It.IsAny<Property>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateProperty_ForAgencyMemberBelowAgencyLimit_IsAllowed()
+    {
+        var ownerId = Guid.NewGuid();
+        var agencyId = Guid.NewGuid();
+
+        var agencies = new Mock<IAgencyRepository>();
+        agencies
+            .Setup(x => x.GetUserAccountAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(BuildAccountInAgency(ownerId, agencyId));
+
+        var repository = new Mock<IPropertyRepository>();
+        repository
+            .Setup(x => x.CountActiveListingsByAgencyAsync(agencyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(49);
+
+        var handler = CreatePropertyHandler(repository, agencies, new FakeListingQuotaPolicy(50));
+
+        // This member individually already has zero listings of their own — the point is
+        // that a member with plenty of room left may still be blocked once the agency's
+        // shared pool (checked here, not the member's own count) is full, and is not
+        // blocked purely for holding "their share": the pool has no per-head share at all.
+        var id = await handler.Handle(
+            ValidCreateCommand() with { OwnerId = ownerId },
+            CancellationToken.None);
+
+        Assert.NotEqual(Guid.Empty, id);
+        repository.Verify(
+            x => x.AddAsync(It.IsAny<Property>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    // ── Application: quota check race is closed by an advisory lock (RELEASE-BLOCKERS-AR.md B-10) ──
+
+    [Fact]
+    public async Task CreateProperty_OnSuccess_AcquiresTheOwnerLockInsideATransactionThenCommits()
+    {
+        var ownerId = Guid.NewGuid();
+        var repository = new Mock<IPropertyRepository>();
+        repository
+            .Setup(x => x.CountActiveListingsByOwnerAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+
+        var uow = new Mock<IUnitOfWork>();
+        var handler = CreatePropertyHandler(repository, unitOfWork: uow);
+
+        await handler.Handle(
+            ValidCreateCommand() with { OwnerId = ownerId },
+            CancellationToken.None);
+
+        var expectedKey = ListingQuotaLock.ForOwner(ownerId);
+
+        uow.Verify(x => x.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        uow.Verify(x => x.AcquireAdvisoryLockAsync(expectedKey, It.IsAny<CancellationToken>()), Times.Once);
+        uow.Verify(x => x.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        uow.Verify(x => x.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateProperty_ForAgencyMember_AcquiresTheAgencyLock_NotTheOwnerLock()
+    {
+        var ownerId = Guid.NewGuid();
+        var agencyId = Guid.NewGuid();
+
+        var agencies = new Mock<IAgencyRepository>();
+        agencies
+            .Setup(x => x.GetUserAccountAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(BuildAccountInAgency(ownerId, agencyId));
+
+        var repository = new Mock<IPropertyRepository>();
+        repository
+            .Setup(x => x.CountActiveListingsByAgencyAsync(agencyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+
+        var uow = new Mock<IUnitOfWork>();
+        var handler = CreatePropertyHandler(repository, agencies, new FakeListingQuotaPolicy(50), uow);
+
+        await handler.Handle(
+            ValidCreateCommand() with { OwnerId = ownerId },
+            CancellationToken.None);
+
+        uow.Verify(x => x.AcquireAdvisoryLockAsync(
+            ListingQuotaLock.ForAgency(agencyId), It.IsAny<CancellationToken>()), Times.Once);
+        uow.Verify(x => x.AcquireAdvisoryLockAsync(
+            ListingQuotaLock.ForOwner(ownerId), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateProperty_WhenQuotaCheckFails_RollsBackInsteadOfCommitting()
+    {
+        var ownerId = Guid.NewGuid();
+        var repository = new Mock<IPropertyRepository>();
+        repository
+            .Setup(x => x.CountActiveListingsByOwnerAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ListingLifecyclePolicy.FreeTierActiveListingLimit);
+
+        var uow = new Mock<IUnitOfWork>();
+        var handler = CreatePropertyHandler(repository, unitOfWork: uow);
+
+        await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
+            ValidCreateCommand() with { OwnerId = ownerId },
+            CancellationToken.None));
+
+        // The lock must still have been taken — the race it closes exists precisely because
+        // the check itself needs to run inside it — but the transaction must not commit a
+        // rejected creation.
+        uow.Verify(x => x.AcquireAdvisoryLockAsync(
+            ListingQuotaLock.ForOwner(ownerId), It.IsAny<CancellationToken>()), Times.Once);
+        uow.Verify(x => x.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
+        uow.Verify(x => x.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        repository.Verify(x => x.AddAsync(It.IsAny<Property>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public void ListingQuotaLock_OwnerAndAgencyKeys_ForTheSameGuid_Differ()
+    {
+        // Same underlying id used as both an owner id and an agency id must not collide —
+        // otherwise an individual owner's lock could serialize against an unrelated agency's.
+        var id = Guid.NewGuid();
+
+        Assert.NotEqual(ListingQuotaLock.ForOwner(id), ListingQuotaLock.ForAgency(id));
+    }
+
+    [Fact]
+    public void ListingQuotaLock_IsDeterministic_ForTheSameId()
+    {
+        var ownerId = Guid.NewGuid();
+
+        Assert.Equal(ListingQuotaLock.ForOwner(ownerId), ListingQuotaLock.ForOwner(ownerId));
+    }
+
+    // ── Application: PropertyDto exposes AgencyId (RELEASE-BLOCKERS-AR.md B-5) ──
+
+    [Fact]
+    public void Dto_ExposesAgencyId_WhenListingBelongsToOne()
+    {
+        var agencyId = Guid.NewGuid();
+        var property = CreateListing();
+        property.SetAgency(agencyId);
+
+        var dto = PropertyMapper.ToDto(property);
+
+        Assert.Equal(agencyId, dto.AgencyId);
+    }
+
+    [Fact]
+    public void Dto_ReportsNullAgencyId_ForAnIndependentOwner()
+    {
+        var property = CreateListing();
+
+        var dto = PropertyMapper.ToDto(property);
+
+        Assert.Null(dto.AgencyId);
+    }
+
+    private static UserAccount BuildAccountInAgency(Guid userId, Guid agencyId)
+    {
+        var account = UserAccount.Create(userId, "نعيم", "بزازة", DateTime.UtcNow);
+        account.JoinAgency(agencyId, DateTime.UtcNow);
+        return account;
     }
 
     // ── Application: extension request ───────────────────────────
@@ -322,13 +520,29 @@ public sealed class ListingLifecycleTests
         exchangeRateToUSD: 1m,
         paymentMethod: TransactionPaymentMethod.BankTransfer);
 
-    private static CreatePropertyCommandHandler CreatePropertyHandler(Mock<IPropertyRepository> repository)
+    private static CreatePropertyCommandHandler CreatePropertyHandler(
+        Mock<IPropertyRepository> repository,
+        Mock<IAgencyRepository>? agencies = null,
+        IListingQuotaPolicy? quotaPolicy = null,
+        Mock<IUnitOfWork>? unitOfWork = null)
         => new(
             repository.Object,
-            Mock.Of<IAgencyRepository>(),
-            Mock.Of<IUnitOfWork>(),
+            (agencies ?? new Mock<IAgencyRepository>()).Object,
+            (unitOfWork ?? new Mock<IUnitOfWork>()).Object,
             Mock.Of<ILocationSuggestionService>(),
+            quotaPolicy ?? new FakeListingQuotaPolicy(50),
             NullLogger<CreatePropertyCommandHandler>.Instance);
+
+    /// <summary>Deterministic stand-in for the config-backed IListingQuotaPolicy.</summary>
+    private sealed class FakeListingQuotaPolicy : IListingQuotaPolicy
+    {
+        public FakeListingQuotaPolicy(int agencyActiveListingLimit)
+        {
+            AgencyActiveListingLimit = agencyActiveListingLimit;
+        }
+
+        public int AgencyActiveListingLimit { get; }
+    }
 
     private static RequestListingExtensionCommandHandler RequestExtensionHandler(
         Property property,

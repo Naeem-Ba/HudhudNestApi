@@ -82,6 +82,11 @@ public sealed class ListingExpiryHostedService : BackgroundService
     /// <summary>
     /// One full sweep. Internal so it can be driven directly from a test without
     /// waiting on the timer.
+    ///
+    /// Guarded by a Postgres advisory lock (BackgroundJobLockKeys.ListingExpiry): every
+    /// deployed instance runs this same timer, and the deletion phase in particular must run
+    /// exactly once per sweep — two instances racing MaxItemsPerPhase-capped queries would
+    /// pick the same rows, not different ones. See B-6 in RELEASE-BLOCKERS-AR.md.
     /// </summary>
     internal async Task RunOnceAsync(CancellationToken ct)
     {
@@ -89,28 +94,46 @@ public sealed class ListingExpiryHostedService : BackgroundService
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var notifications = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
-        var now = DateTime.UtcNow;
-
-        // Order matters: warn before expiring, and expire before deleting, so a listing
-        // cannot cross two boundaries in one sweep without its owner hearing about the
-        // first one.
-        var warned = await WarnExpiringSoonAsync(db, notifications, now, ct);
-        var expired = await ExpireElapsedAsync(db, notifications, now, ct);
-        var deleted = await DeleteAfterGraceAsync(db, now, ct);
-
-        // Independent of the three phases above and ordered last only because it is the
-        // cheapest: a listing can lose its featured placement while its publication window
-        // is still running, and expiring can happen while a placement is still paid for.
-        var unfeatured = await ClearElapsedFeaturedAsync(db, now, ct);
-
-        if (warned + expired + deleted + unfeatured > 0)
+        await db.Database.OpenConnectionAsync(ct);
+        try
         {
-            _logger.LogInformation(
-                "Listing expiry sweep complete. Warned={Warned}, Expired={Expired}, Deleted={Deleted}, Unfeatured={Unfeatured}.",
-                warned,
-                expired,
-                deleted,
-                unfeatured);
+            await BackgroundJobLock.TryRunAsync(
+                db.Database.GetDbConnection(),
+                BackgroundJobLockKeys.ListingExpiry,
+                nameof(ListingExpiryHostedService),
+                _logger,
+                async () =>
+                {
+                    var now = DateTime.UtcNow;
+
+                    // Order matters: warn before expiring, and expire before deleting, so a
+                    // listing cannot cross two boundaries in one sweep without its owner
+                    // hearing about the first one.
+                    var warned = await WarnExpiringSoonAsync(db, notifications, now, ct);
+                    var expired = await ExpireElapsedAsync(db, notifications, now, ct);
+                    var deleted = await DeleteAfterGraceAsync(db, now, ct);
+
+                    // Independent of the three phases above and ordered last only because it
+                    // is the cheapest: a listing can lose its featured placement while its
+                    // publication window is still running, and expiring can happen while a
+                    // placement is still paid for.
+                    var unfeatured = await ClearElapsedFeaturedAsync(db, now, ct);
+
+                    if (warned + expired + deleted + unfeatured > 0)
+                    {
+                        _logger.LogInformation(
+                            "Listing expiry sweep complete. Warned={Warned}, Expired={Expired}, Deleted={Deleted}, Unfeatured={Unfeatured}.",
+                            warned,
+                            expired,
+                            deleted,
+                            unfeatured);
+                    }
+                },
+                ct);
+        }
+        finally
+        {
+            await db.Database.CloseConnectionAsync();
         }
     }
 

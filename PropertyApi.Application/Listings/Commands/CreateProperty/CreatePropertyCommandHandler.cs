@@ -6,6 +6,7 @@ using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Domain.Listings;
 using PropertyApi.Domain.Listings.Entities;
+using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Listings.Commands.CreateProperty;
 
@@ -23,6 +24,7 @@ public sealed class CreatePropertyCommandHandler
     private readonly IAgencyRepository _agencies;
     private readonly IUnitOfWork _uow;
     private readonly ILocationSuggestionService _locationSuggestions;
+    private readonly IListingQuotaPolicy _quotaPolicy;
     private readonly ILogger<CreatePropertyCommandHandler> _logger;
 
     public CreatePropertyCommandHandler(
@@ -30,12 +32,14 @@ public sealed class CreatePropertyCommandHandler
         IAgencyRepository agencies,
         IUnitOfWork uow,
         ILocationSuggestionService locationSuggestions,
+        IListingQuotaPolicy quotaPolicy,
         ILogger<CreatePropertyCommandHandler> logger)
     {
         _repo = repo;
         _agencies = agencies;
         _uow = uow;
         _locationSuggestions = locationSuggestions;
+        _quotaPolicy = quotaPolicy;
         _logger = logger;
     }
 
@@ -43,8 +47,68 @@ public sealed class CreatePropertyCommandHandler
         CreatePropertyCommand request,
         CancellationToken cancellationToken)
     {
-        await EnsureListingQuotaAvailableAsync(request.OwnerId, cancellationToken);
+        // Read once, up front: both the quota check and the attribution below need the
+        // owner's current agency, and reading it twice could observe two different answers
+        // if the owner changes agency mid-request.
+        var ownerAccount = await _agencies.GetUserAccountAsync(request.OwnerId, cancellationToken);
 
+        var property = await CreateWithQuotaEnforcedAsync(request, ownerAccount, cancellationToken);
+
+        // Best-effort — a manually-typed district/neighborhood name becomes a
+        // suggestion for admin review (see LocationSuggestion's doc comment).
+        // Deliberately never allowed to fail the actual listing save: this
+        // runs after the property is already committed, and any exception
+        // here is swallowed (with a log) rather than surfaced to the user.
+        await TrySubmitLocationSuggestionsAsync(property, cancellationToken);
+
+        return property.Id;
+    }
+
+    /// <summary>
+    /// RELEASE-BLOCKERS-AR.md B-10: the quota check (count existing, then insert one more) is
+    /// a classic read-then-write race — two concurrent requests for the same owner/agency can
+    /// both read the same count and both proceed. An advisory lock keyed by owner/agency
+    /// (<see cref="ListingQuotaLock"/>) serializes only requests that share a key; unrelated
+    /// owners/agencies are unaffected. The lock is transaction-scoped, so it releases itself
+    /// on commit or rollback — including if EnsureListingQuotaAvailableAsync throws.
+    /// </summary>
+    private async Task<Property> CreateWithQuotaEnforcedAsync(
+        CreatePropertyCommand request,
+        UserAccount? ownerAccount,
+        CancellationToken cancellationToken)
+    {
+        await _uow.BeginTransactionAsync(cancellationToken);
+
+        Property property;
+        try
+        {
+            var lockKey = ownerAccount?.AgencyId is { } lockAgencyId
+                ? ListingQuotaLock.ForAgency(lockAgencyId)
+                : ListingQuotaLock.ForOwner(request.OwnerId);
+
+            await _uow.AcquireAdvisoryLockAsync(lockKey, cancellationToken);
+
+            await EnsureListingQuotaAvailableAsync(request.OwnerId, ownerAccount?.AgencyId, cancellationToken);
+
+            property = BuildProperty(request, ownerAccount);
+
+            await _repo.AddAsync(property, cancellationToken);
+            await _uow.SaveChangesAsync(cancellationToken);
+            await _uow.CommitTransactionAsync(cancellationToken);
+        }
+        catch
+        {
+            await _uow.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+
+        return property;
+    }
+
+    private static Property BuildProperty(
+        CreatePropertyCommand request,
+        Domain.Users.Entities.UserAccount? ownerAccount)
+    {
         // Factory method — the ONLY correct way to create a Property.
         // Throws DomainException if invariants are violated.
         var property = Property.Create(
@@ -96,30 +160,19 @@ public sealed class CreatePropertyCommandHandler
         }
 
         // Attribute the listing to the owner's agency, if they belong to one. Read from the
-        // owner's account rather than accepted from the request: a client that could name
-        // the agency could attribute its listing to somebody else's office.
+        // owner's account (fetched up front, above) rather than accepted from the request: a
+        // client that could name the agency could attribute its listing to somebody else's
+        // office.
         //
         // Attribution is captured once, at creation. It is NOT re-derived later, so a
         // listing keeps the badge of the agency it was published under even if its owner
         // moves on — which is what the listing's history actually was.
-        var ownerAccount = await _agencies.GetUserAccountAsync(request.OwnerId, cancellationToken);
-
         if (ownerAccount?.AgencyId is { } agencyId)
         {
             property.SetAgency(agencyId);
         }
 
-        await _repo.AddAsync(property, cancellationToken);
-        await _uow.SaveChangesAsync(cancellationToken);
-
-        // Best-effort — a manually-typed district/neighborhood name becomes a
-        // suggestion for admin review (see LocationSuggestion's doc comment).
-        // Deliberately never allowed to fail the actual listing save: this
-        // runs after the property is already committed, and any exception
-        // here is swallowed (with a log) rather than surfaced to the user.
-        await TrySubmitLocationSuggestionsAsync(property, cancellationToken);
-
-        return property.Id;
+        return property;
     }
 
     /// <summary>
@@ -135,9 +188,38 @@ public sealed class CreatePropertyCommandHandler
     /// Consequence worth being explicit about: an existing owner who already holds more than
     /// the limit keeps every listing they have — nothing is retroactively removed — but
     /// cannot create another until they are back under it.
+    ///
+    /// RELEASE-BLOCKERS-AR.md B-3: a member of an agency does NOT get their own copy of the
+    /// free-tier limit — the limit belongs to the agency as a whole, pooled across every
+    /// member's active listings, because the owner may not intend every member to publish.
+    /// This is an interim, config-driven mitigation (<see cref="IListingQuotaPolicy"/>), not
+    /// the real fix — the real fix is a Subscription entity, deliberately deferred as a
+    /// product decision.
     /// </remarks>
-    private async Task EnsureListingQuotaAvailableAsync(Guid ownerId, CancellationToken ct)
+    private async Task EnsureListingQuotaAvailableAsync(
+        Guid ownerId,
+        Guid? agencyId,
+        CancellationToken ct)
     {
+        if (agencyId is { } id)
+        {
+            var agencyActiveListings = await _repo.CountActiveListingsByAgencyAsync(id, ct);
+            var agencyLimit = _quotaPolicy.AgencyActiveListingLimit;
+
+            if (agencyActiveListings < agencyLimit)
+                return;
+
+            _logger.LogInformation(
+                "Listing creation blocked by agency-pooled quota. AgencyId={AgencyId}, Active={Active}, Limit={Limit}",
+                id,
+                agencyActiveListings,
+                agencyLimit);
+
+            throw new ConflictException(
+                $"بلغ مكتبكم الحدّ الأقصى المسموح به من الإعلانات النشطة ({agencyLimit} إعلاناً). " +
+                "احذفوا إعلاناً قائماً لإضافة إعلان جديد.");
+        }
+
         var activeListings = await _repo.CountActiveListingsByOwnerAsync(ownerId, ct);
 
         if (activeListings < ListingLifecyclePolicy.FreeTierActiveListingLimit)

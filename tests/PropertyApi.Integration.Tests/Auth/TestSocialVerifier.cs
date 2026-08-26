@@ -30,6 +30,7 @@ internal sealed class TestSocialTokenVerifier : ISocialTokenVerifier
 
     public Task<SocialUserInfo?> VerifyAsync(
         string token,
+        string? expectedNonce = null,
         CancellationToken ct = default)
     {
         if (!_seeds.TryGetValue(token, out var seed))

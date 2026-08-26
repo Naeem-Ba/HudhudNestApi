@@ -21,7 +21,13 @@ internal sealed class GoogleTokenVerifier : ISocialTokenVerifier
 
     public string ProviderName => "Google";
 
-    public async Task<SocialUserInfo?> VerifyAsync(string token, CancellationToken ct = default)
+    // expectedNonce is unused here: Google sign-in in this codebase goes through Google
+    // Identity Services (One Tap), which does not thread a client-generated nonce through
+    // the ID token today. B-16 (RELEASE-BLOCKERS-AR.md) scopes the nonce fix to Apple only.
+    public async Task<SocialUserInfo?> VerifyAsync(
+        string token,
+        string? expectedNonce = null,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(_settings.GoogleClientId))
         {

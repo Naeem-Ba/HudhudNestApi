@@ -8,11 +8,13 @@ namespace PropertyApi.Auth.Tests.Contracts;
 /// <summary>
 /// Guards the wire shape of the /api/auth/login response.
 ///
-/// Program.cs configures MVC with PropertyNamingPolicy = null, which means named DTOs would
-/// serialize as PascalCase unless every member carries an explicit [JsonPropertyName]. The
-/// Angular client (core/models/auth.model.ts) reads camelCase only, so a missing attribute
-/// silently produces an empty access token instead of a visible failure. These tests pin the
-/// exact serializer configuration from Program.cs so that regression cannot ship again.
+/// RELEASE-BLOCKERS-AR.md B-11: Program.cs now configures MVC with
+/// PropertyNamingPolicy = JsonNamingPolicy.CamelCase for every DTO, not just this one — before
+/// that, it was `null` (PascalCase by default) and LoginResponseDto alone carried explicit
+/// [JsonPropertyName] attributes to force camelCase, since the Angular client
+/// (core/models/auth.model.ts) reads camelCase only. Those attributes are gone now that the
+/// policy produces the same names by default; these tests still pin the exact serializer
+/// configuration from Program.cs so that regression cannot ship again.
 /// </summary>
 [Trait("Category", "AuthContract")]
 public sealed class LoginResponseContractTests
@@ -24,7 +26,7 @@ public sealed class LoginResponseContractTests
     {
         var options = new JsonSerializerOptions
         {
-            PropertyNamingPolicy = null,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             ReferenceHandler = ReferenceHandler.IgnoreCycles
         };
 

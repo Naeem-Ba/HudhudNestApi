@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using PropertyApi.Application.Admin.Interfaces;
@@ -26,8 +27,17 @@ namespace PropertyApi.Infrastructure.Repositories;
 internal static class RepositoryInfrastructureRegistration
 {
     public static IServiceCollection AddRepositoryInfrastructure(
-        this IServiceCollection services)
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
+        services.AddOptions<ListingQuotaOptions>()
+            .Bind(configuration.GetSection(ListingQuotaOptions.SectionName))
+            .Validate(
+                options => options.AgencyActiveListingLimit > 0,
+                "Listings:Quota:AgencyActiveListingLimit must be greater than zero.")
+            .ValidateOnStart();
+        services.AddSingleton<IListingQuotaPolicy, ListingQuotaPolicy>();
+
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IAdminUserQueryRepository, AdminUserQueryRepository>();

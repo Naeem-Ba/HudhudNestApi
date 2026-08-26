@@ -15,6 +15,21 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
 
         builder.HasKey(p => p.Id);
 
+        // Optimistic concurrency (RELEASE-BLOCKERS-AR.md B-9). Maps the Postgres system
+        // column `xmin`, which every table already has — no new column, no data migration.
+        // Two concurrent writers to the same row (an owner editing while B-6's advisory-lock
+        // background sweep touches the same listing, or two browser tabs) now get one
+        // winner and one DbUpdateConcurrencyException instead of a silent last-write-wins.
+        // Scoped to Property only for now: it is the entity B-6's background jobs mutate
+        // unattended; Agency can gain the same mapping later with no schema change.
+        //
+        // NpgsqlEntityTypeBuilderExtensions.UseXminAsConcurrencyToken() is obsolete in this
+        // Npgsql version — this is its documented replacement.
+        builder.Property<uint>("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsRowVersion();
+
         // -- Core ---------------------------------------------
         builder.Property(p => p.Title)
             .IsRequired()

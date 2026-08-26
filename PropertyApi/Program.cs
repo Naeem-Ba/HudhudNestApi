@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -271,23 +272,32 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("DefaultCors", policy =>
     {
-        if (builder.Environment.IsDevelopment() || isTestingOrCi)
+        // RELEASE-BLOCKERS-AR.md B-13: the refresh-token cookie needs a credentialed CORS
+        // policy to ever reach the browser — AllowAnyOrigin() and AllowCredentials() are
+        // mutually exclusive by the CORS spec itself (browsers reject the combination
+        // outright), so every environment with a configured origin list now gets the
+        // credentialed policy, not just Production. This is not new risk: Development's
+        // appsettings.Development.example.json and Testing's appsettings.Testing.json both
+        // already list the real frontend origin(s).
+        if (allowedOrigins.Length > 0)
         {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        }
+        else if (builder.Environment.IsDevelopment() || isTestingOrCi)
+        {
+            // No origins configured at all (e.g. a fresh clone before appsettings.Development
+            // is filled in) — permissive fallback so the API still starts. Note this
+            // combination cannot carry the refresh-token cookie; see RefreshTokenCookie.
             policy.AllowAnyOrigin()
                   .AllowAnyHeader()
                   .AllowAnyMethod();
         }
         else
         {
-            if (allowedOrigins.Length == 0)
-            {
-                throw new InvalidOperationException("Cors:AllowedOrigins is required outside Development.");
-            }
-
-            policy.WithOrigins(allowedOrigins)
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials();
+            throw new InvalidOperationException("Cors:AllowedOrigins is required outside Development.");
         }
     });
 });
@@ -298,7 +308,13 @@ builder.Services
     .AddControllers()
     .AddJsonOptions(options =>
     {
-        options.JsonSerializerOptions.PropertyNamingPolicy = null;
+        // RELEASE-BLOCKERS-AR.md B-11: was `null` (PascalCase by default), forcing every
+        // endpoint that needed camelCase — historically just /auth/login — to carry manual
+        // [JsonPropertyName] attributes, while the Angular client ran a client-side
+        // apiToCamelCase() adapter across ~15 other files to paper over the rest. One
+        // consistent policy for the whole API removes both: LoginResponseDto's attributes
+        // are now redundant (kept for clarity, not correctness) and the adapter is deleted.
+        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
@@ -476,6 +492,19 @@ builder.Services.AddRateLimiter(options =>
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+
+    // RELEASE-BLOCKERS-AR.md B-7: GET /api/agencies/{slug} was anonymous with no rate
+    // limit at all. Same cadence as public-search.
+    options.AddPolicy("agencies-public", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetClientRateLimitPartitionKey(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
                 Window = TimeSpan.FromMinutes(1),
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0

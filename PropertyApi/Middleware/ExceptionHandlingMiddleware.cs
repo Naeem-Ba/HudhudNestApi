@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Domain.Common.Exceptions;
 
@@ -119,6 +120,27 @@ public sealed class ExceptionHandlingMiddleware
                 title = "Conflict",
                 status = StatusCodes.Status409Conflict,
                 message = ex.Message
+            });
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // RELEASE-BLOCKERS-AR.md B-9: Property now carries an xmin concurrency token, so
+            // two writers racing the same row raise this instead of silently letting the
+            // second SaveChangesAsync overwrite the first. Without this catch, that race
+            // surfaced as an unhandled 500 — trading silent data loss for a crash is not the
+            // fix B-9 asked for; the caller needs a 409 it can react to (reload and retry).
+            _logger.LogInformation(
+                ex,
+                "Concurrency conflict for {Method} {Path}",
+                context.Request.Method,
+                context.Request.Path);
+
+            await WriteJson(context, StatusCodes.Status409Conflict, new
+            {
+                title = "Conflict",
+                status = StatusCodes.Status409Conflict,
+                message = "تم تعديل هذا العنصر من قبل مستخدم أو عملية أخرى في نفس اللحظة. " +
+                    "أعد تحميل البيانات وحاول مرة أخرى."
             });
         }
         catch (ForbiddenException ex)

@@ -52,6 +52,10 @@ public sealed class PropertyFilterDto
     // Owner filter
     public Guid? OwnerId { get; set; }
 
+    // Agency filter — RELEASE-BLOCKERS-AR.md B-5. Same shape as OwnerId above: a public,
+    // anonymous "this agency's other listings" filter, not an authorization boundary.
+    public Guid? AgencyId { get; set; }
+
     // Sort
     public string SortBy { get; set; } = "CreatedAt";
     public bool SortDescending { get; set; } = true;

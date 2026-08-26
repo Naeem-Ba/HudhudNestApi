@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyApi.Infrastructure.Persistence;
+using PropertyApi.Security.Staging;
 
 namespace PropertyApi.Controllers;
 
@@ -24,10 +25,21 @@ public sealed class OperationalController : ControllerBase
         _environment = environment;
     }
 
+    // RELEASE-BLOCKERS-AR.md B-8: this used to answer anyone, anywhere, with the applied
+    // migration count/name, PostGIS availability, and Staging's own database/Redis/storage
+    // isolation markers — real infrastructure detail with zero authentication. It exists only
+    // for Staging release-readiness automation (production-gate.yml's polling loop, the smoke
+    // test's technical-health check, both already updated to send the secret header), so it
+    // is now gated exactly like StagingTestSupportController's cleanup endpoint: Staging only,
+    // plus a constant-time secret compare, 404 rather than 401/403 so the endpoint's
+    // existence is not confirmed to an unauthorized caller either.
     [HttpGet("build-info")]
     [AllowAnonymous]
     public async Task<IActionResult> BuildInfo(CancellationToken ct)
     {
+        if (!StagingTestSupportAuthorization.IsAuthorized(Request, _configuration, _environment))
+            return NotFound();
+
         var pending = (await _db.Database.GetPendingMigrationsAsync(ct)).ToArray();
         var applied = (await _db.Database.GetAppliedMigrationsAsync(ct)).ToArray();
         var postGisVersion = await _db.Database

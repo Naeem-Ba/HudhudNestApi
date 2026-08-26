@@ -3,8 +3,10 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Phone;
 using PropertyApi.Domain.Enums;
+using PropertyApi.Security.Auth;
 
 namespace PropertyApi.Controllers;
 
@@ -13,7 +15,13 @@ namespace PropertyApi.Controllers;
 public sealed class PhonePasswordAuthController : ControllerBase
 {
     private readonly ISender _sender;
-    public PhonePasswordAuthController(ISender sender) => _sender = sender;
+    private readonly IJwtTokenSettings _jwtSettings;
+
+    public PhonePasswordAuthController(ISender sender, IJwtTokenSettings jwtSettings)
+    {
+        _sender = sender;
+        _jwtSettings = jwtSettings;
+    }
 
     [HttpPost("registration/send-otp"), AllowAnonymous, EnableRateLimiting("send-otp")]
     public Task<IActionResult> SendRegistrationOtp(PhoneNumberRequestV2 r, CancellationToken ct) => Send(r.PhoneNumber, OtpPurpose.PhoneRegistration, null, ct);
@@ -39,7 +47,24 @@ public sealed class PhonePasswordAuthController : ControllerBase
     public async Task<IActionResult> Change(PhoneChangeVerifyRequest r, CancellationToken ct) => Id() is { } id ? Result(await _sender.Send(new VerifyPhoneChangeCommand(id, r.ChallengeId, r.Code, r.CurrentPassword, Ip()), ct)) : Unauthorized();
 
     private async Task<IActionResult> Send(string phone, OtpPurpose purpose, Guid? id, CancellationToken ct) => Result(await _sender.Send(new SendPhoneChallengeCommand(phone, purpose, id, Ip()), ct));
-    private static IActionResult Result(PhoneWorkflowResult r) => r.Succeeded ? new OkObjectResult(r) : new BadRequestObjectResult(new { code = r.ErrorCode, message = r.Message });
+
+    // RELEASE-BLOCKERS-AR.md B-13: this is the one place Register/Login's issued refresh
+    // token would otherwise reach the JSON body. Every other PhoneWorkflowResult use
+    // (SendOtp, VerifyReset, reverification, ...) carries a null RefreshToken already, so
+    // checking for one here and only there needs no per-endpoint branching.
+    private IActionResult Result(PhoneWorkflowResult r)
+    {
+        if (!r.Succeeded)
+            return new BadRequestObjectResult(new { code = r.ErrorCode, message = r.Message });
+
+        if (r.RefreshToken is { } refreshToken)
+        {
+            RefreshTokenCookie.Attach(Response, refreshToken, _jwtSettings.RefreshTokenDays);
+            r = r with { RefreshToken = null };
+        }
+
+        return new OkObjectResult(r);
+    }
     private Guid? Id() => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
     private string? Ip() => HttpContext.Connection.RemoteIpAddress?.ToString();
 }

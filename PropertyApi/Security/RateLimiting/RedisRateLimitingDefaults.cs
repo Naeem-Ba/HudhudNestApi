@@ -15,6 +15,10 @@ internal static class RedisRateLimitingDefaults
             ["auth-logout"] = Policy(20, TimeSpan.FromMinutes(5)),
             ["public-search"] = Policy(120, TimeSpan.FromMinutes(1)),
             ["geo-search"] = Policy(60, TimeSpan.FromMinutes(1)),
+            // RELEASE-BLOCKERS-AR.md B-7: GET /api/agencies/{slug} was anonymous with no
+            // limit at all. Same cadence as public-search — it is the same kind of
+            // anonymous, browsable public page.
+            ["agencies-public"] = Policy(120, TimeSpan.FromMinutes(1)),
             ["visits"] = Policy(10, TimeSpan.FromHours(1)),
             ["reviews"] = Policy(5, TimeSpan.FromHours(24))
         };

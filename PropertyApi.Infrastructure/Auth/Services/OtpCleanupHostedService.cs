@@ -1,7 +1,9 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Infrastructure.Persistence;
 
 namespace PropertyApi.Infrastructure.Auth.Services;
 
@@ -47,16 +49,40 @@ public sealed class OtpCleanupHostedService : BackgroundService
         }
     }
 
+    /// <summary>
+    /// Guarded by a Postgres advisory lock (BackgroundJobLockKeys.OtpCleanup): harmless if
+    /// two instances both delete the same already-expired rows, but pointless duplicate work
+    /// every hour on every instance is still worth skipping. See B-6 in
+    /// RELEASE-BLOCKERS-AR.md.
+    /// </summary>
     internal async Task CleanupOnceAsync(CancellationToken ct)
     {
         using var scope = _scopeFactory.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<IOtpCodeRepository>();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var deleted = await repository.DeleteExpiredAsync(DateTime.UtcNow, ct);
-
-        if (deleted > 0)
+        await db.Database.OpenConnectionAsync(ct);
+        try
         {
-            _logger.LogInformation("Deleted {Count} expired OTP codes.", deleted);
+            await BackgroundJobLock.TryRunAsync(
+                db.Database.GetDbConnection(),
+                BackgroundJobLockKeys.OtpCleanup,
+                nameof(OtpCleanupHostedService),
+                _logger,
+                async () =>
+                {
+                    var deleted = await repository.DeleteExpiredAsync(DateTime.UtcNow, ct);
+
+                    if (deleted > 0)
+                    {
+                        _logger.LogInformation("Deleted {Count} expired OTP codes.", deleted);
+                    }
+                },
+                ct);
+        }
+        finally
+        {
+            await db.Database.CloseConnectionAsync();
         }
     }
 }

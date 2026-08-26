@@ -1,68 +1,66 @@
-using System.Text.Json.Serialization;
-
 namespace PropertyApi.Application.Auth.Models;
 
 /// <summary>
 /// Unified response model for login operations with comprehensive security information.
 /// Ensures frontend can properly handle all authentication scenarios.
 ///
-/// IMPORTANT: Program.cs sets JsonSerializerOptions.PropertyNamingPolicy = null, so named
-/// DTOs serialize as PascalCase by default. The login contract has always been camelCase
-/// (the previous endpoint returned an anonymous object with lowercase-written members), and
-/// the Angular client reads camelCase only. Every member therefore carries an explicit
-/// [JsonPropertyName] — do not remove them or the client silently stores empty tokens.
+/// RELEASE-BLOCKERS-AR.md B-11: Program.cs now sets
+/// JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase for the whole API.
+/// Before this, that policy was `null` (PascalCase by default), and this DTO was the one
+/// endpoint whose contract had to stay camelCase regardless — every member carried an
+/// explicit [JsonPropertyName] to force it, while the Angular client ran a client-side
+/// apiToCamelCase() adapter across the rest of the API to compensate. Neither is needed
+/// any more: every member here already maps to the same camelCase name the policy now
+/// produces by default, so the attributes were removed rather than left as no-op noise.
 /// </summary>
 public sealed class LoginResponseDto
 {
     /// <summary>
     /// Whether login was successful.
     /// </summary>
-    [JsonPropertyName("success")]
     public bool Success { get; init; }
 
     /// <summary>
     /// HTTP status code mirrored in the body (the transport status is authoritative).
     /// 200 = Success, 401 = Invalid credentials, 423 = Account locked, 429 = Rate limited.
     /// </summary>
-    [JsonPropertyName("statusCode")]
     public int StatusCode { get; init; }
 
     /// <summary>
     /// User-friendly message for display in UI.
     /// </summary>
-    [JsonPropertyName("message")]
     public string Message { get; init; } = string.Empty;
 
     /// <summary>
     /// Stable machine-readable error code — the discriminator the client should branch on.
     /// See <see cref="LoginErrorCodes"/>.
     /// </summary>
-    [JsonPropertyName("errorCode")]
     public string? ErrorCode { get; init; }
 
     /// <summary>
     /// Error category. Serialized as a string (JsonStringEnumConverter is registered globally),
     /// e.g. "InvalidCredentials" — not a number.
     /// </summary>
-    [JsonPropertyName("errorType")]
     public LoginErrorType? ErrorType { get; init; }
 
     /// <summary>
     /// Access token on successful login.
     /// </summary>
-    [JsonPropertyName("accessToken")]
     public string? AccessToken { get; init; }
 
     /// <summary>
     /// Refresh token on successful login.
+    ///
+    /// RELEASE-BLOCKERS-AR.md B-13: kept on the DTO (other factory methods/tests still
+    /// construct it), but AuthController deliberately withholds it from the actual
+    /// /api/auth/login response body now — the token travels only in the refresh_token
+    /// HttpOnly cookie. Do not start reading this field again on that path.
     /// </summary>
-    [JsonPropertyName("refreshToken")]
     public string? RefreshToken { get; init; }
 
     /// <summary>
     /// Access token lifetime in seconds.
     /// </summary>
-    [JsonPropertyName("expiresIn")]
     public int ExpiresIn { get; init; }
 
     // ========== Security-Related Fields ==========
@@ -70,32 +68,27 @@ public sealed class LoginResponseDto
     /// <summary>
     /// Number of failed login attempts recorded for this account.
     /// </summary>
-    [JsonPropertyName("failedAttemptCount")]
     public int FailedAttemptCount { get; init; }
 
     /// <summary>
     /// Maximum allowed failed attempts before lockout.
     /// </summary>
-    [JsonPropertyName("maxFailedAttempts")]
     public int MaxFailedAttempts { get; init; } = 5;
 
     /// <summary>
     /// Remaining attempts before the account locks.
     /// </summary>
-    [JsonPropertyName("remainingAttemptsBeforeLockout")]
     public int RemainingAttemptsBeforeLockout =>
         Math.Max(0, MaxFailedAttempts - FailedAttemptCount);
 
     /// <summary>
     /// Is the account currently locked?
     /// </summary>
-    [JsonPropertyName("isAccountLocked")]
     public bool IsAccountLocked { get; init; }
 
     /// <summary>
     /// When the account unlocks (UTC). Null when not locked.
     /// </summary>
-    [JsonPropertyName("lockoutEndTimeUtc")]
     public DateTime? LockoutEndTimeUtc { get; init; }
 
     /// <summary>
@@ -103,7 +96,6 @@ public sealed class LoginResponseDto
     /// Clients should prefer <see cref="LockoutEndTimeUtc"/> for countdowns, since this value
     /// is computed at serialization time and goes stale immediately.
     /// </summary>
-    [JsonPropertyName("lockoutMinutesRemaining")]
     public int LockoutMinutesRemaining
     {
         get
@@ -120,20 +112,17 @@ public sealed class LoginResponseDto
     /// <summary>
     /// Localizable-by-the-client hint about remaining attempts.
     /// </summary>
-    [JsonPropertyName("attemptWarningMessage")]
     public string? AttemptWarningMessage { get; init; }
 
     /// <summary>
     /// Password reset URL when the account must be secured.
     /// </summary>
-    [JsonPropertyName("passwordResetUrl")]
     public string? PasswordResetUrl { get; init; }
 
     /// <summary>
     /// Action the client should steer the user toward.
     /// One of: "retry", "wait-and-retry", "change-password", "contact-support".
     /// </summary>
-    [JsonPropertyName("recommendedAction")]
     public string? RecommendedAction { get; init; }
 
     // ========== Factory Methods ==========

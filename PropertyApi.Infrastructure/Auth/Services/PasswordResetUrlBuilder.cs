@@ -6,7 +6,7 @@ namespace PropertyApi.Infrastructure.Auth.Services;
 
 public sealed class PasswordResetUrlBuilder : IPasswordResetUrlBuilder
 {
-    private const string DevelopmentFallbackResetUrl = "http://localhost:4200/reset-password";
+    private const string DevelopmentFallbackResetUrl = "http://localhost:4200/#/auth/reset-password";
 
     private readonly IConfiguration _configuration;
     private readonly IHostEnvironment _environment;
