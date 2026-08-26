@@ -1,4 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -34,7 +36,10 @@ internal sealed class AppleTokenVerifier : ISocialTokenVerifier
 
     public string ProviderName => "Apple";
 
-    public async Task<SocialUserInfo?> VerifyAsync(string token, CancellationToken ct = default)
+    public async Task<SocialUserInfo?> VerifyAsync(
+        string token,
+        string? expectedNonce = null,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(_settings.AppleClientId))
         {
@@ -46,7 +51,17 @@ internal sealed class AppleTokenVerifier : ISocialTokenVerifier
         {
             var signingKeys = await GetApplePublicKeysAsync(ct);
 
-            var handler = new JwtSecurityTokenHandler();
+            // MapInboundClaims = false is load-bearing, not stylistic: JwtSecurityTokenHandler
+            // silently rewrites short claim names to long legacy URIs by default (e.g. "sub"
+            // becomes ".../claims/nameidentifier", "email" becomes ".../claims/emailaddress").
+            // With the default left on, every principal.FindFirst("sub") below returns null —
+            // Apple sign-in would validate the token successfully and then fail every single
+            // login with no error logged, because the sub-not-found branch returns null
+            // silently by design (an actually-missing sub is not itself unusual for a
+            // malformed token). Found while adding nonce enforcement for B-16 in
+            // RELEASE-BLOCKERS-AR.md — a real, signed test token was the only thing that
+            // surfaced it; nothing before this exercised this method with a real JWT.
+            var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
             var validationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
@@ -68,6 +83,26 @@ internal sealed class AppleTokenVerifier : ISocialTokenVerifier
             if (string.IsNullOrWhiteSpace(sub))
             {
                 return null;
+            }
+
+            // B-16 (RELEASE-BLOCKERS-AR.md): without this, a valid Apple identity token
+            // obtained for one sign-in attempt could be replayed against this endpoint from
+            // any other session within its validity window. The token's own signature only
+            // proves Apple issued it, not that it was issued for *this* request. Only
+            // enforced once a caller actually supplies a nonce — the frontend and backend
+            // ship this together, so no partial-rollout state where one side has it and the
+            // other does not is expected to reach Production.
+            if (!string.IsNullOrWhiteSpace(expectedNonce))
+            {
+                var nonceClaim = principal.FindFirst("nonce")?.Value;
+                var expectedNonceHash = HashNonce(expectedNonce);
+
+                if (string.IsNullOrWhiteSpace(nonceClaim) ||
+                    !string.Equals(nonceClaim, expectedNonceHash, StringComparison.Ordinal))
+                {
+                    _logger.LogWarning("Apple identity token nonce did not match the expected value.");
+                    return null;
+                }
             }
 
             var email = principal.FindFirst("email")?.Value;
@@ -92,6 +127,19 @@ internal sealed class AppleTokenVerifier : ISocialTokenVerifier
             _logger.LogWarning(ex, "Apple identity token validation failed.");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Apple's identity token carries the SHA-256 hash of the raw nonce the client passed to
+    /// AppleID.auth.init, hex-encoded lowercase — not the raw value itself. Lowercase
+    /// specifically: unlike RefreshTokenStore.HashToken elsewhere in this codebase (which
+    /// uses Convert.ToHexString's uppercase output for an internal-only comparison), this
+    /// hash is compared against a claim whose casing this codebase does not control.
+    /// </summary>
+    private static string HashNonce(string rawNonce)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(rawNonce));
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     private async Task<IEnumerable<SecurityKey>> GetApplePublicKeysAsync(CancellationToken ct)

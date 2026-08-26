@@ -972,6 +972,9 @@ jobs:
           STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL }}
           EXPECTED_COMMIT_SHA: ${{ github.sha }}
           STAGING_READY_TIMEOUT_SECONDS: ${{ vars.STAGING_READY_TIMEOUT_SECONDS || '900' }}
+          # RELEASE-BLOCKERS-AR.md B-8: build-info is no longer anonymous — it now requires
+          # the same Staging automation secret the cleanup call already sends.
+          STAGING_SMOKE_CLEANUP_SECRET: ${{ secrets.STAGING_SMOKE_CLEANUP_SECRET }}
         run: |
           set -euo pipefail
           base_url="${STAGING_BASE_URL%/}"
@@ -982,6 +985,7 @@ jobs:
             attempt=$((attempt + 1))
             body="$(mktemp)"
             status="$(curl --location --silent --show-error --max-time 15 \
+              --header "X-Staging-Smoke-Secret: ${STAGING_SMOKE_CLEANUP_SECRET}" \
               --output "${body}" --write-out '%{http_code}' \
               "${base_url}/api/operational/build-info" || true)"
             if [ "${status}" = "200" ] && jq -e . "${body}" > /dev/null 2>&1; then

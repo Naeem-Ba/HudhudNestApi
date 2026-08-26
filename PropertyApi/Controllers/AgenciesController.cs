@@ -3,9 +3,12 @@ using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.Agencies.Commands.AddAgencyMember;
 using PropertyApi.Application.Agencies.Commands.CreateAgency;
+using PropertyApi.Application.Agencies.Commands.DeactivateAgency;
 using PropertyApi.Application.Agencies.Commands.RemoveAgencyMember;
+using PropertyApi.Application.Agencies.Commands.UpdateAgency;
 using PropertyApi.Application.Agencies.DTOs;
 using PropertyApi.Application.Agencies.Queries.GetAgencyBySlug;
 using PropertyApi.Application.Agencies.Queries.GetMyAgency;
@@ -35,8 +38,12 @@ public sealed class AgenciesController : ControllerBase
     // ── GET /api/agencies/{slug} ─────────────────────────────────
     // Public agency page. Anonymous by design; must be registered in
     // PublicEndpointPolicyTests.ApprovedAnonymousEndpoints or the build fails.
+    //
+    // RELEASE-BLOCKERS-AR.md B-7: this had no rate limit at all — an anonymous caller could
+    // hit it without limit, for either denial-of-service or bulk scraping every agency page.
     [HttpGet("{slug}")]
     [AllowAnonymous]
+    [EnableRateLimiting("agencies-public")]
     [ProducesResponseType(typeof(AgencyDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBySlug(string slug, CancellationToken ct)
@@ -95,6 +102,56 @@ public sealed class AgenciesController : ControllerBase
             ct);
 
         return CreatedAtAction(nameof(GetBySlug), new { slug = agency.Slug }, agency);
+    }
+
+    // ── PUT /api/agencies/{agencyId} ──────────────────────────────
+    // Owner-only profile edit. RELEASE-BLOCKERS-AR.md B-4: Agency.UpdateProfile already
+    // existed on the domain entity — this is the missing thin command layer around it.
+    [HttpPut("{agencyId:guid}")]
+    [Authorize(Roles = RoleNames.AgencyOwner)]
+    [ProducesResponseType(typeof(AgencyDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Update(
+        Guid agencyId,
+        [FromBody] UpdateAgencyRequest request,
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var agency = await _mediator.Send(
+            new UpdateAgencyCommand(
+                AgencyId: agencyId,
+                Name: request.Name,
+                Description: request.Description,
+                ContactEmail: request.ContactEmail,
+                ContactPhone: request.ContactPhone,
+                City: request.City,
+                RequestingUserId: userId.Value),
+            ct);
+
+        return Ok(agency);
+    }
+
+    // ── DELETE /api/agencies/{agencyId} ───────────────────────────
+    // "Delete" maps to the agency's existing reversible Deactivate() — see B-4's decision
+    // note on DeactivateAgencyCommand. Idempotent: deactivating twice is not an error.
+    [HttpDelete("{agencyId:guid}")]
+    [Authorize(Roles = RoleNames.AgencyOwner)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Deactivate(Guid agencyId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await _mediator.Send(
+            new DeactivateAgencyCommand(AgencyId: agencyId, RequestingUserId: userId.Value),
+            ct);
+
+        return NoContent();
     }
 
     // ── POST /api/agencies/{agencyId}/members ────────────────────
@@ -177,3 +234,18 @@ public sealed record CreateAgencyRequest(
     string? LicenseNumber);
 
 public sealed record AddAgencyMemberRequest(Guid UserId);
+
+/// <summary>
+/// Request body for agency profile updates — the same fields Agency.UpdateProfile accepts.
+/// Slug, CountryCode and LicenseNumber are intentionally absent: the slug is immutable once
+/// shared and links to it would break, the country was fixed at creation, and the licence
+/// number is a legal field that Agency.SetLicenseNumber's own doc comment says must never be
+/// swept along by a bulk profile save. There is currently no endpoint to change the licence
+/// number after creation at all — that gap is real but out of scope for this change.
+/// </summary>
+public sealed record UpdateAgencyRequest(
+    string Name,
+    string? Description,
+    string? ContactEmail,
+    string? ContactPhone,
+    string? City);

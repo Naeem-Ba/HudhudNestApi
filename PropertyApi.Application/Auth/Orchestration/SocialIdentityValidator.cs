@@ -48,7 +48,11 @@ public sealed class SocialIdentityValidator
             return (null, "Social login is not configured for this provider.");
         }
 
-        var user = await verifier.VerifyAsync(token, cancellationToken);
+        // Only Apple carries a nonce today (B-16, RELEASE-BLOCKERS-AR.md); GoogleTokenVerifier
+        // ignores the parameter when it is null, which it always is for the Google branch.
+        var expectedNonce = provider == "Apple" ? command.AppleNonce : null;
+
+        var user = await verifier.VerifyAsync(token, expectedNonce, cancellationToken);
         if (user is null)
         {
             _logger.LogWarning(

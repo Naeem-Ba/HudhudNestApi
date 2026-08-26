@@ -8,6 +8,7 @@ public sealed record SocialLoginCommand(
     string? AppleAuthorizationCode,
     string? AppleFirstName,
     string? AppleLastName,
+    string? AppleNonce = null,
     string? IpAddress = null) : IRequest<SocialLoginResult>;
 
 public sealed record SocialLoginResult

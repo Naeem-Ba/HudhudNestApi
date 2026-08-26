@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Infrastructure.Persistence;
@@ -10,7 +11,7 @@ using PropertyApi.Infrastructure.Persistence;
 namespace PropertyApi.Infrastructure.Persistence;
 
 /// <summary>
-/// Unit of Work — the single point for committing all changes.
+/// Unit of Work ï¿½ the single point for committing all changes.
 /// Repositories only track changes; UoW decides when to flush them.
 /// </summary>
 public sealed class UnitOfWork : IUnitOfWork
@@ -67,6 +68,19 @@ public sealed class UnitOfWork : IUnitOfWork
             await _transaction.DisposeAsync();
             _transaction = null;
         }
+    }
+
+    public async Task AcquireAdvisoryLockAsync(long key, CancellationToken ct = default)
+    {
+        if (_transaction is null)
+            throw new InvalidOperationException(
+                "AcquireAdvisoryLockAsync requires an active transaction â€” call BeginTransactionAsync first.");
+
+        // Transaction-scoped (xact, not session-level): released automatically at commit or
+        // rollback, unlike BackgroundJobLock's session-level pg_try_advisory_lock which a
+        // hosted service releases explicitly because its unit of work is not a DB transaction.
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock({key})", ct);
     }
 
     public void Dispose() => _transaction?.Dispose();

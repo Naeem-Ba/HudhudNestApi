@@ -157,7 +157,10 @@ public sealed class StagingSmokeJourneyTests
             Expect(enumJson.RootElement.ValueKind is JsonValueKind.Array or JsonValueKind.Object,
                 "Enum response is not a JSON object or array.");
 
-            var response = await _client.GetAsync("/api/operational/build-info");
+            // RELEASE-BLOCKERS-AR.md B-8: build-info now requires the same Staging automation
+            // secret the cleanup call already sends — it is no longer anonymous.
+            var response = await SendAsync(
+                HttpMethod.Get, "/api/operational/build-info", stagingSecret: _config.CleanupSecret);
             Expect(response.StatusCode == HttpStatusCode.OK,
                 "Build-information endpoint failed.");
             using var body = await ReadJsonAsync(response);
@@ -255,7 +258,9 @@ public sealed class StagingSmokeJourneyTests
             Expect(response.StatusCode == HttpStatusCode.OK, "Valid refresh token was rejected.");
             using var body = await ReadJsonAsync(response);
             var access = RequiredText(body.RootElement, "accessToken");
-            var refresh = RequiredText(body.RootElement, "refreshToken");
+
+            // See RequiredCookie's doc comment: the rotated token is cookie-only now.
+            var refresh = RequiredCookie(response, RefreshTokenCookieName);
             Expect(access != _owner.AccessToken, "Refresh did not issue a new access token.");
             Expect(refresh != previous, "Refresh-token rotation did not issue a new token.");
             _owner = _owner with { AccessToken = access, RefreshToken = refresh };
@@ -450,6 +455,8 @@ public sealed class StagingSmokeJourneyTests
                 "Logout unexpectedly revoked a stateless access token contrary to the current model.");
         }
 
+        private const string RefreshTokenCookieName = "refresh_token";
+
         private async Task<Session> RegisterPhoneUserAsync(string phone, string roleMarker)
         {
             var send = await SendJsonAsync(HttpMethod.Post,
@@ -483,7 +490,7 @@ public sealed class StagingSmokeJourneyTests
                 });
             Expect(verify.StatusCode == HttpStatusCode.OK, "Correct OTP did not register the user.");
             using var verifyBody = await ReadJsonAsync(verify);
-            var session = SessionFrom(verifyBody.RootElement);
+            var session = SessionFrom(verify, verifyBody.RootElement);
 
             var me = await SendAsync(HttpMethod.Get, "/api/users/me", token: session.AccessToken);
             Expect(me.StatusCode == HttpStatusCode.OK,
@@ -513,13 +520,15 @@ public sealed class StagingSmokeJourneyTests
                 new { PhoneNumber = phone, Password = _config.Password });
             Expect(response.StatusCode == HttpStatusCode.OK, "Correct phone credentials were rejected.");
             using var body = await ReadJsonAsync(response);
-            return SessionFrom(body.RootElement);
+            return SessionFrom(response, body.RootElement);
         }
 
-        private Session SessionFrom(JsonElement body)
+        private Session SessionFrom(HttpResponseMessage response, JsonElement body)
         {
             var access = RequiredText(body, "AccessToken");
-            var refresh = RequiredText(body, "RefreshToken");
+
+            // See RequiredCookie's doc comment: the refresh token is cookie-only now.
+            var refresh = RequiredCookie(response, RefreshTokenCookieName);
             Expect(access.Split('.').Length == 3, "Access token is not a JWT.");
             Expect(refresh.Length >= 40, "Refresh token contract is invalid.");
             Expect(!body.EnumerateObject().Any(x =>
@@ -763,6 +772,38 @@ public sealed class StagingSmokeJourneyTests
             if (string.IsNullOrWhiteSpace(value))
                 throw new InvalidOperationException($"Required response property '{name}' is missing.");
             return value;
+        }
+
+        // RELEASE-BLOCKERS-AR.md B-13: the refresh token no longer travels in the JSON body
+        // at all — every issuing endpoint (login, phone login/registration, refresh) now sets
+        // it only via the refresh_token cookie. This client's default HttpClientHandler
+        // already tracks cookies automatically (UseCookies defaults to true), which is why
+        // the rest of this file needs no other change: RefreshAsync/LogoutAsync still send an
+        // explicit RefreshToken in the body for the negative-path assertions
+        // (stale/invalid/logged-out token rejection), and RefreshTokenCookie.Read on the
+        // server prefers that explicit value over the ambient cookie, so those assertions
+        // keep testing exactly the token value each one intends to.
+        private static string RequiredCookie(HttpResponseMessage response, string cookieName)
+        {
+            if (response.Headers.TryGetValues("Set-Cookie", out var cookies))
+            {
+                foreach (var cookie in cookies)
+                {
+                    var prefix = cookieName + "=";
+                    if (!cookie.StartsWith(prefix, StringComparison.Ordinal))
+                        continue;
+
+                    var end = cookie.IndexOf(';');
+                    var raw = end >= 0 ? cookie[prefix.Length..end] : cookie[prefix.Length..];
+                    var value = Uri.UnescapeDataString(raw);
+
+                    if (!string.IsNullOrWhiteSpace(value))
+                        return value;
+                }
+            }
+
+            throw new InvalidOperationException(
+                $"Response did not set the '{cookieName}' cookie.");
         }
 
         private static bool Boolean(JsonElement element, string name) => Property(element, name).GetBoolean();

@@ -11,7 +11,9 @@ using PropertyApi.Application.Auth.Commands.RefreshToken;
 using PropertyApi.Application.Auth.Commands.Register;
 using PropertyApi.Application.Auth.Commands.ResetPassword;
 using PropertyApi.Application.Auth.Commands.SocialLogin;
+using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
+using PropertyApi.Security.Auth;
 
 namespace PropertyApi.Controllers;
 
@@ -21,6 +23,7 @@ namespace PropertyApi.Controllers;
 public sealed class AuthController : ControllerBase
 {
     private readonly ISender _sender;
+    private readonly IJwtTokenSettings _jwtSettings;
     private readonly ILogger<AuthController> _logger;
 
     // ILoginIdentityService was injected only so the login failure path could look the
@@ -29,9 +32,11 @@ public sealed class AuthController : ControllerBase
     // into the identity store at all.
     public AuthController(
         ISender sender,
+        IJwtTokenSettings jwtSettings,
         ILogger<AuthController> logger)
     {
         _sender = sender;
+        _jwtSettings = jwtSettings;
         _logger = logger;
     }
 
@@ -108,10 +113,26 @@ public sealed class AuthController : ControllerBase
                     "Login succeeded from IP {IpAddress}.",
                     ipAddress);
 
-                var response = LoginResponseDto.CreateSuccess(
-                    result.AccessToken,
+                // RELEASE-BLOCKERS-AR.md B-13: the refresh token now travels only in an
+                // HttpOnly cookie, never in a body a script on the page could read.
+                // LoginResponseDto.CreateSuccess is kept as-is (see LoginResponseContractTests)
+                // — its RefreshToken member is deliberately not set here rather than removed
+                // from the DTO, since other callers of that factory are unaffected by this
+                // endpoint's choice to withhold it.
+                RefreshTokenCookie.Attach(
+                    Response,
                     result.RefreshToken,
-                    result.ExpiresIn);
+                    _jwtSettings.RefreshTokenDays);
+
+                var response = new LoginResponseDto
+                {
+                    Success = true,
+                    StatusCode = 200,
+                    Message = "Login successful",
+                    AccessToken = result.AccessToken,
+                    RefreshToken = null,
+                    ExpiresIn = result.ExpiresIn
+                };
 
                 return Ok(response);
             }
@@ -222,20 +243,31 @@ public sealed class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Refresh(
-        [FromBody] RefreshRequest dto,
+        [FromBody] RefreshRequest? dto,
         CancellationToken ct)
     {
+        // RELEASE-BLOCKERS-AR.md B-13: the token a real browser client presents now arrives
+        // only via the refresh_token cookie — dto/dto.RefreshToken exists purely so a
+        // transitional or non-browser caller (internal tooling, a mobile client not yet
+        // verified against the cookie flow) can still assert an explicit value. See
+        // RefreshTokenCookie.Read's doc comment for why the explicit value wins when present.
+        var refreshToken = RefreshTokenCookie.Read(Request, dto?.RefreshToken);
+
+        if (refreshToken is null)
+            return Unauthorized(new { message = "No refresh token was supplied." });
+
         var result = await _sender.Send(new RefreshTokenCommand(
-            RefreshToken: dto.RefreshToken,
+            RefreshToken: refreshToken,
             IpAddress: GetClientIp()), ct);
 
         if (!result.Success)
             return Unauthorized(new { message = result.Message });
 
+        RefreshTokenCookie.Attach(Response, result.RefreshToken, _jwtSettings.RefreshTokenDays);
+
         return Ok(new
         {
             accessToken = result.AccessToken,
-            refreshToken = result.RefreshToken,
             expiresIn = result.ExpiresIn
         });
     }
@@ -247,17 +279,27 @@ public sealed class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Logout(
-        [FromBody] RefreshRequest dto,
+        [FromBody] RefreshRequest? dto,
         CancellationToken ct)
     {
         var userIdText = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!Guid.TryParse(userIdText, out var userId))
             return Unauthorized();
 
-        await _sender.Send(new LogoutCommand(
-            UserId: userId,
-            RefreshToken: dto.RefreshToken,
-            IpAddress: GetClientIp()), ct);
+        var refreshToken = RefreshTokenCookie.Read(Request, dto?.RefreshToken);
+
+        if (refreshToken is not null)
+        {
+            await _sender.Send(new LogoutCommand(
+                UserId: userId,
+                RefreshToken: refreshToken,
+                IpAddress: GetClientIp()), ct);
+        }
+
+        // Clear unconditionally: an already-expired/missing cookie costs nothing to clear
+        // again, and the browser's session must not keep offering a token client-side has
+        // no way to inspect or know is now meaningless.
+        RefreshTokenCookie.Clear(Response);
 
         return NoContent();
     }
@@ -286,10 +328,11 @@ public sealed class AuthController : ControllerBase
         if (!result.Success)
             return BadRequest(new { message = result.Message });
 
+        RefreshTokenCookie.Attach(Response, result.RefreshToken, _jwtSettings.RefreshTokenDays);
+
         return Ok(new
         {
             accessToken = result.AccessToken,
-            refreshToken = result.RefreshToken,
             expiresIn = result.ExpiresIn
         });
     }
@@ -313,15 +356,17 @@ public sealed class AuthController : ControllerBase
             AppleAuthorizationCode: dto.AuthorizationCode,
             AppleFirstName: dto.FirstName,
             AppleLastName: dto.LastName,
+            AppleNonce: dto.Nonce,
             IpAddress: GetClientIp()), ct);
 
         if (!result.Success)
             return BadRequest(new { message = result.Message });
 
+        RefreshTokenCookie.Attach(Response, result.RefreshToken, _jwtSettings.RefreshTokenDays);
+
         return Ok(new
         {
             accessToken = result.AccessToken,
-            refreshToken = result.RefreshToken,
             expiresIn = result.ExpiresIn
         });
     }
@@ -360,9 +405,17 @@ public sealed record AppleLoginRequest(
     string IdentityToken,
     string? AuthorizationCode,
     string? FirstName,
-    string? LastName);
+    string? LastName,
+    // Raw (unhashed) nonce the client passed to AppleID.auth.init — see B-16 in
+    // RELEASE-BLOCKERS-AR.md. Optional at the DTO level so a malformed/old request still
+    // deserializes; AppleTokenVerifier is what actually enforces it once the frontend sends it.
+    string? Nonce = null);
+// Optional now (RELEASE-BLOCKERS-AR.md B-13): a real browser client sends no body at all —
+// the refresh_token cookie carries the value. RefreshToken remains so a transitional or
+// non-browser caller (internal tooling, a mobile client pending its own cookie verification)
+// can still assert an explicit token; see RefreshTokenCookie.Read.
 public sealed record RefreshRequest(
-    string RefreshToken);
+    string? RefreshToken = null);
 
 public sealed record ForgotPasswordRequest(
     string Email);

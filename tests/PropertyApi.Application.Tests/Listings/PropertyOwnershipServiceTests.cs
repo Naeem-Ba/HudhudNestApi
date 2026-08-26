@@ -102,6 +102,11 @@ public sealed class PropertyOwnershipServiceTests
             CancellationToken ct = default)
             => throw new NotImplementedException();
 
+        public Task<int> CountActiveListingsByAgencyAsync(
+            Guid agencyId,
+            CancellationToken ct = default)
+            => throw new NotImplementedException();
+
         public Task<IReadOnlyList<Property>> FindPotentialDuplicatesAsync(
             int neighborhoodId,
             ListingType listingType,

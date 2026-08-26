@@ -62,6 +62,13 @@ public sealed class PropertyDto
     public Guid OwnerId { get; set; }
     public string OwnerName { get; set; } = string.Empty;
 
+    // BUG FIX (RELEASE-BLOCKERS-AR.md B-5): AgencyId was stamped on Property at creation
+    // (CreatePropertyCommandHandler) but never surfaced in this DTO, so an agency's public
+    // page had no way to show its own listings. Filter GET /api/properties/search by
+    // ?agencyId=... the same way OwnerId already lets a client fetch "this seller's other
+    // listings" — see PropertyFilterDto.AgencyId.
+    public Guid? AgencyId { get; set; }
+
     // Publishing
     public bool IsPublished { get; set; }
     public DateTime? PublishedAt { get; set; }

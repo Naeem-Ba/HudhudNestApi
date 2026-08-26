@@ -1,11 +1,10 @@
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Infrastructure.Media;
 using PropertyApi.Infrastructure.Persistence;
+using PropertyApi.Security.Staging;
 
 namespace PropertyApi.Controllers;
 
@@ -166,21 +165,8 @@ public sealed class StagingTestSupportController : ControllerBase
         });
     }
 
-    private bool IsAuthorizedTestSupportRequest()
-    {
-        if (!_environment.IsStaging() ||
-            !_configuration.GetValue<bool>("Staging:TestSupport:Enabled"))
-            return false;
-
-        var configured = _configuration["Staging:TestSupport:CleanupSecret"];
-        var supplied = Request.Headers["X-Staging-Smoke-Secret"].ToString();
-        if (string.IsNullOrEmpty(configured) || string.IsNullOrEmpty(supplied))
-            return false;
-
-        return CryptographicOperations.FixedTimeEquals(
-            SHA256.HashData(Encoding.UTF8.GetBytes(configured)),
-            SHA256.HashData(Encoding.UTF8.GetBytes(supplied)));
-    }
+    private bool IsAuthorizedTestSupportRequest() =>
+        StagingTestSupportAuthorization.IsAuthorized(Request, _configuration, _environment);
 
     private static bool IsValidRunId(string? runId) =>
         !string.IsNullOrWhiteSpace(runId) &&

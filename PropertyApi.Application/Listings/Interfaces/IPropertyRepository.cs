@@ -47,6 +47,18 @@ public interface IPropertyRepository
         CancellationToken ct = default);
 
     /// <summary>
+    /// Counts active listings across every member of the given agency, pooled together —
+    /// see RELEASE-BLOCKERS-AR.md B-3. Property.AgencyId is stamped once at creation from
+    /// the owner's account (CreatePropertyCommandHandler), so this is a direct filter, not
+    /// a join through UserAccount. Same "active" definition as
+    /// <see cref="CountActiveListingsByOwnerAsync"/>: excludes deleted (global query filter)
+    /// and Expired listings.
+    /// </summary>
+    Task<int> CountActiveListingsByAgencyAsync(
+        Guid agencyId,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Advisory potential-duplicate lookup (Phase-0, Task 4). Returns published,
     /// non-deleted properties in the same neighborhood and listing type whose price
     /// and/or area fall within +/-maxTolerancePercent of the supplied values. Returns

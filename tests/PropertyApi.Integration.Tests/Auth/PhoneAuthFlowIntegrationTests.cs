@@ -30,10 +30,15 @@ public sealed class PhoneAuthFlowIntegrationTests : IClassFixture<PhoneAuthWebAp
         Assert.True(registration.StatusCode == HttpStatusCode.OK,
             $"Registration failed: {registration.StatusCode}: {await registration.Content.ReadAsStringAsync()}");
         Assert.False(string.IsNullOrWhiteSpace(await Property<string>(registration, "accessToken")));
-        Assert.False(string.IsNullOrWhiteSpace(await Property<string>(registration, "refreshToken")));
+
+        // RELEASE-BLOCKERS-AR.md B-13: the refresh token is no longer readable from the
+        // response body — it travels only in the HttpOnly refresh_token cookie now.
+        Assert.True(string.IsNullOrWhiteSpace(await Property<string>(registration, "refreshToken")));
+        Assert.True(HasRefreshTokenCookie(registration), "Registration did not set the refresh_token cookie.");
 
         var login = await _client.PostAsJsonAsync("/api/auth/phone/login", new { phoneNumber = phone, password = "SecurePass9" });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        Assert.True(HasRefreshTokenCookie(login), "Login did not set the refresh_token cookie.");
         Assert.False(string.IsNullOrWhiteSpace(await Property<string>(login, "accessToken")));
 
         var legacy = await _client.PostAsJsonAsync("/api/auth/phone/verify", new { phoneNumber = phone, code = DeterministicOtpService.ValidOtp });
@@ -59,5 +64,9 @@ public sealed class PhoneAuthFlowIntegrationTests : IClassFixture<PhoneAuthWebAp
     }
 
     private static Task<string> Message(HttpResponseMessage response) => Property<string>(response, "message");
+
+    private static bool HasRefreshTokenCookie(HttpResponseMessage response) =>
+        response.Headers.TryGetValues("Set-Cookie", out var cookies) &&
+        cookies.Any(cookie => cookie.StartsWith("refresh_token=", StringComparison.Ordinal));
     private static string UniquePhone() => $"+49{Math.Abs(DateTime.UtcNow.Ticks % 10_000_000_000_000L):D13}";
 }

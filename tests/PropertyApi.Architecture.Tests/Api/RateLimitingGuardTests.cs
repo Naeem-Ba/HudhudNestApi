@@ -71,6 +71,20 @@ public sealed class RateLimitingGuardTests
         Assert.Equal(expectedPolicy, attribute.PolicyName);
     }
 
+    [Fact(DisplayName = "Public agency page must use the agencies-public rate limiting policy")]
+    public void GetBySlug_Should_Have_AgenciesPublic_RateLimit()
+    {
+        var method = typeof(AgenciesController).GetMethod(nameof(AgenciesController.GetBySlug));
+        Assert.NotNull(method);
+
+        var attribute = Assert.Single(method!.GetCustomAttributes(
+                typeof(EnableRateLimitingAttribute),
+                inherit: false)
+            .Cast<EnableRateLimitingAttribute>());
+
+        Assert.Equal("agencies-public", attribute.PolicyName);
+    }
+
     [Fact(DisplayName = "Program.cs must define local fallback auth policies and enable Redis rate limiting")]
     public void Program_Should_Define_Auth_RateLimit_Policies()
     {

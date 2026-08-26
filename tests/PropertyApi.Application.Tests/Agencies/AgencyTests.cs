@@ -4,8 +4,11 @@ using PropertyApi.Application.Admin.DTOs;
 using PropertyApi.Application.Admin.Interfaces;
 using PropertyApi.Application.Agencies.Commands.AddAgencyMember;
 using PropertyApi.Application.Agencies.Commands.CreateAgency;
+using PropertyApi.Application.Agencies.Commands.DeactivateAgency;
 using PropertyApi.Application.Agencies.Commands.RemoveAgencyMember;
+using PropertyApi.Application.Agencies.Commands.UpdateAgency;
 using PropertyApi.Application.Agencies.Interfaces;
+using PropertyApi.Application.Agencies.Queries.GetAgencyBySlug;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Domain.Agencies.Entities;
@@ -204,6 +207,80 @@ public sealed class AgencyTests
         Assert.Equal("sham-realty", result.Slug);
     }
 
+    // ── Public agency page ──────────────────────────────────────────
+
+    [Fact]
+    public async Task GetAgencyBySlug_ShowsOnlyTheOwner_UntilRealConsentExists()
+    {
+        // Interim mitigation for B-2 (RELEASE-BLOCKERS-AR.md): AddAgencyMemberCommandHandler
+        // lets an owner attach a member with no consent step at all, so the public page must
+        // not publish a name or photo nobody agreed to. Until a real invitation/acceptance
+        // flow exists, the owner (whose consent is implicit) is the only member shown here.
+        var owner = BuildAccount();
+        var agency = BuildAgency(owner.Id);
+        var memberOne = BuildAccount();
+        memberOne.JoinAgency(agency.Id, DateTime.UtcNow);
+        var memberTwo = BuildAccount();
+        memberTwo.JoinAgency(agency.Id, DateTime.UtcNow);
+
+        var repo = new Mock<IAgencyRepository>();
+        repo.Setup(x => x.GetBySlugAsync(agency.Slug, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(agency);
+        repo.Setup(x => x.GetMembersAsync(agency.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([owner, memberOne, memberTwo]);
+
+        var handler = new GetAgencyBySlugQueryHandler(repo.Object);
+
+        var dto = await handler.Handle(
+            new GetAgencyBySlugQuery(agency.Slug),
+            CancellationToken.None);
+
+        var shown = Assert.Single(dto.Members);
+        Assert.Equal(owner.Id, shown.UserId);
+        Assert.True(shown.IsOwner);
+
+        // The count still reflects the real roster — only names/photos are withheld, not the
+        // fact that the agency has other members.
+        Assert.Equal(3, dto.MemberCount);
+    }
+
+    [Fact]
+    public async Task GetAgencyBySlug_WithAMalformedSlug_IsNotFound_NotBadRequest()
+    {
+        // RELEASE-BLOCKERS-AR.md B-12: a slug with nothing normalizable (e.g. "---") used to
+        // surface Agency.NormalizeSlug's DomainException as-is, which the exception
+        // middleware maps to 400 — while a well-formed slug that just does not exist answers
+        // 404 from the check below. That difference told an anonymous caller something about
+        // slug validity the handler's own doc comment says it must not. Both must answer the
+        // same way now.
+        var repo = new Mock<IAgencyRepository>();
+        var handler = new GetAgencyBySlugQueryHandler(repo.Object);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => handler.Handle(
+            new GetAgencyBySlugQuery("---"),
+            CancellationToken.None));
+
+        // The malformed-slug path must never reach the repository — there is nothing to look
+        // up once normalization itself failed.
+        repo.Verify(
+            x => x.GetBySlugAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task GetAgencyBySlug_WithAWellFormedButUnknownSlug_IsAlsoNotFound()
+    {
+        var repo = new Mock<IAgencyRepository>();
+        repo.Setup(x => x.GetBySlugAsync("no-such-office", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Agency?)null);
+
+        var handler = new GetAgencyBySlugQueryHandler(repo.Object);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => handler.Handle(
+            new GetAgencyBySlugQuery("no-such-office"),
+            CancellationToken.None));
+    }
+
     // ── Add member ───────────────────────────────────────────────
 
     [Fact]
@@ -361,6 +438,137 @@ public sealed class AgencyTests
             Times.Never);
     }
 
+    // ── Application: update profile (RELEASE-BLOCKERS-AR.md B-4) ──
+
+    [Fact]
+    public async Task UpdateAgency_ByOwner_ChangesProfileAndReturnsIt()
+    {
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        var owner = BuildAccount(ownerId);
+        owner.JoinAgency(agency.Id, DateTime.UtcNow);
+
+        var repo = BuildRepository(owner, agency);
+        var handler = UpdateHandler(repo);
+
+        var dto = await handler.Handle(
+            new UpdateAgencyCommand(
+                AgencyId: agency.Id,
+                Name: "مكتب الشام الجديد",
+                Description: "وصف جديد",
+                ContactEmail: "new@sham-realty.sy",
+                ContactPhone: "0999999999",
+                City: "دمشق",
+                RequestingUserId: ownerId),
+            CancellationToken.None);
+
+        Assert.Equal("مكتب الشام الجديد", agency.Name);
+        Assert.Equal("وصف جديد", agency.Description);
+        Assert.Equal("مكتب الشام الجديد", dto.Name);
+    }
+
+    [Fact]
+    public async Task UpdateAgency_ByNonOwner_IsRejected()
+    {
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        var owner = BuildAccount(ownerId);
+
+        var repo = BuildRepository(owner, agency);
+        var handler = UpdateHandler(repo);
+
+        // Holding AgencyOwner elsewhere is not enough — it must be THIS agency's owner.
+        await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(
+            new UpdateAgencyCommand(
+                agency.Id, "اسم آخر", null, null, null, null,
+                RequestingUserId: Guid.NewGuid()),
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task UpdateAgency_WhenAgencyMissing_IsNotFound()
+    {
+        var repo = new Mock<IAgencyRepository>();
+        repo.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Agency?)null);
+
+        var handler = UpdateHandler(repo);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => handler.Handle(
+            new UpdateAgencyCommand(
+                Guid.NewGuid(), "اسم", null, null, null, null, Guid.NewGuid()),
+            CancellationToken.None));
+    }
+
+    // ── Application: deactivate = "delete" (RELEASE-BLOCKERS-AR.md B-4) ──
+
+    [Fact]
+    public async Task DeactivateAgency_ByOwner_TurnsItOff()
+    {
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        var owner = BuildAccount(ownerId);
+
+        var repo = BuildRepository(owner, agency);
+        var handler = DeactivateHandler(repo);
+
+        await handler.Handle(
+            new DeactivateAgencyCommand(agency.Id, ownerId),
+            CancellationToken.None);
+
+        Assert.False(agency.IsActive);
+    }
+
+    [Fact]
+    public async Task DeactivateAgency_ByNonOwner_IsRejected()
+    {
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        var owner = BuildAccount(ownerId);
+
+        var repo = BuildRepository(owner, agency);
+        var handler = DeactivateHandler(repo);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(
+            new DeactivateAgencyCommand(agency.Id, Guid.NewGuid()),
+            CancellationToken.None));
+
+        Assert.True(agency.IsActive);
+    }
+
+    [Fact]
+    public async Task DeactivateAgency_WhenAlreadyInactive_IsIdempotent()
+    {
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        agency.Deactivate(DateTime.UtcNow);
+        var owner = BuildAccount(ownerId);
+
+        var repo = BuildRepository(owner, agency);
+        var handler = DeactivateHandler(repo);
+
+        // DELETE is idempotent — deactivating an already-inactive agency must not throw.
+        await handler.Handle(
+            new DeactivateAgencyCommand(agency.Id, ownerId),
+            CancellationToken.None);
+
+        Assert.False(agency.IsActive);
+    }
+
+    [Fact]
+    public async Task DeactivateAgency_WhenAgencyMissing_IsNotFound()
+    {
+        var repo = new Mock<IAgencyRepository>();
+        repo.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Agency?)null);
+
+        var handler = DeactivateHandler(repo);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => handler.Handle(
+            new DeactivateAgencyCommand(Guid.NewGuid(), Guid.NewGuid()),
+            CancellationToken.None));
+    }
+
     // ── Helpers ──────────────────────────────────────────────────
 
     private static Agency BuildAgency(Guid ownerId) => Agency.Create(
@@ -460,4 +668,13 @@ public sealed class AgencyTests
             identity.Object,
             Mock.Of<IUnitOfWork>(),
             NullLogger<RemoveAgencyMemberCommandHandler>.Instance);
+
+    private static UpdateAgencyCommandHandler UpdateHandler(Mock<IAgencyRepository> repo)
+        => new(repo.Object, Mock.Of<IUnitOfWork>());
+
+    private static DeactivateAgencyCommandHandler DeactivateHandler(Mock<IAgencyRepository> repo)
+        => new(
+            repo.Object,
+            Mock.Of<IUnitOfWork>(),
+            NullLogger<DeactivateAgencyCommandHandler>.Instance);
 }

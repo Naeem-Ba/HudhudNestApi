@@ -79,6 +79,9 @@ public static class PropertyMapper
             ? $"{p.Owner.FirstName} {p.Owner.LastName}".Trim()
             : string.Empty,
 
+        // See PropertyDto.AgencyId's doc comment (RELEASE-BLOCKERS-AR.md B-5).
+        AgencyId = p.AgencyId,
+
         // Publishing
         IsPublished = p.IsPublished,
         PublishedAt = p.PublishedAt,

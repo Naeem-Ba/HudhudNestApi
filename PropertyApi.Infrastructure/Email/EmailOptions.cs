@@ -27,4 +27,34 @@ public sealed class EmailOptions
     public string Password { get; init; } = string.Empty;
 
     public bool EnableSsl { get; init; } = true;
+
+    /// <summary>
+    /// Fails fast in Production against the one deployment mistake startup validation
+    /// otherwise cannot see: <see cref="From" /> left at its shipped placeholder domain.
+    /// That address passes every other check -- it is non-empty, and nothing in this
+    /// process can ask Resend whether a domain is verified -- yet Resend rejects it with a
+    /// 403 at send time, and both callers of the send path swallow that failure by design
+    /// (see docs/architecture/email-confirmation-and-delivery.md). Left unchecked, that
+    /// combination means every registration succeeds and zero mail ever arrives.
+    /// </summary>
+    public void ValidateForEnvironment(string environmentName)
+    {
+        var isProduction = string.Equals(
+            environmentName,
+            "Production",
+            StringComparison.OrdinalIgnoreCase);
+
+        if (!isProduction)
+        {
+            return;
+        }
+
+        if (From.EndsWith("@propertyapi.local", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Email:From must not use the placeholder @propertyapi.local domain in " +
+                "Production. Set it to an address on a domain verified with the email " +
+                "provider (e.g. Resend), or every send will be rejected with a silent 403.");
+        }
+    }
 }

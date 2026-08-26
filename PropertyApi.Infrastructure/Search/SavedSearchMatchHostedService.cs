@@ -62,6 +62,12 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
         }
     }
 
+    /// <summary>
+    /// Guarded by a Postgres advisory lock (BackgroundJobLockKeys.SavedSearchMatch): every
+    /// deployed instance runs this same timer against the same saved searches, and without
+    /// coordination two instances would notify the same owner of the same match twice. See
+    /// B-6 in RELEASE-BLOCKERS-AR.md.
+    /// </summary>
     internal async Task RunOnceAsync(CancellationToken ct)
     {
         using var scope = _scopeFactory.CreateScope();
@@ -69,50 +75,68 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var notifications = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
-        var allSearches = await savedSearches.GetAllAsync(ct);
-        var now = DateTime.UtcNow;
-        var matchedCount = 0;
-
-        foreach (var savedSearch in allSearches)
+        await db.Database.OpenConnectionAsync(ct);
+        try
         {
-            // First run for a search only looks forward from its creation — never
-            // floods the owner with every pre-existing listing that already matched.
-            var since = savedSearch.LastMatchedAt ?? savedSearch.CreatedAt;
+            await BackgroundJobLock.TryRunAsync(
+                db.Database.GetDbConnection(),
+                BackgroundJobLockKeys.SavedSearchMatch,
+                nameof(SavedSearchMatchHostedService),
+                _logger,
+                async () =>
+                {
+                    var allSearches = await savedSearches.GetAllAsync(ct);
+                    var now = DateTime.UtcNow;
+                    var matchedCount = 0;
 
-            var filter = ToFilterDto(savedSearch);
-            var query = PropertyRepository.ApplyFilter(db.Properties.AsNoTracking(), filter)
-                .Where(p => p.CreatedAt > since);
+                    foreach (var savedSearch in allSearches)
+                    {
+                        // First run for a search only looks forward from its creation — never
+                        // floods the owner with every pre-existing listing that already matched.
+                        var since = savedSearch.LastMatchedAt ?? savedSearch.CreatedAt;
 
-            var matches = await query
-                .OrderByDescending(p => p.CreatedAt)
-                .Take(10) // Cap per run — an unusually broad saved search should not spam the user.
-                .ToListAsync(ct);
+                        var filter = ToFilterDto(savedSearch);
+                        var query = PropertyRepository.ApplyFilter(db.Properties.AsNoTracking(), filter)
+                            .Where(p => p.CreatedAt > since);
 
-            if (matches.Count == 0)
-                continue;
+                        var matches = await query
+                            .OrderByDescending(p => p.CreatedAt)
+                            .Take(10) // Cap per run — an unusually broad saved search should not spam the user.
+                            .ToListAsync(ct);
 
-            foreach (var property in matches)
-            {
-                await notifications.NotifySavedSearchMatchAsync(
-                    savedSearch.UserId,
-                    property.Id,
-                    property.Title,
-                    savedSearch.Name ?? "بحث محفوظ",
-                    ct);
-            }
+                        if (matches.Count == 0)
+                            continue;
 
-            // savedSearch came from ISavedSearchRepository.GetAllAsync(), which returns
-            // tracked entities specifically so this mutation is picked up by the
-            // single SaveChangesAsync call below — no explicit Update() call needed.
-            savedSearch.MarkMatched();
-            matchedCount += matches.Count;
+                        foreach (var property in matches)
+                        {
+                            await notifications.NotifySavedSearchMatchAsync(
+                                savedSearch.UserId,
+                                property.Id,
+                                property.Title,
+                                savedSearch.Name ?? "بحث محفوظ",
+                                ct);
+                        }
+
+                        // savedSearch came from ISavedSearchRepository.GetAllAsync(), which
+                        // returns tracked entities specifically so this mutation is picked up
+                        // by the single SaveChangesAsync call below — no explicit Update()
+                        // call needed.
+                        savedSearch.MarkMatched();
+                        matchedCount += matches.Count;
+                    }
+
+                    await db.SaveChangesAsync(ct);
+
+                    if (matchedCount > 0)
+                    {
+                        _logger.LogInformation("Saved search run notified {Count} new matches across {SearchCount} searches.", matchedCount, allSearches.Count);
+                    }
+                },
+                ct);
         }
-
-        await db.SaveChangesAsync(ct);
-
-        if (matchedCount > 0)
+        finally
         {
-            _logger.LogInformation("Saved search run notified {Count} new matches across {SearchCount} searches.", matchedCount, allSearches.Count);
+            await db.Database.CloseConnectionAsync();
         }
     }
 

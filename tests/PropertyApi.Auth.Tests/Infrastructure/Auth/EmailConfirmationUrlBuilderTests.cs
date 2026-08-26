@@ -25,7 +25,7 @@ public sealed class EmailConfirmationUrlBuilderTests
         var url = builder.Build(IdentityId, "plain-token");
 
         Assert.Equal(
-            $"https://app.example.com/auth/verify-email?userId={IdentityId}&token=plain-token",
+            $"https://app.example.com/#/auth/verify-email?userId={IdentityId}&token=plain-token",
             url);
     }
 
@@ -65,7 +65,7 @@ public sealed class EmailConfirmationUrlBuilderTests
             Environments.Production);
 
         Assert.Contains(
-            "https://app.example.com/auth/verify-email",
+            "https://app.example.com/#/auth/verify-email",
             builder.Build(IdentityId, "token"),
             StringComparison.Ordinal);
     }
@@ -78,7 +78,7 @@ public sealed class EmailConfirmationUrlBuilderTests
             Environments.Development);
 
         Assert.StartsWith(
-            "http://localhost:4200/auth/verify-email",
+            "http://localhost:4200/#/auth/verify-email",
             builder.Build(IdentityId, "token"),
             StringComparison.Ordinal);
     }

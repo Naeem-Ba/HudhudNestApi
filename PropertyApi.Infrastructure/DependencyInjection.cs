@@ -27,7 +27,7 @@ public static class DependencyInjection
 
         services.AddAuthInfrastructure(configuration, environment);
         services.AddPersistenceInfrastructure(configuration, environment);
-        services.AddRepositoryInfrastructure();
+        services.AddRepositoryInfrastructure(configuration);
         services.AddLookupInfrastructure();
         services.AddUserContextInfrastructure();
         services.AddMediaInfrastructure(configuration, environment);

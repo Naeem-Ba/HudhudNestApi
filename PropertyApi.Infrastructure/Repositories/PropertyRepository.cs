@@ -143,6 +143,20 @@ public sealed class PropertyRepository : IPropertyRepository
                 ct);
     }
 
+    public async Task<int> CountActiveListingsByAgencyAsync(
+        Guid agencyId,
+        CancellationToken ct = default)
+    {
+        // Mirrors CountActiveListingsByOwnerAsync's "active" definition, but pools every
+        // member's listings under the agency instead of a single owner (RELEASE-BLOCKERS-AR.md
+        // B-3). AgencyId is stamped on Property at creation time, so no join is needed.
+        return await _db.Properties
+            .AsNoTracking()
+            .CountAsync(
+                p => p.AgencyId == agencyId && p.Status != PropertyStatus.Expired,
+                ct);
+    }
+
     public async Task<IReadOnlyList<Property>> FindPotentialDuplicatesAsync(
         int neighborhoodId,
         ListingType listingType,
@@ -303,6 +317,9 @@ public sealed class PropertyRepository : IPropertyRepository
 
         if (filter.OwnerId.HasValue)
             query = query.Where(p => p.OwnerId == filter.OwnerId);
+
+        if (filter.AgencyId.HasValue)
+            query = query.Where(p => p.AgencyId == filter.AgencyId);
 
         if (filter.AmenityIds is { Count: > 0 })
             query = query.Where(p =>

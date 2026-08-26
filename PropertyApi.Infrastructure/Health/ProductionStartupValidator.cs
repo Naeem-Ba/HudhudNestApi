@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PropertyApi.Infrastructure.Auth.Services;
+using PropertyApi.Infrastructure.Email;
 
 namespace PropertyApi.Infrastructure.Health;
 
@@ -36,6 +37,7 @@ public sealed class ProductionStartupValidator : IHostedService
 
         ValidateProductionDatabaseConnection();
         ValidateSmsSettings();
+        ValidateEmailSettings();
         await ValidatePostGisAsync(cancellationToken);
 
         _logger.LogInformation("Production startup validation completed successfully.");
@@ -67,6 +69,13 @@ public sealed class ProductionStartupValidator : IHostedService
     {
         using var scope = _services.CreateScope();
         var options = scope.ServiceProvider.GetRequiredService<IOptions<SmsProviderOptions>>().Value;
+        options.ValidateForEnvironment(_environment.EnvironmentName);
+    }
+
+    private void ValidateEmailSettings()
+    {
+        using var scope = _services.CreateScope();
+        var options = scope.ServiceProvider.GetRequiredService<IOptions<EmailOptions>>().Value;
         options.ValidateForEnvironment(_environment.EnvironmentName);
     }
 

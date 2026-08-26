@@ -551,6 +551,7 @@ public sealed class SocialLoginSecurityTests
         _verifier
             .Setup(x => x.VerifyAsync(
                 RawToken,
+                It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(
                 socialUser);

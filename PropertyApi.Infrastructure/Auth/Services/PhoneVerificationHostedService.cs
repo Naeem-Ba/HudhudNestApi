@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Npgsql;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Notifications.Entities;
 using PropertyApi.Domain.Notifications.Enums;
@@ -16,8 +18,15 @@ public sealed class PhoneVerificationHostedService : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly TimeProvider _clock;
     private readonly IConfiguration _configuration;
-    public PhoneVerificationHostedService(IServiceScopeFactory scopes, TimeProvider clock, IConfiguration configuration)
-    { _scopes = scopes; _clock = clock; _configuration = configuration; }
+    private readonly IHostEnvironment _environment;
+    private readonly ILogger<PhoneVerificationHostedService> _logger;
+    public PhoneVerificationHostedService(
+        IServiceScopeFactory scopes,
+        TimeProvider clock,
+        IConfiguration configuration,
+        IHostEnvironment environment,
+        ILogger<PhoneVerificationHostedService> logger)
+    { _scopes = scopes; _clock = clock; _configuration = configuration; _environment = environment; _logger = logger; }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -30,55 +39,85 @@ public sealed class PhoneVerificationHostedService : BackgroundService
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
+    /// <summary>
+    /// Guarded by a Postgres advisory lock (BackgroundJobLockKeys.PhoneVerificationReminder):
+    /// every deployed instance runs this same hourly timer over the same users, and without
+    /// coordination two instances would both page through and double-write reminder
+    /// notifications. See B-6 in RELEASE-BLOCKERS-AR.md.
+    ///
+    /// The lock lives on its own dedicated connection, separate from the per-page AppDbContext
+    /// scopes below, because this method opens and disposes a new scope every 100 users —
+    /// a session-level lock has to outlive all of them, not any single one.
+    /// </summary>
     internal async Task ProcessAsync(CancellationToken ct)
     {
-        var offset = 0;
-        while (!ct.IsCancellationRequested)
+        var connectionString = PostgresConnectionStringResolver.Resolve(_configuration, _environment);
+        await using var lockConnection = new NpgsqlConnection(connectionString);
+        await lockConnection.OpenAsync(ct);
+
+        try
         {
-            using var scope = _scopes.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var audit = scope.ServiceProvider.GetRequiredService<IAuditLogService>();
-            var users = await db.Users.Where(x => x.PhoneLastVerifiedAtUtc != null)
-                .OrderBy(x => x.Id).Skip(offset).Take(100).ToListAsync(ct);
-            if (users.Count == 0) break;
-            var now = _clock.GetUtcNow();
-            foreach (var user in users)
-            {
-                var due = user.PhoneVerificationDueAtUtc!.Value;
-                var grace = user.PhoneVerificationGraceEndsAtUtc!.Value;
-                var state = now >= grace ? PhoneVerificationState.Restricted : now >= due
-                    ? PhoneVerificationState.GracePeriod : now >= due.AddDays(-14)
-                        ? PhoneVerificationState.DueSoon : PhoneVerificationState.Verified;
-                var previousState = user.PhoneVerificationState;
-                user.PhoneVerificationState = state;
-                if (state != previousState)
+            await BackgroundJobLock.TryRunAsync(
+                lockConnection,
+                BackgroundJobLockKeys.PhoneVerificationReminder,
+                nameof(PhoneVerificationHostedService),
+                _logger,
+                async () =>
                 {
-                    var action = state switch
+                    var offset = 0;
+                    while (!ct.IsCancellationRequested)
                     {
-                        PhoneVerificationState.DueSoon => AuditActions.PhoneVerificationDueSoon,
-                        PhoneVerificationState.GracePeriod => AuditActions.PhoneVerificationGraceStarted,
-                        PhoneVerificationState.Restricted => AuditActions.PhoneVerificationRestricted,
-                        _ => null
-                    };
-                    if (action is not null)
-                        await audit.LogAsync(user.Id, action, null,
-                            newValue: $"{{\"outcome\":\"transitioned\",\"state\":\"{state}\"}}", ct: ct);
-                }
-                var eventName = EventName(now, due, grace, state);
-                var key = eventName is null ? null : $"{due:yyyyMMdd}:{eventName}";
-                if (key is not null && user.LastPhoneVerificationNotificationKey != key)
-                {
-                    db.Notifications.Add(new Notification
-                    {
-                        RecipientId = user.Id,
-                        Type = NotificationType.PhoneVerification,
-                        Message = Message(eventName!)
-                    });
-                    user.LastPhoneVerificationNotificationKey = key;
-                }
-            }
-            await db.SaveChangesAsync(ct);
-            offset += users.Count;
+                        using var scope = _scopes.CreateScope();
+                        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                        var audit = scope.ServiceProvider.GetRequiredService<IAuditLogService>();
+                        var users = await db.Users.Where(x => x.PhoneLastVerifiedAtUtc != null)
+                            .OrderBy(x => x.Id).Skip(offset).Take(100).ToListAsync(ct);
+                        if (users.Count == 0) break;
+                        var now = _clock.GetUtcNow();
+                        foreach (var user in users)
+                        {
+                            var due = user.PhoneVerificationDueAtUtc!.Value;
+                            var grace = user.PhoneVerificationGraceEndsAtUtc!.Value;
+                            var state = now >= grace ? PhoneVerificationState.Restricted : now >= due
+                                ? PhoneVerificationState.GracePeriod : now >= due.AddDays(-14)
+                                    ? PhoneVerificationState.DueSoon : PhoneVerificationState.Verified;
+                            var previousState = user.PhoneVerificationState;
+                            user.PhoneVerificationState = state;
+                            if (state != previousState)
+                            {
+                                var action = state switch
+                                {
+                                    PhoneVerificationState.DueSoon => AuditActions.PhoneVerificationDueSoon,
+                                    PhoneVerificationState.GracePeriod => AuditActions.PhoneVerificationGraceStarted,
+                                    PhoneVerificationState.Restricted => AuditActions.PhoneVerificationRestricted,
+                                    _ => null
+                                };
+                                if (action is not null)
+                                    await audit.LogAsync(user.Id, action, null,
+                                        newValue: $"{{\"outcome\":\"transitioned\",\"state\":\"{state}\"}}", ct: ct);
+                            }
+                            var eventName = EventName(now, due, grace, state);
+                            var key = eventName is null ? null : $"{due:yyyyMMdd}:{eventName}";
+                            if (key is not null && user.LastPhoneVerificationNotificationKey != key)
+                            {
+                                db.Notifications.Add(new Notification
+                                {
+                                    RecipientId = user.Id,
+                                    Type = NotificationType.PhoneVerification,
+                                    Message = Message(eventName!)
+                                });
+                                user.LastPhoneVerificationNotificationKey = key;
+                            }
+                        }
+                        await db.SaveChangesAsync(ct);
+                        offset += users.Count;
+                    }
+                },
+                ct);
+        }
+        finally
+        {
+            await lockConnection.CloseAsync();
         }
     }
 
