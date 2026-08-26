@@ -7,6 +7,7 @@ using PropertyApi.Application.Reviews.Queries.GetRatingEligibility;
 using PropertyApi.Application.Reviews.Queries.GetUserRatings;
 using PropertyApi.Application.Users.Commands.ChangePassword;
 using PropertyApi.Application.Users.Commands.DeleteUser;
+using PropertyApi.Application.Users.Commands.SelectPlan;
 using PropertyApi.Application.Users.Commands.UpdateUser;
 using PropertyApi.Application.Users.Commands.UploadUserAvatar;
 using PropertyApi.Application.Users.DTOs;
@@ -198,6 +199,24 @@ public sealed class UsersController : ControllerBase
         };
     }
 
+    // POST /api/Users/me/plan — records the caller's explicit plan choice (including
+    // "free"). Gates listing creation/publishing — see CreatePropertyCommandHandler.
+    [HttpPost("me/plan")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> SelectPlan(
+        [FromBody] SelectPlanRequest dto,
+        CancellationToken ct)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var result = await _sender.Send(new SelectPlanCommand(userId, dto.Tier), ct);
+
+        return result ? NoContent() : Unauthorized();
+    }
+
     [HttpPost("me/change-password")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -265,6 +284,8 @@ public sealed record UpdateProfileRequest(
 public sealed record ChangePasswordRequest(
     string CurrentPassword,
     string NewPassword);
+
+public sealed record SelectPlanRequest(string Tier);
 
 public sealed record RateUserRequest(
     int Credibility,

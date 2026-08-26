@@ -10,6 +10,7 @@ using PropertyApi.Application.Contact.Interfaces;
 using PropertyApi.Application.Favorites.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Notifications.Interfaces;
+using PropertyApi.Application.Plans.Interfaces;
 using PropertyApi.Application.Reviews.Interfaces;
 using PropertyApi.Application.Search.Interfaces;
 using PropertyApi.Application.Users.Interfaces;
@@ -61,6 +62,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IUserDirectoryReadService, UserDirectoryReadService>();
         services.AddScoped<IUserAccountRepository, UserAccountRepository>();
         services.AddScoped<IMessageRepository, MessageRepository>();
+        services.AddScoped<IPlanRepository, PlanRepository>();
 
         return services;
     }

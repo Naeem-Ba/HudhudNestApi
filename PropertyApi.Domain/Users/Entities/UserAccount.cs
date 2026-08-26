@@ -63,6 +63,15 @@ public sealed class UserAccount
     /// <summary>متى انضم المستخدم إلى مكتبه الحالي — يُمسح عند مغادرته.</summary>
     public DateTime? AgencyJoinedAt { get; private set; }
 
+    /// <summary>
+    /// الخطة التي اختارها المستخدم صراحةً (بما فيها الخطة المجانية). null يعني أن
+    /// المستخدم لم يختر أي خطة بعد — وهذا يختلف عمداً عن معاملة كل حساب كخطة مجانية
+    /// ضمنياً: نشر أول إعلان يتطلب اختياراً صريحاً، لا افتراضاً صامتاً.
+    /// </summary>
+    public Guid? PlanId { get; private set; }
+
+    public DateTime? PlanSelectedAt { get; private set; }
+
     public DateTime CreatedAt { get; private set; }
 
     public DateTime UpdatedAt { get; private set; }
@@ -280,6 +289,32 @@ public sealed class UserAccount
 
         AgencyJoinedAt =
             null;
+
+        UpdatedAt =
+            utcNow;
+    }
+
+    /// <summary>
+    /// يسجّل اختيار المستخدم لخطة — بما فيها الخطة المجانية. يمكن استدعاؤها أكثر من
+    /// مرة (تغيير الخطة لاحقاً)؛ كل استدعاء يحدّث PlanSelectedAt إلى وقت الاختيار
+    /// الأخير الفعلي.
+    /// </summary>
+    public void SelectPlan(
+        Guid planId,
+        DateTime utcNow)
+    {
+        if (planId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Plan id is required.",
+                nameof(planId));
+        }
+
+        PlanId =
+            planId;
+
+        PlanSelectedAt =
+            utcNow;
 
         UpdatedAt =
             utcNow;

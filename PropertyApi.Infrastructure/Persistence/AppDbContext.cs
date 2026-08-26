@@ -8,6 +8,7 @@ using PropertyApi.Domain.Agencies.Entities;
 using PropertyApi.Domain.Audit.Entities;
 using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Messaging.Entities;
+using PropertyApi.Domain.Plans.Entities;
 using PropertyApi.Domain.Users.Entities;
 using IdentityApplicationRole = PropertyApi.Infrastructure.Identity.Entities.ApplicationRole;
 using PropertyApi.Domain.Auth.Entities;
@@ -51,6 +52,7 @@ public sealed class AppDbContext
     // -- DbSets --------------------------------------------------
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
     public DbSet<Agency> Agencies => Set<Agency>();
+    public DbSet<Plan> Plans => Set<Plan>();
     public DbSet<Property> Properties => Set<Property>();
     public DbSet<PropertyPriceHistory> PropertyPriceHistories => Set<PropertyPriceHistory>();
     public DbSet<PropertyImage> PropertyImages => Set<PropertyImage>();

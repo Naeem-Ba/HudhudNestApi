@@ -1,7 +1,9 @@
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
+using PropertyApi.Application.Plans.Interfaces;
 using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Application.Users.Queries.GetCurrentUser;
+using PropertyApi.Domain.Plans.Entities;
 using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.Tests.Users;
@@ -35,7 +37,8 @@ public sealed class GetCurrentUserQueryHandlerTests
                     identity,
                     ["User"]),
                 new StubUserAccountRepository(
-                    account));
+                    account),
+                new StubPlanRepository());
 
         // Act
         var result =
@@ -102,7 +105,8 @@ public sealed class GetCurrentUserQueryHandlerTests
                     identity,
                     ["User"]),
                 new StubUserAccountRepository(
-                    CreateUserAccount(id)));
+                    CreateUserAccount(id)),
+                new StubPlanRepository());
 
         // Act
         var result =
@@ -127,7 +131,8 @@ public sealed class GetCurrentUserQueryHandlerTests
                     account: null,
                     roles: []),
                 new StubUserAccountRepository(
-                    CreateUserAccount(id)));
+                    CreateUserAccount(id)),
+                new StubPlanRepository());
 
         // Act
         var result =
@@ -163,7 +168,8 @@ public sealed class GetCurrentUserQueryHandlerTests
                     identity,
                     ["User"]),
                 new StubUserAccountRepository(
-                    null));
+                    null),
+                new StubPlanRepository());
 
         // Act
         var result =
@@ -258,5 +264,20 @@ public sealed class GetCurrentUserQueryHandlerTests
             throw new NotSupportedException(
                 "This test repository is read-only.");
         }
+    }
+
+    /// <summary>None of these tests select a plan, so account.PlanId is always null and
+    /// this is never actually called — kept trivial rather than NotSupportedException so
+    /// a future test that does select a plan doesn't need to touch this class.</summary>
+    private sealed class StubPlanRepository : IPlanRepository
+    {
+        public Task<IReadOnlyList<Plan>> GetActiveAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<Plan>>(Array.Empty<Plan>());
+
+        public Task<Plan?> GetByTierAsync(string tier, CancellationToken ct = default)
+            => Task.FromResult<Plan?>(null);
+
+        public Task<Plan?> GetByIdAsync(Guid id, CancellationToken ct = default)
+            => Task.FromResult<Plan?>(null);
     }
 }

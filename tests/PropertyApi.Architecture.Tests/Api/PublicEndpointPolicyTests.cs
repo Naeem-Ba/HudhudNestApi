@@ -83,6 +83,9 @@ public sealed class PublicEndpointPolicyTests
             "LookupsController.GetNeighborhoods",
             "LookupsController.GetPropertyTypeCatalog",
 
+            // Public plan catalog for the /pricing marketing page — FRONTEND_BACKEND_CONTRACT.md §11.2.
+            "PlansController.GetPlans",
+
             // Public contact form; abuse is bounded by the "contact" rate-limit policy.
             "ContactController.Submit",
 

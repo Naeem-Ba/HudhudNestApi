@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Plans.Interfaces;
 using PropertyApi.Application.Users.DTOs;
 using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Domain.Users.Constants;
@@ -14,17 +15,20 @@ public sealed class UpdateUserCommandHandler
 {
     private readonly IUpdateUserIdentityService _identity;
     private readonly IUserAccountRepository _accounts;
+    private readonly IPlanRepository _plans;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<UpdateUserCommandHandler> _logger;
 
     public UpdateUserCommandHandler(
         IUpdateUserIdentityService identity,
         IUserAccountRepository accounts,
+        IPlanRepository plans,
         IUnitOfWork unitOfWork,
         ILogger<UpdateUserCommandHandler> logger)
     {
         _identity = identity;
         _accounts = accounts;
+        _plans = plans;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -254,6 +258,11 @@ public sealed class UpdateUserCommandHandler
                 $"Identity '{identity.IdentityId}' was not found after update.");
         }
 
+        var planTier =
+            account.PlanId is { } planId
+                ? (await _plans.GetByIdAsync(planId, cancellationToken))?.Tier
+                : null;
+
         return new UserDto
         {
             Id =
@@ -295,6 +304,15 @@ public sealed class UpdateUserCommandHandler
 
             EmailConfirmed =
                 updatedIdentity.EmailConfirmed,
+
+            PhoneConfirmed =
+                updatedIdentity.PhoneConfirmed,
+
+            PlanTier =
+                planTier,
+
+            PlanSelectedAt =
+                account.PlanSelectedAt,
 
             CreatedAt =
                 account.CreatedAt,

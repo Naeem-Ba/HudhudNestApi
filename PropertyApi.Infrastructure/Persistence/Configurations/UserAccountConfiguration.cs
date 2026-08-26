@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using PropertyApi.Domain.Agencies.Entities;
+using PropertyApi.Domain.Plans.Entities;
 using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Infrastructure.Persistence.Configurations;
@@ -62,5 +63,18 @@ public sealed class UserAccountConfiguration
         builder.HasIndex(x => x.AgencyId)
             .HasDatabaseName("IX_UserAccounts_AgencyId")
             .HasFilter("\"AgencyId\" IS NOT NULL");
+
+        // Plan selection. Nullable — null means "has not chosen a plan yet", which is a
+        // real, distinct state from "on the free plan" (see UserAccount.PlanId doc comment).
+        // Restrict rather than SetNull: a Plan referenced by any account should not be
+        // deletable out from under them; deactivate it (IsActive = false) instead.
+        builder.HasOne<Plan>()
+            .WithMany()
+            .HasForeignKey(x => x.PlanId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(x => x.PlanId)
+            .HasDatabaseName("IX_UserAccounts_PlanId")
+            .HasFilter("\"PlanId\" IS NOT NULL");
     }
 }

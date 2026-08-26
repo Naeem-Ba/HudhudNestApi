@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
+using PropertyApi.Application.Plans.Interfaces;
 using PropertyApi.Application.Users.DTOs;
 using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Domain.Users.Entities;
@@ -12,13 +13,16 @@ public sealed class GetCurrentUserQueryHandler
 {
     private readonly IUserIdentityReadService _identity;
     private readonly IUserAccountRepository _accounts;
+    private readonly IPlanRepository _plans;
 
     public GetCurrentUserQueryHandler(
         IUserIdentityReadService identity,
-        IUserAccountRepository accounts)
+        IUserAccountRepository accounts,
+        IPlanRepository plans)
     {
         _identity = identity;
         _accounts = accounts;
+        _plans = plans;
     }
 
     public async Task<UserDto?> Handle(
@@ -47,13 +51,18 @@ public sealed class GetCurrentUserQueryHandler
             identity.IdentityId,
             cancellationToken);
 
-        return MapToDto(account, identity, roles);
+        var planTier = account.PlanId is { } planId
+            ? (await _plans.GetByIdAsync(planId, cancellationToken))?.Tier
+            : null;
+
+        return MapToDto(account, identity, roles, planTier);
     }
 
     private static UserDto MapToDto(
         UserAccount account,
         IdentityAccountSnapshot identity,
-        IReadOnlyList<string> roles)
+        IReadOnlyList<string> roles,
+        string? planTier)
     {
         return new UserDto
         {
@@ -68,6 +77,9 @@ public sealed class GetCurrentUserQueryHandler
             PreferredCurrency = account.PreferredCurrency,
             CountryCode = account.CountryCode,
             EmailConfirmed = identity.EmailConfirmed,
+            PhoneConfirmed = identity.PhoneConfirmed,
+            PlanTier = planTier,
+            PlanSelectedAt = account.PlanSelectedAt,
             CreatedAt = account.CreatedAt,
             Roles = roles.ToList().AsReadOnly()
         };
