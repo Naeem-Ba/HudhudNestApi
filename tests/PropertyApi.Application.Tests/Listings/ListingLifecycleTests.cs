@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using PropertyApi.Application.Agencies.Interfaces;
+using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Auth.Models;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings;
@@ -362,7 +364,105 @@ public sealed class ListingLifecycleTests
     {
         var account = UserAccount.Create(userId, "نعيم", "بزازة", DateTime.UtcNow);
         account.JoinAgency(agencyId, DateTime.UtcNow);
+        account.SelectPlan(Guid.NewGuid(), DateTime.UtcNow);
         return account;
+    }
+
+    // ── Application: contact-confirmation + plan-selection gates ──
+
+    [Fact]
+    public async Task CreateProperty_WithNeitherEmailNorPhoneConfirmed_IsRejected()
+    {
+        var ownerId = Guid.NewGuid();
+        var repository = new Mock<IPropertyRepository>();
+
+        var identity = new Mock<IUserIdentityReadService>();
+        identity
+            .Setup(x => x.FindByIdAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IdentityAccountSnapshot(
+                IdentityId: ownerId,
+                UserAccountId: ownerId,
+                Email: "owner@example.com",
+                PhoneNumber: null,
+                EmailConfirmed: false,
+                PhoneConfirmed: false,
+                HasPassword: true,
+                IsDeleted: false));
+
+        var handler = CreatePropertyHandler(repository, identity: identity);
+
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(
+            ValidCreateCommand() with { OwnerId = ownerId },
+            CancellationToken.None));
+
+        Assert.Equal("LISTING_CONTACT_NOT_CONFIRMED", ex.Code);
+
+        // Rejected before the quota was even consulted, let alone written to.
+        repository.Verify(
+            x => x.CountActiveListingsByOwnerAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        repository.Verify(
+            x => x.AddAsync(It.IsAny<Property>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateProperty_WithPhoneConfirmedButNotEmail_IsAllowed()
+    {
+        // Either confirmation is enough — email is not privileged over phone.
+        var ownerId = Guid.NewGuid();
+        var repository = new Mock<IPropertyRepository>();
+        repository
+            .Setup(x => x.CountActiveListingsByOwnerAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+
+        var identity = new Mock<IUserIdentityReadService>();
+        identity
+            .Setup(x => x.FindByIdAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IdentityAccountSnapshot(
+                IdentityId: ownerId,
+                UserAccountId: ownerId,
+                Email: "owner@example.com",
+                PhoneNumber: "+49123456789",
+                EmailConfirmed: false,
+                PhoneConfirmed: true,
+                HasPassword: true,
+                IsDeleted: false));
+
+        var handler = CreatePropertyHandler(repository, identity: identity);
+
+        var id = await handler.Handle(
+            ValidCreateCommand() with { OwnerId = ownerId },
+            CancellationToken.None);
+
+        Assert.NotEqual(Guid.Empty, id);
+    }
+
+    [Fact]
+    public async Task CreateProperty_WithNoPlanSelected_IsRejected()
+    {
+        var ownerId = Guid.NewGuid();
+        var repository = new Mock<IPropertyRepository>();
+
+        var agencies = new Mock<IAgencyRepository>();
+        agencies
+            .Setup(x => x.GetUserAccountAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UserAccount.Create(ownerId, "نعيم", "بزازة", DateTime.UtcNow));
+
+        var handler = CreatePropertyHandler(repository, agencies);
+
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(
+            ValidCreateCommand() with { OwnerId = ownerId },
+            CancellationToken.None));
+
+        Assert.Equal("LISTING_PLAN_REQUIRED", ex.Code);
+
+        repository.Verify(
+            x => x.CountActiveListingsByOwnerAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        repository.Verify(
+            x => x.AddAsync(It.IsAny<Property>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     // ── Application: extension request ───────────────────────────
@@ -524,14 +624,56 @@ public sealed class ListingLifecycleTests
         Mock<IPropertyRepository> repository,
         Mock<IAgencyRepository>? agencies = null,
         IListingQuotaPolicy? quotaPolicy = null,
-        Mock<IUnitOfWork>? unitOfWork = null)
+        Mock<IUnitOfWork>? unitOfWork = null,
+        Mock<IUserIdentityReadService>? identity = null)
         => new(
             repository.Object,
-            (agencies ?? new Mock<IAgencyRepository>()).Object,
+            (agencies ?? DefaultAgencies()).Object,
+            (identity ?? DefaultIdentity()).Object,
             (unitOfWork ?? new Mock<IUnitOfWork>()).Object,
             Mock.Of<ILocationSuggestionService>(),
             quotaPolicy ?? new FakeListingQuotaPolicy(50),
             NullLogger<CreatePropertyCommandHandler>.Instance);
+
+    /// <summary>
+    /// Every owner in these tests has confirmed a way to reach them and picked a plan
+    /// unless a test deliberately overrides one of those to exercise the new gates — the
+    /// quota/lock/agency behavior these tests actually cover is otherwise unrelated to
+    /// either gate, and having every test wire up confirmation + a plan by hand would bury
+    /// what each test is actually about.
+    /// </summary>
+    private static Mock<IAgencyRepository> DefaultAgencies()
+    {
+        var agencies = new Mock<IAgencyRepository>();
+        agencies
+            .Setup(x => x.GetUserAccountAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid ownerId, CancellationToken _) => BuildAccountWithPlan(ownerId));
+        return agencies;
+    }
+
+    private static Mock<IUserIdentityReadService> DefaultIdentity()
+    {
+        var identity = new Mock<IUserIdentityReadService>();
+        identity
+            .Setup(x => x.FindByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid ownerId, CancellationToken _) => new IdentityAccountSnapshot(
+                IdentityId: ownerId,
+                UserAccountId: ownerId,
+                Email: "owner@example.com",
+                PhoneNumber: null,
+                EmailConfirmed: true,
+                PhoneConfirmed: false,
+                HasPassword: true,
+                IsDeleted: false));
+        return identity;
+    }
+
+    private static UserAccount BuildAccountWithPlan(Guid userId)
+    {
+        var account = UserAccount.Create(userId, "نعيم", "بزازة", DateTime.UtcNow);
+        account.SelectPlan(Guid.NewGuid(), DateTime.UtcNow);
+        return account;
+    }
 
     /// <summary>Deterministic stand-in for the config-backed IListingQuotaPolicy.</summary>
     private sealed class FakeListingQuotaPolicy : IListingQuotaPolicy

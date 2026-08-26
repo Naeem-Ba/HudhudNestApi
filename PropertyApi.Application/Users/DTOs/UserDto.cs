@@ -23,6 +23,19 @@ public sealed class UserDto
     public string? ContactInfo { get; set; }
 
     public bool EmailConfirmed { get; set; }
+
+    /// <summary>Not previously exposed here — added alongside PlanTier so a client can
+    /// check "email confirmed OR phone confirmed" without a second call.</summary>
+    public bool PhoneConfirmed { get; set; }
+
+    /// <summary>
+    /// null means the user has not explicitly chosen a plan yet — a distinct state
+    /// from being on the free plan. See UserAccount.PlanId's doc comment.
+    /// </summary>
+    public string? PlanTier { get; set; }
+
+    public DateTime? PlanSelectedAt { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public IReadOnlyList<string> Roles { get; set; } = Array.Empty<string>();

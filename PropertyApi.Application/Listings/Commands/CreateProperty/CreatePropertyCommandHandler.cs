@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Agencies.Interfaces;
+using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
@@ -22,6 +23,7 @@ public sealed class CreatePropertyCommandHandler
 {
     private readonly IPropertyRepository _repo;
     private readonly IAgencyRepository _agencies;
+    private readonly IUserIdentityReadService _identity;
     private readonly IUnitOfWork _uow;
     private readonly ILocationSuggestionService _locationSuggestions;
     private readonly IListingQuotaPolicy _quotaPolicy;
@@ -30,6 +32,7 @@ public sealed class CreatePropertyCommandHandler
     public CreatePropertyCommandHandler(
         IPropertyRepository repo,
         IAgencyRepository agencies,
+        IUserIdentityReadService identity,
         IUnitOfWork uow,
         ILocationSuggestionService locationSuggestions,
         IListingQuotaPolicy quotaPolicy,
@@ -37,6 +40,7 @@ public sealed class CreatePropertyCommandHandler
     {
         _repo = repo;
         _agencies = agencies;
+        _identity = identity;
         _uow = uow;
         _locationSuggestions = locationSuggestions;
         _quotaPolicy = quotaPolicy;
@@ -51,6 +55,14 @@ public sealed class CreatePropertyCommandHandler
         // owner's current agency, and reading it twice could observe two different answers
         // if the owner changes agency mid-request.
         var ownerAccount = await _agencies.GetUserAccountAsync(request.OwnerId, cancellationToken);
+
+        // Every account is a "customer" by default and must clear two gates before its
+        // first listing — regardless of role (Agent/AgencyOwner/AgencyAgent included, by
+        // deliberate decision, not an oversight). Checked before the quota's transaction
+        // and advisory lock even open: cheap checks first, no lock taken for a request
+        // that's going to be rejected anyway.
+        await EnsureContactConfirmedAsync(request.OwnerId, cancellationToken);
+        EnsurePlanSelected(ownerAccount);
 
         var property = await CreateWithQuotaEnforcedAsync(request, ownerAccount, cancellationToken);
 
@@ -173,6 +185,49 @@ public sealed class CreatePropertyCommandHandler
         }
 
         return property;
+    }
+
+    /// <summary>
+    /// A brand-new account cannot publish until it has confirmed some way to reach the
+    /// person behind it — email OR phone, either is enough. Checked against the Identity
+    /// snapshot (the source of truth for confirmation state — see IdentityAccountSnapshot's
+    /// doc comment), not any cached flag on UserAccount.
+    /// </summary>
+    private async Task EnsureContactConfirmedAsync(Guid ownerId, CancellationToken ct)
+    {
+        var identity = await _identity.FindByIdAsync(ownerId, ct);
+
+        if (identity is { } snapshot && (snapshot.EmailConfirmed || snapshot.PhoneConfirmed))
+            return;
+
+        _logger.LogInformation(
+            "Listing creation blocked: neither email nor phone confirmed. OwnerId={OwnerId}",
+            ownerId);
+
+        throw new ForbiddenException(
+            "أكّد بريدك الإلكتروني أو رقم هاتفك أولاً قبل نشر إعلان.",
+            "LISTING_CONTACT_NOT_CONFIRMED");
+    }
+
+    /// <summary>
+    /// A brand-new account cannot publish until it has explicitly chosen a plan —
+    /// including the free plan. This is a deliberate product decision: "free" is not an
+    /// implicit default here, unlike the aspirational note in
+    /// FRONTEND_BACKEND_CONTRACT.md §11.4 ("free is not a purchased subscription"). See
+    /// UserAccount.PlanId's doc comment.
+    /// </summary>
+    private void EnsurePlanSelected(UserAccount? ownerAccount)
+    {
+        if (ownerAccount?.PlanId is not null)
+            return;
+
+        _logger.LogInformation(
+            "Listing creation blocked: no plan selected. OwnerId={OwnerId}",
+            ownerAccount?.Id);
+
+        throw new ForbiddenException(
+            "اختر خطة أولاً قبل نشر إعلان — الخطة المجانية متاحة أيضاً.",
+            "LISTING_PLAN_REQUIRED");
     }
 
     /// <summary>

@@ -153,7 +153,12 @@ public sealed class ExceptionHandlingMiddleware
             {
                 title = "Forbidden",
                 status = StatusCodes.Status403Forbidden,
-                message = ex.Message
+                message = ex.Message,
+
+                // Lets a localised client translate rather than print the server's
+                // English — same idea as ValidationException.ErrorCodes above. Null
+                // for the (older) call sites that never set one.
+                code = ex.Code
             });
         }
         catch (DomainException ex)
