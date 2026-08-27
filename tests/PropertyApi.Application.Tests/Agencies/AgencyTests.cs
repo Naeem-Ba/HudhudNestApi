@@ -5,11 +5,15 @@ using PropertyApi.Application.Admin.Interfaces;
 using PropertyApi.Application.Agencies.Commands.CreateAgency;
 using PropertyApi.Application.Agencies.Commands.DeactivateAgency;
 using PropertyApi.Application.Agencies.Commands.RemoveAgencyMember;
+using PropertyApi.Application.Agencies.Commands.SetAgencyLogo;
+using PropertyApi.Application.Agencies.Commands.TransferAgencyOwnership;
 using PropertyApi.Application.Agencies.Commands.UpdateAgency;
+using PropertyApi.Application.Agencies.DTOs;
 using PropertyApi.Application.Agencies.Interfaces;
 using PropertyApi.Application.Agencies.Queries.GetAgencyBySlug;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Common.Models;
 using PropertyApi.Domain.Agencies.Entities;
 using PropertyApi.Domain.Common.Exceptions;
 using PropertyApi.Domain.Users.Constants;
@@ -85,6 +89,49 @@ public sealed class AgencyTests
 
         Assert.Throws<DomainException>(
             () => agency.TransferOwnership(owner, DateTime.UtcNow));
+    }
+
+    [Fact]
+    public void TransferOwnership_ToAnUnspecifiedUser_Throws()
+    {
+        var agency = BuildAgency(Guid.NewGuid());
+
+        Assert.Throws<DomainException>(
+            () => agency.TransferOwnership(Guid.Empty, DateTime.UtcNow));
+    }
+
+    [Fact]
+    public void TransferOwnership_ToAnotherUser_MovesOwnerUserId()
+    {
+        var agency = BuildAgency(Guid.NewGuid());
+        var newOwner = Guid.NewGuid();
+
+        agency.TransferOwnership(newOwner, DateTime.UtcNow);
+
+        Assert.Equal(newOwner, agency.OwnerUserId);
+    }
+
+    [Fact]
+    public void SetLogo_StoresUrlAndPublicId()
+    {
+        var agency = BuildAgency(Guid.NewGuid());
+
+        agency.SetLogo("https://cdn.example.com/logo.png", "agency-logos/abc123", DateTime.UtcNow);
+
+        Assert.Equal("https://cdn.example.com/logo.png", agency.LogoUrl);
+        Assert.Equal("agency-logos/abc123", agency.LogoPublicId);
+    }
+
+    [Fact]
+    public void SetLogo_WithNulls_ClearsTheLogo()
+    {
+        var agency = BuildAgency(Guid.NewGuid());
+        agency.SetLogo("https://cdn.example.com/logo.png", "agency-logos/abc123", DateTime.UtcNow);
+
+        agency.SetLogo(null, null, DateTime.UtcNow);
+
+        Assert.Null(agency.LogoUrl);
+        Assert.Null(agency.LogoPublicId);
     }
 
     // ── Domain: membership on UserAccount ────────────────────────
@@ -494,6 +541,243 @@ public sealed class AgencyTests
             CancellationToken.None));
     }
 
+    // ── Application: transfer ownership (B-4b) ────────────────────
+
+    [Fact]
+    public async Task TransferOwnership_ByOwner_ToAnExistingMember_Succeeds()
+    {
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        var newOwner = BuildAccount();
+        newOwner.JoinAgency(agency.Id, DateTime.UtcNow);
+
+        var repo = new Mock<IAgencyRepository>();
+        repo.Setup(x => x.GetByIdAsync(agency.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(agency);
+        repo.Setup(x => x.GetUserAccountAsync(newOwner.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(newOwner);
+        repo.Setup(x => x.GetMembersAsync(agency.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([newOwner]);
+
+        var identity = BuildIdentity();
+        var handler = TransferHandler(repo, identity);
+
+        var dto = await handler.Handle(
+            new TransferAgencyOwnershipCommand(agency.Id, newOwner.Id, ownerId, null),
+            CancellationToken.None);
+
+        Assert.Equal(newOwner.Id, agency.OwnerUserId);
+        Assert.Equal(newOwner.Id, dto.OwnerUserId);
+
+        identity.Verify(
+            x => x.RemoveRoleAsync(
+                ownerId, RoleNames.AgencyOwner, ownerId, It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+        identity.Verify(
+            x => x.AssignRoleAsync(
+                ownerId, RoleNames.AgencyAgent, ownerId, It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+        identity.Verify(
+            x => x.AssignRoleAsync(
+                newOwner.Id, RoleNames.AgencyOwner, ownerId, It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task TransferOwnership_ByNonOwner_IsForbidden()
+    {
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+
+        var repo = new Mock<IAgencyRepository>();
+        repo.Setup(x => x.GetByIdAsync(agency.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(agency);
+
+        var handler = TransferHandler(repo, BuildIdentity());
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(
+            new TransferAgencyOwnershipCommand(agency.Id, Guid.NewGuid(), Guid.NewGuid(), null),
+            CancellationToken.None));
+
+        Assert.Equal(ownerId, agency.OwnerUserId);
+    }
+
+    [Fact]
+    public async Task TransferOwnership_ToANonMember_IsRejected()
+    {
+        // The new owner must already have gone through the invitation/accept consent flow
+        // (B-2) — a transfer must never be able to hand ownership to someone who never
+        // agreed to join the agency at all.
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        var outsider = BuildAccount();
+
+        var repo = new Mock<IAgencyRepository>();
+        repo.Setup(x => x.GetByIdAsync(agency.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(agency);
+        repo.Setup(x => x.GetUserAccountAsync(outsider.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(outsider);
+
+        var handler = TransferHandler(repo, BuildIdentity());
+
+        await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
+            new TransferAgencyOwnershipCommand(agency.Id, outsider.Id, ownerId, null),
+            CancellationToken.None));
+
+        Assert.Equal(ownerId, agency.OwnerUserId);
+    }
+
+    [Fact]
+    public async Task TransferOwnership_ToTheCurrentOwner_IsRejectedAsConflict()
+    {
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        var ownerAccount = BuildAccount(ownerId);
+        ownerAccount.JoinAgency(agency.Id, DateTime.UtcNow);
+
+        var repo = new Mock<IAgencyRepository>();
+        repo.Setup(x => x.GetByIdAsync(agency.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(agency);
+        repo.Setup(x => x.GetUserAccountAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ownerAccount);
+
+        var handler = TransferHandler(repo, BuildIdentity());
+
+        // The domain's own DomainException guard is translated to the same ConflictException
+        // every other "wrong state" case in this handler uses.
+        await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
+            new TransferAgencyOwnershipCommand(agency.Id, ownerId, ownerId, null),
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task TransferOwnership_WhenAgencyMissing_IsNotFound()
+    {
+        var repo = new Mock<IAgencyRepository>();
+        repo.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Agency?)null);
+
+        var handler = TransferHandler(repo, BuildIdentity());
+
+        await Assert.ThrowsAsync<NotFoundException>(() => handler.Handle(
+            new TransferAgencyOwnershipCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null),
+            CancellationToken.None));
+    }
+
+    // ── Application: set logo (B-4b) ───────────────────────────────
+
+    [Fact]
+    public async Task SetLogo_ByOwner_UploadsAndReplacesTheOldOne()
+    {
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        agency.SetLogo("https://cdn.example.com/old.png", "agency-logos/old", DateTime.UtcNow);
+        var owner = BuildAccount(ownerId);
+
+        var repo = BuildRepository(owner, agency);
+        var storage = new Mock<IMediaStorageService>();
+        storage
+            .Setup(x => x.UploadImageAsync(
+                It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), "agency-logos",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MediaUploadResult.Success(
+                "https://cdn.example.com/new.png", "agency-logos/new"));
+
+        var handler = SetLogoHandler(repo, storage);
+
+        var result = await handler.Handle(
+            new SetAgencyLogoCommand(agency.Id, ownerId, BuildPngFile()),
+            CancellationToken.None);
+
+        Assert.Equal(SetAgencyLogoStatus.Success, result.Status);
+        Assert.Equal("https://cdn.example.com/new.png", agency.LogoUrl);
+        Assert.Equal("agency-logos/new", agency.LogoPublicId);
+
+        // The old logo is deleted only after the new one is safely persisted.
+        storage.Verify(
+            x => x.DeleteImageAsync("agency-logos/old", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task SetLogo_ByNonOwner_IsForbidden()
+    {
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        var owner = BuildAccount(ownerId);
+
+        var repo = BuildRepository(owner, agency);
+        var handler = SetLogoHandler(repo, new Mock<IMediaStorageService>());
+
+        var result = await handler.Handle(
+            new SetAgencyLogoCommand(agency.Id, Guid.NewGuid(), BuildPngFile()),
+            CancellationToken.None);
+
+        Assert.Equal(SetAgencyLogoStatus.Forbidden, result.Status);
+        Assert.Null(agency.LogoUrl);
+    }
+
+    [Fact]
+    public async Task SetLogo_WhenAgencyMissing_IsNotFound()
+    {
+        var repo = new Mock<IAgencyRepository>();
+        repo.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Agency?)null);
+
+        var handler = SetLogoHandler(repo, new Mock<IMediaStorageService>());
+
+        var result = await handler.Handle(
+            new SetAgencyLogoCommand(Guid.NewGuid(), Guid.NewGuid(), BuildPngFile()),
+            CancellationToken.None);
+
+        Assert.Equal(SetAgencyLogoStatus.NotFound, result.Status);
+    }
+
+    [Fact]
+    public async Task SetLogo_WhenStorageFails_DoesNotChangeTheAgency()
+    {
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        var owner = BuildAccount(ownerId);
+
+        var repo = BuildRepository(owner, agency);
+        var storage = new Mock<IMediaStorageService>();
+        storage
+            .Setup(x => x.UploadImageAsync(
+                It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MediaUploadResult.Failed("storage unavailable"));
+
+        var handler = SetLogoHandler(repo, storage);
+
+        var result = await handler.Handle(
+            new SetAgencyLogoCommand(agency.Id, ownerId, BuildPngFile()),
+            CancellationToken.None);
+
+        Assert.Equal(SetAgencyLogoStatus.StorageFailed, result.Status);
+        Assert.Null(agency.LogoUrl);
+    }
+
+    [Fact]
+    public async Task SetLogo_WithAnOversizedFile_IsRejected()
+    {
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        var owner = BuildAccount(ownerId);
+
+        var repo = BuildRepository(owner, agency);
+        var handler = SetLogoHandler(repo, new Mock<IMediaStorageService>());
+
+        var oversized = new SetAgencyLogoFileDto(
+            new MemoryStream(new byte[8]), "logo.png", "image/png", 3_000_000);
+
+        var result = await handler.Handle(
+            new SetAgencyLogoCommand(agency.Id, ownerId, oversized),
+            CancellationToken.None);
+
+        Assert.Equal(SetAgencyLogoStatus.ValidationFailed, result.Status);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────
 
     private static Agency BuildAgency(Guid ownerId) => Agency.Create(
@@ -593,4 +877,30 @@ public sealed class AgencyTests
             repo.Object,
             Mock.Of<IUnitOfWork>(),
             NullLogger<DeactivateAgencyCommandHandler>.Instance);
+
+    private static TransferAgencyOwnershipCommandHandler TransferHandler(
+        Mock<IAgencyRepository> repo,
+        Mock<IAdminIdentityService> identity)
+        => new(
+            repo.Object,
+            identity.Object,
+            Mock.Of<IUnitOfWork>(),
+            NullLogger<TransferAgencyOwnershipCommandHandler>.Instance);
+
+    private static SetAgencyLogoCommandHandler SetLogoHandler(
+        Mock<IAgencyRepository> repo,
+        Mock<IMediaStorageService> storage)
+        => new(
+            repo.Object,
+            storage.Object,
+            Mock.Of<IUnitOfWork>(),
+            NullLogger<SetAgencyLogoCommandHandler>.Instance);
+
+    /// <summary>A minimal-but-valid PNG signature, so the handler's own file-content check passes.</summary>
+    private static SetAgencyLogoFileDto BuildPngFile()
+    {
+        byte[] pngHeader = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        return new SetAgencyLogoFileDto(
+            new MemoryStream(pngHeader), "logo.png", "image/png", pngHeader.Length);
+    }
 }
