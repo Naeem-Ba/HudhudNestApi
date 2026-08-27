@@ -10,6 +10,8 @@ using PropertyApi.Application.Agencies.Commands.CreateAgencyInvitation;
 using PropertyApi.Application.Agencies.Commands.DeactivateAgency;
 using PropertyApi.Application.Agencies.Commands.DeclineAgencyInvitation;
 using PropertyApi.Application.Agencies.Commands.RemoveAgencyMember;
+using PropertyApi.Application.Agencies.Commands.SetAgencyLogo;
+using PropertyApi.Application.Agencies.Commands.TransferAgencyOwnership;
 using PropertyApi.Application.Agencies.Commands.UpdateAgency;
 using PropertyApi.Application.Agencies.DTOs;
 using PropertyApi.Application.Agencies.Queries.GetAgencyBySlug;
@@ -155,6 +157,83 @@ public sealed class AgenciesController : ControllerBase
             ct);
 
         return NoContent();
+    }
+
+    // ── POST /api/agencies/{agencyId}/transfer-ownership ──────────
+    // Owner-only. B-4b: Agency.TransferOwnership already existed on the domain entity —
+    // this is the missing thin command layer, same shape as Update above. The new owner
+    // must already be a member of this agency (see the command's doc comment) — nothing
+    // here can attach a new member on its own.
+    [HttpPost("{agencyId:guid}/transfer-ownership")]
+    [Authorize(Roles = RoleNames.AgencyOwner)]
+    [ProducesResponseType(typeof(AgencyDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> TransferOwnership(
+        Guid agencyId,
+        [FromBody] TransferAgencyOwnershipRequest request,
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var agency = await _mediator.Send(
+            new TransferAgencyOwnershipCommand(
+                AgencyId: agencyId,
+                NewOwnerUserId: request.NewOwnerUserId,
+                RequestingUserId: userId.Value,
+                IpAddress: GetClientIp()),
+            ct);
+
+        return Ok(agency);
+    }
+
+    // ── POST /api/agencies/{agencyId}/logo ─────────────────────────
+    // Owner-only, multipart/form-data. B-4b: Agency.SetLogo already existed on the domain
+    // entity — this is the missing thin command layer. Same shape as
+    // POST /api/Users/me/avatar (UsersController): IFormFile → DTO that does not know
+    // ASP.NET → Command → Handler validates and uploads via IMediaStorageService.
+    [HttpPost("{agencyId:guid}/logo")]
+    [Authorize(Roles = RoleNames.AgencyOwner)]
+    [RequestSizeLimit(2_500_000)]
+    [ProducesResponseType(typeof(AgencyDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetLogo(
+        Guid agencyId,
+        // No [FromForm] here: Swashbuckle throws "[FromForm] attribute used with IFormFile"
+        // and fails the whole /swagger/v1/swagger.json document — see UploadAvatar above.
+        IFormFile? file,
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        if (file is null || file.Length == 0)
+            return BadRequest(new { message = "لم يتم رفع أي صورة." });
+
+        var fileDto = new SetAgencyLogoFileDto(
+            file.OpenReadStream(),
+            file.FileName,
+            file.ContentType,
+            file.Length);
+
+        var result = await _mediator.Send(
+            new SetAgencyLogoCommand(agencyId, userId.Value, fileDto), ct);
+
+        return result.Status switch
+        {
+            SetAgencyLogoStatus.Success => Ok(result.Agency),
+            SetAgencyLogoStatus.NotFound => NotFound(),
+            SetAgencyLogoStatus.Forbidden => Forbid(),
+            SetAgencyLogoStatus.ValidationFailed => BadRequest(new { message = result.Message }),
+            SetAgencyLogoStatus.StorageFailed => BadRequest(new { message = result.Message }),
+            _ => BadRequest(new { message = result.Message })
+        };
     }
 
     // ── POST /api/agencies/{agencyId}/invitations ─────────────────
@@ -303,6 +382,13 @@ public sealed record CreateAgencyRequest(
 
 /// <summary>Request body for POST .../invitations — who the owner wants to invite.</summary>
 public sealed record CreateAgencyInvitationRequest(Guid UserId);
+
+/// <summary>
+/// Request body for POST .../transfer-ownership — who the new owner is. Deliberately the
+/// only field: OwnerUserId can never be set through UpdateAgencyRequest, and this is the
+/// one place it can move at all.
+/// </summary>
+public sealed record TransferAgencyOwnershipRequest(Guid NewOwnerUserId);
 
 /// <summary>
 /// Request body for agency profile updates — the same fields Agency.UpdateProfile accepts.
