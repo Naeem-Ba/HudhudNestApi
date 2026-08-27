@@ -143,17 +143,18 @@ public sealed class RateLimitingGuardTests
     public void Program_Should_Define_Auth_RateLimit_Policies()
     {
         var repoRoot = FindRepositoryRoot();
-        var programFile = Path.Combine(repoRoot, "PropertyApi", "Program.cs");
-        var source = File.ReadAllText(programFile);
+        var programSource = File.ReadAllText(Path.Combine(repoRoot, "PropertyApi", "Program.cs"));
+        var rateLimitingSource = File.ReadAllText(
+            Path.Combine(repoRoot, "PropertyApi", "Configuration", "RateLimitingRegistration.cs"));
 
-        Assert.Contains("auth-login", source);
-        Assert.Contains("PermitLimit = 10", source);
-        Assert.Contains("TimeSpan.FromMinutes(1)", source);
-        Assert.Contains("auth-register", source);
-        Assert.Contains("PermitLimit = 5", source);
-        Assert.Contains("TimeSpan.FromMinutes(10)", source);
-        Assert.Contains("UseRedisRateLimiting", source);
-        Assert.Contains("AddPropertyApiRedisRateLimiting", source);
+        Assert.Contains("auth-login", rateLimitingSource);
+        Assert.Contains("PermitLimit = 10", rateLimitingSource);
+        Assert.Contains("TimeSpan.FromMinutes(1)", rateLimitingSource);
+        Assert.Contains("auth-register", rateLimitingSource);
+        Assert.Contains("PermitLimit = 5", rateLimitingSource);
+        Assert.Contains("TimeSpan.FromMinutes(10)", rateLimitingSource);
+        Assert.Contains("UseRedisRateLimiting", programSource);
+        Assert.Contains("AddPropertyApiRedisRateLimiting", programSource);
     }
 
     /// <summary>

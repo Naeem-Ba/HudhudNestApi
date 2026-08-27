@@ -20,12 +20,13 @@ public sealed class ScalingTests
     [Fact(DisplayName = "SignalR must support Redis backplane configuration")]
     public void Program_Should_Add_SignalR_Redis_Backplane_When_Configured()
     {
-        var source = ReadSource("PropertyApi", "Program.cs");
+        var signalRSource = ReadSource("PropertyApi", "Configuration", "SignalRRegistration.cs");
+        var redisResolverSource = ReadSource("PropertyApi", "Configuration", "RedisConnectionResolver.cs");
         var project = ReadSource("PropertyApi", "PropertyApi.csproj");
 
-        Assert.Contains("AddStackExchangeRedis", source);
-        Assert.Contains("SignalR:Provider", source);
-        Assert.Contains("SignalR:Redis:ConnectionString", source);
+        Assert.Contains("AddStackExchangeRedis", signalRSource);
+        Assert.Contains("SignalR:Provider", signalRSource);
+        Assert.Contains("SignalR:Redis:ConnectionString", redisResolverSource);
         Assert.Contains("Microsoft.AspNetCore.SignalR.StackExchangeRedis", project);
     }
 
