@@ -83,7 +83,7 @@ public static class PlansSeed
             isRecommended: false,
             displayOrder: 4,
             listingLimit: null)); // "يُتفق عليه" — negotiated; no cap until a real Subscription
-                                   // entity can carry a per-account agreed number.
+                                  // entity can carry a per-account agreed number.
 
         await context.SaveChangesAsync();
     }
