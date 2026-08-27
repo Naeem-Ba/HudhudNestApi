@@ -4,14 +4,17 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using PropertyApi.Application.Agencies.Commands.AddAgencyMember;
+using PropertyApi.Application.Agencies.Commands.AcceptAgencyInvitation;
 using PropertyApi.Application.Agencies.Commands.CreateAgency;
+using PropertyApi.Application.Agencies.Commands.CreateAgencyInvitation;
 using PropertyApi.Application.Agencies.Commands.DeactivateAgency;
+using PropertyApi.Application.Agencies.Commands.DeclineAgencyInvitation;
 using PropertyApi.Application.Agencies.Commands.RemoveAgencyMember;
 using PropertyApi.Application.Agencies.Commands.UpdateAgency;
 using PropertyApi.Application.Agencies.DTOs;
 using PropertyApi.Application.Agencies.Queries.GetAgencyBySlug;
 using PropertyApi.Application.Agencies.Queries.GetMyAgency;
+using PropertyApi.Application.Agencies.Queries.GetMyAgencyInvitations;
 using PropertyApi.Domain.Users.Constants;
 
 namespace PropertyApi.Controllers;
@@ -154,30 +157,95 @@ public sealed class AgenciesController : ControllerBase
         return NoContent();
     }
 
-    // ── POST /api/agencies/{agencyId}/members ────────────────────
-    [HttpPost("{agencyId:guid}/members")]
+    // ── POST /api/agencies/{agencyId}/invitations ─────────────────
+    // Owner invites a user to join. B-2 (RELEASE-BLOCKERS-AR.md): this used to be
+    // POST .../members, which attached the user immediately with no consent step. It now
+    // only ever creates a Pending AgencyInvitation — see AcceptInvitation for the step
+    // that actually creates the membership.
+    [HttpPost("{agencyId:guid}/invitations")]
     [Authorize(Roles = RoleNames.AgencyOwner)]
-    [ProducesResponseType(typeof(AgencyMemberDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(AgencyInvitationDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> AddMember(
+    public async Task<IActionResult> CreateInvitation(
         Guid agencyId,
-        [FromBody] AddAgencyMemberRequest request,
+        [FromBody] CreateAgencyInvitationRequest request,
         CancellationToken ct)
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
 
-        var member = await _mediator.Send(
-            new AddAgencyMemberCommand(
+        var invitation = await _mediator.Send(
+            new CreateAgencyInvitationCommand(
                 AgencyId: agencyId,
-                MemberUserId: request.UserId,
+                TargetUserId: request.UserId,
                 RequestingUserId: userId.Value,
                 IpAddress: GetClientIp()),
             ct);
 
-        return StatusCode(StatusCodes.Status201Created, member);
+        return StatusCode(StatusCodes.Status201Created, invitation);
+    }
+
+    // ── GET /api/agencies/invitations/mine ────────────────────────
+    // The caller's own invitation inbox — never another user's (RequestingUserId always
+    // comes from the token, same as GetMine above).
+    [HttpGet("invitations/mine")]
+    [Authorize]
+    [ProducesResponseType(typeof(IReadOnlyList<AgencyInvitationDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMyInvitations(CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var invitations = await _mediator.Send(new GetMyAgencyInvitationsQuery(userId.Value), ct);
+
+        return Ok(invitations);
+    }
+
+    // ── POST /api/agencies/invitations/{invitationId}/accept ─────
+    // Only the invited user may accept their own invitation — the handler checks
+    // TargetUserId against the token, not against anything the client supplies.
+    [HttpPost("invitations/{invitationId:guid}/accept")]
+    [Authorize]
+    [ProducesResponseType(typeof(AgencyMemberDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AcceptInvitation(Guid invitationId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var member = await _mediator.Send(
+            new AcceptAgencyInvitationCommand(
+                InvitationId: invitationId,
+                RequestingUserId: userId.Value,
+                IpAddress: GetClientIp()),
+            ct);
+
+        return Ok(member);
+    }
+
+    // ── POST /api/agencies/invitations/{invitationId}/decline ────
+    [HttpPost("invitations/{invitationId:guid}/decline")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> DeclineInvitation(Guid invitationId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await _mediator.Send(
+            new DeclineAgencyInvitationCommand(
+                InvitationId: invitationId,
+                RequestingUserId: userId.Value),
+            ct);
+
+        return NoContent();
     }
 
     // ── DELETE /api/agencies/{agencyId}/members/{memberUserId} ───
@@ -233,7 +301,8 @@ public sealed record CreateAgencyRequest(
     string? City,
     string? LicenseNumber);
 
-public sealed record AddAgencyMemberRequest(Guid UserId);
+/// <summary>Request body for POST .../invitations — who the owner wants to invite.</summary>
+public sealed record CreateAgencyInvitationRequest(Guid UserId);
 
 /// <summary>
 /// Request body for agency profile updates — the same fields Agency.UpdateProfile accepts.

@@ -67,6 +67,31 @@ public interface INotificationService
         int graceDaysRemaining,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// B-2 (RELEASE-BLOCKERS-AR.md): tells a user an agency owner invited them to join.
+    /// Called by CreateAgencyInvitationCommandHandler after the invitation is persisted.
+    /// RelatedEntityId on the resulting notification is the invitation id, not the agency —
+    /// the recipient acts on the invitation, and the agency behind it may still change name
+    /// before they get to it.
+    /// </summary>
+    Task NotifyAgencyInvitationReceivedAsync(
+        Guid recipientId,
+        Guid invitationId,
+        string agencyName,
+        string inviterName,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Tells the agency owner their invitation was accepted or declined. Called by
+    /// AcceptAgencyInvitationCommandHandler / DeclineAgencyInvitationCommandHandler.
+    /// </summary>
+    Task NotifyAgencyInvitationRespondedAsync(
+        Guid recipientId,
+        Guid invitationId,
+        string targetUserName,
+        bool accepted,
+        CancellationToken ct = default);
+
     Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(
         Guid userId,
         int page,

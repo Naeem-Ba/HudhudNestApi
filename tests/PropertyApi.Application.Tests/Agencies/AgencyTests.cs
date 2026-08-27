@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using PropertyApi.Application.Admin.DTOs;
 using PropertyApi.Application.Admin.Interfaces;
-using PropertyApi.Application.Agencies.Commands.AddAgencyMember;
 using PropertyApi.Application.Agencies.Commands.CreateAgency;
 using PropertyApi.Application.Agencies.Commands.DeactivateAgency;
 using PropertyApi.Application.Agencies.Commands.RemoveAgencyMember;
@@ -212,10 +211,10 @@ public sealed class AgencyTests
     [Fact]
     public async Task GetAgencyBySlug_ShowsOnlyTheOwner_UntilRealConsentExists()
     {
-        // Interim mitigation for B-2 (RELEASE-BLOCKERS-AR.md): AddAgencyMemberCommandHandler
-        // lets an owner attach a member with no consent step at all, so the public page must
-        // not publish a name or photo nobody agreed to. Until a real invitation/acceptance
-        // flow exists, the owner (whose consent is implicit) is the only member shown here.
+        // Interim mitigation for B-2 (RELEASE-BLOCKERS-AR.md), kept even after the
+        // invitation/accept flow landed (see AgencyInvitationTests): this handler has no way
+        // to tell "accepted a real invitation" apart from any other route to AgencyId being
+        // set, so it still only trusts the owner's own implicit consent for the public page.
         var owner = BuildAccount();
         var agency = BuildAgency(owner.Id);
         var memberOne = BuildAccount();
@@ -281,84 +280,10 @@ public sealed class AgencyTests
             CancellationToken.None));
     }
 
-    // ── Add member ───────────────────────────────────────────────
-
-    [Fact]
-    public async Task AddMember_BySomeoneWhoIsNotThisAgencysOwner_IsForbidden()
-    {
-        var agency = BuildAgency(Guid.NewGuid());
-        var candidate = BuildAccount();
-        var repo = BuildRepository(candidate, agency);
-        var handler = AddHandler(repo, BuildIdentity());
-
-        // Holding AgencyOwner means you own *an* agency, not *this* one. Without this check
-        // any agency owner could staff any other office.
-        await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(
-            new AddAgencyMemberCommand(agency.Id, candidate.Id, Guid.NewGuid(), null),
-            CancellationToken.None));
-
-        Assert.Null(candidate.AgencyId);
-    }
-
-    [Fact]
-    public async Task AddMember_WhoAlreadyBelongsElsewhere_IsRejected()
-    {
-        var ownerId = Guid.NewGuid();
-        var agency = BuildAgency(ownerId);
-        var candidate = BuildAccount();
-        candidate.JoinAgency(Guid.NewGuid(), DateTime.UtcNow);
-
-        var handler = AddHandler(BuildRepository(candidate, agency), BuildIdentity());
-
-        await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
-            new AddAgencyMemberCommand(agency.Id, candidate.Id, ownerId, null),
-            CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task AddMember_AtTheMemberCap_IsRejected()
-    {
-        var ownerId = Guid.NewGuid();
-        var agency = BuildAgency(ownerId);
-        var candidate = BuildAccount();
-
-        var repo = BuildRepository(candidate, agency);
-        repo.Setup(x => x.CountMembersAsync(agency.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Agency.MaxMembers);
-
-        var handler = AddHandler(repo, BuildIdentity());
-
-        await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
-            new AddAgencyMemberCommand(agency.Id, candidate.Id, ownerId, null),
-            CancellationToken.None));
-
-        Assert.Null(candidate.AgencyId);
-    }
-
-    [Fact]
-    public async Task AddMember_AttachesAndGrantsTheAgentRole()
-    {
-        var ownerId = Guid.NewGuid();
-        var agency = BuildAgency(ownerId);
-        var candidate = BuildAccount();
-
-        var identity = BuildIdentity();
-        var handler = AddHandler(BuildRepository(candidate, agency), identity);
-
-        var member = await handler.Handle(
-            new AddAgencyMemberCommand(agency.Id, candidate.Id, ownerId, null),
-            CancellationToken.None);
-
-        Assert.Equal(agency.Id, candidate.AgencyId);
-        Assert.False(member.IsOwner);
-        identity.Verify(
-            x => x.AssignRoleAsync(
-                candidate.Id, RoleNames.AgencyAgent, ownerId,
-                It.IsAny<string?>(), It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
-
     // ── Remove member ────────────────────────────────────────────
+    //
+    // "Add member" moved to AgencyInvitationTests: B-2 (RELEASE-BLOCKERS-AR.md) replaced
+    // AddAgencyMemberCommand's direct attach with CreateAgencyInvitation/Accept/Decline.
 
     [Fact]
     public async Task RemoveMember_TheOwner_IsRejected()
@@ -650,15 +575,6 @@ public sealed class AgencyTests
             identity.Object,
             Mock.Of<IUnitOfWork>(),
             NullLogger<CreateAgencyCommandHandler>.Instance);
-
-    private static AddAgencyMemberCommandHandler AddHandler(
-        Mock<IAgencyRepository> repo,
-        Mock<IAdminIdentityService> identity)
-        => new(
-            repo.Object,
-            identity.Object,
-            Mock.Of<IUnitOfWork>(),
-            NullLogger<AddAgencyMemberCommandHandler>.Instance);
 
     private static RemoveAgencyMemberCommandHandler RemoveHandler(
         Mock<IAgencyRepository> repo,

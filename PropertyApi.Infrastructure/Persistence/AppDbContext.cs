@@ -52,6 +52,7 @@ public sealed class AppDbContext
     // -- DbSets --------------------------------------------------
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
     public DbSet<Agency> Agencies => Set<Agency>();
+    public DbSet<AgencyInvitation> AgencyInvitations => Set<AgencyInvitation>();
     public DbSet<Plan> Plans => Set<Plan>();
     public DbSet<Property> Properties => Set<Property>();
     public DbSet<PropertyPriceHistory> PropertyPriceHistories => Set<PropertyPriceHistory>();
