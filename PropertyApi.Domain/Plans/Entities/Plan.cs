@@ -42,6 +42,21 @@ public class Plan
 
     public int DisplayOrder { get; private set; }
 
+    /// <summary>
+    /// Maximum simultaneously-active listings an account on this plan may hold. When the
+    /// account belongs to an agency, this is the pooled limit for the whole agency, resolved
+    /// from the agency owner's plan — see <c>IListingQuotaPolicy</c>'s doc comment for why
+    /// the owner's plan (not each member's own) governs the agency-wide pool.
+    ///
+    /// Null means unlimited. That is a deliberate reading of the Elite tier's "negotiated,
+    /// contact us" pricing (RELEASE-BLOCKERS-AR.md §B-3 / FRONTEND_BACKEND_CONTRACT.md §11.1):
+    /// there is no per-account override mechanism yet to express an arbitrary agreed number,
+    /// so the catalog row treats "contact us" as no cap rather than silently capping a paying
+    /// Elite customer at some other tier's number. Revisit if/when a real Subscription entity
+    /// gives Elite accounts an actual negotiated figure.
+    /// </summary>
+    public int? ListingLimit { get; private set; }
+
     private Plan() { }
 
     public static Plan Create(
@@ -54,11 +69,19 @@ public class Plan
         string ctaKey,
         bool isRecommended,
         int displayOrder,
+        int? listingLimit,
         string? noteKey = null)
     {
         if (string.IsNullOrWhiteSpace(tier))
         {
             throw new ArgumentException("Plan tier is required.", nameof(tier));
+        }
+
+        if (listingLimit is <= 0)
+        {
+            throw new ArgumentException(
+                "Plan listing limit must be a positive number, or null for unlimited.",
+                nameof(listingLimit));
         }
 
         return new Plan
@@ -74,6 +97,7 @@ public class Plan
             CtaKey = ctaKey,
             IsRecommended = isRecommended,
             DisplayOrder = displayOrder,
+            ListingLimit = listingLimit,
             IsActive = true
         };
     }

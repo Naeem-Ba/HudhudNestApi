@@ -45,6 +45,12 @@ public sealed class PlanConfiguration : IEntityTypeConfiguration<Plan>
             .HasMaxLength(100)
             .IsRequired();
 
+        // Null means unlimited (see Plan.ListingLimit's doc comment) — the check constraint
+        // only needs to rule out zero/negative, not require a value.
+        builder.ToTable(t => t.HasCheckConstraint(
+            "CK_Plans_ListingLimit_PositiveOrUnlimited",
+            "\"ListingLimit\" IS NULL OR \"ListingLimit\" > 0"));
+
         builder.HasIndex(p => p.Tier)
             .IsUnique();
 

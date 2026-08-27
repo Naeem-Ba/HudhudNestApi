@@ -15,4 +15,12 @@ public sealed class PlanDto
     public string? NoteKey { get; set; }
     public bool IsRecommended { get; set; }
     public string CtaKey { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Maximum simultaneously-active listings this plan allows — the exact number
+    /// CreatePropertyCommandHandler enforces via IListingQuotaPolicy, exposed here so
+    /// `/pricing` never shows a number the backend does not actually apply. Null means
+    /// unlimited (see Plan.ListingLimit's doc comment — currently only the Elite tier).
+    /// </summary>
+    public int? ListingLimit { get; set; }
 }

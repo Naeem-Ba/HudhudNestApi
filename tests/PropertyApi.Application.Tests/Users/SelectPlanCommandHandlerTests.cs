@@ -134,5 +134,6 @@ public sealed class SelectPlanCommandHandlerTests
         featureKeys: new[] { "PRICING.FREE.F1" },
         ctaKey: "PRICING.FREE.CTA",
         isRecommended: false,
-        displayOrder: 1);
+        displayOrder: 1,
+        listingLimit: 1);
 }

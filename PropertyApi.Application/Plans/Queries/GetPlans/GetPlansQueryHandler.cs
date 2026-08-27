@@ -34,6 +34,7 @@ public sealed class GetPlansQueryHandler
         FeatureKeys = plan.FeatureKeys,
         NoteKey = plan.NoteKey,
         IsRecommended = plan.IsRecommended,
-        CtaKey = plan.CtaKey
+        CtaKey = plan.CtaKey,
+        ListingLimit = plan.ListingLimit
     };
 }

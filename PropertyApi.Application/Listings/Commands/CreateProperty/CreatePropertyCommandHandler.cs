@@ -5,7 +5,6 @@ using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
-using PropertyApi.Domain.Listings;
 using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Users.Entities;
 
@@ -62,9 +61,9 @@ public sealed class CreatePropertyCommandHandler
         // and advisory lock even open: cheap checks first, no lock taken for a request
         // that's going to be rejected anyway.
         await EnsureContactConfirmedAsync(request.OwnerId, cancellationToken);
-        EnsurePlanSelected(ownerAccount);
+        var verifiedAccount = EnsurePlanSelected(ownerAccount);
 
-        var property = await CreateWithQuotaEnforcedAsync(request, ownerAccount, cancellationToken);
+        var property = await CreateWithQuotaEnforcedAsync(request, verifiedAccount, cancellationToken);
 
         // Best-effort — a manually-typed district/neighborhood name becomes a
         // suggestion for admin review (see LocationSuggestion's doc comment).
@@ -86,7 +85,7 @@ public sealed class CreatePropertyCommandHandler
     /// </summary>
     private async Task<Property> CreateWithQuotaEnforcedAsync(
         CreatePropertyCommand request,
-        UserAccount? ownerAccount,
+        UserAccount ownerAccount,
         CancellationToken cancellationToken)
     {
         await _uow.BeginTransactionAsync(cancellationToken);
@@ -94,13 +93,13 @@ public sealed class CreatePropertyCommandHandler
         Property property;
         try
         {
-            var lockKey = ownerAccount?.AgencyId is { } lockAgencyId
+            var lockKey = ownerAccount.AgencyId is { } lockAgencyId
                 ? ListingQuotaLock.ForAgency(lockAgencyId)
                 : ListingQuotaLock.ForOwner(request.OwnerId);
 
             await _uow.AcquireAdvisoryLockAsync(lockKey, cancellationToken);
 
-            await EnsureListingQuotaAvailableAsync(request.OwnerId, ownerAccount?.AgencyId, cancellationToken);
+            await EnsureListingQuotaAvailableAsync(ownerAccount, cancellationToken);
 
             property = BuildProperty(request, ownerAccount);
 
@@ -119,7 +118,7 @@ public sealed class CreatePropertyCommandHandler
 
     private static Property BuildProperty(
         CreatePropertyCommand request,
-        Domain.Users.Entities.UserAccount? ownerAccount)
+        UserAccount ownerAccount)
     {
         // Factory method — the ONLY correct way to create a Property.
         // Throws DomainException if invariants are violated.
@@ -179,7 +178,7 @@ public sealed class CreatePropertyCommandHandler
         // Attribution is captured once, at creation. It is NOT re-derived later, so a
         // listing keeps the badge of the agency it was published under even if its owner
         // moves on — which is what the listing's history actually was.
-        if (ownerAccount?.AgencyId is { } agencyId)
+        if (ownerAccount.AgencyId is { } agencyId)
         {
             property.SetAgency(agencyId);
         }
@@ -216,10 +215,10 @@ public sealed class CreatePropertyCommandHandler
     /// FRONTEND_BACKEND_CONTRACT.md §11.4 ("free is not a purchased subscription"). See
     /// UserAccount.PlanId's doc comment.
     /// </summary>
-    private void EnsurePlanSelected(UserAccount? ownerAccount)
+    private UserAccount EnsurePlanSelected(UserAccount? ownerAccount)
     {
         if (ownerAccount?.PlanId is not null)
-            return;
+            return ownerAccount;
 
         _logger.LogInformation(
             "Listing creation blocked: no plan selected. OwnerId={OwnerId}",
@@ -231,64 +230,55 @@ public sealed class CreatePropertyCommandHandler
     }
 
     /// <summary>
-    /// Enforces the free-tier active-listing limit.
+    /// Enforces the active-listing limit — plan-driven for both an independent owner and an
+    /// agency-pooled owner (BACKEND-ISSUES.md §B-3): <see cref="IListingQuotaPolicy"/>
+    /// resolves the limit from <c>Plan.ListingLimit</c> via <c>UserAccount.PlanId</c> (the
+    /// agency owner's, when <paramref name="ownerAccount"/> belongs to one — see
+    /// IListingQuotaPolicy's doc comment), never from a constant here.
+    ///
+    /// Consequence worth being explicit about: an existing owner (or agency) who already
+    /// holds more than the limit — e.g. after a plan downgrade — keeps every listing they
+    /// have; nothing is retroactively removed. They simply cannot create another until they
+    /// are back under it.
     /// </summary>
-    /// <remarks>
-    /// There is no Subscription entity in this domain yet, so there is no way to ask "which
-    /// plan is this user on" — every account is therefore treated as free tier. That is the
-    /// honest state of the system, not a simplification: the moment a paid plan exists, this
-    /// is the single place that has to learn about it, and the check becomes
-    /// "quota = plan.ListingLimit" instead of the constant below.
-    ///
-    /// Consequence worth being explicit about: an existing owner who already holds more than
-    /// the limit keeps every listing they have — nothing is retroactively removed — but
-    /// cannot create another until they are back under it.
-    ///
-    /// RELEASE-BLOCKERS-AR.md B-3: a member of an agency does NOT get their own copy of the
-    /// free-tier limit — the limit belongs to the agency as a whole, pooled across every
-    /// member's active listings, because the owner may not intend every member to publish.
-    /// This is an interim, config-driven mitigation (<see cref="IListingQuotaPolicy"/>), not
-    /// the real fix — the real fix is a Subscription entity, deliberately deferred as a
-    /// product decision.
-    /// </remarks>
     private async Task EnsureListingQuotaAvailableAsync(
-        Guid ownerId,
-        Guid? agencyId,
+        UserAccount ownerAccount,
         CancellationToken ct)
     {
-        if (agencyId is { } id)
-        {
-            var agencyActiveListings = await _repo.CountActiveListingsByAgencyAsync(id, ct);
-            var agencyLimit = _quotaPolicy.AgencyActiveListingLimit;
+        var limit = await _quotaPolicy.GetActiveListingLimitAsync(ownerAccount, ct);
 
-            if (agencyActiveListings < agencyLimit)
+        if (ownerAccount.AgencyId is { } agencyId)
+        {
+            var agencyActiveListings = await _repo.CountActiveListingsByAgencyAsync(agencyId, ct);
+
+            if (agencyActiveListings < limit)
                 return;
 
             _logger.LogInformation(
                 "Listing creation blocked by agency-pooled quota. AgencyId={AgencyId}, Active={Active}, Limit={Limit}",
-                id,
+                agencyId,
                 agencyActiveListings,
-                agencyLimit);
+                limit);
 
             throw new ConflictException(
-                $"بلغ مكتبكم الحدّ الأقصى المسموح به من الإعلانات النشطة ({agencyLimit} إعلاناً). " +
-                "احذفوا إعلاناً قائماً لإضافة إعلان جديد.");
+                $"بلغ مكتبكم الحدّ الأقصى المسموح به من الإعلانات النشطة ({limit} إعلاناً) وفق خطة مكتبكم. " +
+                "احذفوا إعلاناً قائماً أو رقّوا الخطة لإضافة إعلان جديد.");
         }
 
-        var activeListings = await _repo.CountActiveListingsByOwnerAsync(ownerId, ct);
+        var activeListings = await _repo.CountActiveListingsByOwnerAsync(ownerAccount.Id, ct);
 
-        if (activeListings < ListingLifecyclePolicy.FreeTierActiveListingLimit)
+        if (activeListings < limit)
             return;
 
         _logger.LogInformation(
-            "Listing creation blocked by free-tier quota. OwnerId={OwnerId}, Active={Active}, Limit={Limit}",
-            ownerId,
+            "Listing creation blocked by plan quota. OwnerId={OwnerId}, Active={Active}, Limit={Limit}",
+            ownerAccount.Id,
             activeListings,
-            ListingLifecyclePolicy.FreeTierActiveListingLimit);
+            limit);
 
         throw new ConflictException(
-            $"الخطة المجانية تسمح بإعلان واحد نشط فقط. لديك حالياً {activeListings}. " +
-            "احذف إعلاناً قائماً أو رقِّ خطتك لإضافة إعلان جديد.");
+            $"خطتكم الحالية تسمح بـ {limit} إعلاناً نشطاً كحد أقصى. لديكم حالياً {activeListings}. " +
+            "احذفوا إعلاناً قائماً أو رقّوا خطتكم لإضافة إعلان جديد.");
     }
 
     private async Task TrySubmitLocationSuggestionsAsync(Property property, CancellationToken ct)
