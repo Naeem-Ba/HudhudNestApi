@@ -55,6 +55,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddHostedService<SavedSearchMatchHostedService>();
         services.AddScoped<IListingFeeRepository, ListingFeeRepository>();
         services.AddScoped<IAgencyRepository, AgencyRepository>();
+        services.AddScoped<IAgencyInvitationRepository, AgencyInvitationRepository>();
         services.AddHostedService<ListingExpiryHostedService>();
         services.AddScoped<IPropertyImageRepository, PropertyImageRepository>();
         services.AddScoped<IFavoriteRepository, FavoriteRepository>();

@@ -35,4 +35,16 @@ public enum NotificationType
     /// This is the notification the user acts on to pay for an extension.
     /// </summary>
     ListingExpired = 15,
+
+    /// <summary>
+    /// B-2 (RELEASE-BLOCKERS-AR.md): an agency owner sent the recipient an AgencyInvitation.
+    /// Raised by CreateAgencyInvitationCommandHandler; RelatedEntityId is the invitation id.
+    /// </summary>
+    AgencyInvitationReceived = 16,
+
+    /// <summary>The recipient's agency invitation was accepted. Sent to the agency owner.</summary>
+    AgencyInvitationAccepted = 17,
+
+    /// <summary>The recipient's agency invitation was declined. Sent to the agency owner.</summary>
+    AgencyInvitationDeclined = 18,
 }

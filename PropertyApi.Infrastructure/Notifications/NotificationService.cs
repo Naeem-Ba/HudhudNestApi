@@ -209,6 +209,86 @@ public sealed class NotificationService : INotificationService
             raterId);
     }
 
+    public async Task NotifyAgencyInvitationReceivedAsync(
+        Guid recipientId,
+        Guid invitationId,
+        string agencyName,
+        string inviterName,
+        CancellationToken ct = default)
+    {
+        if (recipientId == Guid.Empty)
+        {
+            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
+
+        if (invitationId == Guid.Empty)
+        {
+            throw new ArgumentException("Invitation id is required.", nameof(invitationId));
+        }
+
+        var agency = string.IsNullOrWhiteSpace(agencyName) ? "مكتب عقاري" : agencyName.Trim();
+        var inviter = string.IsNullOrWhiteSpace(inviterName) ? "مستخدم" : inviterName.Trim();
+
+        var notification = new Notification
+        {
+            RecipientId = recipientId,
+            Type = NotificationType.AgencyInvitationReceived,
+            Message = $"دعاك {inviter} للانضمام إلى مكتب '{agency}'. راجع دعواتك لقبولها أو رفضها.",
+            RelatedEntityId = invitationId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await PersistAndPushAsync(notification, ct);
+
+        _logger.LogInformation(
+            "Agency invitation notification created. RecipientId={RecipientId}, InvitationId={InvitationId}",
+            recipientId,
+            invitationId);
+    }
+
+    public async Task NotifyAgencyInvitationRespondedAsync(
+        Guid recipientId,
+        Guid invitationId,
+        string targetUserName,
+        bool accepted,
+        CancellationToken ct = default)
+    {
+        if (recipientId == Guid.Empty)
+        {
+            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
+
+        if (invitationId == Guid.Empty)
+        {
+            throw new ArgumentException("Invitation id is required.", nameof(invitationId));
+        }
+
+        var name = string.IsNullOrWhiteSpace(targetUserName) ? "المستخدم" : targetUserName.Trim();
+
+        var notification = new Notification
+        {
+            RecipientId = recipientId,
+            Type = accepted
+                ? NotificationType.AgencyInvitationAccepted
+                : NotificationType.AgencyInvitationDeclined,
+            Message = accepted
+                ? $"قبل {name} دعوة الانضمام إلى مكتبك."
+                : $"رفض {name} دعوة الانضمام إلى مكتبك.",
+            RelatedEntityId = invitationId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await PersistAndPushAsync(notification, ct);
+
+        _logger.LogInformation(
+            "Agency invitation response notification created. RecipientId={RecipientId}, InvitationId={InvitationId}, Accepted={Accepted}",
+            recipientId,
+            invitationId,
+            accepted);
+    }
+
     public async Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(
         Guid userId,
         int page,

@@ -44,4 +44,23 @@ public static class AgencyMapper
             ProfileImageUrl: member.ProfileImageUrl,
             IsOwner: member.Id == ownerUserId,
             JoinedAt: member.AgencyJoinedAt);
+
+    public static AgencyInvitationDto ToInvitationDto(
+        AgencyInvitation invitation,
+        Agency agency,
+        UserAccount inviter)
+        => new(
+            Id: invitation.Id,
+            AgencyId: agency.Id,
+            AgencyName: agency.Name,
+            AgencySlug: agency.Slug,
+            InviterUserId: inviter.Id,
+            InviterName: string.IsNullOrWhiteSpace(inviter.DisplayName)
+                ? $"{inviter.FirstName} {inviter.LastName}".Trim()
+                : inviter.DisplayName!,
+            TargetUserId: invitation.TargetUserId,
+            Status: invitation.Status,
+            CreatedAt: invitation.CreatedAt,
+            ExpiresAt: invitation.ExpiresAt,
+            RespondedAt: invitation.RespondedAt);
 }
