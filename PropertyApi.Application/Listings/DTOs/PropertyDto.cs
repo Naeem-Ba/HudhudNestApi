@@ -51,7 +51,18 @@ public sealed class PropertyDto
     // Details
     public int? Rooms { get; set; }
     public decimal? Area { get; set; }
+    public string AreaUnit { get; set; } = string.Empty;
     public int? Floor { get; set; }
+
+    // Rental term (Rent only)
+    public DateOnly? RentalStartDate { get; set; }
+    public DateOnly? RentalEndDate { get; set; }
+    public string? RentalDurationType { get; set; }
+
+    // Ownership document type ("OwnershipType" in the UI — see LegalStatusType).
+    public string LegalStatus { get; set; } = string.Empty;
+
+    public string FurnishingStatus { get; set; } = string.Empty;
 
     // Features
     public bool HasBalcony { get; set; }

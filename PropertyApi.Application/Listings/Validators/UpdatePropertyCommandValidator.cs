@@ -1,5 +1,6 @@
 ﻿using FluentValidation;
 using PropertyApi.Application.Listings.Commands.UpdateProperty;
+using PropertyApi.Domain.Listings.Enums;
 
 namespace PropertyApi.Application.Listings.Validators;
 
@@ -115,9 +116,44 @@ public sealed class UpdatePropertyCommandValidator
             .InclusiveBetween(1, 50)
             .When(command => command.Rooms.HasValue);
 
+        // Area >10 only makes sense in square meters — see
+        // CreatePropertyCommandValidator for the same rule and its rationale.
+        // AreaUnit isn't itself required here (partial-update — omitting it
+        // just leaves the property's existing unit unchanged).
         RuleFor(command => command.Area)
             .GreaterThan(10)
-            .When(command => command.Area.HasValue);
+            .When(command => command.Area.HasValue &&
+                (command.AreaUnit is null || command.AreaUnit == AreaUnit.SquareMeter));
+
+        RuleFor(command => command.Area)
+            .GreaterThan(0)
+            .When(command => command.Area.HasValue &&
+                command.AreaUnit is not null && command.AreaUnit != AreaUnit.SquareMeter);
+
+        RuleFor(command => command.AreaUnit)
+            .IsInEnum()
+            .When(command => command.AreaUnit.HasValue);
+
+        RuleFor(command => command.LegalStatus)
+            .IsInEnum()
+            .When(command => command.LegalStatus.HasValue);
+
+        RuleFor(command => command.FurnishingStatus)
+            .IsInEnum()
+            .When(command => command.FurnishingStatus.HasValue);
+
+        RuleFor(command => command.RentalDurationType)
+            .IsInEnum()
+            .When(command => command.RentalDurationType.HasValue);
+
+        // This command has no ListingType (it's immutable after creation, set
+        // only by CreatePropertyCommand), so "required for Rent/Sale" can't be
+        // expressed here the same way it is on create — only the structural
+        // invariant (end after start) applies to a partial update.
+        RuleFor(command => command)
+            .Must(command => !command.RentalStartDate.HasValue || !command.RentalEndDate.HasValue
+                              || command.RentalEndDate.Value > command.RentalStartDate.Value)
+            .WithMessage("Rental end date must be after the start date.");
 
         RuleFor(command => command.Floor)
             .GreaterThanOrEqualTo(0)

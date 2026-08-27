@@ -91,8 +91,14 @@ public sealed class UpdatePropertyCommandHandler
         if (request.AdditionalCosts.HasValue) property.AdditionalCosts = request.AdditionalCosts;
         if (request.Rooms.HasValue) property.Rooms = request.Rooms;
         if (request.Area.HasValue) property.Area = request.Area;
+        if (request.AreaUnit.HasValue) property.AreaUnit = request.AreaUnit.Value;
         if (request.Floor.HasValue) property.Floor = request.Floor;
         if (request.TotalFloors.HasValue) property.TotalFloors = request.TotalFloors;
+        if (request.RentalStartDate.HasValue) property.RentalStartDate = request.RentalStartDate;
+        if (request.RentalEndDate.HasValue) property.RentalEndDate = request.RentalEndDate;
+        if (request.RentalDurationType.HasValue) property.RentalDurationType = request.RentalDurationType;
+        if (request.LegalStatus.HasValue) property.LegalStatus = request.LegalStatus.Value;
+        if (request.FurnishingStatus.HasValue) property.FurnishingStatus = request.FurnishingStatus.Value;
         if (request.HasBalcony.HasValue) property.HasBalcony = request.HasBalcony.Value;
         if (request.HasElevator.HasValue) property.HasElevator = request.HasElevator.Value;
         if (request.HasParkingSpace.HasValue) property.HasParkingSpace = request.HasParkingSpace.Value;

@@ -156,6 +156,20 @@ public sealed class CreatePropertyCommandHandler
         property.HasParkingSpace = request.HasParkingSpace;
         property.HeatingType = request.HeatingType;
         property.AvailableFrom = request.AvailableFrom;
+        property.AreaUnit = request.AreaUnit;
+        property.RentalStartDate = request.RentalStartDate;
+        property.RentalEndDate = request.RentalEndDate;
+        property.RentalDurationType = request.RentalDurationType;
+
+        // LegalStatus/FurnishingStatus already default sensibly on the entity
+        // (Unknown/Unfurnished) — only overwrite when the request actually
+        // specifies a value, so an omitted field doesn't silently downgrade a
+        // future entity-level default.
+        if (request.LegalStatus.HasValue)
+            property.LegalStatus = request.LegalStatus.Value;
+
+        if (request.FurnishingStatus.HasValue)
+            property.FurnishingStatus = request.FurnishingStatus.Value;
 
         // Associate amenities if provided
         if (request.AmenityIds is { Count: > 0 })

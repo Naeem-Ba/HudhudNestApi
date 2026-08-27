@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Domain.Enums;
+using PropertyApi.Domain.Listings.Enums;
 
 namespace PropertyApi.Controllers;
 
@@ -25,6 +26,16 @@ public sealed class EnumController : ControllerBase
             { "PropertyCondition", typeof(PropertyCondition) },
             { "EnergyEfficiency", typeof(EnergyEfficiencyType) },
             { "HeatingType", typeof(HeatingType) },
+
+            // Dynamic listing form (ListingType × PropertyType redesign, Syrian
+            // market). "OwnershipType" is a product-facing alias for the domain
+            // type LegalStatusType — no new enum, see LegalStatusType's doc
+            // comment for why the two names refer to the same values.
+            { "AreaUnit", typeof(AreaUnit) },
+            { "RentalDurationType", typeof(RentalDurationType) },
+            { "LegalStatusType", typeof(LegalStatusType) },
+            { "OwnershipType", typeof(LegalStatusType) },
+            { "FurnishingStatus", typeof(FurnishingStatus) },
 
             // Legacy aliases for frontend compatibility
             { "STATUS", typeof(PropertyStatus) },
