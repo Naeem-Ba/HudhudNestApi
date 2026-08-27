@@ -19,6 +19,10 @@ internal static class RedisRateLimitingDefaults
             // limit at all. Same cadence as public-search — it is the same kind of
             // anonymous, browsable public page.
             ["agencies-public"] = Policy(120, TimeSpan.FromMinutes(1)),
+            // RELEASE-BLOCKERS-AR.md B-7: shared policy for the remaining anonymous
+            // read-only/reference endpoints that had no rate limit at all. Same cadence as
+            // public-search/agencies-public.
+            ["public-read"] = Policy(120, TimeSpan.FromMinutes(1)),
             ["visits"] = Policy(10, TimeSpan.FromHours(1)),
             ["reviews"] = Policy(5, TimeSpan.FromHours(24))
         };

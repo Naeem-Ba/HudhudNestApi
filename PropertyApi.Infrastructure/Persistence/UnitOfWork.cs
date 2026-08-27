@@ -11,7 +11,7 @@ using PropertyApi.Infrastructure.Persistence;
 namespace PropertyApi.Infrastructure.Persistence;
 
 /// <summary>
-/// Unit of Work � the single point for committing all changes.
+/// Unit of Work — the single point for committing all changes.
 /// Repositories only track changes; UoW decides when to flush them.
 /// </summary>
 public sealed class UnitOfWork : IUnitOfWork

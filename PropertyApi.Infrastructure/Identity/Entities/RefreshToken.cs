@@ -11,7 +11,7 @@ public class RefreshToken
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
-    /// <summary>The token value (or its hash — see security note above).</summary>
+    /// <summary>The token value (or its hash â€” see security note above).</summary>
     public string TokenHash { get; set; } = string.Empty;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

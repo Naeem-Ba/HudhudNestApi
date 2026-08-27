@@ -510,6 +510,22 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0
             }));
 
+    // RELEASE-BLOCKERS-AR.md B-7: shared policy for every anonymous, read-only (or
+    // functionally read-only) endpoint that had no rate limit at all -- reference/lookup
+    // data, public reference profiles, and the CSRF token handshake. Same generous cadence
+    // as public-search/agencies-public; see RateLimitingGuardTests for the exact endpoint
+    // list this is pinned to.
+    options.AddPolicy("public-read", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetClientRateLimitPartitionKey(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
+
     options.AddPolicy("visits", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: GetClientRateLimitPartitionKey(httpContext),

@@ -15,7 +15,7 @@ public sealed class FavoriteConfiguration : IEntityTypeConfiguration<Favorite>
     {
         builder.ToTable("Favorites");
 
-        // Composite PK — no Id needed
+        // Composite PK â€” no Id needed
         builder.HasKey(f => new { f.UserId, f.PropertyId });
 
         builder.HasOne(f => f.User)

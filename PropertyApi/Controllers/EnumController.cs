@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Domain.Enums;
 
@@ -39,6 +40,7 @@ public sealed class EnumController : ControllerBase
     /// </summary>
     [HttpGet("{name}")]
     [AllowAnonymous] // Public enum metadata used to render forms.
+    [EnableRateLimiting("public-read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public IActionResult Get(string name)
@@ -70,6 +72,7 @@ public sealed class EnumController : ControllerBase
     /// </summary>
     [HttpGet]
     [AllowAnonymous] // Public enum metadata used to render forms.
+    [EnableRateLimiting("public-read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult GetAll()
     {

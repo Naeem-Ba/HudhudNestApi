@@ -2,6 +2,7 @@ using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.Listings.Commands.DeletePropertyImage;
 using PropertyApi.Application.Listings.Commands.SetMainPropertyImage;
 using PropertyApi.Application.Listings.Commands.UploadPropertyImages;
@@ -68,6 +69,7 @@ public sealed class PropertyImagesController : ControllerBase
 
     [HttpGet]
     [AllowAnonymous]
+    [EnableRateLimiting("public-read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetAll(

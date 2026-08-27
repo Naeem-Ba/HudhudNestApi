@@ -9,7 +9,7 @@ namespace PropertyApi.Domain.Listings.Entities;
 
 /// <summary>
 /// User's saved/favorited properties.
-/// Composite PK: (UserId, PropertyId) — no surrogate Id needed.
+/// Composite PK: (UserId, PropertyId) â€” no surrogate Id needed.
 /// </summary>
 public class Favorite
 {

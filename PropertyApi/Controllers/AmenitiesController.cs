@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.Amenities.Queries.GetAmenities;
 
 namespace PropertyApi.Controllers;
@@ -16,6 +17,7 @@ public sealed class AmenitiesController : ControllerBase
 
     [HttpGet]
     [AllowAnonymous] // Public amenity lookup: consumed by the search filters before sign-in.
+    [EnableRateLimiting("public-read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {

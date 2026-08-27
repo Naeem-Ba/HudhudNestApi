@@ -31,6 +31,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OutputCaching;
+using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.Analytics.DTOs;
 using PropertyApi.Application.Analytics.Queries.GetMarketInsights;
 using PropertyApi.Application.Analytics.Queries.GetPropertyStats;
@@ -68,6 +69,7 @@ public sealed class AnalyticsController : ControllerBase
     /// </summary>
     [HttpGet("market")]
     [AllowAnonymous]
+    [EnableRateLimiting("public-read")]
     // ✅ إصلاح M-2: استبدال [ResponseCache] بـ [OutputCache]
     //   PolicyName = "market-insights" → معرَّفة في Program.cs:
     //     Expire(5 min) + Tag("analytics") + VaryByQuery()

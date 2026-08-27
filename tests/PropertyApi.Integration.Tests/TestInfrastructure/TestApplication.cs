@@ -88,6 +88,19 @@ public sealed class TestApplication : WebApplicationFactory<Program>
         return new TestApplication("Production", configurationOverrides);
     }
 
+    /// <summary>
+    /// Same "Testing" environment/InMemory-database host the parameterless constructor
+    /// builds, but with extra configuration layered on top -- e.g. CSRF integration tests
+    /// that need CookieCsrf:Enabled=true, which appsettings.Testing.json leaves off for the
+    /// rest of the suite so that ordinary POST/PUT/DELETE integration tests are not required
+    /// to fetch and send a CSRF token to keep passing.
+    /// </summary>
+    public static TestApplication CreateTesting(
+        IDictionary<string, string?>? configurationOverrides = null)
+    {
+        return new TestApplication("Testing", configurationOverrides);
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(_environmentName);

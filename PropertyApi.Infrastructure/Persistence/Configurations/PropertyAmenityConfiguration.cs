@@ -15,7 +15,7 @@ public sealed class PropertyAmenityConfiguration : IEntityTypeConfiguration<Prop
     {
         builder.ToTable("PropertyAmenities");
 
-        // Composite PK — no surrogate Id column (cleaner, correct design)
+        // Composite PK â€” no surrogate Id column (cleaner, correct design)
         builder.HasKey(pa => new { pa.PropertyId, pa.AmenityId });
 
         builder.HasOne(pa => pa.Property)

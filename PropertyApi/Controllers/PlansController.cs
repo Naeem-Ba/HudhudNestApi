@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.Plans.Queries.GetPlans;
 
 namespace PropertyApi.Controllers;
@@ -20,6 +21,7 @@ public sealed class PlansController : ControllerBase
 
     [HttpGet]
     [AllowAnonymous]
+    [EnableRateLimiting("public-read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPlans(CancellationToken ct)
     {

@@ -75,6 +75,7 @@ public sealed class PropertiesController : ControllerBase
     // ── GET /api/properties/{id} ─────────────────────────────────
     [HttpGet("{id:guid}")]
     [AllowAnonymous]
+    [EnableRateLimiting("public-read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)

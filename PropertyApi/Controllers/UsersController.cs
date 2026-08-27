@@ -2,6 +2,7 @@ using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.Reviews.Commands.RateUser;
 using PropertyApi.Application.Reviews.Queries.GetRatingEligibility;
 using PropertyApi.Application.Reviews.Queries.GetUserRatings;
@@ -54,6 +55,7 @@ public sealed class UsersController : ControllerBase
     // GET /api/Properties العام — نفس فكرة "من هو هذا البائع؟" قبل التواصل معه.
     [HttpGet("{id:guid}/profile")]
     [AllowAnonymous]
+    [EnableRateLimiting("public-read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetProfile(Guid id, CancellationToken ct)
@@ -65,6 +67,7 @@ public sealed class UsersController : ControllerBase
     // GET /api/Users/{id}/ratings?page=&pageSize= — قائمة التقييمات + التعليقات
     [HttpGet("{id:guid}/ratings")]
     [AllowAnonymous]
+    [EnableRateLimiting("public-read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetRatings(
         Guid id,

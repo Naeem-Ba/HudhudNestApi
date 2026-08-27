@@ -17,6 +17,6 @@ public class Amenity : BaseEntity
     public string? Category { get; set; }  // e.g. "Security", "Comfort", "Kitchen"
     public string? IconName { get; set; }  // CSS/icon class name for frontend
 
-    // Navigation — only through junction table, not directly
+    // Navigation â€” only through junction table, not directly
     public ICollection<PropertyAmenity> PropertyAmenities { get; set; } = new List<PropertyAmenity>();
 }
