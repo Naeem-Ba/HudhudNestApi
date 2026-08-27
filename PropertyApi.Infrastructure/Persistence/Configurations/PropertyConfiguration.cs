@@ -104,6 +104,24 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
         builder.Property(p => p.Area)
             .HasColumnType("decimal(10,2)");
 
+        // Area's unit. Default SquareMeter backfills every existing row to what
+        // Area has always meant before this column existed — fully backward
+        // compatible, no data migration needed beyond the column default.
+        builder.Property(p => p.AreaUnit)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(AreaUnit.SquareMeter);
+
+        // -- تفاصيل الإيجار (Rent فقط) --------------------------
+        builder.Property(p => p.RentalStartDate);
+        builder.Property(p => p.RentalEndDate);
+
+        // Nullable — a Sale listing has no rental duration, and "no value" must
+        // mean exactly that rather than defaulting to a misleading duration.
+        builder.Property(p => p.RentalDurationType)
+            .HasConversion<string>()
+            .HasMaxLength(20);
+
         // -- Enums: store as string for readability in DB ------
         // Changing enum order never corrupts data
         builder.Property(p => p.ListingType)

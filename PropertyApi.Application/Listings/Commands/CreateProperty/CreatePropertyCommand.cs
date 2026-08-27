@@ -1,5 +1,6 @@
 ﻿using MediatR;
 using PropertyApi.Domain.Enums;
+using PropertyApi.Domain.Listings.Enums;
 
 namespace PropertyApi.Application.Listings.Commands.CreateProperty;
 
@@ -48,6 +49,22 @@ public sealed record CreatePropertyCommand(
     bool HasParkingSpace,
     HeatingType HeatingType,
     DateTime? AvailableFrom,
-    List<Guid>? AmenityIds
+    List<Guid>? AmenityIds,
+
+    // نوع الملكية (OwnershipType) — مطلوب للبيع، غير مطلوب للإيجار. القيم الممكنة
+    // تعكس السوق السوري (طابو أخضر/حكم محكمة/فراغ جمعية/...) — راجع LegalStatusType.
+    LegalStatusType? LegalStatus = null,
+
+    // وحدة المساحة — افتراضياً متر مربع، يطابق المعنى التاريخي لحقل Area.
+    AreaUnit AreaUnit = AreaUnit.SquareMeter,
+
+    // تفاصيل الإيجار — مطلوبة فقط عندما ListingType = ForRent أو ForRentAndSale
+    // (يتحقق منها CreatePropertyCommandValidator، وليس هذا التعريف).
+    DateOnly? RentalStartDate = null,
+    DateOnly? RentalEndDate = null,
+    RentalDurationType? RentalDurationType = null,
+
+    // مفروش / غير مفروش — اختياري، غير مناسب للأراضي.
+    FurnishingStatus? FurnishingStatus = null
 ) : IRequest<Guid>;
 

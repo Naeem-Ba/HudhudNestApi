@@ -66,7 +66,16 @@ public static class PropertyMapper
         // Details
         Rooms = p.Rooms,
         Area = p.Area,
+        AreaUnit = p.AreaUnit.ToString(),
         Floor = p.Floor,
+
+        // Rental term (Rent only) + ownership/furnishing — see Property's
+        // doc comments for why these live directly on the entity.
+        RentalStartDate = p.RentalStartDate,
+        RentalEndDate = p.RentalEndDate,
+        RentalDurationType = p.RentalDurationType?.ToString(),
+        LegalStatus = p.LegalStatus.ToString(),
+        FurnishingStatus = p.FurnishingStatus.ToString(),
 
         // Features
         HasBalcony = p.HasBalcony,

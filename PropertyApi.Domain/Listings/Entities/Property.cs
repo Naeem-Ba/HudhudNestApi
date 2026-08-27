@@ -52,11 +52,22 @@ public class Property : AuditableEntity
 
     // -- Property Details ---------------------------------------
     public int? Rooms { get; set; }
-    /// <summary>Area in m². Use decimal — not double — for precision.</summary>
+    /// <summary>
+    /// المساحة كما أدخلها المستخدم بوحدة AreaUnit — وليست دائماً بالمتر المربع.
+    /// راجع AreaUnit's doc comment: لا يوجد تحويل تلقائي بين الوحدات.
+    /// </summary>
     public decimal? Area { get; set; }
+
+    /// <summary>وحدة المساحة أعلاه. الافتراضي SquareMeter — يطابق المعنى التاريخي لهذا الحقل قبل إضافة الوحدات الأخرى.</summary>
+    public AreaUnit AreaUnit { get; set; } = AreaUnit.SquareMeter;
     public int? Floor { get; set; }
     public int? TotalFloors { get; set; }
     public DateTime? AvailableFrom { get; set; }
+
+    // -- تفاصيل الإيجار (Rent فقط — الإيجار حالياً محدَّد المدة دائماً) --------
+    public DateOnly? RentalStartDate { get; set; }
+    public DateOnly? RentalEndDate { get; set; }
+    public RentalDurationType? RentalDurationType { get; set; }
 
     // -- Features -----------------------------------------------
     public bool HasBalcony { get; set; }
