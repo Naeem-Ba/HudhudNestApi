@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PropertyApi.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using PropertyApi.Infrastructure.Persistence;
 namespace PropertyApi.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260827091846_AddPlanListingLimit")]
+    partial class AddPlanListingLimit
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -237,58 +240,6 @@ namespace PropertyApi.Infrastructure.Migrations
                         .HasDatabaseName("IX_Agencies_CountryCode_City");
 
                     b.ToTable("Agencies", (string)null);
-                });
-
-            modelBuilder.Entity("PropertyApi.Domain.Agencies.Entities.AgencyInvitation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AgencyId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<Guid>("InviterUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("RespondedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("TargetUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AgencyId");
-
-                    b.HasIndex("InviterUserId");
-
-                    b.HasIndex("TargetUserId");
-
-                    b.HasIndex("AgencyId", "TargetUserId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_AgencyInvitations_AgencyId_TargetUserId_Pending")
-                        .HasFilter("\"Status\" = 0");
-
-                    b.ToTable("AgencyInvitations", (string)null);
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.Audit.Entities.AuditLog", b =>
@@ -2341,27 +2292,6 @@ namespace PropertyApi.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("PropertyApi.Domain.Agencies.Entities.AgencyInvitation", b =>
-                {
-                    b.HasOne("PropertyApi.Domain.Agencies.Entities.Agency", null)
-                        .WithMany()
-                        .HasForeignKey("AgencyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", null)
-                        .WithMany()
-                        .HasForeignKey("InviterUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", null)
-                        .WithMany()
-                        .HasForeignKey("TargetUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

@@ -8,6 +8,17 @@ namespace PropertyApi.Infrastructure.Persistence.Seeds;
 /// src/app/core/models/subscription-plan.model.ts SUBSCRIPTION_PLANS constant key
 /// for key — the two must stay in sync, since neither owns display text (that's
 /// entirely frontend i18n).
+///
+/// ListingLimit values mirror the same frontend's pricing table (FRONTEND_BACKEND_CONTRACT.md
+/// §11.1): 1 for Free (also RELEASE-BLOCKERS-AR.md's former FreeTierActiveListingLimit
+/// constant, now retired in favor of this being the one source), 50 for Basic, 250 for
+/// Premium, and null (unlimited) for Elite's "negotiated" quota.
+///
+/// EnsureAsync below only inserts a tier that does not exist yet — it does not update
+/// ListingLimit on a tier that was already seeded before this column existed. Environments
+/// migrated from before this change get their existing rows backfilled by migration
+/// 20260827091846_AddPlanListingLimit's data migration instead; this seed only matters for a
+/// brand-new database.
 /// </summary>
 public static class PlansSeed
 {
@@ -26,6 +37,7 @@ public static class PlansSeed
             ctaKey: "PRICING.FREE.CTA",
             isRecommended: false,
             displayOrder: 1,
+            listingLimit: 1,
             noteKey: "PRICING.FREE.NOTE"));
 
         await EnsureAsync(context, Plan.Create(
@@ -41,7 +53,8 @@ public static class PlansSeed
             },
             ctaKey: "PRICING.BASIC.CTA",
             isRecommended: false,
-            displayOrder: 2));
+            displayOrder: 2,
+            listingLimit: 50));
 
         await EnsureAsync(context, Plan.Create(
             tier: "premium",
@@ -56,7 +69,8 @@ public static class PlansSeed
             },
             ctaKey: "PRICING.PREMIUM.CTA",
             isRecommended: true,
-            displayOrder: 3));
+            displayOrder: 3,
+            listingLimit: 250));
 
         await EnsureAsync(context, Plan.Create(
             tier: "elite",
@@ -67,7 +81,9 @@ public static class PlansSeed
             featureKeys: new[] { "PRICING.ELITE.F1", "PRICING.ELITE.F2", "PRICING.ELITE.F3" },
             ctaKey: "PRICING.ELITE.CTA",
             isRecommended: false,
-            displayOrder: 4));
+            displayOrder: 4,
+            listingLimit: null)); // "يُتفق عليه" — negotiated; no cap until a real Subscription
+                                  // entity can carry a per-account agreed number.
 
         await context.SaveChangesAsync();
     }

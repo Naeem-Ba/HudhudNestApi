@@ -128,18 +128,20 @@ public sealed class ListingLifecycleTests
             () => property.ExtendPublication(TimeSpan.Zero, DateTime.UtcNow));
     }
 
-    // ── Application: free-tier quota ─────────────────────────────
+    // ── Application: plan-driven quota, individual owner (BACKEND-ISSUES.md §B-3) ──
 
     [Fact]
-    public async Task CreateProperty_AtFreeTierLimit_IsRejected()
+    public async Task CreateProperty_OnFreePlan_AtTheLimit_IsRejected()
     {
         var ownerId = Guid.NewGuid();
         var repository = new Mock<IPropertyRepository>();
         repository
             .Setup(x => x.CountActiveListingsByOwnerAsync(ownerId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ListingLifecyclePolicy.FreeTierActiveListingLimit);
+            .ReturnsAsync(1);
 
-        var handler = CreatePropertyHandler(repository);
+        // Free plan's real ListingLimit (seeded as 1) — not a constant in this handler
+        // anymore, so the test drives it through the policy exactly as production does.
+        var handler = CreatePropertyHandler(repository, quotaPolicy: new FakeListingQuotaPolicy(1));
 
         await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
             ValidCreateCommand() with { OwnerId = ownerId },
@@ -152,15 +154,15 @@ public sealed class ListingLifecycleTests
     }
 
     [Fact]
-    public async Task CreateProperty_BelowFreeTierLimit_IsAllowed()
+    public async Task CreateProperty_OnFreePlan_BelowTheLimit_IsAllowed()
     {
         var ownerId = Guid.NewGuid();
         var repository = new Mock<IPropertyRepository>();
         repository
             .Setup(x => x.CountActiveListingsByOwnerAsync(ownerId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ListingLifecyclePolicy.FreeTierActiveListingLimit - 1);
+            .ReturnsAsync(0);
 
-        var handler = CreatePropertyHandler(repository);
+        var handler = CreatePropertyHandler(repository, quotaPolicy: new FakeListingQuotaPolicy(1));
 
         var id = await handler.Handle(
             ValidCreateCommand() with { OwnerId = ownerId },
@@ -170,6 +172,92 @@ public sealed class ListingLifecycleTests
         repository.Verify(
             x => x.AddAsync(It.IsAny<Property>(), It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateProperty_OnPremiumPlan_UsesThePlanLimit_NotTheOldFreeTierConstant()
+    {
+        // A Premium owner sitting on 5 active listings must NOT be rejected by the retired
+        // free-tier constant (1) — only Plan.ListingLimit (250, mirrored here by the fake)
+        // governs now.
+        var ownerId = Guid.NewGuid();
+        var repository = new Mock<IPropertyRepository>();
+        repository
+            .Setup(x => x.CountActiveListingsByOwnerAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(5);
+
+        var handler = CreatePropertyHandler(repository, quotaPolicy: new FakeListingQuotaPolicy(250));
+
+        var id = await handler.Handle(
+            ValidCreateCommand() with { OwnerId = ownerId },
+            CancellationToken.None);
+
+        Assert.NotEqual(Guid.Empty, id);
+    }
+
+    [Fact]
+    public async Task CreateProperty_OnPremiumPlan_AtThePlanLimit_IsRejected()
+    {
+        var ownerId = Guid.NewGuid();
+        var repository = new Mock<IPropertyRepository>();
+        repository
+            .Setup(x => x.CountActiveListingsByOwnerAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(250);
+
+        var handler = CreatePropertyHandler(repository, quotaPolicy: new FakeListingQuotaPolicy(250));
+
+        await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
+            ValidCreateCommand() with { OwnerId = ownerId },
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CreateProperty_OnElitePlan_WithManyActiveListings_IsStillAllowed()
+    {
+        // Elite's unlimited quota (Plan.ListingLimit == null) is represented by
+        // IListingQuotaPolicy as int.MaxValue — a very large existing count must still not
+        // be rejected.
+        var ownerId = Guid.NewGuid();
+        var repository = new Mock<IPropertyRepository>();
+        repository
+            .Setup(x => x.CountActiveListingsByOwnerAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(10_000);
+
+        var handler = CreatePropertyHandler(
+            repository, quotaPolicy: new FakeListingQuotaPolicy(int.MaxValue));
+
+        var id = await handler.Handle(
+            ValidCreateCommand() with { OwnerId = ownerId },
+            CancellationToken.None);
+
+        Assert.NotEqual(Guid.Empty, id);
+    }
+
+    [Fact]
+    public async Task CreateProperty_AsksTheQuotaPolicy_ForTheSameAccountItLoadedUpFront()
+    {
+        // The handler must not re-derive or substitute a different account when consulting
+        // the quota policy — it is the same UserAccount read once at the top of Handle().
+        var ownerId = Guid.NewGuid();
+        var repository = new Mock<IPropertyRepository>();
+        repository
+            .Setup(x => x.CountActiveListingsByOwnerAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+
+        var agencies = new Mock<IAgencyRepository>();
+        var account = BuildAccountWithPlan(ownerId);
+        agencies
+            .Setup(x => x.GetUserAccountAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(account);
+
+        var quotaPolicy = new FakeListingQuotaPolicy(1);
+        var handler = CreatePropertyHandler(repository, agencies, quotaPolicy);
+
+        await handler.Handle(
+            ValidCreateCommand() with { OwnerId = ownerId },
+            CancellationToken.None);
+
+        Assert.Same(account, quotaPolicy.LastQueriedAccount);
     }
 
     // ── Application: agency-pooled quota (RELEASE-BLOCKERS-AR.md B-3) ─────
@@ -192,7 +280,8 @@ public sealed class ListingLifecycleTests
 
         var handler = CreatePropertyHandler(repository, agencies, new FakeListingQuotaPolicy(50));
 
-        // The individual limit (1) must NOT apply here — only the agency-pooled count does.
+        // The individual-owner count path must NOT apply here — only the agency-pooled
+        // count does.
         await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
             ValidCreateCommand() with { OwnerId = ownerId },
             CancellationToken.None));
@@ -235,6 +324,40 @@ public sealed class ListingLifecycleTests
         repository.Verify(
             x => x.AddAsync(It.IsAny<Property>(), It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateProperty_ForAgencyMember_AsksTheQuotaPolicy_ForTheMembersOwnAccount()
+    {
+        // The handler's job stops at "hand the policy the account it loaded" — it must NOT
+        // try to resolve the agency owner's plan itself (that would put a Plan-loading
+        // responsibility directly in CreatePropertyCommandHandler, which the architecture
+        // deliberately keeps out of it — see IListingQuotaPolicy's doc comment). Whether the
+        // limit actually comes from the *owner's* plan rather than this member's own is
+        // ListingQuotaPolicy's job, covered separately in
+        // PropertyApi.Integration.Tests/Listings/ListingQuotaPolicyTests.cs.
+        var ownerId = Guid.NewGuid();
+        var agencyId = Guid.NewGuid();
+
+        var agencies = new Mock<IAgencyRepository>();
+        var member = BuildAccountInAgency(ownerId, agencyId);
+        agencies
+            .Setup(x => x.GetUserAccountAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(member);
+
+        var repository = new Mock<IPropertyRepository>();
+        repository
+            .Setup(x => x.CountActiveListingsByAgencyAsync(agencyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+
+        var quotaPolicy = new FakeListingQuotaPolicy(50);
+        var handler = CreatePropertyHandler(repository, agencies, quotaPolicy);
+
+        await handler.Handle(
+            ValidCreateCommand() with { OwnerId = ownerId },
+            CancellationToken.None);
+
+        Assert.Same(member, quotaPolicy.LastQueriedAccount);
     }
 
     // ── Application: quota check race is closed by an advisory lock (RELEASE-BLOCKERS-AR.md B-10) ──
@@ -299,10 +422,11 @@ public sealed class ListingLifecycleTests
         var repository = new Mock<IPropertyRepository>();
         repository
             .Setup(x => x.CountActiveListingsByOwnerAsync(ownerId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ListingLifecyclePolicy.FreeTierActiveListingLimit);
+            .ReturnsAsync(1);
 
         var uow = new Mock<IUnitOfWork>();
-        var handler = CreatePropertyHandler(repository, unitOfWork: uow);
+        var handler = CreatePropertyHandler(
+            repository, unitOfWork: uow, quotaPolicy: new FakeListingQuotaPolicy(1));
 
         await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
             ValidCreateCommand() with { OwnerId = ownerId },
@@ -675,15 +799,34 @@ public sealed class ListingLifecycleTests
         return account;
     }
 
-    /// <summary>Deterministic stand-in for the config-backed IListingQuotaPolicy.</summary>
+    /// <summary>
+    /// Deterministic stand-in for the plan-driven IListingQuotaPolicy. The handler-level
+    /// tests in this file only need "the policy returned N" — the interesting part of
+    /// resolving N from Plan.ListingLimit (including the agency-owner-vs-member-plan
+    /// semantics from IListingQuotaPolicy's doc comment) is Infrastructure's
+    /// ListingQuotaPolicy's own job and is covered by
+    /// PropertyApi.Integration.Tests/Listings/ListingQuotaPolicyTests.cs instead, against
+    /// mocked IPlanRepository/IAgencyRepository. Records the account it was called with so a
+    /// test can assert the handler asked about the right one.
+    /// </summary>
     private sealed class FakeListingQuotaPolicy : IListingQuotaPolicy
     {
-        public FakeListingQuotaPolicy(int agencyActiveListingLimit)
+        private readonly int _limit;
+
+        public FakeListingQuotaPolicy(int limit)
         {
-            AgencyActiveListingLimit = agencyActiveListingLimit;
+            _limit = limit;
         }
 
-        public int AgencyActiveListingLimit { get; }
+        public UserAccount? LastQueriedAccount { get; private set; }
+
+        public Task<int> GetActiveListingLimitAsync(
+            UserAccount ownerAccount,
+            CancellationToken ct = default)
+        {
+            LastQueriedAccount = ownerAccount;
+            return Task.FromResult(_limit);
+        }
     }
 
     private static RequestListingExtensionCommandHandler RequestExtensionHandler(

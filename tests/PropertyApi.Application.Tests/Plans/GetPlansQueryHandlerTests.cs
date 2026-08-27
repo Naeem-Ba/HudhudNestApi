@@ -20,6 +20,7 @@ public sealed class GetPlansQueryHandlerTests
             ctaKey: "PRICING.FREE.CTA",
             isRecommended: false,
             displayOrder: 1,
+            listingLimit: 1,
             noteKey: "PRICING.FREE.NOTE");
 
         var elite = Plan.Create(
@@ -31,7 +32,8 @@ public sealed class GetPlansQueryHandlerTests
             featureKeys: new[] { "PRICING.ELITE.F1" },
             ctaKey: "PRICING.ELITE.CTA",
             isRecommended: false,
-            displayOrder: 4);
+            displayOrder: 4,
+            listingLimit: null);
 
         var plans = new Mock<IPlanRepository>();
         plans
@@ -50,10 +52,15 @@ public sealed class GetPlansQueryHandlerTests
         Assert.Equal(0m, freeDto.PriceUsd);
         Assert.Equal(new[] { "PRICING.FREE.F1", "PRICING.FREE.F2" }, freeDto.FeatureKeys);
         Assert.Equal("PRICING.FREE.NOTE", freeDto.NoteKey);
+        Assert.Equal(1, freeDto.ListingLimit);
 
         var eliteDto = result.Single(p => p.Tier == "elite");
         Assert.Equal("contact", eliteDto.PriceKind);
         Assert.Null(eliteDto.PriceUsd);
         Assert.Null(eliteDto.NoteKey);
+
+        // /pricing must not invent its own "unlimited" display value — it reflects exactly
+        // what the backend enforces (BACKEND-ISSUES.md §B-3, §14 pricing consistency).
+        Assert.Null(eliteDto.ListingLimit);
     }
 }

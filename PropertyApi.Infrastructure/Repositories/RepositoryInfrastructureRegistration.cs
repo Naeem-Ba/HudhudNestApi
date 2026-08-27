@@ -31,13 +31,10 @@ internal static class RepositoryInfrastructureRegistration
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddOptions<ListingQuotaOptions>()
-            .Bind(configuration.GetSection(ListingQuotaOptions.SectionName))
-            .Validate(
-                options => options.AgencyActiveListingLimit > 0,
-                "Listings:Quota:AgencyActiveListingLimit must be greater than zero.")
-            .ValidateOnStart();
-        services.AddSingleton<IListingQuotaPolicy, ListingQuotaPolicy>();
+        // Plan-driven (BACKEND-ISSUES.md §B-3) — depends on the scoped IPlanRepository and
+        // IAgencyRepository below, so this must be Scoped too, not Singleton (a singleton
+        // capturing a scoped dependency is a DI captive-dependency bug).
+        services.AddScoped<IListingQuotaPolicy, ListingQuotaPolicy>();
 
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<INotificationService, NotificationService>();
