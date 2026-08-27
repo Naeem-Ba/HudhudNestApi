@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.EntityFrameworkCore;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Domain.Common.Exceptions;
@@ -46,7 +47,7 @@ public sealed class ExceptionHandlingMiddleware
         }
         catch (ValidationException ex)
         {
-            // 422 � fluentvalidation errors from ValidationBehavior
+            // 422 — fluentvalidation errors from ValidationBehavior
             _logger.LogWarning("Validation errors: {@Errors}", ex.Errors);
 
             await WriteJson(context, StatusCodes.Status422UnprocessableEntity, new
@@ -143,6 +144,31 @@ public sealed class ExceptionHandlingMiddleware
                     "أعد تحميل البيانات وحاول مرة أخرى."
             });
         }
+        catch (AntiforgeryValidationException ex)
+        {
+            // RELEASE-BLOCKERS-AR.md B-18: CookieCsrfProtectionMiddleware's
+            // IAntiforgery.ValidateRequestAsync throws this for a missing/invalid/mismatched
+            // X-XSRF-TOKEN. Left uncaught it fell through to the generic Exception handler
+            // below as an unexplained 500 -- the request was correctly blocked either way
+            // (this middleware runs, and throws, before the controller action ever executes),
+            // but the caller had no way to tell "you forgot the CSRF token" from "the server
+            // is broken". 403, not 401: the caller may well be authenticated (the refresh
+            // cookie can be valid); what is missing is proof the request came from a page
+            // that fetched a token, which is an authorization concern, not identity.
+            _logger.LogWarning(
+                "CSRF validation failed for {Method} {Path}: {Message}",
+                context.Request.Method,
+                context.Request.Path,
+                ex.Message);
+
+            await WriteJson(context, StatusCodes.Status403Forbidden, new
+            {
+                title = "Forbidden",
+                status = StatusCodes.Status403Forbidden,
+                message = "طلب غير آمن: رمز CSRF مفقود أو غير صالح. أعد تحميل الصفحة وحاول مرة أخرى.",
+                code = "CSRF_VALIDATION_FAILED"
+            });
+        }
         catch (ForbiddenException ex)
         {
             _logger.LogWarning(
@@ -163,7 +189,7 @@ public sealed class ExceptionHandlingMiddleware
         }
         catch (DomainException ex)
         {
-            // 400 � business rule violation from Domain layer
+            // 400 — business rule violation from Domain layer
             _logger.LogWarning("Domain error: {Message}", ex.Message);
 
             await WriteJson(context, StatusCodes.Status400BadRequest, new
@@ -175,7 +201,7 @@ public sealed class ExceptionHandlingMiddleware
         }
         catch (UnauthorizedAccessException ex)
         {
-            // 403 � ownership check failed in handler
+            // 403 — ownership check failed in handler
             _logger.LogWarning(
                 "Unauthorized access: {Message}",
                 ex.Message);

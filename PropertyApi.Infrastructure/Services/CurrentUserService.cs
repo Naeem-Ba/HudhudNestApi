@@ -6,7 +6,7 @@ namespace PropertyApi.Infrastructure.Services;
 
 /// <summary>
 /// Reads current user identity from IHttpContextAccessor.
-/// Lives in Infrastructure — the Application layer only sees ICurrentUserService.
+/// Lives in Infrastructure â€” the Application layer only sees ICurrentUserService.
 ///
 /// NEW FILE: Didn't exist. Required by handlers that need the caller's identity.
 ///

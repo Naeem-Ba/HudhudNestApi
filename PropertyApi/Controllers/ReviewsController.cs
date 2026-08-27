@@ -21,6 +21,7 @@ public sealed class ReviewsController : ControllerBase
 
     [HttpGet("property/{propertyId:guid}")]
     [AllowAnonymous]
+    [EnableRateLimiting("public-read")]
     [ProducesResponseType(typeof(PropertyReviewSummaryDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPropertyReviews(
         Guid propertyId,

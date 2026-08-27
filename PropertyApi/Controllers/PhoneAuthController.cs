@@ -14,14 +14,16 @@ using PropertyApi.Domain.Enums;
 namespace PropertyApi.Controllers;
 
 /// <summary>
-/// ???????? ??? ??? ?????? ?????? ?????? ??????????
+/// المصادقة عبر رقم الهاتف وإدارة البريد الإلكتروني
 ///
-/// ???? ??????? (Endpoints):
-/// -------------------------
-/// POST /api/auth/phone/send-otp     ? ????? ??? ?????? ??????
-/// POST /api/auth/phone/verify       ? ?????? ?? ????? (????? ?? ????)
-/// POST /api/auth/email/add          ? ????? ???? ???????? ??????
-/// POST /api/auth/email/verify       ? ????? ?????? ??????????
+/// نقاط النهاية الحالية (Endpoints):
+/// ──────────────────────────────────
+/// POST /api/auth/email/add                 → إضافة بريد إلكتروني للحساب
+/// POST /api/auth/email/verify              → تفعيل البريد الإلكتروني
+/// POST /api/auth/email/resend-confirmation → إعادة إرسال رابط التأكيد
+///
+/// POST /api/auth/phone/send-otp و POST /api/auth/phone/verify أصبحتا 410 Gone؛
+/// التسجيل/الدخول عبر الهاتف الآن من PhonePasswordAuthController.
 /// </summary>
 [ApiController]
 [Route("api/auth")]
@@ -54,6 +56,7 @@ public sealed class PhoneAuthController : ControllerBase
     [HttpPost("phone/send-otp")]
     [HttpPost("phone/verify")]
     [AllowAnonymous]
+    [EnableRateLimiting("public-read")]
     [ApiExplorerSettings(IgnoreApi = true)]
     [ProducesResponseType(StatusCodes.Status410Gone)]
     public IActionResult LegacyPhoneOtpFlowRemoved()
@@ -66,11 +69,11 @@ public sealed class PhoneAuthController : ControllerBase
     // ----------------------------------------------------------
     // POST /api/auth/email/add
     // ----------------------------------------------------------
-    /// <summary>????? ???? ???????? ?????? (?????????? ??????????? ???? ??????)</summary>
+    /// <summary>إضافة بريد إلكتروني للحساب (للمستخدمين المُسجَّلين برقم الهاتف)</summary>
     /// <remarks>
-    /// ????? ????? ?????? ????? (JWT Token ?? ??? Header).
+    /// يتطلب تسجيل الدخول أولاً (JWT Token في الـ Header).
     ///
-    /// **????:**
+    /// **مثال:**
     /// ```json
     /// POST /api/auth/email/add
     /// Authorization: Bearer eyJhbGci...
@@ -78,7 +81,7 @@ public sealed class PhoneAuthController : ControllerBase
     /// ```
     /// </remarks>
     [HttpPost("email/add")]
-    [Authorize] // ????? ????? ??????
+    [Authorize] // يتطلب تسجيل الدخول
     [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -86,7 +89,7 @@ public sealed class PhoneAuthController : ControllerBase
         [FromBody] AddEmailRequest request,
         CancellationToken ct)
     {
-        // ?????? ????? ???????? ?? ??? JWT Token
+        // نستخرج معرّف المستخدم من الـ JWT Token
         var userId = GetCurrentUserId();
         if (userId is null)
             return Unauthorized(new ErrorResponse("UNAUTHORIZED", "غير مصرّح."));
@@ -106,11 +109,11 @@ public sealed class PhoneAuthController : ControllerBase
     // ----------------------------------------------------------
     // POST /api/auth/email/verify
     // ----------------------------------------------------------
-    /// <summary>????? ?????? ?????????? ??? ??? ??????</summary>
+    /// <summary>تفعيل البريد الإلكتروني عبر رمز التحقق</summary>
     /// <remarks>
-    /// ??????? ??? ??? ???????? ??? ???? ?????? ?? ?????.
+    /// يُستدعى عند نقر المستخدم على رابط التحقق في بريده.
     ///
-    /// **????:**
+    /// **مثال:**
     /// ```json
     /// POST /api/auth/email/verify
     /// { "userId": "uuid...", "token": "CfDJ8..." }
@@ -118,6 +121,7 @@ public sealed class PhoneAuthController : ControllerBase
     /// </remarks>
     [HttpPost("email/verify")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth-password-reset")]
     [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> VerifyEmail(
@@ -166,7 +170,7 @@ public sealed class PhoneAuthController : ControllerBase
         return Ok(new MessageResponse(result.Message));
     }
 
-    // -- ???? ??????: ??????? ????? ???????? ?? ??? JWT --------
+    // ── دالة مساعدة: استخراج معرّف المستخدم من الـ JWT ────────
     private Guid? GetCurrentUserId()
     {
         var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -185,7 +189,7 @@ public sealed class PhoneAuthController : ControllerBase
 }
 
 // --------------------------------------------------------------
-// Request / Response Records (DTOs ??? HTTP layer)
+// Request / Response Records (DTOs للـ HTTP layer)
 // --------------------------------------------------------------
 
 // -- Requests --------------------------------------------------

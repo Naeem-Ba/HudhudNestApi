@@ -8,9 +8,9 @@ namespace PropertyApi.Domain.Common.Entities;
 
 /// <summary>
 /// Base class for ALL domain entities.
-/// Guid PK — safe for distributed systems, no sequential guessing.
-/// All timestamps in UTC — required for global multi-timezone support.
-/// Soft delete built-in — never lose data, support GDPR erasure requests.
+/// Guid PK â€” safe for distributed systems, no sequential guessing.
+/// All timestamps in UTC â€” required for global multi-timezone support.
+/// Soft delete built-in â€” never lose data, support GDPR erasure requests.
 /// </summary>
 public abstract class BaseEntity
 {
@@ -19,7 +19,7 @@ public abstract class BaseEntity
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-    // Soft Delete — never hard-delete records
+    // Soft Delete â€” never hard-delete records
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
 }

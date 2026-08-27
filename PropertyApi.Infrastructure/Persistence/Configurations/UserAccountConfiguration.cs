@@ -16,6 +16,22 @@ public sealed class UserAccountConfiguration
 
         builder.HasKey(x => x.Id);
 
+        // Optimistic concurrency (RELEASE-BLOCKERS-AR.md B-9b). Same xmin/IsRowVersion mapping
+        // as PropertyConfiguration -- see that file's comment for why xmin, not a dedicated
+        // column. UserAccount is one row updated from several independent handlers that do not
+        // coordinate with each other (UpdateUserCommandHandler, SelectPlanCommandHandler, the
+        // agency invitation accept/leave flow's JoinAgency/LeaveAgency, avatar upload). Without
+        // this, a stale read racing e.g. a concurrent agency-membership change on the same
+        // account silently overwrites whichever field it was carrying, because EF only emits
+        // an UPDATE for the columns the handler touched -- there was nothing to detect the
+        // race, only to avoid colliding on the same column. This does not apply to Identity's
+        // own row (security stamp, lockout, password hash): that is a separate table owned by
+        // ASP.NET Identity, not UserAccount.
+        builder.Property<uint>("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsRowVersion();
+
         builder.Property(x => x.FirstName)
             .HasMaxLength(100)
             .IsRequired();

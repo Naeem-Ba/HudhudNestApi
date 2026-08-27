@@ -16,6 +16,21 @@ public sealed class TransactionConfiguration : IEntityTypeConfiguration<Transact
         builder.ToTable("Transactions");
         builder.HasKey(t => t.Id);
 
+        // Optimistic concurrency (RELEASE-BLOCKERS-AR.md B-9b). Same xmin/IsRowVersion mapping
+        // as PropertyConfiguration. ConfirmFeaturedListingPaymentCommandHandler and
+        // ConfirmListingExtensionPaymentCommandHandler both read a fee's Status, check it is
+        // still Pending, then mark it Completed and grant the paid effect (featured placement /
+        // extension) -- a read-check-then-write with no locking in between. Two concurrent
+        // confirmations of the same fee (double-submit, two admins) previously could both pass
+        // the Pending check before either write landed, granting the paid effect twice for one
+        // payment. The second SaveChangesAsync now raises DbUpdateConcurrencyException instead
+        // (translated to 409 by ExceptionHandlingMiddleware), so only the first confirmation
+        // wins and the second is rejected rather than silently repeated.
+        builder.Property<uint>("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsRowVersion();
+
         builder.Property(t => t.Amount).HasColumnType("decimal(18,2)").IsRequired();
         builder.Property(t => t.AmountInUSD).HasColumnType("decimal(18,2)").IsRequired();
         builder.Property(t => t.ExchangeRateUsed).HasColumnType("decimal(18,6)").IsRequired();

@@ -7,7 +7,7 @@ namespace PropertyApi.Domain.Listings.Entities;
 
 /// <summary>
 /// Junction table for Property ? Amenity many-to-many relationship.
-/// Uses composite PK — no surrogate Id column.
+/// Uses composite PK â€” no surrogate Id column.
 /// </summary>
 public class PropertyAmenity
 {
