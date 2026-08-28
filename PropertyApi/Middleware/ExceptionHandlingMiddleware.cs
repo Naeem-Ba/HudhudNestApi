@@ -187,6 +187,22 @@ public sealed class ExceptionHandlingMiddleware
                 code = ex.Code
             });
         }
+        catch (InvalidStateTransitionException ex)
+        {
+            // 409 — an action was attempted while the entity is in a status that does not
+            // allow it (e.g. accepting a ServiceRequest twice). Caught before the generic
+            // DomainException clause below since C# picks the first matching catch and this
+            // is the more specific type — see InvalidStateTransitionException's remarks for
+            // why this is 409 rather than the 400 every other DomainException maps to.
+            _logger.LogInformation("Invalid state transition: {Message}", ex.Message);
+
+            await WriteJson(context, StatusCodes.Status409Conflict, new
+            {
+                title = "Conflict",
+                status = StatusCodes.Status409Conflict,
+                message = ex.Message
+            });
+        }
         catch (DomainException ex)
         {
             // 400 — business rule violation from Domain layer

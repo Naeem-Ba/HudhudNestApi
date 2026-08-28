@@ -86,6 +86,14 @@ public sealed class PublicEndpointPolicyTests
             // Public plan catalog for the /pricing marketing page — FRONTEND_BACKEND_CONTRACT.md §11.2.
             "PlansController.GetPlans",
 
+            // AqarTech Services Marketplace: the public marketplace browse surface — a visitor
+            // compares services/providers before signing up, same rationale as the property
+            // catalogue above.
+            "ServiceOfferingsController.GetCategories",
+            "ServiceOfferingsController.GetByCategory",
+            "ServiceOfferingsController.GetById",
+            "ServiceProvidersController.GetReviews",
+
             // Public contact form; abuse is bounded by the "contact" rate-limit policy.
             "ContactController.Submit",
 

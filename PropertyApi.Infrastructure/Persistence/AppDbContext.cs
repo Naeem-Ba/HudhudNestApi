@@ -18,6 +18,7 @@ using PropertyApi.Domain.Reviews.Entities;
 using PropertyApi.Domain.Lookups.Entities;
 using PropertyApi.Domain.Transactions.Entities;
 using PropertyApi.Domain.Search.Entities;
+using PropertyApi.Domain.Services.Entities;
 using PropertyApi.Infrastructure.Identity.Entities;
 using PropertyApi.Infrastructure.Security.DataProtection;
 
@@ -82,6 +83,14 @@ public sealed class AppDbContext
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
+    // AqarTech Services Marketplace
+    public DbSet<ServiceProvider> ServiceProviders => Set<ServiceProvider>();
+    public DbSet<ServiceOffering> ServiceOfferings => Set<ServiceOffering>();
+    public DbSet<ServiceRequest> ServiceRequests => Set<ServiceRequest>();
+    public DbSet<ServiceRequestStatusHistory> ServiceRequestStatusHistories => Set<ServiceRequestStatusHistory>();
+    public DbSet<ServiceReviewDocument> ServiceReviewDocuments => Set<ServiceReviewDocument>();
+    public DbSet<ServiceReview> ServiceReviews => Set<ServiceReview>();
+
     // -- Model Configuration -------------------------------------
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -124,6 +133,14 @@ public sealed class AppDbContext
         builder.Entity<RefreshToken>().HasQueryFilter(refreshToken => !refreshToken.User.IsDeleted);
 
         builder.Entity<DataProtectionKey>().ToTable("DataProtectionKeys");
+
+        // AqarTech Services Marketplace
+        builder.Entity<ServiceProvider>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<ServiceOffering>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<ServiceRequest>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<ServiceRequestStatusHistory>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<ServiceReviewDocument>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<ServiceReview>().HasQueryFilter(e => !e.IsDeleted);
     }
 
 
