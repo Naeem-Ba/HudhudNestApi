@@ -24,7 +24,9 @@ internal static class RedisRateLimitingDefaults
             // public-search/agencies-public.
             ["public-read"] = Policy(120, TimeSpan.FromMinutes(1)),
             ["visits"] = Policy(10, TimeSpan.FromHours(1)),
-            ["reviews"] = Policy(5, TimeSpan.FromHours(24))
+            ["reviews"] = Policy(5, TimeSpan.FromHours(24)),
+            ["service-requests"] = Policy(10, TimeSpan.FromHours(1)),
+            ["service-request-documents"] = Policy(20, TimeSpan.FromHours(1))
         };
 
     private static RedisFixedWindowRateLimitPolicyOptions Policy(

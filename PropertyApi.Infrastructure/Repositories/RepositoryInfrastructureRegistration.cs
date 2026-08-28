@@ -13,6 +13,7 @@ using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Application.Plans.Interfaces;
 using PropertyApi.Application.Reviews.Interfaces;
 using PropertyApi.Application.Search.Interfaces;
+using PropertyApi.Application.Services.Interfaces;
 using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Application.Users.Messaging.Interfaces;
 using PropertyApi.Infrastructure.Admin;
@@ -22,6 +23,7 @@ using PropertyApi.Infrastructure.Listings;
 using PropertyApi.Infrastructure.Notifications;
 using PropertyApi.Infrastructure.Reviews;
 using PropertyApi.Infrastructure.Search;
+using PropertyApi.Infrastructure.Services;
 
 namespace PropertyApi.Infrastructure.Repositories;
 
@@ -61,6 +63,15 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IUserAccountRepository, UserAccountRepository>();
         services.AddScoped<IMessageRepository, MessageRepository>();
         services.AddScoped<IPlanRepository, PlanRepository>();
+
+        // AqarTech Services Marketplace
+        services.AddScoped<IServiceProviderRepository, ServiceProviderRepository>();
+        services.AddScoped<IServiceOfferingRepository, ServiceOfferingRepository>();
+        services.AddScoped<IServiceRequestRepository, ServiceRequestRepository>();
+        services.AddScoped<IServiceRequestStatusHistoryRepository, ServiceRequestStatusHistoryRepository>();
+        services.AddScoped<IServiceReviewRepository, ServiceReviewRepository>();
+        services.AddScoped<IServiceReviewDocumentRepository, ServiceReviewDocumentRepository>();
+        services.AddScoped<IServiceRequestNumberGenerator, ServiceRequestNumberGenerator>();
 
         return services;
     }
