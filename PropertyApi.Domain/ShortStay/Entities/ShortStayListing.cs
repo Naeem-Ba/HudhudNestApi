@@ -195,6 +195,22 @@ public sealed class ShortStayListing : AuditableEntity
         DepositPercentage = depositPercentage;
     }
 
+    /// <summary>
+    /// Replaces the full amenity set in one call (not additive) — mirrors how the host-facing
+    /// form actually works (a checklist submitted as a whole), and avoids ever accumulating
+    /// duplicate rows for the same AmenityId. Does not validate that each id refers to a real,
+    /// active Amenity — the FK constraint on ShortStayListingAmenities.AmenityId is the backstop
+    /// (same trust level CreatePropertyCommandHandler already applies to PropertyAmenities).
+    /// </summary>
+    public void SetAmenities(IReadOnlyCollection<Guid> amenityIds)
+    {
+        ListingAmenities.Clear();
+        foreach (var amenityId in amenityIds.Distinct())
+        {
+            ListingAmenities.Add(new ShortStayListingAmenity { ShortStayListingId = Id, AmenityId = amenityId });
+        }
+    }
+
     /// <summary>Builds the immutable snapshot text stored on a Booking at creation time.</summary>
     public string BuildHouseRulesSnapshotText()
     {

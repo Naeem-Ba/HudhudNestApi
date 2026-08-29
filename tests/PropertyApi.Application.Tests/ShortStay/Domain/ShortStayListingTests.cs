@@ -79,4 +79,23 @@ public sealed class ShortStayListingTests
         Assert.Contains("22:00", snapshot);
         Assert.Contains("الرجاء خلع الأحذية عند الدخول", snapshot);
     }
+
+    [Fact]
+    public void SetAmenities_ReplacesEntireSet_WithoutDuplicates()
+    {
+        var listing = CreateListing();
+        var wifi = Guid.NewGuid();
+        var pool = Guid.NewGuid();
+
+        listing.SetAmenities([wifi, wifi, pool]);
+        Assert.Equal(2, listing.ListingAmenities.Count);
+        Assert.Contains(listing.ListingAmenities, a => a.AmenityId == wifi);
+        Assert.Contains(listing.ListingAmenities, a => a.AmenityId == pool);
+
+        var parking = Guid.NewGuid();
+        listing.SetAmenities([parking]);
+
+        Assert.Single(listing.ListingAmenities);
+        Assert.Equal(parking, listing.ListingAmenities.Single().AmenityId);
+    }
 }

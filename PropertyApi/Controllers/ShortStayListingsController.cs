@@ -10,6 +10,7 @@ using PropertyApi.Application.ShortStay.Commands.DeleteShortStayListing;
 using PropertyApi.Application.ShortStay.Commands.PublishShortStayListing;
 using PropertyApi.Application.ShortStay.Commands.SetMinimumStayRules;
 using PropertyApi.Application.ShortStay.Commands.SetPricingRules;
+using PropertyApi.Application.ShortStay.Commands.SetShortStayListingAmenities;
 using PropertyApi.Application.ShortStay.Commands.UpdateShortStayListing;
 using PropertyApi.Application.ShortStay.DTOs;
 using PropertyApi.Application.ShortStay.Queries.GetMyShortStayListings;
@@ -142,6 +143,15 @@ public sealed class ShortStayListingsController : ControllerBase
     public async Task<IActionResult> Unpublish(Guid id, CancellationToken ct)
     {
         await _mediator.Send(new UnpublishShortStayListingCommand(id, GetUserId()), ct);
+        return NoContent();
+    }
+
+    [HttpPut("{id:guid}/amenities")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> SetAmenities(Guid id, [FromBody] IReadOnlyList<Guid> amenityIds, CancellationToken ct)
+    {
+        await _mediator.Send(new SetShortStayListingAmenitiesCommand(id, GetUserId(), amenityIds), ct);
         return NoContent();
     }
 
