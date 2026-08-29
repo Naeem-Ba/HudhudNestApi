@@ -25,7 +25,7 @@ public sealed class CsrfController : ControllerBase
     [HttpGet("csrf-token")]
     [AllowAnonymous]
     [EnableRateLimiting("public-read")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult GetCsrfToken([FromServices] IAntiforgery antiforgery)
     {
         var tokens = antiforgery.GetAndStoreTokens(HttpContext);
@@ -48,6 +48,14 @@ public sealed class CsrfController : ControllerBase
                 Secure = Request.IsHttps
             });
 
-        return NoContent();
+        // RELEASE-BLOCKERS-AR.md B-20: the XSRF-TOKEN cookie above is host-only and, in
+        // deployed environments, the SPA and this API sit on hostnames that share no
+        // registrable domain (e.g. realestateworld.world vs. onrender.com) -- so
+        // document.cookie on the SPA's origin can never see it there, no matter what Domain
+        // is (or isn't) set on the cookie. Returning the same request token in the response
+        // body lets the client read it directly instead of depending on cross-site cookie
+        // visibility, while the cookie itself is kept for any consumer that can rely on it
+        // (e.g. same-host local development).
+        return Ok(new { csrfToken = tokens.RequestToken });
     }
 }
