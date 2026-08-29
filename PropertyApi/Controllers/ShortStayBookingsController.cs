@@ -15,6 +15,7 @@ using PropertyApi.Application.ShortStay.Commands.RejectBooking;
 using PropertyApi.Application.ShortStay.DTOs;
 using PropertyApi.Application.ShortStay.Queries.GetHostBookingRequests;
 using PropertyApi.Application.ShortStay.Queries.GetMyShortStayBookings;
+using PropertyApi.Application.ShortStay.Queries.GetPricingPreview;
 using PropertyApi.Application.ShortStay.Queries.GetUnitAvailability;
 
 namespace PropertyApi.Controllers;
@@ -51,6 +52,19 @@ public sealed class ShortStayBookingsController : ControllerBase
         Guid unitId, [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
     {
         var result = await _mediator.Send(new GetUnitAvailabilityQuery(unitId, from, to), ct);
+        return Ok(result);
+    }
+
+    [HttpGet("pricing-preview")]
+    [AllowAnonymous]
+    [EnableRateLimiting("shortstay-search")]
+    [ProducesResponseType(typeof(PricingBreakdownDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPricingPreview(
+        [FromQuery] Guid unitId, [FromQuery] DateOnly checkIn, [FromQuery] DateOnly checkOut,
+        [FromQuery] int adults, [FromQuery] int children, [FromQuery] int infants, CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new GetPricingPreviewQuery(unitId, checkIn, checkOut, adults, children, infants), ct);
         return Ok(result);
     }
 
