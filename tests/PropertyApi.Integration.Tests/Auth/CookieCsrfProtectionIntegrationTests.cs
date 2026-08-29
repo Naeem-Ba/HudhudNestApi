@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using PropertyApi.Integration.Tests.TestInfrastructure;
 using Xunit;
@@ -44,14 +45,23 @@ public sealed class CookieCsrfProtectionIntegrationTests : IAsyncLifetime
         return Task.CompletedTask;
     }
 
-    [Fact(DisplayName = "GET csrf-token is reachable without any cookie and returns a usable XSRF-TOKEN cookie")]
+    [Fact(DisplayName = "GET csrf-token is reachable without any cookie and returns a usable XSRF-TOKEN cookie and body token")]
     public async Task GetCsrfToken_Succeeds_AndSetsXsrfCookie()
     {
         using var response = await _client.GetAsync("/api/security/csrf-token");
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var xsrfCookie = ExtractCookie(response, "XSRF-TOKEN");
         Assert.False(string.IsNullOrEmpty(xsrfCookie), "Expected a non-empty XSRF-TOKEN cookie in the response.");
+
+        // RELEASE-BLOCKERS-AR.md B-20: the SPA and this API can sit on hostnames that share no
+        // registrable domain in deployed environments, so document.cookie can never see the
+        // cookie above there -- the body must also carry the same request token so the client
+        // can read it directly instead of depending on cross-site cookie visibility.
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var bodyToken = body.RootElement.GetProperty("csrfToken").GetString();
+        Assert.False(string.IsNullOrEmpty(bodyToken));
+        Assert.Equal(xsrfCookie, bodyToken);
     }
 
     [Fact(DisplayName = "POST refresh with no refresh_token cookie is not blocked by CSRF (nothing ambient to protect)")]
@@ -119,7 +129,7 @@ public sealed class CookieCsrfProtectionIntegrationTests : IAsyncLifetime
         using var tokenRequest = new HttpRequestMessage(HttpMethod.Get, "/api/security/csrf-token");
         tokenRequest.Headers.Add("Cookie", "refresh_token=not-a-real-token");
         using var tokenResponse = await _client.SendAsync(tokenRequest);
-        Assert.Equal(HttpStatusCode.NoContent, tokenResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, tokenResponse.StatusCode);
 
         var xsrfCookieValue = ExtractCookie(tokenResponse, "XSRF-TOKEN");
         Assert.False(string.IsNullOrEmpty(xsrfCookieValue));
