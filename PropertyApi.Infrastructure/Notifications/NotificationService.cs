@@ -289,6 +289,45 @@ public sealed class NotificationService : INotificationService
             accepted);
     }
 
+    public async Task NotifyShortStayBookingUpdateAsync(
+        Guid recipientId,
+        Guid bookingId,
+        string listingTitle,
+        NotificationType type,
+        string detail,
+        CancellationToken ct = default)
+    {
+        if (recipientId == Guid.Empty)
+        {
+            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
+
+        if (bookingId == Guid.Empty)
+        {
+            throw new ArgumentException("Booking id is required.", nameof(bookingId));
+        }
+
+        var notification = new Notification
+        {
+            RecipientId = recipientId,
+            Type = type,
+            Message = detail,
+            // Deliberately RelatedEntityId, not PropertyId — a ShortStayListing is its own
+            // aggregate and is not necessarily backed by a Property row.
+            RelatedEntityId = bookingId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await PersistAndPushAsync(notification, ct);
+
+        _logger.LogInformation(
+            "Short-stay booking notification created. RecipientId={RecipientId}, BookingId={BookingId}, Type={Type}",
+            recipientId,
+            bookingId,
+            type);
+    }
+
     public async Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(
         Guid userId,
         int page,

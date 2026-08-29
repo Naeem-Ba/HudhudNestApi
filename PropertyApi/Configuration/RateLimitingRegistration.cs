@@ -173,6 +173,31 @@ public static class RateLimitingRegistration
                         QueueLimit = 0
                     }));
 
+            // Short-Stay Accommodation — same cadence as "visits", the closest existing
+            // equivalent (one user-initiated request-creation flow against a limited resource).
+            options.AddPolicy("shortstay-booking", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 10,
+                        Window = TimeSpan.FromHours(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
+            // Same cadence as "public-search" — anonymous, read-only listing search.
+            options.AddPolicy("shortstay-search", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 120,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
             // AqarTech Services Marketplace — same cadence as "visits", the closest existing
             // equivalent (one user-initiated request-creation flow against a limited resource).
             options.AddPolicy("service-requests", httpContext =>
