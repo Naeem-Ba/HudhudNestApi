@@ -106,31 +106,3 @@ public static class UserBuilder
 
     public static ApplicationUser Deleted() => Valid(isDeleted: true);
 }
-
-public static class OtpCodeBuilder
-{
-    public static OtpCode Valid(
-        string phone = "+963911234567",
-        string hash = "validHash==",
-        OtpPurpose purpose = OtpPurpose.PhoneRegistration) =>
-        OtpCode.Create(phone, hash, purpose, expiryMinutes: 5);
-
-    public static OtpCode Expired(string phone = "+963911234567") =>
-        OtpCode.Create(phone, "expiredHash==", OtpPurpose.PhoneRegistration, expiryMinutes: -1);
-
-    public static OtpCode Exhausted(string phone = "+963911234567")
-    {
-        var code = OtpCode.Create(phone, "exhaustedHash==", OtpPurpose.PhoneRegistration, expiryMinutes: 5);
-        code.IncrementAttempts();
-        code.IncrementAttempts();
-        code.IncrementAttempts();
-        return code;
-    }
-
-    public static OtpCode Used(string phone = "+963911234567")
-    {
-        var code = OtpCode.Create(phone, "usedHash==", OtpPurpose.PhoneRegistration, expiryMinutes: 5);
-        code.MarkAsUsed();
-        return code;
-    }
-}

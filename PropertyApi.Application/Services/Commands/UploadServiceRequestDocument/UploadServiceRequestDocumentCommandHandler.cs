@@ -16,7 +16,7 @@ namespace PropertyApi.Application.Services.Commands.UploadServiceRequestDocument
 /// still-narrow vertical.
 /// </summary>
 public sealed class UploadServiceRequestDocumentCommandHandler
-    : IRequestHandler<UploadServiceRequestDocumentCommand, ServiceReviewDocumentDto>
+    : IRequestHandler<UploadServiceRequestDocumentCommand, ServiceRequestDocumentDto>
 {
     private const long MaxFileSize = 5_000_000;
     private const string DocumentFolder = "service-request-documents";
@@ -29,14 +29,14 @@ public sealed class UploadServiceRequestDocumentCommandHandler
 
     private readonly IServiceRequestRepository _requests;
     private readonly IServiceProviderRepository _providers;
-    private readonly IServiceReviewDocumentRepository _documents;
+    private readonly IServiceRequestDocumentRepository _documents;
     private readonly IMediaStorageService _storage;
     private readonly IUnitOfWork _uow;
 
     public UploadServiceRequestDocumentCommandHandler(
         IServiceRequestRepository requests,
         IServiceProviderRepository providers,
-        IServiceReviewDocumentRepository documents,
+        IServiceRequestDocumentRepository documents,
         IMediaStorageService storage,
         IUnitOfWork uow)
     {
@@ -47,7 +47,7 @@ public sealed class UploadServiceRequestDocumentCommandHandler
         _uow = uow;
     }
 
-    public async Task<ServiceReviewDocumentDto> Handle(
+    public async Task<ServiceRequestDocumentDto> Handle(
         UploadServiceRequestDocumentCommand request, CancellationToken ct)
     {
         var serviceRequest = await _requests.GetByIdAsync(request.ServiceRequestId, ct)
@@ -86,7 +86,7 @@ public sealed class UploadServiceRequestDocumentCommandHandler
         if (!uploadResult.Succeeded)
             throw new ConflictException(uploadResult.ErrorMessage ?? "فشل رفع الملف.");
 
-        var document = ServiceReviewDocument.Create(
+        var document = ServiceRequestDocument.Create(
             serviceRequest.Id,
             uploadResult.Url!,
             uploadResult.PublicId,

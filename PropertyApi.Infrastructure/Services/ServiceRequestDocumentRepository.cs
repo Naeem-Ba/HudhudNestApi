@@ -5,17 +5,17 @@ using PropertyApi.Infrastructure.Persistence;
 
 namespace PropertyApi.Infrastructure.Services;
 
-public sealed class ServiceReviewDocumentRepository : IServiceReviewDocumentRepository
+public sealed class ServiceRequestDocumentRepository : IServiceRequestDocumentRepository
 {
     private readonly AppDbContext _db;
-    public ServiceReviewDocumentRepository(AppDbContext db) => _db = db;
+    public ServiceRequestDocumentRepository(AppDbContext db) => _db = db;
 
-    public async Task AddAsync(ServiceReviewDocument document, CancellationToken ct = default)
-        => await _db.ServiceReviewDocuments.AddAsync(document, ct);
+    public async Task AddAsync(ServiceRequestDocument document, CancellationToken ct = default)
+        => await _db.ServiceRequestDocuments.AddAsync(document, ct);
 
-    public async Task<IReadOnlyList<ServiceReviewDocument>> GetByServiceRequestIdAsync(
+    public async Task<IReadOnlyList<ServiceRequestDocument>> GetByServiceRequestIdAsync(
         Guid serviceRequestId, CancellationToken ct = default)
-        => await _db.ServiceReviewDocuments
+        => await _db.ServiceRequestDocuments
             .Where(d => d.ServiceRequestId == serviceRequestId)
             .OrderBy(d => d.CreatedAt)
             .ToListAsync(ct);

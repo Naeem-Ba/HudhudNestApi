@@ -1,21 +1,15 @@
 using System.Reflection;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
-using PropertyApi.Application.Auth.Interfaces;
 
 using AuthRegisterCommand =
     PropertyApi.Application.Auth.Commands.Register.RegisterCommand;
-using VerifyPhoneOtpCommandType =
-    PropertyApi.Application.Auth.Commands.VerifyPhoneOtp.VerifyPhoneOtpCommand;
 
 
 namespace PropertyApi.Integration.Tests.Auth;
 
 internal static class AuthTestReflection
 {
-    private static readonly Assembly ApplicationAssembly =
-        typeof(IRegisterIdentityService).Assembly;
-
     /// <summary>
     /// Creates the exact Auth registration command.
     ///
@@ -41,37 +35,6 @@ internal static class AuthTestReflection
             LastName: lastName,
             Email: email,
             Password: password);
-    }
-
-    public static object SendOtpCommand(
-        string phoneNumber)
-        => CreateCommand(
-            new[]
-            {
-                "SendOtpCommand",
-                "SendPhoneOtpCommand",
-                "RequestPhoneOtpCommand"
-            },
-            new Dictionary<string, object?>(
-                StringComparer.OrdinalIgnoreCase)
-            {
-                ["PhoneNumber"] = phoneNumber,
-                ["Phone"] = phoneNumber
-            });
-
-    public static object VerifyOtpCommand(
-        string phoneNumber,
-        string code,
-        string firstName = "Phone",
-        string lastName = "User",
-        string? ipAddress = "127.0.0.1")
-    {
-        return new VerifyPhoneOtpCommandType(
-            PhoneNumber: phoneNumber,
-            Code: code,
-            FirstName: firstName,
-            LastName: lastName,
-            IpAddress: ipAddress);
     }
 
     public static async Task<object?> SendAsync(
@@ -194,29 +157,6 @@ internal static class AuthTestReflection
 
         throw new InvalidOperationException(
             $"Could not construct '{type.FullName}'.");
-    }
-
-    private static object CreateCommand(
-        IReadOnlyCollection<string> candidateNames,
-        IReadOnlyDictionary<string, object?> values)
-    {
-        var type = ApplicationAssembly
-            .GetTypes()
-            .FirstOrDefault(type =>
-                candidateNames.Contains(
-                    type.Name,
-                    StringComparer.OrdinalIgnoreCase) &&
-                !type.IsAbstract &&
-                !type.IsInterface);
-
-        if (type is null)
-        {
-            throw new InvalidOperationException(
-                "None of these command types were found: " +
-                $"{string.Join(", ", candidateNames)}.");
-        }
-
-        return Create(type, values);
     }
 
     private static void ApplyWritableProperties(

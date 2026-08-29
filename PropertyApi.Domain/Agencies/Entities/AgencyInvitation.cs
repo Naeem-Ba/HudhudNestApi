@@ -14,7 +14,7 @@ namespace PropertyApi.Domain.Agencies.Entities;
 /// Accepted/Declined/Expired are all terminal.
 ///
 /// Expiration is computed (<see cref="IsExpired"/>), not swept by a background job — the
-/// same choice OtpCode makes. <see cref="MarkExpiredIfDue"/> persists that computed fact
+/// same choice PhoneOtpChallenge makes. <see cref="MarkExpiredIfDue"/> persists that computed fact
 /// the next time the row is touched (an accept attempt, or a new invite for the same
 /// agency+user), which is also what lets an owner re-invite once a stale invitation's
 /// window has passed without needing a cleanup job to run first.

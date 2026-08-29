@@ -5,7 +5,10 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using PropertyApi.Domain.Bookings.Entities;
+using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Transactions.Entities;
+using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Infrastructure.Persistence.Configurations;
 
@@ -45,6 +48,33 @@ public sealed class TransactionConfiguration : IEntityTypeConfiguration<Transact
 
         builder.Property(t => t.ReferenceNumber).HasMaxLength(100);
         builder.Property(t => t.Notes).HasMaxLength(1000);
+
+        // Referential integrity for the financial ledger -- this is exactly the table where
+        // "no DB-enforced integrity" is least acceptable. Restrict on all three required
+        // parties: a financial record must outlive the property/accounts it references, so
+        // deleting either side is blocked rather than silently orphaning the record.
+        builder.HasOne<Property>()
+            .WithMany()
+            .HasForeignKey(t => t.PropertyId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<UserAccount>()
+            .WithMany()
+            .HasForeignKey(t => t.PayerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<UserAccount>()
+            .WithMany()
+            .HasForeignKey(t => t.ReceiverId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Nullable and, today, never populated in production (see audit) -- best-effort link
+        // to the booking that produced this fee/payment. SetNull: a transaction record must
+        // never disappear just because the booking it referenced was removed.
+        builder.HasOne<VisitRequest>()
+            .WithMany()
+            .HasForeignKey(t => t.BookingId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // Most frequently used indexes
         builder.HasIndex(t => t.PropertyId);

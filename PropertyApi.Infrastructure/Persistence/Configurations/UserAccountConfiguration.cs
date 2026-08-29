@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using PropertyApi.Domain.Agencies.Entities;
 using PropertyApi.Domain.Plans.Entities;
 using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Infrastructure.Identity.Entities;
 
 namespace PropertyApi.Infrastructure.Persistence.Configurations;
 
@@ -15,6 +16,16 @@ public sealed class UserAccountConfiguration
         builder.ToTable("UserAccounts");
 
         builder.HasKey(x => x.Id);
+
+        // Shared-PK 1:1 with the Identity user (Users.Id) -- UserAccount.Id is always set to
+        // the owning ApplicationUser's id by whoever creates the account (see
+        // ApplicationUser/UserAccount doc comments for why auth and profile are split tables).
+        // Restrict, not Cascade: the pairing must never silently break by deleting one side out
+        // from under the other -- the app deletes/creates both together explicitly.
+        builder.HasOne<ApplicationUser>()
+            .WithOne()
+            .HasForeignKey<UserAccount>(x => x.Id)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // Optimistic concurrency (RELEASE-BLOCKERS-AR.md B-9b). Same xmin/IsRowVersion mapping
         // as PropertyConfiguration -- see that file's comment for why xmin, not a dedicated

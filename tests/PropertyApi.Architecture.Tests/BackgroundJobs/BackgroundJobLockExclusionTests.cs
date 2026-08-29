@@ -2,9 +2,9 @@ namespace PropertyApi.Architecture.Tests.BackgroundJobs;
 
 /// <summary>
 /// Guards the B-6/B-6b decision that <c>SecurityAlertBackgroundService</c> deliberately does
-/// not take a <c>BackgroundJobLock</c> advisory lock, unlike the four other recurring hosted
+/// not take a <c>BackgroundJobLock</c> advisory lock, unlike the other recurring hosted
 /// services (<c>ListingExpiryHostedService</c>, <c>SavedSearchMatchHostedService</c>,
-/// <c>PhoneVerificationHostedService</c>, <c>OtpCleanupHostedService</c>).
+/// <c>PhoneVerificationHostedService</c>).
 ///
 /// The reasoning (see <c>BackgroundJobLockKeys.cs</c>): the other four sweep rows that every
 /// deployed instance can see and mutate, so an unlocked sweep double-processes the same rows.
@@ -51,7 +51,6 @@ public sealed class BackgroundJobLockExclusionTests
     [InlineData("Listings", "ListingExpiryHostedService.cs")]
     [InlineData("Search", "SavedSearchMatchHostedService.cs")]
     [InlineData("Auth\\Services", "PhoneVerificationHostedService.cs")]
-    [InlineData("Auth\\Services", "OtpCleanupHostedService.cs")]
     public void HostedService_Should_Reference_BackgroundJobLock(string relativeDir, string fileName)
     {
         var source = ReadSource(

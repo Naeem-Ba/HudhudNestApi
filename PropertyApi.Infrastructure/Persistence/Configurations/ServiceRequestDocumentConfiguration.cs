@@ -4,11 +4,11 @@ using PropertyApi.Domain.Services.Entities;
 
 namespace PropertyApi.Infrastructure.Persistence.Configurations;
 
-public sealed class ServiceReviewDocumentConfiguration : IEntityTypeConfiguration<ServiceReviewDocument>
+public sealed class ServiceRequestDocumentConfiguration : IEntityTypeConfiguration<ServiceRequestDocument>
 {
-    public void Configure(EntityTypeBuilder<ServiceReviewDocument> builder)
+    public void Configure(EntityTypeBuilder<ServiceRequestDocument> builder)
     {
-        builder.ToTable("ServiceReviewDocuments");
+        builder.ToTable("ServiceRequestDocuments");
         builder.HasKey(d => d.Id);
 
         builder.Property(d => d.FileUrl).IsRequired().HasMaxLength(2048);

@@ -10,4 +10,4 @@ public sealed record UploadServiceRequestDocumentCommand(
     Stream Content,
     string FileName,
     string ContentType,
-    long Length) : IRequest<Application.Services.DTOs.ServiceReviewDocumentDto>;
+    long Length) : IRequest<Application.Services.DTOs.ServiceRequestDocumentDto>;
