@@ -219,15 +219,6 @@ public class Property : AuditableEntity
     public bool HasView { get; set; }
     public string? ViewDescription { get; set; }
 
-    // ── التسعير بالعملة ────────────────────────────────────────────────
-
-    /// <summary>
-    /// FK → Currencies — العملة الأصلية للسعر المُعلَن.
-    /// لا نخزّن BasePriceInUSD هنا — نحسبه عند الاستعلام.
-    /// السبب: سعر الصرف يتغير يومياً، والقيمة المخزونة تصبح خاطئة.
-    /// </summary>
-    public int? PriceCurrencyId { get; set; }
-
     // ── الميتاداتا ─────────────────────────────────────────────────────
 
     public int ViewsCount { get; set; }
@@ -255,10 +246,7 @@ public class Property : AuditableEntity
     public District? District { get; set; }
     public Neighborhood? Neighborhood { get; set; }
     public PropertyType? PropertyType { get; set; }
-    public Currency? PriceCurrency { get; set; }
     public UserAccount? Agent { get; set; }
-    public SaleDetails? SaleDetails { get; set; }
-    public RentalDetails? RentalDetails { get; set; }
 
     // -- Navigation ---------------------------------------------
     public ICollection<PropertyImage> Images { get; set; } = new List<PropertyImage>();

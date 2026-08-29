@@ -70,7 +70,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IServiceRequestRepository, ServiceRequestRepository>();
         services.AddScoped<IServiceRequestStatusHistoryRepository, ServiceRequestStatusHistoryRepository>();
         services.AddScoped<IServiceReviewRepository, ServiceReviewRepository>();
-        services.AddScoped<IServiceReviewDocumentRepository, ServiceReviewDocumentRepository>();
+        services.AddScoped<IServiceRequestDocumentRepository, ServiceRequestDocumentRepository>();
         services.AddScoped<IServiceRequestNumberGenerator, ServiceRequestNumberGenerator>();
 
         return services;

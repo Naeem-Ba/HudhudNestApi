@@ -7,10 +7,14 @@ namespace PropertyApi.Domain.Services.Entities;
 /// A file (report, photo set, certificate...) a provider attaches to a ServiceRequest as its
 /// deliverable. Uploaded through the platform's existing IMediaStorageService — this entity
 /// only records the result, it does not talk to storage itself.
+///
+/// Named after its parent (ServiceRequest), not ServiceReview: it has no relationship to
+/// ServiceReview at all — a document can exist on a request that was never reviewed, and a
+/// review carries no reference to any document.
 /// </summary>
-public sealed class ServiceReviewDocument : BaseEntity
+public sealed class ServiceRequestDocument : BaseEntity
 {
-    private ServiceReviewDocument() { }
+    private ServiceRequestDocument() { }
 
     public Guid ServiceRequestId { get; private set; }
 
@@ -26,7 +30,7 @@ public sealed class ServiceReviewDocument : BaseEntity
 
     public Guid UploadedByUserId { get; private set; }
 
-    public static ServiceReviewDocument Create(
+    public static ServiceRequestDocument Create(
         Guid serviceRequestId,
         string fileUrl,
         string? filePublicId,
@@ -50,7 +54,7 @@ public sealed class ServiceReviewDocument : BaseEntity
         if (uploadedByUserId == Guid.Empty)
             throw new DomainException("لا يمكن إرفاق مستند بلا رافع محدد.");
 
-        return new ServiceReviewDocument
+        return new ServiceRequestDocument
         {
             ServiceRequestId = serviceRequestId,
             FileUrl = fileUrl.Trim(),

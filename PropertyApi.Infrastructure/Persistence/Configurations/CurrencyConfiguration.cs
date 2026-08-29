@@ -30,11 +30,5 @@ public sealed class CurrencyConfiguration : IEntityTypeConfiguration<Currency>
 
         builder.HasIndex(c => c.Code).IsUnique();
         builder.HasIndex(c => c.IsActive);
-
-        // العلاقة مع Properties (Currency ← Properties)
-        builder.HasMany(c => c.Properties)
-            .WithOne(p => p.PriceCurrency!)
-            .HasForeignKey(p => p.PriceCurrencyId)
-            .OnDelete(DeleteBehavior.Restrict);
     }
 }
