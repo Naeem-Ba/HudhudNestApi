@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.ShortStay.Commands.AddAccommodationUnit;
 using PropertyApi.Application.ShortStay.Commands.AddRoomType;
+using PropertyApi.Application.ShortStay.Commands.AddShortStayListingPhotos;
+using PropertyApi.Application.Listings.DTOs;
 using PropertyApi.Application.ShortStay.Commands.CreateShortStayListing;
 using PropertyApi.Application.ShortStay.Commands.DeleteShortStayListing;
 using PropertyApi.Application.ShortStay.Commands.PublishShortStayListing;
@@ -155,6 +157,23 @@ public sealed class ShortStayListingsController : ControllerBase
     {
         await _mediator.Send(new UnpublishShortStayListingCommand(id, GetUserId()), ct);
         return NoContent();
+    }
+
+    [HttpPost("{id:guid}/photos")]
+    [Authorize]
+    [RequestSizeLimit(20_000_000)]
+    [ProducesResponseType(typeof(IReadOnlyList<string>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadPhotos(Guid id, [FromForm] IFormFileCollection files, CancellationToken ct)
+    {
+        var uploadFiles = (files ?? new FormFileCollection())
+            .Select(file => new UploadPropertyImageFileDto(
+                file.OpenReadStream(), file.FileName, file.ContentType, file.Length))
+            .ToList();
+
+        var result = await _mediator.Send(new AddShortStayListingPhotosCommand(id, GetUserId(), uploadFiles), ct);
+        return Ok(result);
     }
 
     [HttpPut("{id:guid}/amenities")]
