@@ -9,26 +9,26 @@ namespace PropertyApi.Application.Services.Queries.GetServiceRequestDocuments;
 public sealed record GetServiceRequestDocumentsQuery(
     Guid ServiceRequestId,
     Guid ActorUserId,
-    bool IsAdmin) : IRequest<IReadOnlyList<ServiceReviewDocumentDto>>;
+    bool IsAdmin) : IRequest<IReadOnlyList<ServiceRequestDocumentDto>>;
 
 public sealed class GetServiceRequestDocumentsQueryHandler
-    : IRequestHandler<GetServiceRequestDocumentsQuery, IReadOnlyList<ServiceReviewDocumentDto>>
+    : IRequestHandler<GetServiceRequestDocumentsQuery, IReadOnlyList<ServiceRequestDocumentDto>>
 {
     private readonly IServiceRequestRepository _requests;
     private readonly IServiceProviderRepository _providers;
-    private readonly IServiceReviewDocumentRepository _documents;
+    private readonly IServiceRequestDocumentRepository _documents;
 
     public GetServiceRequestDocumentsQueryHandler(
         IServiceRequestRepository requests,
         IServiceProviderRepository providers,
-        IServiceReviewDocumentRepository documents)
+        IServiceRequestDocumentRepository documents)
     {
         _requests = requests;
         _providers = providers;
         _documents = documents;
     }
 
-    public async Task<IReadOnlyList<ServiceReviewDocumentDto>> Handle(
+    public async Task<IReadOnlyList<ServiceRequestDocumentDto>> Handle(
         GetServiceRequestDocumentsQuery request, CancellationToken ct)
     {
         var serviceRequest = await _requests.GetByIdAsync(request.ServiceRequestId, ct)

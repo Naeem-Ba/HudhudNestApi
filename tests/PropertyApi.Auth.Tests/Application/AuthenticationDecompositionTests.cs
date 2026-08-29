@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging.Abstractions;
 using PropertyApi.Application.Auth.Abstractions;
 using PropertyApi.Application.Auth.Commands.SocialLogin;
-using PropertyApi.Application.Auth.Commands.VerifyPhoneOtp;
 using PropertyApi.Application.Auth.Contracts;
 using PropertyApi.Application.Auth.Models;
 using PropertyApi.Application.Auth.Policies;
@@ -21,14 +20,6 @@ public sealed class AuthenticationDecompositionTests
         var parameter = Assert.Single(
             Assert.Single(typeof(SocialLoginCommandHandler).GetConstructors()).GetParameters());
         Assert.Equal(typeof(ISocialAuthenticationOrchestrator), parameter.ParameterType);
-    }
-
-    [Fact]
-    public void PhoneOtpHandler_DependsOnlyOnOrchestrator()
-    {
-        var parameter = Assert.Single(
-            Assert.Single(typeof(VerifyPhoneOtpCommandHandler).GetConstructors()).GetParameters());
-        Assert.Equal(typeof(IPhoneOtpAuthenticationOrchestrator), parameter.ParameterType);
     }
 
     [Fact]

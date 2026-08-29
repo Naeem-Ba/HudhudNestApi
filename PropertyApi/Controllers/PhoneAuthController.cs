@@ -5,9 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.Auth.Commands.AddEmail;
 using PropertyApi.Application.Auth.Commands.ResendConfirmationEmail;
-using PropertyApi.Application.Auth.Commands.SendPhoneOtp;
 using PropertyApi.Application.Auth.Commands.VerifyEmail;
-using PropertyApi.Application.Auth.Commands.VerifyPhoneOtp;
 using PropertyApi.Application.Auth.DTOs;
 using PropertyApi.Domain.Enums;
 

@@ -73,7 +73,7 @@ public sealed class ServiceRequestsController : ControllerBase
     }
 
     [HttpGet("{id:guid}/documents")]
-    [ProducesResponseType(typeof(IReadOnlyList<ServiceReviewDocumentDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(IReadOnlyList<ServiceRequestDocumentDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetDocuments(Guid id, CancellationToken ct)
@@ -85,7 +85,7 @@ public sealed class ServiceRequestsController : ControllerBase
     [HttpPost("{id:guid}/documents")]
     [RequestSizeLimit(MaxDocumentSize)]
     [EnableRateLimiting("service-request-documents")]
-    [ProducesResponseType(typeof(ServiceReviewDocumentDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ServiceRequestDocumentDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using PropertyApi.Domain.Services.Entities;
+using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Infrastructure.Persistence.Configurations;
 
@@ -22,6 +23,14 @@ public sealed class ServiceProviderConfiguration : IEntityTypeConfiguration<Serv
             .HasConversion<string>()
             .HasMaxLength(30)
             .IsRequired();
+
+        // One UserAccount runs at most one provider profile (see class remarks). Restrict:
+        // an account with a provider profile must deactivate/transfer it first, matching the
+        // Restrict convention used for every other UserAccount-owning relationship.
+        builder.HasOne<UserAccount>()
+            .WithMany()
+            .HasForeignKey(p => p.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // One provider profile per user, live rows only — a soft-deleted provider does not
         // block that user from being onboarded again later.

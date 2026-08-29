@@ -6,7 +6,6 @@ using PropertyApi.Application.Admin.Interfaces;
 using PropertyApi.Application.Admin.Services;
 using PropertyApi.Application.Auth.Commands.SocialLogin;
 using PropertyApi.Application.Auth.Commands.RefreshToken;
-using PropertyApi.Application.Auth.Commands.VerifyPhoneOtp;
 using PropertyApi.Application.Auth.Abstractions;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Orchestration;
@@ -54,9 +53,6 @@ public static class DependencyInjection
         services.AddScoped<ISocialAuthenticationOrchestrator, SocialAuthenticationOrchestrator>();
         services.AddSingleton<SocialAccountLinkingPolicy>();
         services.AddSingleton<SocialAccountCreationPolicy>();
-        services.AddScoped<OtpConsumptionService>();
-        services.AddScoped<PhoneAccountMutationCoordinator>();
-        services.AddScoped<IPhoneOtpAuthenticationOrchestrator, PhoneOtpAuthenticationOrchestrator>();
         services.AddSingleton<PhoneOwnershipPolicy>();
         services.AddSingleton<IPhoneVerificationPolicy, PhoneVerificationPolicy>();
         services.AddScoped<IAdminService, AdminService>();

@@ -85,11 +85,6 @@ public sealed class PhoneAuthWebApplicationFactory
             services.RemoveAll<ISmsService>();
             services.AddSingleton<ISmsService, AlwaysSuccessfulSmsService>();
 
-            services.RemoveAll<IOtpCodeRepository>();
-            services.AddSingleton<InMemoryOtpCodeRepository>();
-            services.AddSingleton<IOtpCodeRepository>(sp =>
-                sp.GetRequiredService<InMemoryOtpCodeRepository>());
-
             services.RemoveAll<IRefreshTokenRepository>();
             services.RemoveAll<IRefreshTokenStore>();
             services.AddScoped<EfInMemoryRefreshTokenRepository>();

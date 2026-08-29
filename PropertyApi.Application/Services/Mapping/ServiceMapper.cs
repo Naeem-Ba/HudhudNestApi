@@ -82,7 +82,7 @@ public static class ServiceMapper
             Note: entry.Note,
             CreatedAt: entry.CreatedAt);
 
-    public static ServiceReviewDocumentDto ToDto(ServiceReviewDocument document)
+    public static ServiceRequestDocumentDto ToDto(ServiceRequestDocument document)
         => new(
             Id: document.Id,
             ServiceRequestId: document.ServiceRequestId,

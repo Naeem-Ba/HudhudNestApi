@@ -127,10 +127,6 @@ public sealed class StagingTestSupportController : ControllerBase
         await _db.PropertyImages.IgnoreQueryFilters()
             .Where(x => propertyIds.Contains(x.PropertyId))
             .ExecuteDeleteAsync(ct);
-        await _db.SaleDetails.Where(x => propertyIds.Contains(x.PropertyId))
-            .ExecuteDeleteAsync(ct);
-        await _db.RentalDetails.Where(x => propertyIds.Contains(x.PropertyId))
-            .ExecuteDeleteAsync(ct);
         await _db.Properties.IgnoreQueryFilters()
             .Where(x => propertyIds.Contains(x.Id))
             .ExecuteDeleteAsync(ct);
@@ -141,8 +137,6 @@ public sealed class StagingTestSupportController : ControllerBase
         await _db.PhoneOtpChallenges
             .Where(x => (x.UserId.HasValue && userIds.Contains(x.UserId.Value)) ||
                 phones.Contains(x.NormalizedPhoneNumber))
-            .ExecuteDeleteAsync(ct);
-        await _db.OtpCodes.Where(x => phones.Contains(x.PhoneNumber))
             .ExecuteDeleteAsync(ct);
         await _db.AuditLogs.Where(x => x.UserId.HasValue && userIds.Contains(x.UserId.Value))
             .ExecuteDeleteAsync(ct);

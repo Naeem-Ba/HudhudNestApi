@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using PropertyApi.Domain.Listings.Entities;
 
 
 namespace PropertyApi.Domain.Lookups.Entities;
@@ -42,9 +41,6 @@ public class Currency
 
     /// <summary>عدد الخانات العشرية للعرض (SYP=0, USD=2, EUR=2)</summary>
     public int DecimalPlaces { get; private set; } = 2;
-
-    // للعلاقات
-    public ICollection<Property> Properties { get; private set; } = new List<Property>();
 
     // EF Core constructor
     private Currency() { }

@@ -1,6 +1,6 @@
 namespace PropertyApi.Application.Services.DTOs;
 
-public sealed record ServiceReviewDocumentDto(
+public sealed record ServiceRequestDocumentDto(
     Guid Id,
     Guid ServiceRequestId,
     string FileUrl,

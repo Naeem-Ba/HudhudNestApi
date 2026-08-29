@@ -58,7 +58,6 @@ public sealed class CompositionRegistrationTests
         AssertScoped<IUpdateUserIdentityService>(services);
         AssertScoped<IDeleteUserIdentityService>(services);
         AssertScoped<IRefreshTokenRepository>(services);
-        AssertScoped<IOtpCodeRepository>(services);
         AssertScoped<IOtpService>(services);
         AssertScoped<IEmailVerificationService>(services);
         AssertScoped<IApplicationEmailSender>(services);
