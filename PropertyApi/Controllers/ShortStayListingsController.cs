@@ -13,6 +13,7 @@ using PropertyApi.Application.ShortStay.Commands.SetPricingRules;
 using PropertyApi.Application.ShortStay.Commands.SetShortStayListingAmenities;
 using PropertyApi.Application.ShortStay.Commands.UpdateShortStayListing;
 using PropertyApi.Application.ShortStay.DTOs;
+using PropertyApi.Application.ShortStay.Queries.GetActiveAccommodationTypes;
 using PropertyApi.Application.ShortStay.Queries.GetMyShortStayListings;
 using PropertyApi.Application.ShortStay.Queries.GetShortStayListingById;
 using PropertyApi.Application.ShortStay.Queries.SearchShortStayListings;
@@ -25,6 +26,16 @@ public sealed class ShortStayListingsController : ControllerBase
 {
     private readonly ISender _mediator;
     public ShortStayListingsController(ISender mediator) => _mediator = mediator;
+
+    [HttpGet("accommodation-types")]
+    [AllowAnonymous]
+    [EnableRateLimiting("shortstay-search")]
+    [ProducesResponseType(typeof(IReadOnlyList<AccommodationTypeDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAccommodationTypes(CancellationToken ct)
+    {
+        var result = await _mediator.Send(new GetActiveAccommodationTypesQuery(), ct);
+        return Ok(result);
+    }
 
     [HttpGet]
     [AllowAnonymous]
