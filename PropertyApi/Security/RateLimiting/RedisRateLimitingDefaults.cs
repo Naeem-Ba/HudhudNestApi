@@ -26,7 +26,10 @@ internal static class RedisRateLimitingDefaults
             ["visits"] = Policy(10, TimeSpan.FromHours(1)),
             ["reviews"] = Policy(5, TimeSpan.FromHours(24)),
             ["service-requests"] = Policy(10, TimeSpan.FromHours(1)),
-            ["service-request-documents"] = Policy(20, TimeSpan.FromHours(1))
+            ["service-request-documents"] = Policy(20, TimeSpan.FromHours(1)),
+            // Short-Stay Accommodation — same cadence as visits/public-search respectively.
+            ["shortstay-booking"] = Policy(10, TimeSpan.FromHours(1)),
+            ["shortstay-search"] = Policy(120, TimeSpan.FromMinutes(1))
         };
 
     private static RedisFixedWindowRateLimitPolicyOptions Policy(

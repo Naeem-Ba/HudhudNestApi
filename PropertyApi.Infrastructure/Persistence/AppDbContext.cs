@@ -21,6 +21,7 @@ using PropertyApi.Domain.Search.Entities;
 using PropertyApi.Domain.Services.Entities;
 using PropertyApi.Infrastructure.Identity.Entities;
 using PropertyApi.Infrastructure.Security.DataProtection;
+using PropertyApi.Domain.ShortStay.Entities;
 
 
 
@@ -87,6 +88,20 @@ public sealed class AppDbContext
     public DbSet<ServiceRequestStatusHistory> ServiceRequestStatusHistories => Set<ServiceRequestStatusHistory>();
     public DbSet<ServiceRequestDocument> ServiceRequestDocuments => Set<ServiceRequestDocument>();
     public DbSet<ServiceReview> ServiceReviews => Set<ServiceReview>();
+
+    // Short-Stay Accommodation subsystem
+    public DbSet<AccommodationType> AccommodationTypes => Set<AccommodationType>();
+    public DbSet<ShortStayListing> ShortStayListings => Set<ShortStayListing>();
+    public DbSet<RoomType> ShortStayRoomTypes => Set<RoomType>();
+    public DbSet<AccommodationUnit> AccommodationUnits => Set<AccommodationUnit>();
+    public DbSet<PricingRule> ShortStayPricingRules => Set<PricingRule>();
+    public DbSet<MinimumStayRule> ShortStayMinimumStayRules => Set<MinimumStayRule>();
+    public DbSet<UnitBookingRange> UnitBookingRanges => Set<UnitBookingRange>();
+    public DbSet<ShortStayListingAmenity> ShortStayListingAmenities => Set<ShortStayListingAmenity>();
+    public DbSet<ShortStayListingPhoto> ShortStayListingPhotos => Set<ShortStayListingPhoto>();
+    public DbSet<Booking> ShortStayBookings => Set<Booking>();
+    public DbSet<ShortStayReview> ShortStayReviews => Set<ShortStayReview>();
+    public DbSet<HostVerificationRecord> HostVerificationRecords => Set<HostVerificationRecord>();
 
     // -- Model Configuration -------------------------------------
     protected override void OnModelCreating(ModelBuilder builder)

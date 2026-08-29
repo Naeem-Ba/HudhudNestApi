@@ -16,6 +16,8 @@ using PropertyApi.Application.Search.Interfaces;
 using PropertyApi.Application.Services.Interfaces;
 using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Application.Users.Messaging.Interfaces;
+using PropertyApi.Application.ShortStay.Interfaces;
+using PropertyApi.Application.ShortStay.Services;
 using PropertyApi.Infrastructure.Admin;
 using PropertyApi.Infrastructure.Analytics;
 using PropertyApi.Infrastructure.Bookings;
@@ -24,6 +26,7 @@ using PropertyApi.Infrastructure.Notifications;
 using PropertyApi.Infrastructure.Reviews;
 using PropertyApi.Infrastructure.Search;
 using PropertyApi.Infrastructure.Services;
+using PropertyApi.Infrastructure.ShortStay;
 
 namespace PropertyApi.Infrastructure.Repositories;
 
@@ -72,6 +75,17 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IServiceReviewRepository, ServiceReviewRepository>();
         services.AddScoped<IServiceRequestDocumentRepository, ServiceRequestDocumentRepository>();
         services.AddScoped<IServiceRequestNumberGenerator, ServiceRequestNumberGenerator>();
+
+        // Short-Stay Accommodation subsystem
+        services.AddScoped<IAccommodationTypeRepository, AccommodationTypeRepository>();
+        services.AddScoped<IShortStayListingRepository, ShortStayListingRepository>();
+        services.AddScoped<IRoomTypeRepository, RoomTypeRepository>();
+        services.AddScoped<IAccommodationUnitRepository, AccommodationUnitRepository>();
+        services.AddScoped<IPricingRuleRepository, PricingRuleRepository>();
+        services.AddScoped<IMinimumStayRuleRepository, MinimumStayRuleRepository>();
+        services.AddScoped<IBookingRepository, BookingRepository>();
+        services.AddScoped<IShortStayReviewRepository, ShortStayReviewRepository>();
+        services.AddScoped<IPricingCalculationService, PricingCalculationService>();
 
         return services;
     }

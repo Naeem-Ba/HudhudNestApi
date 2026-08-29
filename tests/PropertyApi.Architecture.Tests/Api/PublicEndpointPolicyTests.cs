@@ -57,6 +57,13 @@ public sealed class PublicEndpointPolicyTests
             "PropertiesController.GetAll",
             "PropertiesController.SearchNearby",
             "PropertiesController.GetById",
+
+            // Short-Stay Accommodation: the search/detail pages a guest browses before
+            // booking, and a unit's public availability calendar — all anonymous, read-only,
+            // and rate-limited under "shortstay-search".
+            "ShortStayListingsController.Search",
+            "ShortStayListingsController.GetById",
+            "ShortStayBookingsController.GetAvailability",
             "PropertyImagesController.GetAll",
             "ReviewsController.GetPropertyReviews",
             "AnalyticsController.GetMarketInsights",
