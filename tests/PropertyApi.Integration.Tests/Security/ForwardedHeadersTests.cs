@@ -1,14 +1,49 @@
 using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using PropertyApi.Configuration;
 using Xunit;
 
 namespace PropertyApi.Integration.Tests.Security;
 
 public sealed class ForwardedHeadersTests
 {
+    // BUG-01 regression: RequireHeaderSymmetry=true made ForwardedHeadersMiddleware discard
+    // forwarded scheme info whenever X-Forwarded-For and X-Forwarded-Proto had mismatched
+    // header counts -- which happens on Render's real Cloudflare-fronted, multi-hop edge --
+    // leaving Request.IsHttps false and silently turning UseHsts() into a no-op in a genuine
+    // Production environment. Unlike the test below, this one exercises the actual production
+    // registration path (AddTrustedForwardedHeaders), not a hand-built stand-in options object,
+    // so a regression back to RequireHeaderSymmetry=true here fails the build.
+    [Fact(DisplayName =
+     "AddTrustedForwardedHeaders should disable RequireHeaderSymmetry in Production")]
+    public void AddTrustedForwardedHeaders_ShouldDisable_RequireHeaderSymmetry_InProduction()
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = "Production"
+        });
+
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ForwardedHeaders:KnownProxies:0"] = "203.0.113.1",
+            ["ForwardedHeaders:ForwardLimit"] = "1"
+        });
+
+        builder.Services.AddTrustedForwardedHeaders(builder.Configuration, builder.Environment);
+
+        using var app = builder.Build();
+
+        var options = app.Services
+            .GetRequiredService<IOptions<ForwardedHeadersOptions>>()
+            .Value;
+
+        Assert.False(options.RequireHeaderSymmetry);
+    }
+
     [Fact(DisplayName = "Production ForwardedHeaders should use bounded trusted proxy settings")]
     public void ForwardedHeaders_ShouldUse_BoundedTrustedProxySettings()
     {

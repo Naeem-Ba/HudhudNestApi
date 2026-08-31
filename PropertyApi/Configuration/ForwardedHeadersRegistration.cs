@@ -66,7 +66,17 @@ public static class ForwardedHeadersRegistration
                 ForwardedHeaders.XForwardedProto;
 
             options.ForwardLimit = forwardLimit;
-            options.RequireHeaderSymmetry = true;
+
+            // Render terminates TLS at its own edge (fronted by Cloudflare) and forwards to
+            // Kestrel over plain HTTP; that edge is a multi-hop chain in which intermediate
+            // hops do not symmetrically append to X-Forwarded-For and X-Forwarded-Proto.
+            // RequireHeaderSymmetry=true made ForwardedHeadersMiddleware discard forwarded
+            // scheme info entirely whenever the header counts mismatched -- logged as
+            // "Parameter count mismatch between X-Forwarded-For and X-Forwarded-Proto" --
+            // leaving Request.IsHttps false for every live request. UseHsts() is a no-op for
+            // any request where IsHttps is false, so Strict-Transport-Security silently never
+            // reached clients in Production despite IsProduction() correctly being true.
+            options.RequireHeaderSymmetry = false;
 
             options.KnownProxies.Clear();
             options.KnownNetworks.Clear();
