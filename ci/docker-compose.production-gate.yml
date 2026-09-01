@@ -41,6 +41,134 @@ services:
       timeout: 3s
       retries: 20
 
+  # ---------------------------------------------------------------------
+  # Redis Sentinel HA topology (see docs/REDIS-HA.md). This is a *separate*
+  # concern from the single `redis:` service above, which the
+  # build-test-container job's "Start PostgreSQL and Redis" step brings up
+  # explicitly by name (postgres, redis) -- these five services are only
+  # started by name from the dedicated `redis-sentinel-ha` job in
+  # production-gate.yml, so they add zero time to every ordinary PR build.
+  # They live on their own `redis-ha` network, isolated from the app/DB
+  # services, and are never published to the host (no `ports:` mapping).
+  # ---------------------------------------------------------------------
+  redis-primary:
+    image: redis:7-alpine
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --bind
+      - "0.0.0.0"
+      - --protected-mode
+      - "no"
+    networks:
+      redis-ha:
+        ipv4_address: 172.28.0.10
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli ping | grep -q PONG && [ "$(redis-cli role | head -n1)" = "master" ]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis-replica:
+    image: redis:7-alpine
+    # Replicates from redis-primary's static IP, not its DNS hostname --
+    # see ci/redis/sentinel/sentinel.conf for why (Docker DNS stops
+    # resolving a stopped container's hostname, which breaks failover).
+    command:
+      - redis-server
+      - --replicaof
+      - "172.28.0.10"
+      - "6379"
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --bind
+      - "0.0.0.0"
+      - --protected-mode
+      - "no"
+    networks:
+      redis-ha:
+        ipv4_address: 172.28.0.11
+    depends_on:
+      redis-primary:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli ping | grep -q PONG && [ "$(redis-cli role | head -n1)" = "slave" ]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis-sentinel-1:
+    image: redis:7-alpine
+    volumes:
+      - ./redis/sentinel/sentinel.conf:/etc/redis-sentinel/sentinel.conf.template:ro
+    command: >
+      sh -c "cp /etc/redis-sentinel/sentinel.conf.template /tmp/sentinel.conf &&
+             redis-server /tmp/sentinel.conf --sentinel"
+    networks:
+      redis-ha:
+        ipv4_address: 172.28.0.21
+    depends_on:
+      redis-primary:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli -p 26379 ping | grep -q PONG && redis-cli -p 26379 sentinel get-master-addr-by-name mymaster | grep -q 172.28.0.10
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis-sentinel-2:
+    image: redis:7-alpine
+    volumes:
+      - ./redis/sentinel/sentinel.conf:/etc/redis-sentinel/sentinel.conf.template:ro
+    command: >
+      sh -c "cp /etc/redis-sentinel/sentinel.conf.template /tmp/sentinel.conf &&
+             redis-server /tmp/sentinel.conf --sentinel"
+    networks:
+      redis-ha:
+        ipv4_address: 172.28.0.22
+    depends_on:
+      redis-primary:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli -p 26379 ping | grep -q PONG && redis-cli -p 26379 sentinel get-master-addr-by-name mymaster | grep -q 172.28.0.10
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis-sentinel-3:
+    image: redis:7-alpine
+    volumes:
+      - ./redis/sentinel/sentinel.conf:/etc/redis-sentinel/sentinel.conf.template:ro
+    command: >
+      sh -c "cp /etc/redis-sentinel/sentinel.conf.template /tmp/sentinel.conf &&
+             redis-server /tmp/sentinel.conf --sentinel"
+    networks:
+      redis-ha:
+        ipv4_address: 172.28.0.23
+    depends_on:
+      redis-primary:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli -p 26379 ping | grep -q PONG && redis-cli -p 26379 sentinel get-master-addr-by-name mymaster | grep -q 172.28.0.10
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
   migrator:
     image: propertyapi-migrator:${PROPERTYAPI_IMAGE_TAG:-production-gate}
     build:
@@ -101,3 +229,23 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+# Isolated network for the Redis Sentinel HA topology (redis-primary,
+# redis-replica, redis-sentinel-1/2/3). Kept separate from the default
+# project network the app/DB services share, since the sentinel topology is
+# only ever driven by the dedicated `redis-sentinel-ha` CI job, not by the
+# `api` container. See docs/REDIS-HA.md.
+networks:
+  # A fixed subnet so redis-primary/redis-replica/redis-sentinel-* can be
+  # addressed by static IP instead of by Docker DNS hostname. This is
+  # deliberate, not cosmetic: a real local failover drill showed that once
+  # `docker compose stop redis-primary` stops the primary container,
+  # Docker's embedded DNS stops resolving its hostname, which makes
+  # `sentinel resolve-hostnames yes` fail on every monitoring cycle and get
+  # stuck in TILT mode forever (see ci/redis/sentinel/sentinel.conf and
+  # docs/REDIS-HA.md). Static IPs sidestep DNS entirely for the Sentinel
+  # topology's cross-container addressing.
+  redis-ha:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
