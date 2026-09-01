@@ -24,8 +24,18 @@ on:
         description: Migration captured in the backup manifest
         value: ${{ jobs.restore-drill.outputs.ef_core_migration }}
     secrets:
+      # BUG-32: this job body already falls back to secrets.DATABASE_URL when
+      # PRODUCTION_DATABASE_URL isn't set (see the env: block below and the
+      # "Create fresh encrypted backup" step, and the identical pattern in
+      # database-backup.yml) -- the repo's actual production DB secret is
+      # named DATABASE_URL. Declaring PRODUCTION_DATABASE_URL as required here
+      # made `secrets: inherit` in production-gate.yml fail workflow-call
+      # validation before the job (and its fallback) ever ran, with a less
+      # useful error than the runtime check below produces. required: false
+      # keeps this fail-closed -- "Require production recovery configuration"
+      # (a few lines down) still hard-fails the job if neither secret resolves.
       PRODUCTION_DATABASE_URL:
-        required: true
+        required: false
       BACKUP_ENCRYPTION_KEY:
         required: true
       BACKUP_STORAGE_URI:
