@@ -117,8 +117,8 @@ public sealed class CreatePropertyCommandValidatorTests
         RentalStartDate: DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1)),
         RentalEndDate: DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(7)),
         RentalDurationType: RentalDurationType.SixMonths
-        // LegalStatus: null — غير مطلوب للإيجار؛ اختبارات البيع تحدده صراحة.
-        // AreaUnit: يبقى الافتراضي SquareMeter (يطابق Area=85m² أعلاه).
+    // LegalStatus: null — غير مطلوب للإيجار؛ اختبارات البيع تحدده صراحة.
+    // AreaUnit: يبقى الافتراضي SquareMeter (يطابق Area=85m² أعلاه).
     );
 
     // ══════════════════════════════════════════════════════════════════
