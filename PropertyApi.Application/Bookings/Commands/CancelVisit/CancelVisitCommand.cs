@@ -1,4 +1,5 @@
 ﻿using MediatR;
+using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Bookings.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
@@ -15,17 +16,20 @@ public sealed class CancelVisitCommandHandler : IRequestHandler<CancelVisitComma
     private readonly IUnitOfWork _uow;
     private readonly INotificationService _notifications;
     private readonly IPropertyReadRepository _properties;
+    private readonly ILogger<CancelVisitCommandHandler> _logger;
 
     public CancelVisitCommandHandler(
         IVisitRepository visits,
         IUnitOfWork uow,
         INotificationService notifications,
-        IPropertyReadRepository properties)
+        IPropertyReadRepository properties,
+        ILogger<CancelVisitCommandHandler> logger)
     {
         _visits = visits;
         _uow = uow;
         _notifications = notifications;
         _properties = properties;
+        _logger = logger;
     }
 
     public async Task<bool> Handle(CancelVisitCommand request, CancellationToken ct)
@@ -39,13 +43,28 @@ public sealed class CancelVisitCommandHandler : IRequestHandler<CancelVisitComma
         visit.Cancel(request.RequesterId);
         await _uow.SaveChangesAsync(ct);
 
-        await _notifications.NotifyPropertyUpdateAsync(
-            recipientId: property.OwnerId,
-            propertyId: property.Id,
-            propertyTitle: property.Title,
-            type: NotificationType.VisitCancelled,
-            detail: $"{visit.VisitorName} cancelled the visit request scheduled for {visit.ProposedAt:dd/MM/yyyy HH:mm}.",
-            ct: ct);
+        // ✅ إصلاح: نفس نمط try/catch الموجود بـ RequestVisitCommandHandler —
+        // الزيارة أُلغيت وحُفظت أعلاه بالفعل، فلا يجوز لفشل إرسال الإشعار أن
+        // يُسقط طلب الإلغاء بأكمله بـ 500.
+        try
+        {
+            await _notifications.NotifyPropertyUpdateAsync(
+                recipientId: property.OwnerId,
+                propertyId: property.Id,
+                propertyTitle: property.Title,
+                type: NotificationType.VisitCancelled,
+                detail: $"{visit.VisitorName} — الموعد الملغى: {visit.ProposedAt:dd/MM/yyyy HH:mm}.",
+                relatedEntityId: visit.Id,
+                ct: ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to create/send visit-cancelled notification. VisitId={VisitId}, OwnerId={OwnerId}",
+                visit.Id,
+                property.OwnerId);
+        }
 
         return true;
     }

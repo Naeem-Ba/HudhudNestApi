@@ -80,6 +80,7 @@ public sealed class NotificationService : INotificationService
         string propertyTitle,
         NotificationType type,
         string detail,
+        Guid? relatedEntityId = null,
         CancellationToken ct = default)
     {
         if (recipientId == Guid.Empty)
@@ -110,6 +111,29 @@ public sealed class NotificationService : INotificationService
             NotificationType.PropertyUnpublished =>
                 $"تم إلغاء نشر العقار '{title}'.",
 
+            // ✅ إصلاح: كانت هذه الأنواع تسقط في حالة الـ default الإنكليزية
+            // أدناه، ما ينتج نصاً عربياً/إنكليزياً مختلطاً وغير واضح للمعلن/الزائر.
+            NotificationType.VisitRequested =>
+                $"طلب زيارة جديد لعقارك '{title}': {detail}",
+
+            NotificationType.VisitConfirmed =>
+                $"تم تأكيد موعد زيارتك لعقار '{title}': {detail}",
+
+            NotificationType.VisitDeclined =>
+                $"تم رفض طلب زيارتك لعقار '{title}': {detail}",
+
+            NotificationType.VisitCancelled =>
+                $"ألغى الزائر طلب الزيارة لعقارك '{title}': {detail}",
+
+            NotificationType.VisitRescheduleProposed =>
+                $"اقترح مالك العقار '{title}' موعداً بديلاً لزيارتك: {detail}",
+
+            NotificationType.VisitRescheduleAccepted =>
+                $"وافق الزائر على الموعد البديل لزيارة عقارك '{title}': {detail}",
+
+            NotificationType.VisitRescheduleDeclined =>
+                $"رفض الزائر الموعد البديل لزيارة عقارك '{title}': {detail}",
+
             _ => $"تحديث على العقار '{title}': {detail}"
         };
 
@@ -119,6 +143,7 @@ public sealed class NotificationService : INotificationService
             Type = type,
             Message = message,
             PropertyId = propertyId,
+            RelatedEntityId = relatedEntityId,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };

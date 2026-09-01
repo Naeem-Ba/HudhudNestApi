@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Bookings.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
@@ -6,27 +6,28 @@ using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Domain.Notifications.Enums;
 
-namespace PropertyApi.Application.Bookings.Commands.ConfirmVisit;
+namespace PropertyApi.Application.Bookings.Commands.AcceptRescheduledVisit;
 
-public sealed record ConfirmVisitCommand(
+/// <summary>Requester-side: accepts the owner's counter-proposed date/time.</summary>
+public sealed record AcceptRescheduledVisitCommand(
     Guid VisitId,
-    Guid OwnerId,
-    string? OwnerNote = null) : IRequest<bool>;
+    Guid RequesterId) : IRequest<bool>;
 
-public sealed class ConfirmVisitCommandHandler : IRequestHandler<ConfirmVisitCommand, bool>
+public sealed class AcceptRescheduledVisitCommandHandler
+    : IRequestHandler<AcceptRescheduledVisitCommand, bool>
 {
     private readonly IVisitRepository _visits;
     private readonly IUnitOfWork _uow;
     private readonly INotificationService _notifications;
     private readonly IPropertyReadRepository _properties;
-    private readonly ILogger<ConfirmVisitCommandHandler> _logger;
+    private readonly ILogger<AcceptRescheduledVisitCommandHandler> _logger;
 
-    public ConfirmVisitCommandHandler(
+    public AcceptRescheduledVisitCommandHandler(
         IVisitRepository visits,
         IUnitOfWork uow,
         INotificationService notifications,
         IPropertyReadRepository properties,
-        ILogger<ConfirmVisitCommandHandler> logger)
+        ILogger<AcceptRescheduledVisitCommandHandler> logger)
     {
         _visits = visits;
         _uow = uow;
@@ -35,7 +36,7 @@ public sealed class ConfirmVisitCommandHandler : IRequestHandler<ConfirmVisitCom
         _logger = logger;
     }
 
-    public async Task<bool> Handle(ConfirmVisitCommand request, CancellationToken ct)
+    public async Task<bool> Handle(AcceptRescheduledVisitCommand request, CancellationToken ct)
     {
         var visit = await _visits.GetByIdAsync(request.VisitId, ct)
             ?? throw new NotFoundException($"Visit {request.VisitId} was not found.");
@@ -43,29 +44,22 @@ public sealed class ConfirmVisitCommandHandler : IRequestHandler<ConfirmVisitCom
         var property = await _properties.GetByIdAsync(visit.PropertyId, ct)
             ?? throw new NotFoundException("Property was not found.");
 
-        if (property.OwnerId != request.OwnerId)
+        if (visit.RequesterId != request.RequesterId)
         {
-            throw new ForbiddenException("Only the property owner can confirm this visit.");
+            throw new ForbiddenException("Only the requester can accept the rescheduled visit.");
         }
 
-        visit.Confirm(request.OwnerNote);
+        visit.AcceptReschedule();
         await _uow.SaveChangesAsync(ct);
 
-        // ✅ إصلاح: نفس نمط try/catch الموجود بـ RequestVisitCommandHandler —
-        // الزيارة تأكدت وحُفظت أعلاه بالفعل، فلا يجوز لفشل إرسال الإشعار
-        // (SignalR مثلاً) أن يُسقط طلب التأكيد بأكمله بـ 500.
         try
         {
-            var noteSuffix = string.IsNullOrWhiteSpace(visit.OwnerNote)
-                ? string.Empty
-                : $" — ملاحظة المالك: {visit.OwnerNote}";
-
             await _notifications.NotifyPropertyUpdateAsync(
-                recipientId: visit.RequesterId,
+                recipientId: property.OwnerId,
                 propertyId: property.Id,
                 propertyTitle: property.Title,
-                type: NotificationType.VisitConfirmed,
-                detail: $"موعد الزيارة بتاريخ {visit.ProposedAt:dd/MM/yyyy HH:mm}.{noteSuffix}",
+                type: NotificationType.VisitRescheduleAccepted,
+                detail: $"{visit.VisitorName} — الموعد المؤكَّد: {visit.ProposedAt:dd/MM/yyyy HH:mm}.",
                 relatedEntityId: visit.Id,
                 ct: ct);
         }
@@ -73,12 +67,11 @@ public sealed class ConfirmVisitCommandHandler : IRequestHandler<ConfirmVisitCom
         {
             _logger.LogError(
                 ex,
-                "Failed to create/send visit-confirmed notification. VisitId={VisitId}, RequesterId={RequesterId}",
+                "Failed to create/send visit-reschedule-accepted notification. VisitId={VisitId}, OwnerId={OwnerId}",
                 visit.Id,
-                visit.RequesterId);
+                property.OwnerId);
         }
 
         return true;
     }
 }
-

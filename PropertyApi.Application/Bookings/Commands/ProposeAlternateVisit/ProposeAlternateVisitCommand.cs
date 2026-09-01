@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Bookings.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
@@ -6,27 +6,33 @@ using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Domain.Notifications.Enums;
 
-namespace PropertyApi.Application.Bookings.Commands.ConfirmVisit;
+namespace PropertyApi.Application.Bookings.Commands.ProposeAlternateVisit;
 
-public sealed record ConfirmVisitCommand(
+/// <summary>
+/// Owner-side: instead of confirming/declining the requester's proposed time as-is,
+/// counter-propose a different date/time. Mirrors ConfirmVisitCommand/DeclineVisitCommand.
+/// </summary>
+public sealed record ProposeAlternateVisitCommand(
     Guid VisitId,
     Guid OwnerId,
+    DateTime ProposedAt,
     string? OwnerNote = null) : IRequest<bool>;
 
-public sealed class ConfirmVisitCommandHandler : IRequestHandler<ConfirmVisitCommand, bool>
+public sealed class ProposeAlternateVisitCommandHandler
+    : IRequestHandler<ProposeAlternateVisitCommand, bool>
 {
     private readonly IVisitRepository _visits;
     private readonly IUnitOfWork _uow;
     private readonly INotificationService _notifications;
     private readonly IPropertyReadRepository _properties;
-    private readonly ILogger<ConfirmVisitCommandHandler> _logger;
+    private readonly ILogger<ProposeAlternateVisitCommandHandler> _logger;
 
-    public ConfirmVisitCommandHandler(
+    public ProposeAlternateVisitCommandHandler(
         IVisitRepository visits,
         IUnitOfWork uow,
         INotificationService notifications,
         IPropertyReadRepository properties,
-        ILogger<ConfirmVisitCommandHandler> logger)
+        ILogger<ProposeAlternateVisitCommandHandler> logger)
     {
         _visits = visits;
         _uow = uow;
@@ -35,7 +41,7 @@ public sealed class ConfirmVisitCommandHandler : IRequestHandler<ConfirmVisitCom
         _logger = logger;
     }
 
-    public async Task<bool> Handle(ConfirmVisitCommand request, CancellationToken ct)
+    public async Task<bool> Handle(ProposeAlternateVisitCommand request, CancellationToken ct)
     {
         var visit = await _visits.GetByIdAsync(request.VisitId, ct)
             ?? throw new NotFoundException($"Visit {request.VisitId} was not found.");
@@ -45,15 +51,12 @@ public sealed class ConfirmVisitCommandHandler : IRequestHandler<ConfirmVisitCom
 
         if (property.OwnerId != request.OwnerId)
         {
-            throw new ForbiddenException("Only the property owner can confirm this visit.");
+            throw new ForbiddenException("Only the property owner can propose an alternate time for this visit.");
         }
 
-        visit.Confirm(request.OwnerNote);
+        visit.ProposeAlternate(request.ProposedAt, request.OwnerNote);
         await _uow.SaveChangesAsync(ct);
 
-        // ✅ إصلاح: نفس نمط try/catch الموجود بـ RequestVisitCommandHandler —
-        // الزيارة تأكدت وحُفظت أعلاه بالفعل، فلا يجوز لفشل إرسال الإشعار
-        // (SignalR مثلاً) أن يُسقط طلب التأكيد بأكمله بـ 500.
         try
         {
             var noteSuffix = string.IsNullOrWhiteSpace(visit.OwnerNote)
@@ -64,8 +67,8 @@ public sealed class ConfirmVisitCommandHandler : IRequestHandler<ConfirmVisitCom
                 recipientId: visit.RequesterId,
                 propertyId: property.Id,
                 propertyTitle: property.Title,
-                type: NotificationType.VisitConfirmed,
-                detail: $"موعد الزيارة بتاريخ {visit.ProposedAt:dd/MM/yyyy HH:mm}.{noteSuffix}",
+                type: NotificationType.VisitRescheduleProposed,
+                detail: $"الموعد الجديد المقترح: {visit.ProposedAt:dd/MM/yyyy HH:mm}.{noteSuffix}",
                 relatedEntityId: visit.Id,
                 ct: ct);
         }
@@ -73,7 +76,7 @@ public sealed class ConfirmVisitCommandHandler : IRequestHandler<ConfirmVisitCom
         {
             _logger.LogError(
                 ex,
-                "Failed to create/send visit-confirmed notification. VisitId={VisitId}, RequesterId={RequesterId}",
+                "Failed to create/send visit-reschedule-proposed notification. VisitId={VisitId}, RequesterId={RequesterId}",
                 visit.Id,
                 visit.RequesterId);
         }
@@ -81,4 +84,3 @@ public sealed class ConfirmVisitCommandHandler : IRequestHandler<ConfirmVisitCom
         return true;
     }
 }
-

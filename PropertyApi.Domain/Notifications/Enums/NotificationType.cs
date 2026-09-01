@@ -71,4 +71,13 @@ public enum NotificationType
 
     /// <summary>A ServiceReview was added. Sent to the ServiceProvider's UserId.</summary>
     ServiceReviewAdded = 25,
+
+    /// <summary>The owner proposed an alternate date/time for a Pending VisitRequest. Sent to the requester.</summary>
+    VisitRescheduleProposed = 26,
+
+    /// <summary>The requester accepted the owner's alternate date/time. Sent to the property owner.</summary>
+    VisitRescheduleAccepted = 27,
+
+    /// <summary>The requester declined the owner's alternate date/time. Sent to the property owner.</summary>
+    VisitRescheduleDeclined = 28,
 }

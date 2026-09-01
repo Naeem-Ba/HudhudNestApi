@@ -9,7 +9,8 @@ namespace PropertyApi.Domain.Bookings.Entities;
 /// <summary>
 /// Represents a visitor's request to physically visit a property.
 /// DDD: private setters + factory method + domain state-machine methods.
-/// Status transitions: Pending → Confirmed | Declined | Cancelled
+/// Status transitions: Pending → Confirmed | Declined | Cancelled | RescheduleProposed
+///                     RescheduleProposed → Confirmed | Declined | Cancelled
 ///                     Confirmed → Completed | Cancelled
 /// </summary>
 public sealed class VisitRequest : BaseEntity
@@ -99,6 +100,43 @@ public sealed class VisitRequest : BaseEntity
     {
         EnsureStatus(VisitStatus.Confirmed, "إتمام");
         Status = VisitStatus.Completed;
+    }
+
+    /// <summary>
+    /// Owner-side: instead of confirming/declining the requester's proposed time as-is,
+    /// counter-propose a different date/time. Awaits the requester's AcceptReschedule/
+    /// DeclineReschedule. Only valid from Pending — mirrors Confirm/Decline's precondition.
+    /// </summary>
+    public void ProposeAlternate(DateTime newProposedAt, string? ownerNote = null)
+    {
+        EnsureStatus(VisitStatus.Pending, "اقتراح موعد بديل");
+
+        if (newProposedAt < DateTime.UtcNow.AddHours(2))
+            throw new DomainException("يجب أن يكون الموعد البديل بعد ساعتين على الأقل من الآن.");
+
+        if (newProposedAt > DateTime.UtcNow.AddDays(90))
+            throw new DomainException("لا يمكن اقتراح موعد بديل لأكثر من 90 يومًا مقدمًا.");
+
+        Status = VisitStatus.RescheduleProposed;
+        ProposedAt = newProposedAt;
+        OwnerNote = ownerNote?.Trim();
+        RespondedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Requester-side: accepts the owner's counter-proposed date/time.</summary>
+    public void AcceptReschedule()
+    {
+        EnsureStatus(VisitStatus.RescheduleProposed, "قبول الموعد البديل");
+        Status = VisitStatus.Confirmed;
+        RespondedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Requester-side: declines the owner's counter-proposed date/time.</summary>
+    public void DeclineReschedule()
+    {
+        EnsureStatus(VisitStatus.RescheduleProposed, "رفض الموعد البديل");
+        Status = VisitStatus.Declined;
+        RespondedAt = DateTime.UtcNow;
     }
 
     // ── Private Helpers ───────────────────────────────────────────
