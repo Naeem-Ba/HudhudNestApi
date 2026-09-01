@@ -7,13 +7,29 @@ compose_file="performance/docker-compose.performance.yml"
 started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 test_failed=0
 services_started=false
+resource_sampler_pid=""
 
 mkdir -p "${artifacts}" "${artifacts}/k6" "${artifacts}/concurrency" "${artifacts}/postgresql"
 chmod 0777 "${artifacts}/k6"
 
 cleanup() {
   local original_status=$?
+  if [ -n "${resource_sampler_pid}" ]; then
+    # BUG-30b investigation: stop the once-per-second resource sampler started
+    # after the two-instance environment came up (see start_resource_sampler
+    # below). The pre-existing single docker-stats snapshot taken here at exit
+    # only ever captured an idle moment (all containers back near 0% CPU after
+    # every workload had already finished) -- it could neither confirm nor
+    # refute CI-runner resource contention as a cause of browse-cold's p95
+    # miss. container-resources-timeseries.jsonl gives one sample per second
+    # for the whole test run, each tagged with a UTC timestamp, so it can be
+    # correlated against the k6 log's own timestamps for the cold-cache browse
+    # workload window specifically.
+    kill "${resource_sampler_pid}" 2>/dev/null || true
+    wait "${resource_sampler_pid}" 2>/dev/null || true
+  fi
   if [ "${services_started}" = "true" ]; then
+    touch "${artifacts}/container-resources-timeseries.jsonl"
     docker compose -f "${compose_file}" logs --no-color --tail 5000 \
       api1 api2 load-balancer > "${artifacts}/service-logs.txt" 2>&1 || true
     docker stats --no-stream --format '{{json .}}' \
@@ -32,6 +48,23 @@ trap cleanup EXIT
 fail() {
   echo "ERROR: $*" >&2
   exit 1
+}
+
+start_resource_sampler() {
+  # BUG-30b investigation: sample every container's CPU/memory once per
+  # second, each line tagged with a UTC timestamp, for the rest of the run.
+  # `|| true` on every step keeps a single failed sample (e.g. during the
+  # rate-limit loop's --force-recreate restart) from killing the sampler.
+  (
+    while true; do
+      sample_ts="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
+      docker stats --no-stream --format '{{json .}}' 2>/dev/null |
+        jq -c --arg ts "${sample_ts}" '. + {sampledAtUtc: $ts}' \
+        >> "${artifacts}/container-resources-timeseries.jsonl" || true
+      sleep 1
+    done
+  ) &
+  resource_sampler_pid=$!
 }
 
 run_and_record() {
@@ -195,6 +228,8 @@ path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 PY
 
 psql "${PERF_DATABASE_URL}" -X -qAt -c 'SELECT pg_stat_statements_reset()' >/dev/null
+
+start_resource_sampler
 
 docker compose -f "${compose_file}" exec -T redis redis-cli FLUSHDB >/dev/null
 run_and_record "cold-cache browse workload" \
