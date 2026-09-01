@@ -109,19 +109,28 @@ restriction and needs no secret or live deployment — it runs on every `pull_re
    just "three containers are running").
 4. **Sentinel discovery** — `SENTINEL get-master-addr-by-name mymaster` is logged and asserted
    to match the primary, before anything is killed.
-5. **Write test data** — `SET production_gate_redis_ha_test <run-unique value>`, confirmed
+5. **Sentinel replica discovery** — polls `SENTINEL replicas mymaster` on all three Sentinels
+   until each independently reports `redis-replica`'s IP. Sentinel learns a master's replicas by
+   periodically polling the *master's own* `INFO replication` output (default cadence: every
+   10s), which is independent of, and can lag behind, the direct replication link checked in
+   step 2. Killing the primary before every Sentinel's internal replica table is populated
+   leaves `sentinelSelectSlave()` with zero promotion candidates, so every failover attempt
+   aborts with `-failover-abort-no-good-slave` for the rest of the run — this stage exists to
+   fail fast and unambiguously on that race instead of timing out at step 7 looking like a
+   generic failover failure.
+6. **Write test data** — `SET production_gate_redis_ha_test <run-unique value>`, confirmed
    readable, before the primary is touched.
-6. **Kill the primary** — a real `docker compose stop redis-primary`. Not a mock, not a
+7. **Kill the primary** — a real `docker compose stop redis-primary`. Not a mock, not a
    config edit, not a scaled-to-zero replica.
-7. **Wait for failover** — polls `SENTINEL get-master-addr-by-name mymaster` (bounded timeout,
+8. **Wait for failover** — polls `SENTINEL get-master-addr-by-name mymaster` (bounded timeout,
    default 90s) until it reports the replica's IP, then independently confirms at least 2 of
    the 3 Sentinels agree (a real quorum majority, not just the one Sentinel being polled).
-8. **Verify promotion against Redis itself** — `ROLE` against the (former) replica must report
-   `master`. Sentinel's own claim is checked separately in step 7 and is **not** treated as
+9. **Verify promotion against Redis itself** — `ROLE` against the (former) replica must report
+   `master`. Sentinel's own claim is checked separately in step 8 and is **not** treated as
    sufficient on its own.
-9. **Data + writability + stability** — the pre-failover key is read back from the new primary,
-   a brand-new key is written and read back, and all three Sentinels are re-polled to confirm
-   no `s_down`/`o_down` flags remain.
+10. **Data + writability + stability** — the pre-failover key is read back from the new primary,
+    a brand-new key is written and read back, and all three Sentinels are re-polled to confirm
+    no `s_down`/`o_down` flags remain.
 
 On any failure, the script (and a matching `if: always()` step in the job) prints
 `docker compose ps`, the last 100 log lines from all five containers, `SENTINEL masters` /

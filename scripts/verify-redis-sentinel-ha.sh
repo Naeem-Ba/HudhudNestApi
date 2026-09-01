@@ -42,7 +42,7 @@ dc() {
 }
 
 step=0
-total_steps=8
+total_steps=9
 mark() {
   step=$((step + 1))
   echo ""
@@ -93,7 +93,7 @@ echo "${fail_marker}"
 echo "REDIS SENTINEL HA VERIFICATION"
 echo "${fail_marker}"
 
-# --- [1/8] Connectivity ------------------------------------------------
+# --- [1/9] Connectivity ------------------------------------------------
 mark "Checking connectivity: redis-primary, redis-replica, sentinel-1/2/3"
 dc exec -T redis-primary redis-cli ping | grep -q PONG
 dc exec -T redis-replica redis-cli ping | grep -q PONG
@@ -102,7 +102,7 @@ dc exec -T redis-sentinel-2 redis-cli -p 26379 ping | grep -q PONG
 dc exec -T redis-sentinel-3 redis-cli -p 26379 ping | grep -q PONG
 pass
 
-# --- [2/8] Replication ---------------------------------------------------
+# --- [2/9] Replication ---------------------------------------------------
 mark "Checking replication (primary=master, replica=slave, link up)"
 
 primary_role="$(dc exec -T redis-primary redis-cli role | head -n1 | tr -d '\r')"
@@ -137,7 +137,7 @@ fi
 echo "  connected_slaves=${connected_slaves} master_link_status=${link_status}"
 pass
 
-# --- [3/8] Sentinel quorum ------------------------------------------------
+# --- [3/9] Sentinel quorum ------------------------------------------------
 mark "Checking Sentinel quorum (mutual discovery of all 3 sentinels)"
 
 deadline=$((SECONDS + quorum_timeout_seconds))
@@ -165,12 +165,50 @@ if [ "${quorum_ready}" != "true" ]; then
 fi
 pass
 
-# --- [4/8] Sentinel discovery (pre-failover) ------------------------------
+# --- [4/9] Sentinel discovery (pre-failover) ------------------------------
 mark "Verifying current master via Sentinel discovery"
 discovered_master="$(dc exec -T redis-sentinel-1 redis-cli -p 26379 sentinel get-master-addr-by-name mymaster | tr -d '\r' | head -n1)"
 echo "  SENTINEL get-master-addr-by-name mymaster -> ${discovered_master}"
 if [ "${discovered_master}" != "${primary_ip}" ]; then
   echo "::error::Sentinel-discovered master (${discovered_master}) does not match the expected primary (${primary_ip})."
+  exit 1
+fi
+pass
+
+# --- [5/9] Sentinel replica discovery (pre-failover) -----------------------
+mark "Verifying Sentinel has independently discovered redis-replica (not just direct replication)"
+# Sentinel learns a monitored master's replicas by periodically polling the
+# *master's own* `INFO replication` output (default cadence: every 10s) --
+# entirely separate from, and not driven by, the replica's own self-reported
+# link status already confirmed in step 2. If redis-primary is killed before
+# every Sentinel's internal replica table has actually been populated,
+# `sentinelSelectSlave()` finds zero promotion candidates at failover time
+# and every attempt aborts with `-failover-abort-no-good-slave` -- Sentinel
+# retries the *failover*, not the missed *discovery*, so once this window is
+# missed it stays missed for the rest of the run; the drill hangs until
+# failover_timeout_seconds and then fails deterministically, not flakily.
+# See docs/REDIS-HA.md.
+replica_discovery_timeout_seconds="${REDIS_SENTINEL_HA_REPLICA_DISCOVERY_TIMEOUT_SECONDS:-30}"
+deadline=$((SECONDS + replica_discovery_timeout_seconds))
+replica_discovered=false
+while [ "${SECONDS}" -lt "${deadline}" ]; do
+  ok=true
+  for sentinel in redis-sentinel-1 redis-sentinel-2 redis-sentinel-3; do
+    replica_ip_seen="$(dc exec -T "${sentinel}" redis-cli -p 26379 sentinel replicas mymaster | tr -d '\r' | awk '/^ip$/{getline; print; exit}')"
+    echo "  ${sentinel}: sees replica ip=${replica_ip_seen:-none}"
+    if [ "${replica_ip_seen:-}" != "${replica_ip}" ]; then
+      ok=false
+    fi
+  done
+  if [ "${ok}" = "true" ]; then
+    replica_discovered=true
+    break
+  fi
+  sleep 2
+done
+
+if [ "${replica_discovered}" != "true" ]; then
+  echo "::error::Sentinel had not discovered redis-replica (${replica_ip}) as mymaster's replica within ${replica_discovery_timeout_seconds}s (checked SENTINEL REPLICAS on all 3 sentinels). Killing the primary now would make failover unwinnable -- see docs/REDIS-HA.md."
   exit 1
 fi
 pass
@@ -189,7 +227,7 @@ echo "  wrote production_gate_redis_ha_test=${test_value}, confirmed readable on
 
 old_primary="${primary_ip}"
 
-# --- [5/8] Kill the primary ------------------------------------------------
+# --- [6/9] Kill the primary ------------------------------------------------
 mark "Stopping redis-primary (real container stop, not a mock)"
 failover_started_epoch="$(date -u +%s)"
 failover_started_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -197,7 +235,7 @@ dc stop redis-primary
 echo "  redis-primary stopped at ${failover_started_utc}."
 pass
 
-# --- [6/8] Wait for automatic failover -------------------------------------
+# --- [7/9] Wait for automatic failover -------------------------------------
 mark "Waiting for Sentinel to detect the failure and promote redis-replica (timeout ${failover_timeout_seconds}s)"
 deadline=$((SECONDS + failover_timeout_seconds))
 failover_detected=false
@@ -236,7 +274,7 @@ if [ "${agreeing}" -lt 2 ]; then
 fi
 pass
 
-# --- [7/8] Verify promotion directly against Redis (not just Sentinel's claim) ---
+# --- [8/9] Verify promotion directly against Redis (not just Sentinel's claim) ---
 mark "Verifying promotion via ROLE against redis-replica directly"
 new_role="$(dc exec -T redis-replica redis-cli role | head -n1 | tr -d '\r')"
 echo "  redis-replica ROLE -> ${new_role}"
@@ -246,7 +284,7 @@ if [ "${new_role}" != "master" ]; then
 fi
 pass
 
-# --- [8/8] Data preserved + post-failover writes accepted + Sentinel stable ---
+# --- [9/9] Data preserved + post-failover writes accepted + Sentinel stable ---
 mark "Verifying data survived failover, new master accepts writes, Sentinel cluster is stable"
 
 preserved_value="$(dc exec -T redis-replica redis-cli get production_gate_redis_ha_test | tr -d '\r')"
