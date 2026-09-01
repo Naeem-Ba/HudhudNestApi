@@ -198,6 +198,18 @@ dotnet run --project tools/PropertyApi.PerformanceDataGenerator/PropertyApi.Perf
   --properties "${PERF_DATASET_SIZE}" \
   --manifest "${PERF_DATASET_MANIFEST}"
 
+# BUG-30b: a bulk INSERT this size (PERF_DATASET_SIZE rows, "pr" profile
+# defaults to 10000) leaves the planner's statistics on the freshly-loaded
+# tables stale/default until autovacuum's own analyze happens to run --
+# which can then fire at an unpredictable moment during the very first,
+# most latency-sensitive scenario ("cold-cache browse workload", the only
+# scenario whose Redis output cache is empty for its whole measured window,
+# so every request is a real query against this data). Running ANALYZE
+# explicitly, synchronously, right here removes that source of measurement
+# variance instead of leaving it to chance. This is standard PostgreSQL
+# guidance after any large bulk load, not a change to what is measured.
+psql "${PERF_DATABASE_URL}" -X -v ON_ERROR_STOP=1 -c 'ANALYZE;' >/dev/null
+
 docker compose -f "${compose_file}" up -d --build api1 api2 load-balancer
 
 for attempt in $(seq 1 90); do

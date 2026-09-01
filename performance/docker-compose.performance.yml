@@ -70,6 +70,37 @@ services:
       - pg_stat_statements.track=all
       - -c
       - track_io_timing=on
+      # BUG-30b: this container is a throwaway, single-run CI database -- its
+      # volume is torn down (`docker compose down --volumes`) at the end of
+      # every run (see scripts/run-performance-tests.sh's cleanup trap), so it
+      # never needs to survive a crash. Confirmed root cause of BUG-30b was CI
+      # runner resource contention (see BUG-REPORT), not a code regression;
+      # these settings remove durability-only overhead (fsync/WAL sync calls
+      # that block on the runner's shared disk for data nobody will ever
+      # recover) so the "cold-cache browse workload" scenario -- the one
+      # scenario that forces every request to actually hit Postgres, because
+      # the Redis output cache was just flushed -- measures real query
+      # execution time instead of unrelated fsync/checkpoint I/O stalls.
+      # They change nothing about which query plan the planner picks (no
+      # planner cost settings are touched) and nothing about test semantics.
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+      # Default shared_buffers (128MB) is far below the documented minimum
+      # sane starting point (25% of available RAM) for any real workload; the
+      # ubuntu-latest GitHub-hosted runner backing this job
+      # (.github/workflows/performance-validation.yml) has 16GB RAM, so 1GB
+      # leaves ample headroom for the two api containers, redis, k6, and the
+      # postgres/api container builds that run alongside it.
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - work_mem=32MB
+      - -c
+      - maintenance_work_mem=256MB
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${PERF_POSTGRES_PASSWORD:?required}
