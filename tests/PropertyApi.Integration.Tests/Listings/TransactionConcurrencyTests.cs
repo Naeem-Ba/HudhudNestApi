@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using PropertyApi.Domain.Enums;
+using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Transactions.Entities;
 using PropertyApi.Domain.Transactions.Enums;
 using PropertyApi.Infrastructure.Persistence;
@@ -86,13 +88,27 @@ public sealed class TransactionConcurrencyTests : IAsyncLifetime
 
     private async Task<Guid> SeedPendingFeeAsync()
     {
+        // BUG-27: Transaction.PropertyId/PayerId/ReceiverId each carry a real FK
+        // (FK_Transactions_Properties_PropertyId, and two FKs to UserAccounts) — random
+        // Guids with no matching rows violate those constraints on real Postgres, same
+        // class of bug as PropertyConcurrencyTests/UserAccountConcurrencyTests.
+        var payer = await _factory.SeedUserAsync($"transaction-payer-{Guid.NewGuid():N}@test.local");
+        var receiver = await _factory.SeedUserAsync($"transaction-receiver-{Guid.NewGuid():N}@test.local");
+
         await using var scope = _factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+        var property = Property.Create(
+            "شقة للإيجار",
+            "وصف كافٍ للإعلان",
+            payer.UserAccountId,
+            ListingType.ForRent);
+        db.Properties.Add(property);
+
         var fee = Transaction.Create(
-            propertyId: Guid.NewGuid(),
-            payerId: Guid.NewGuid(),
-            receiverId: Guid.NewGuid(),
+            propertyId: property.Id,
+            payerId: payer.UserAccountId,
+            receiverId: receiver.UserAccountId,
             transactionType: TransactionType.FeaturedListingFee,
             amount: 5m,
             currencyId: 1,

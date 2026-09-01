@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Infrastructure.Persistence;
 using Xunit;
 
@@ -82,14 +81,11 @@ public sealed class UserAccountConcurrencyTests : IAsyncLifetime
 
     private async Task<Guid> SeedUserAsync()
     {
-        await using var scope = _factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-        var user = UserAccount.Create(Guid.NewGuid(), "Test", "Owner", DateTime.UtcNow);
-
-        db.UserAccounts.Add(user);
-        await db.SaveChangesAsync();
-
-        return user.Id;
+        // BUG-27: UserAccounts.Id carries FK_UserAccounts_Users_Id (a 1:1 shared-key
+        // relationship with the ASP.NET Identity user) — creating a UserAccount directly
+        // with a fresh Guid, with no matching Users row, violates that FK on real Postgres.
+        // PostgresAuthTestFactory.SeedUserAsync creates both rows correctly.
+        var seeded = await _factory.SeedUserAsync($"useraccount-concurrency-{Guid.NewGuid():N}@test.local");
+        return seeded.UserAccountId;
     }
 }

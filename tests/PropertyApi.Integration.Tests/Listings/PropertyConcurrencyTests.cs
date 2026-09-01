@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Listings.Entities;
-using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Infrastructure.Persistence;
 using PropertyApi.Integration.Tests.Auth;
 using Xunit;
@@ -88,12 +87,17 @@ public sealed class PropertyConcurrencyTests : IAsyncLifetime
 
     private async Task<Guid> SeedPropertyAsync()
     {
-        var ownerId = Guid.NewGuid();
+        // BUG-27: UserAccounts.Id carries FK_UserAccounts_Users_Id (a 1:1 shared-key
+        // relationship with the ASP.NET Identity user) — creating a UserAccount directly
+        // with a fresh Guid, with no matching Users row, violates that FK on real Postgres.
+        // The InMemory provider used by this assembly's other (fast) tests doesn't enforce
+        // FK constraints, so this only ever surfaced here, against a real server.
+        // PostgresAuthTestFactory.SeedUserAsync creates both rows correctly.
+        var owner = await _factory.SeedUserAsync($"property-concurrency-{Guid.NewGuid():N}@test.local");
+        var ownerId = owner.UserAccountId;
 
         await using var scope = _factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-        db.UserAccounts.Add(UserAccount.Create(ownerId, "Test", "Owner", DateTime.UtcNow));
 
         var property = Property.Create(
             "شقة للإيجار",
