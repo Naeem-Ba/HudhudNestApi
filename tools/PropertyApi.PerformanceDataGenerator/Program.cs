@@ -8,6 +8,7 @@ using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Listings.Enums;
 using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Infrastructure.Identity.Entities;
 using PropertyApi.Infrastructure.Persistence;
 
 var options = GeneratorOptions.Parse(args);
@@ -38,14 +39,43 @@ if (await db.UserAccounts.AnyAsync(x => x.LastName == ownerMarker))
     throw new InvalidOperationException("The exact performance run identifier already exists; use a unique PERF_RUN_ID.");
 
 var generatedAt = DateTime.UtcNow;
+var ownerIds = Enumerable.Range(0, options.UserCount)
+    .Select(index => DeterministicGuid(options.Seed, "user", index))
+    .ToArray();
+
+// BUG-29: UserAccounts.Id carries FK_UserAccounts_Users_Id (a 1:1 shared-key relationship
+// with the ASP.NET Identity user, added by CutOverIdentityToApplicationUser) -- a
+// UserAccount with no matching Users row violates that FK. This tool doesn't go through
+// the real registration service (UserManager password hashing for thousands of synthetic
+// rows would be needlessly slow for a load-test fixture), so it inserts the matching
+// Users row directly with the same deterministic id instead. Same underlying gap as
+// BUG-27's integration-test fixtures, different (non-service) fix shape because this
+// caller isn't a test.
+var identities = Enumerable.Range(0, options.UserCount)
+    .Select(index => new ApplicationUser
+    {
+        Id = ownerIds[index],
+        UserName = $"perf-{options.RunId}-{index:D5}",
+        NormalizedUserName = $"PERF-{options.RunId}-{index:D5}".ToUpperInvariant(),
+        Email = $"perf-{options.RunId}-{index:D5}@performance.invalid",
+        NormalizedEmail = $"PERF-{options.RunId}-{index:D5}@PERFORMANCE.INVALID".ToUpperInvariant(),
+        EmailConfirmed = true,
+        SecurityStamp = Guid.NewGuid().ToString("N"),
+        ConcurrencyStamp = Guid.NewGuid().ToString("N"),
+        CreatedAt = generatedAt,
+        UpdatedAt = generatedAt
+    })
+    .ToArray();
+
 var owners = Enumerable.Range(0, options.UserCount)
     .Select(index => UserAccount.Create(
-        DeterministicGuid(options.Seed, "user", index),
+        ownerIds[index],
         $"Perf{index:D5}",
         ownerMarker,
         generatedAt))
     .ToArray();
 
+await db.Users.AddRangeAsync(identities);
 await db.UserAccounts.AddRangeAsync(owners);
 await db.SaveChangesAsync();
 db.ChangeTracker.Clear();
