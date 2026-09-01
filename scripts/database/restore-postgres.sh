@@ -35,7 +35,7 @@ if [ -n "${PRODUCTION_DATABASE_URL:-}" ]; then
 fi
 
 BACKUP_FILE="${BACKUP_FILE}" MANIFEST_FILE="${MANIFEST_FILE}" \
-  "${DATABASE_SCRIPTS_DIR}/verify-backup.sh"
+  bash "${DATABASE_SCRIPTS_DIR}/verify-backup.sh"
 
 WORK_DIR="$(create_private_temp_dir)"
 cleanup() { rm -rf -- "${WORK_DIR}"; }
