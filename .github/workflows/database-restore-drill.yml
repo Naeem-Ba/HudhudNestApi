@@ -163,19 +163,69 @@ jobs:
       - name: Start isolated restore dependencies
         run: docker compose -f ci/docker-compose.database-recovery.yml up -d --wait --wait-timeout 120 restore-postgres redis
 
+      - name: Verify recovery artifact ownership and readability
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_host_path="artifacts/database-recovery/${BACKUP_ID}.manifest.json"
+          archive_host_path="artifacts/database-recovery/${BACKUP_ID}.dump.gpg"
+          for f in "${manifest_host_path}" "${archive_host_path}"; do
+            [ -s "${f}" ] || { echo "::error::Expected recovery artifact is missing or empty: ${f}"; exit 1; }
+          done
+          echo "Host view (runner uid=$(id -u):$(id -g)):"
+          ls -l "${manifest_host_path}" "${archive_host_path}"
+          # The backup/download steps above wrote both files as this same
+          # host UID under scripts/database/common.sh's "umask 077" (owner
+          # read/write only, mode 600 -- deliberately not group/world
+          # readable, since these hold a database dump and its manifest).
+          # Every recovery-toolbox invocation that reads them from here on
+          # must therefore run as this exact host UID via --user
+          # "$(id -u):$(id -g)"; a mismatched UID (e.g. the image's own
+          # Dockerfile-baked USER postgres) cannot open a mode-600 file it
+          # does not own. Prove that readability explicitly here -- with a
+          # clear diagnostic naming owner/mode -- instead of letting a bare
+          # "Permission denied" surface for the first time deep inside jq.
+          docker compose -f ci/docker-compose.database-recovery.yml run --rm --no-deps \
+            --user "$(id -u):$(id -g)" \
+            -e MANIFEST_FILE="/workspace/${manifest_host_path}" \
+            -e BACKUP_FILE="/workspace/${archive_host_path}" \
+            recovery-toolbox bash -c '
+              set -euo pipefail
+              echo "recovery-toolbox view ($(id)):"
+              ls -l "${MANIFEST_FILE}" "${BACKUP_FILE}"
+              [ -r "${MANIFEST_FILE}" ] || { echo "::error::recovery-toolbox (uid=$(id -u)) cannot read ${MANIFEST_FILE}"; exit 1; }
+              [ -r "${BACKUP_FILE}" ] || { echo "::error::recovery-toolbox (uid=$(id -u)) cannot read ${BACKUP_FILE}"; exit 1; }
+              jq -e ".schemaVersion" "${MANIFEST_FILE}" >/dev/null || { echo "::error::recovery-toolbox could open but not parse ${MANIFEST_FILE}"; exit 1; }
+              echo "recovery-toolbox can read and parse both recovery artifacts as the matching host UID."
+            '
+
       - name: Restore and validate the backup
         shell: bash
         run: |
           set -euo pipefail
           export MANIFEST_FILE="/workspace/artifacts/database-recovery/${BACKUP_ID}.manifest.json"
           export BACKUP_FILE="/workspace/artifacts/database-recovery/${BACKUP_ID}.dump.gpg"
+          # The "Create fresh encrypted backup" / "Download latest encrypted
+          # backup" steps above write into this bind-mounted
+          # artifacts/database-recovery directory as --user "$(id -u):$(id
+          # -g)" (the runner's own host UID), because this same manifest is
+          # also read directly on the host runner later (the "jq" calls in
+          # "Enforce RPO and RTO and write evidence" below run outside any
+          # container). recovery-toolbox's image otherwise runs as its
+          # Dockerfile's own USER postgres, a different, fixed UID -- reading
+          # a host-UID-owned file as postgres fails with "Permission denied"
+          # (jq: ... Could not open file ...: Permission denied). Every
+          # recovery-toolbox invocation that touches this shared directory
+          # must run as the same host UID as the steps that wrote to it.
           docker compose -f ci/docker-compose.database-recovery.yml run --rm --no-deps \
+            --user "$(id -u):$(id -g)" \
             -e BACKUP_ENCRYPTION_KEY -e MANIFEST_FILE -e BACKUP_FILE \
             -e RESTORE_TARGET_ENVIRONMENT -e RESTORE_TARGET_DISPOSABLE \
             -e ALLOW_DESTRUCTIVE_RESTORE -e RESTORE_TARGET_DATABASE_URL \
             -e RESTORE_ADMIN_DATABASE_URL -e PRODUCTION_DATABASE_URL \
             recovery-toolbox bash /workspace/scripts/database/restore-postgres.sh
           docker compose -f ci/docker-compose.database-recovery.yml run --rm --no-deps \
+            --user "$(id -u):$(id -g)" \
             -e MANIFEST_FILE -e RESTORE_TARGET_ENVIRONMENT -e RESTORE_TARGET_DATABASE_URL \
             -e RPO_TARGET_SECONDS -e RTO_TARGET_SECONDS \
             recovery-toolbox bash /workspace/scripts/database/verify-restored-database.sh
@@ -211,6 +261,7 @@ jobs:
           export APPLICATION_SMOKE_DURATION_SECONDS="${SMOKE_DURATION_SECONDS}"
           export DOWNLOAD_DURATION_SECONDS="${DOWNLOAD_DURATION_SECONDS:-0}"
           docker compose -f ci/docker-compose.database-recovery.yml run --rm --no-deps \
+            --user "$(id -u):$(id -g)" \
             -e BACKUP_ID -e DRILL_STARTED_EPOCH -e APPLICATION_SMOKE_DURATION_SECONDS \
             -e DOWNLOAD_DURATION_SECONDS -e RPO_TARGET_SECONDS -e RTO_TARGET_SECONDS \
             recovery-toolbox bash /workspace/scripts/database/create-recovery-report.sh

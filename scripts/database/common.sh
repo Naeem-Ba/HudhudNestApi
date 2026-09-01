@@ -35,6 +35,24 @@ create_private_temp_dir() {
   mktemp -d "${base%/}/propertyapi-db-recovery.XXXXXXXX"
 }
 
+# Points GnuPG at a private directory the current process already owns,
+# instead of the container user's home directory. recovery-toolbox
+# invocations run as an explicit numeric --user UID (matching the host UID
+# that owns the shared artifacts/database-recovery bind mount -- see
+# database-restore-drill.yml and BUG-recovery-gate-manifest-uid-mismatch) that
+# has no /etc/passwd entry and therefore no resolvable $HOME. Without this,
+# gpg falls back to creating "$HOME/.gnupg" (effectively "//.gnupg" when
+# $HOME is empty) and fails with:
+#   gpg: Fatal: can't create directory '//.gnupg': Permission denied
+# Every script that invokes gpg must call this before doing so.
+configure_gpg_home() {
+  local private_dir="$1"
+  export HOME="${private_dir}"
+  export GNUPGHOME="${private_dir}/.gnupg"
+  mkdir -p "${GNUPGHOME}"
+  chmod 700 "${GNUPGHOME}"
+}
+
 sha256_file() {
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum "$1" | awk '{print $1}'

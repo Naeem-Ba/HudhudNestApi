@@ -13,20 +13,11 @@ OUTPUT_DIR="${BACKUP_OUTPUT_DIR:-${REPOSITORY_ROOT}/artifacts/database-backup}"
 mkdir -p "${OUTPUT_DIR}"
 
 WORK_DIR="$(create_private_temp_dir)"
-
-# Configure a writable home for GnuPG when running in containers.
-export HOME="${WORK_DIR}"
-export GNUPGHOME="${WORK_DIR}/.gnupg"
-
-mkdir -p "${GNUPGHOME}"
-chmod 700 "${GNUPGHOME}"
-
-mkdir -p "${OUTPUT_DIR}"
-WORK_DIR="$(create_private_temp_dir)"
 cleanup() {
   rm -rf -- "${WORK_DIR}"
 }
 trap cleanup EXIT INT TERM
+configure_gpg_home "${WORK_DIR}"
 
 configure_pg_environment "${DATABASE_URL}"
 assert_postgres_client_matches_server

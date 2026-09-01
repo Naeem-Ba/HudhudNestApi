@@ -21,6 +21,7 @@ ACTUAL_SHA="$(sha256_file "${BACKUP_FILE}")"
 WORK_DIR="$(create_private_temp_dir)"
 cleanup() { rm -rf -- "${WORK_DIR}"; }
 trap cleanup EXIT INT TERM
+configure_gpg_home "${WORK_DIR}"
 PASSPHRASE_FILE="${WORK_DIR}/passphrase"
 DECRYPTED_FILE="${WORK_DIR}/verified.dump"
 TOC_FILE="${WORK_DIR}/archive.toc"
