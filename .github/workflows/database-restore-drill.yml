@@ -169,13 +169,27 @@ jobs:
           set -euo pipefail
           export MANIFEST_FILE="/workspace/artifacts/database-recovery/${BACKUP_ID}.manifest.json"
           export BACKUP_FILE="/workspace/artifacts/database-recovery/${BACKUP_ID}.dump.gpg"
+          # The "Create fresh encrypted backup" / "Download latest encrypted
+          # backup" steps above write into this bind-mounted
+          # artifacts/database-recovery directory as --user "$(id -u):$(id
+          # -g)" (the runner's own host UID), because this same manifest is
+          # also read directly on the host runner later (the "jq" calls in
+          # "Enforce RPO and RTO and write evidence" below run outside any
+          # container). recovery-toolbox's image otherwise runs as its
+          # Dockerfile's own USER postgres, a different, fixed UID -- reading
+          # a host-UID-owned file as postgres fails with "Permission denied"
+          # (jq: ... Could not open file ...: Permission denied). Every
+          # recovery-toolbox invocation that touches this shared directory
+          # must run as the same host UID as the steps that wrote to it.
           docker compose -f ci/docker-compose.database-recovery.yml run --rm --no-deps \
+            --user "$(id -u):$(id -g)" \
             -e BACKUP_ENCRYPTION_KEY -e MANIFEST_FILE -e BACKUP_FILE \
             -e RESTORE_TARGET_ENVIRONMENT -e RESTORE_TARGET_DISPOSABLE \
             -e ALLOW_DESTRUCTIVE_RESTORE -e RESTORE_TARGET_DATABASE_URL \
             -e RESTORE_ADMIN_DATABASE_URL -e PRODUCTION_DATABASE_URL \
             recovery-toolbox bash /workspace/scripts/database/restore-postgres.sh
           docker compose -f ci/docker-compose.database-recovery.yml run --rm --no-deps \
+            --user "$(id -u):$(id -g)" \
             -e MANIFEST_FILE -e RESTORE_TARGET_ENVIRONMENT -e RESTORE_TARGET_DATABASE_URL \
             -e RPO_TARGET_SECONDS -e RTO_TARGET_SECONDS \
             recovery-toolbox bash /workspace/scripts/database/verify-restored-database.sh
@@ -211,6 +225,7 @@ jobs:
           export APPLICATION_SMOKE_DURATION_SECONDS="${SMOKE_DURATION_SECONDS}"
           export DOWNLOAD_DURATION_SECONDS="${DOWNLOAD_DURATION_SECONDS:-0}"
           docker compose -f ci/docker-compose.database-recovery.yml run --rm --no-deps \
+            --user "$(id -u):$(id -g)" \
             -e BACKUP_ID -e DRILL_STARTED_EPOCH -e APPLICATION_SMOKE_DURATION_SECONDS \
             -e DOWNLOAD_DURATION_SECONDS -e RPO_TARGET_SECONDS -e RTO_TARGET_SECONDS \
             recovery-toolbox bash /workspace/scripts/database/create-recovery-report.sh
