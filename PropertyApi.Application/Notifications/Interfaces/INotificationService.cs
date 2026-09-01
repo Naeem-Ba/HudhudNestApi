@@ -93,6 +93,20 @@ public interface INotificationService
         bool accepted,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Generic short-stay booking-lifecycle notification. RelatedEntityId on the resulting
+    /// notification is the bookingId — NOT PropertyId, since a short-stay listing is its own
+    /// aggregate and is not necessarily backed by a Property row (see ShortStayListing.PropertyId,
+    /// which is nullable). Called from ShortStay booking command handlers.
+    /// </summary>
+    Task NotifyShortStayBookingUpdateAsync(
+        Guid recipientId,
+        Guid bookingId,
+        string listingTitle,
+        NotificationType type,
+        string detail,
+        CancellationToken ct = default);
+
     Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(
         Guid userId,
         int page,

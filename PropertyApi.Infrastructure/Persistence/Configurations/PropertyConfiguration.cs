@@ -231,11 +231,6 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
             .WithMany()
             .HasForeignKey(p => p.AgentId)
             .OnDelete(DeleteBehavior.SetNull);
-
-        builder.HasOne(p => p.PriceCurrency)
-            .WithMany(c => c.Properties)
-            .HasForeignKey(p => p.PriceCurrencyId)
-            .OnDelete(DeleteBehavior.Restrict);
         // ── الفهارس الجديدة ────────────────────────────────────────────
         builder.HasIndex(p => p.GovernorateId);
         builder.HasIndex(p => p.PropertyTypeId);
@@ -260,7 +255,6 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
         builder.HasIndex(p => p.AgencyId)
             .HasDatabaseName("IX_Properties_AgencyId")
             .HasFilter("\"AgencyId\" IS NOT NULL");
-        builder.HasIndex(p => p.PriceCurrencyId);
 
         // Composite index للبحث في السوق السوري
         builder.HasIndex(p => new { p.GovernorateId, p.PropertyTypeId, p.Status, p.IsPublished })

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using PropertyApi.Domain.Agencies.Entities;
+using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Infrastructure.Persistence.Configurations;
 
@@ -45,6 +46,15 @@ public sealed class AgencyConfiguration : IEntityTypeConfiguration<Agency>
 
         builder.Property(a => a.LicenseNumber)
             .HasMaxLength(120);
+
+        // Referential integrity for the owner, matching every other UserAccount-owning
+        // relationship in the schema (AgencyInvitation.InviterUserId/TargetUserId, etc.).
+        // Restrict: an owner must transfer ownership or deactivate the agency before their
+        // account can be removed, never lose the link silently.
+        builder.HasOne<UserAccount>()
+            .WithMany()
+            .HasForeignKey(a => a.OwnerUserId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // Unique among live agencies only. Filtered rather than plain, so a deleted
         // agency's slug is released instead of being reserved forever by a soft-deleted row

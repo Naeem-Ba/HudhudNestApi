@@ -94,18 +94,40 @@ public sealed class PerformanceGateConfigurationTests
     }
 
     [Fact]
-    public void K6_contracts_use_the_APIs_configured_Pascal_case_JSON_names()
+    public void K6_contracts_use_the_APIs_configured_camelCase_JSON_names()
     {
+        // BUG-23: Program.cs has used JsonNamingPolicy.CamelCase since the B-11
+        // migration. This test (and, until fixed alongside it, the k6 scripts
+        // themselves) still asserted the pre-B-11 PascalCase contract, which no
+        // longer exists on the wire — every affected k6 check was silently
+        // evaluating against `undefined`.
         var browse = File.ReadAllText(Repo("performance", "load-tests", "scenarios", "browse.js"));
         var authRaces = File.ReadAllText(Repo("performance", "load-tests", "scenarios", "auth-races.js"));
         var program = File.ReadAllText(Repo("PropertyApi", "Program.cs"));
 
-        Assert.Contains("PropertyNamingPolicy = null", program, StringComparison.Ordinal);
-        Assert.Contains("response.json('Items')", browse, StringComparison.Ordinal);
-        Assert.Contains("item.DistanceMeters", browse, StringComparison.Ordinal);
-        Assert.DoesNotContain("response.json('items')", browse, StringComparison.Ordinal);
-        Assert.Contains("response.json('ChallengeId')", authRaces, StringComparison.Ordinal);
-        Assert.Contains("register.json('RefreshToken')", authRaces, StringComparison.Ordinal);
+        Assert.Contains("PropertyNamingPolicy = JsonNamingPolicy.CamelCase", program, StringComparison.Ordinal);
+        Assert.Contains("response.json('items')", browse, StringComparison.Ordinal);
+        Assert.Contains("item.distanceMeters", browse, StringComparison.Ordinal);
+        Assert.DoesNotContain("response.json('Items')", browse, StringComparison.Ordinal);
+        Assert.Contains("response.json('challengeId')", authRaces, StringComparison.Ordinal);
+
+        // BUG-30a: RefreshTokenCookie.Attach (PropertyApi/Security/Auth/RefreshTokenCookie.cs)
+        // moved the refresh token out of the JSON body and into an HttpOnly `refresh_token`
+        // cookie as a security hardening change; PhonePasswordAuthController's Result()
+        // helper always nulls the body's RefreshToken field before returning it. auth-races.js
+        // must read the cookie, not the (permanently null) body field.
+        Assert.Contains("register.cookies.refresh_token", authRaces, StringComparison.Ordinal);
+        Assert.DoesNotContain("register.json('refreshToken')", authRaces, StringComparison.Ordinal);
+
+        // BUG-31: ASP.NET Core's ResponseCookies.Append percent-encodes the cookie value
+        // it writes ('+' -> '%2B', '/' -> '%2F', '=' -> '%3D'; verified against a real
+        // Microsoft.AspNetCore.App ResponseCookiesFeature) and its own Request.Cookies[name]
+        // reader percent-decodes it back, so a real browser round trip is symmetric. k6's
+        // response.cookies[name][0].value does not decode it (verified against the exact
+        // grafana/k6:0.54.0 image this repo's CI uses) -- auth-races.js must decode it
+        // itself before sending it back, or every concurrent request hashes to a value with
+        // no matching stored token and gets rejected as "not found" instead of racing.
+        Assert.Contains("decodeURIComponent(refreshTokenCookie.value)", authRaces, StringComparison.Ordinal);
     }
 
     [Fact]

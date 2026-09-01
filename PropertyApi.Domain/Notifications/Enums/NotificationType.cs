@@ -72,12 +72,32 @@ public enum NotificationType
     /// <summary>A ServiceReview was added. Sent to the ServiceProvider's UserId.</summary>
     ServiceReviewAdded = 25,
 
+    /// <summary>Short-stay: a guest submitted a new booking (Request or Instant). Sent to the
+    /// listing owner. Raised by CreateBookingCommandHandler.</summary>
+    ShortStayBookingRequested = 26,
+
+    /// <summary>Short-stay: the host approved a Pending booking. Sent to the guest.</summary>
+    ShortStayBookingApproved = 27,
+
+    /// <summary>Short-stay: the host rejected a booking, or it lost out to another approved
+    /// overlapping request. Sent to the guest.</summary>
+    ShortStayBookingRejected = 28,
+
+    /// <summary>Short-stay: a booking reached BookingStatus.Confirmed. Sent to the guest.</summary>
+    ShortStayBookingConfirmed = 29,
+
+    /// <summary>Short-stay: a booking was cancelled by the guest. Sent to the host.</summary>
+    ShortStayBookingCancelled = 30,
+
+    /// <summary>Short-stay: a new review was left for a listing. Sent to the host.</summary>
+    ShortStayReviewAdded = 31,
+
     /// <summary>The owner proposed an alternate date/time for a Pending VisitRequest. Sent to the requester.</summary>
-    VisitRescheduleProposed = 26,
+    VisitRescheduleProposed = 32,
 
     /// <summary>The requester accepted the owner's alternate date/time. Sent to the property owner.</summary>
-    VisitRescheduleAccepted = 27,
+    VisitRescheduleAccepted = 33,
 
     /// <summary>The requester declined the owner's alternate date/time. Sent to the property owner.</summary>
-    VisitRescheduleDeclined = 28,
+    VisitRescheduleDeclined = 34,
 }

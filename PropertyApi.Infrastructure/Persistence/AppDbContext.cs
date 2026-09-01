@@ -21,6 +21,7 @@ using PropertyApi.Domain.Search.Entities;
 using PropertyApi.Domain.Services.Entities;
 using PropertyApi.Infrastructure.Identity.Entities;
 using PropertyApi.Infrastructure.Security.DataProtection;
+using PropertyApi.Domain.ShortStay.Entities;
 
 
 
@@ -62,7 +63,6 @@ public sealed class AppDbContext
     public DbSet<PropertyAmenity> PropertyAmenities => Set<PropertyAmenity>();
     public DbSet<Favorite> Favorites => Set<Favorite>();
     public DbSet<Message> Messages => Set<Message>();
-    public DbSet<OtpCode> OtpCodes => Set<OtpCode>();
     public DbSet<PhoneOtpChallenge> PhoneOtpChallenges => Set<PhoneOtpChallenge>();
     public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
@@ -76,8 +76,6 @@ public sealed class AppDbContext
     public DbSet<Neighborhood> Neighborhoods => Set<Neighborhood>();
     public DbSet<PropertyType> PropertyTypes => Set<PropertyType>();
     public DbSet<LocationSuggestion> LocationSuggestions => Set<LocationSuggestion>();
-    public DbSet<SaleDetails> SaleDetails => Set<SaleDetails>();
-    public DbSet<RentalDetails> RentalDetails => Set<RentalDetails>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<SavedSearch> SavedSearches => Set<SavedSearch>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
@@ -88,8 +86,22 @@ public sealed class AppDbContext
     public DbSet<ServiceOffering> ServiceOfferings => Set<ServiceOffering>();
     public DbSet<ServiceRequest> ServiceRequests => Set<ServiceRequest>();
     public DbSet<ServiceRequestStatusHistory> ServiceRequestStatusHistories => Set<ServiceRequestStatusHistory>();
-    public DbSet<ServiceReviewDocument> ServiceReviewDocuments => Set<ServiceReviewDocument>();
+    public DbSet<ServiceRequestDocument> ServiceRequestDocuments => Set<ServiceRequestDocument>();
     public DbSet<ServiceReview> ServiceReviews => Set<ServiceReview>();
+
+    // Short-Stay Accommodation subsystem
+    public DbSet<AccommodationType> AccommodationTypes => Set<AccommodationType>();
+    public DbSet<ShortStayListing> ShortStayListings => Set<ShortStayListing>();
+    public DbSet<RoomType> ShortStayRoomTypes => Set<RoomType>();
+    public DbSet<AccommodationUnit> AccommodationUnits => Set<AccommodationUnit>();
+    public DbSet<PricingRule> ShortStayPricingRules => Set<PricingRule>();
+    public DbSet<MinimumStayRule> ShortStayMinimumStayRules => Set<MinimumStayRule>();
+    public DbSet<UnitBookingRange> UnitBookingRanges => Set<UnitBookingRange>();
+    public DbSet<ShortStayListingAmenity> ShortStayListingAmenities => Set<ShortStayListingAmenity>();
+    public DbSet<ShortStayListingPhoto> ShortStayListingPhotos => Set<ShortStayListingPhoto>();
+    public DbSet<Booking> ShortStayBookings => Set<Booking>();
+    public DbSet<ShortStayReview> ShortStayReviews => Set<ShortStayReview>();
+    public DbSet<HostVerificationRecord> HostVerificationRecords => Set<HostVerificationRecord>();
 
     // -- Model Configuration -------------------------------------
     protected override void OnModelCreating(ModelBuilder builder)
@@ -139,7 +151,7 @@ public sealed class AppDbContext
         builder.Entity<ServiceOffering>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ServiceRequest>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ServiceRequestStatusHistory>().HasQueryFilter(e => !e.IsDeleted);
-        builder.Entity<ServiceReviewDocument>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<ServiceRequestDocument>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ServiceReview>().HasQueryFilter(e => !e.IsDeleted);
     }
 

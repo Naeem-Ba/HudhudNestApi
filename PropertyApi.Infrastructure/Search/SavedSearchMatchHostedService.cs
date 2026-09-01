@@ -20,9 +20,9 @@ namespace PropertyApi.Infrastructure.Search;
 /// rules here — a saved search alert must never disagree with what a live search
 /// for the same criteria would return.
 ///
-/// Pattern mirrors OtpCleanupHostedService: IServiceScopeFactory + a polling loop,
-/// because DbContext/scoped services cannot be injected directly into a singleton
-/// BackgroundService.
+/// Pattern mirrors the other recurring hosted services (e.g. PhoneVerificationHostedService):
+/// IServiceScopeFactory + a polling loop, because DbContext/scoped services cannot be
+/// injected directly into a singleton BackgroundService.
 /// </summary>
 public sealed class SavedSearchMatchHostedService : BackgroundService
 {

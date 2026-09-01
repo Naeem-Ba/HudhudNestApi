@@ -329,55 +329,6 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.ToTable("AuditLogs", (string)null);
                 });
 
-            modelBuilder.Entity("PropertyApi.Domain.Auth.Entities.OtpCode", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("AttemptCount")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("CodeHash")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<string>("IpAddress")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<bool>("IsUsed")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("PhoneNumber")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<int>("Purpose")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ExpiresAt")
-                        .HasDatabaseName("IX_OtpCodes_ExpiresAt");
-
-                    b.HasIndex("PhoneNumber", "CreatedAt")
-                        .HasDatabaseName("IX_OtpCodes_Phone_CreatedAt");
-
-                    b.HasIndex("PhoneNumber", "Purpose", "ExpiresAt")
-                        .HasDatabaseName("IX_OtpCodes_Phone_Purpose_ExpiresAt");
-
-                    b.ToTable("OtpCodes", (string)null);
-                });
-
             modelBuilder.Entity("PropertyApi.Domain.Auth.Entities.PhoneOtpChallenge", b =>
                 {
                     b.Property<Guid>("Id")
@@ -421,6 +372,8 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ExpiresAtUtc");
+
+                    b.HasIndex("UserId");
 
                     b.HasIndex("NormalizedPhoneNumber", "Purpose", "CreatedAtUtc");
 
@@ -786,9 +739,6 @@ namespace PropertyApi.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
-                    b.Property<int?>("PriceCurrencyId")
-                        .HasColumnType("integer");
-
                     b.Property<int?>("PropertyTypeId")
                         .HasColumnType("integer");
 
@@ -927,8 +877,6 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.HasIndex("NeighborhoodId");
 
                     b.HasIndex("OwnerId");
-
-                    b.HasIndex("PriceCurrencyId");
 
                     b.HasIndex("PropertyTypeId");
 
@@ -1077,147 +1025,6 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.HasIndex("PropertyId", "ChangedAt");
 
                     b.ToTable("PropertyPriceHistories", (string)null);
-                });
-
-            modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.RentalDetails", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AllowedTenantType")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<DateOnly?>("AvailableFrom")
-                        .HasColumnType("date");
-
-                    b.Property<bool>("CommercialUseAllowed")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IncludesElectricityBill")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IncludesInternetBill")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IncludesWaterBill")
-                        .HasColumnType("boolean");
-
-                    b.Property<int?>("MaxContractMonths")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("MinContractMonths")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("MonthlyRent")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("PaymentFrequency")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasDefaultValue("Monthly");
-
-                    b.Property<bool>("PetsAllowed")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid>("PropertyId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("RenewalPolicy")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<int>("RentCurrencyId")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal?>("SecurityDepositAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int>("SecurityDepositMonths")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("SmokingAllowed")
-                        .HasColumnType("boolean");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PropertyId")
-                        .IsUnique();
-
-                    b.HasIndex("RentCurrencyId");
-
-                    b.ToTable("RentalDetails", (string)null);
-                });
-
-            modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.SaleDetails", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal?>("DownPaymentAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("DownPaymentPercentage")
-                        .HasColumnType("decimal(5,2)");
-
-                    b.Property<string>("ExtraInclusions")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<bool>("IncludesAppliances")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IncludesFurniture")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("InstallmentNotes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<int?>("InstallmentsYears")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsPriceNegotiable")
-                        .HasColumnType("boolean");
-
-                    b.Property<decimal?>("MonthlyInstallment")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("PaymentMethod")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasDefaultValue("Cash");
-
-                    b.Property<int>("PriceCurrencyId")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("PropertyId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("TotalPrice")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("TransferFeePercentage")
-                        .HasColumnType("decimal(5,2)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PriceCurrencyId");
-
-                    b.HasIndex("PropertyId")
-                        .IsUnique();
-
-                    b.ToTable("SaleDetails", (string)null);
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.Lookups.Entities.Currency", b =>
@@ -2181,6 +1988,56 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.ToTable("ServiceRequests", (string)null);
                 });
 
+            modelBuilder.Entity("PropertyApi.Domain.Services.Entities.ServiceRequestDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("FilePublicId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("FileType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("FileUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("ServiceRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("UploadedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceRequestId");
+
+                    b.ToTable("ServiceRequestDocuments", (string)null);
+                });
+
             modelBuilder.Entity("PropertyApi.Domain.Services.Entities.ServiceRequestStatusHistory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2271,7 +2128,55 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.ToTable("ServiceReviews", (string)null);
                 });
 
-            modelBuilder.Entity("PropertyApi.Domain.Services.Entities.ServiceReviewDocument", b =>
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.AccommodationType", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Icon")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("IsActive");
+
+                    b.ToTable("AccommodationTypes", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.AccommodationUnit", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -2283,42 +2188,615 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp without time zone");
 
-                    b.Property<string>("FileName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<string>("FilePublicId")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<string>("FileType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("FileUrl")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
-                    b.Property<Guid>("ServiceRequestId")
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("RoomTypeId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp without time zone");
 
-                    b.Property<Guid>("UploadedByUserId")
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoomTypeId");
+
+                    b.ToTable("AccommodationUnits", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.Booking", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CancellationPolicyCustomTermsText")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<bool>("CancellationPolicyDepositRefundable")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("CancellationPolicyFreeCancellationDays")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateOnly>("CheckIn")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("CheckOut")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<decimal>("DepositAmount")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid>("GuestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("HostNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("HouseRulesAcceptedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("HouseRulesSnapshotText")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("RemainingAmount")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime?>("RespondedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuestId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UnitId");
+
+                    b.ToTable("ShortStayBookings", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.HostVerificationRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("VerifiedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("VerifiedByAdminId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ServiceRequestId");
+                    b.HasIndex("UserId", "Type")
+                        .IsUnique();
 
-                    b.ToTable("ServiceReviewDocuments", (string)null);
+                    b.ToTable("HostVerificationRecords", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.MinimumStayRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateOnly?>("DateRangeEnd")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("DateRangeStart")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MinimumNights")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RoomTypeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoomTypeId");
+
+                    b.ToTable("ShortStayMinimumStayRules", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.PricingRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateOnly?>("DateRangeEnd")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("DateRangeStart")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("DayOfWeek")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("PricePerNight")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid>("RoomTypeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RuleType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoomTypeId");
+
+                    b.ToTable("ShortStayPricingRules", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.RoomType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("BasePricePerNight")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("Capacity")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("ShortStayListingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShortStayListingId");
+
+                    b.ToTable("ShortStayRoomTypes", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.ShortStayListing", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AccommodationTypeId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("AllowsParties")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AllowsPets")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AllowsSmoking")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Bathrooms")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Bedrooms")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CancellationCustomTermsText")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<bool>("CancellationDepositRefundable")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("CancellationFreeCancellationDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeOnly>("CheckInTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<TimeOnly>("CheckOutTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("CleaningFee")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CustomRulesText")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("DepositPercentage")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<int?>("DistrictId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("ExtraBedFee")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("ExtraGuestFee")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("GovernorateId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("InstantBookingEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("Latitude")
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<string>("LocationVisibility")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("Longitude")
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<int?>("NeighborhoodId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PropertyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<TimeOnly?>("QuietHoursEnd")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<TimeOnly?>("QuietHoursStart")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<bool>("RequestBookingEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("SelfCheckInEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccommodationTypeId");
+
+                    b.HasIndex("City");
+
+                    b.HasIndex("IsPublished");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("ShortStayListings", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.ShortStayListingAmenity", b =>
+                {
+                    b.Property<Guid>("ShortStayListingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AmenityId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("ShortStayListingId", "AmenityId");
+
+                    b.HasIndex("AmenityId");
+
+                    b.ToTable("ShortStayListingAmenities", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.ShortStayListingPhoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AltText")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsMain")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<Guid>("ShortStayListingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ThumbnailUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShortStayListingId");
+
+                    b.ToTable("ShortStayListingPhotos", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.ShortStayReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ReviewerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ShortStayListingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookingId")
+                        .IsUnique();
+
+                    b.HasIndex("ShortStayListingId");
+
+                    b.ToTable("ShortStayReviews", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.UnitBookingRange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BookingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("CheckIn")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("CheckOut")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookingId");
+
+                    b.HasIndex("UnitId");
+
+                    b.HasIndex("UnitId", "CheckIn", "CheckOut");
+
+                    b.ToTable("UnitBookingRanges", (string)null);
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.Transactions.Entities.Transaction", b =>
@@ -2397,6 +2875,8 @@ namespace PropertyApi.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("BookingId");
+
                     b.HasIndex("PayerId");
 
                     b.HasIndex("PropertyId");
@@ -2417,7 +2897,6 @@ namespace PropertyApi.Infrastructure.Migrations
             modelBuilder.Entity("PropertyApi.Domain.Users.Entities.UserAccount", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("AgencyId")
@@ -2776,6 +3255,15 @@ namespace PropertyApi.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("PropertyApi.Domain.Agencies.Entities.Agency", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PropertyApi.Domain.Agencies.Entities.AgencyInvitation", b =>
                 {
                     b.HasOne("PropertyApi.Domain.Agencies.Entities.Agency", null)
@@ -2805,6 +3293,14 @@ namespace PropertyApi.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Auth.Entities.PhoneOtpChallenge", b =>
+                {
+                    b.HasOne("PropertyApi.Infrastructure.Identity.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.Bookings.Entities.VisitRequest", b =>
@@ -2878,11 +3374,6 @@ namespace PropertyApi.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("PropertyApi.Domain.Lookups.Entities.Currency", "PriceCurrency")
-                        .WithMany("Properties")
-                        .HasForeignKey("PriceCurrencyId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("PropertyApi.Domain.Lookups.Entities.PropertyType", "PropertyType")
                         .WithMany("Properties")
                         .HasForeignKey("PropertyTypeId")
@@ -2897,8 +3388,6 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Navigation("Neighborhood");
 
                     b.Navigation("Owner");
-
-                    b.Navigation("PriceCurrency");
 
                     b.Navigation("PropertyType");
                 });
@@ -2940,44 +3429,6 @@ namespace PropertyApi.Infrastructure.Migrations
                         .HasForeignKey("PropertyId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Property");
-                });
-
-            modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.RentalDetails", b =>
-                {
-                    b.HasOne("PropertyApi.Domain.Listings.Entities.Property", "Property")
-                        .WithOne("RentalDetails")
-                        .HasForeignKey("PropertyApi.Domain.Listings.Entities.RentalDetails", "PropertyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("PropertyApi.Domain.Lookups.Entities.Currency", "RentCurrency")
-                        .WithMany()
-                        .HasForeignKey("RentCurrencyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Property");
-
-                    b.Navigation("RentCurrency");
-                });
-
-            modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.SaleDetails", b =>
-                {
-                    b.HasOne("PropertyApi.Domain.Lookups.Entities.Currency", "PriceCurrency")
-                        .WithMany()
-                        .HasForeignKey("PriceCurrencyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("PropertyApi.Domain.Listings.Entities.Property", "Property")
-                        .WithOne("SaleDetails")
-                        .HasForeignKey("PropertyApi.Domain.Listings.Entities.SaleDetails", "PropertyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("PriceCurrency");
 
                     b.Navigation("Property");
                 });
@@ -3117,6 +3568,15 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Navigation("ServiceProvider");
                 });
 
+            modelBuilder.Entity("PropertyApi.Domain.Services.Entities.ServiceProvider", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PropertyApi.Domain.Services.Entities.ServiceRequest", b =>
                 {
                     b.HasOne("PropertyApi.Domain.Lookups.Entities.Currency", null)
@@ -3162,6 +3622,15 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Navigation("ServiceProvider");
                 });
 
+            modelBuilder.Entity("PropertyApi.Domain.Services.Entities.ServiceRequestDocument", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Services.Entities.ServiceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PropertyApi.Domain.Services.Entities.ServiceRequestStatusHistory", b =>
                 {
                     b.HasOne("PropertyApi.Domain.Services.Entities.ServiceRequest", null)
@@ -3186,12 +3655,206 @@ namespace PropertyApi.Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("PropertyApi.Domain.Services.Entities.ServiceReviewDocument", b =>
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.AccommodationUnit", b =>
                 {
-                    b.HasOne("PropertyApi.Domain.Services.Entities.ServiceRequest", null)
-                        .WithMany()
-                        .HasForeignKey("ServiceRequestId")
+                    b.HasOne("PropertyApi.Domain.ShortStay.Entities.RoomType", "RoomType")
+                        .WithMany("Units")
+                        .HasForeignKey("RoomTypeId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RoomType");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.Booking", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.ShortStay.Entities.AccommodationUnit", "Unit")
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.OwnsOne("PropertyApi.Domain.ShortStay.ValueObjects.GuestComposition", "Guests", b1 =>
+                        {
+                            b1.Property<Guid>("BookingId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("Adults")
+                                .HasColumnType("integer")
+                                .HasColumnName("Adults");
+
+                            b1.Property<int>("Children")
+                                .HasColumnType("integer")
+                                .HasColumnName("Children");
+
+                            b1.Property<int>("Infants")
+                                .HasColumnType("integer")
+                                .HasColumnName("Infants");
+
+                            b1.HasKey("BookingId");
+
+                            b1.ToTable("ShortStayBookings");
+
+                            b1.WithOwner()
+                                .HasForeignKey("BookingId");
+                        });
+
+                    b.Navigation("Guests")
+                        .IsRequired();
+
+                    b.Navigation("Unit");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.MinimumStayRule", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.ShortStay.Entities.RoomType", "RoomType")
+                        .WithMany("MinimumStayRules")
+                        .HasForeignKey("RoomTypeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RoomType");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.PricingRule", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.ShortStay.Entities.RoomType", "RoomType")
+                        .WithMany("PricingRules")
+                        .HasForeignKey("RoomTypeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RoomType");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.RoomType", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.ShortStay.Entities.ShortStayListing", "ShortStayListing")
+                        .WithMany("RoomTypes")
+                        .HasForeignKey("ShortStayListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ShortStayListing");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.ShortStayListing", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.ShortStay.Entities.AccommodationType", "AccommodationType")
+                        .WithMany("Listings")
+                        .HasForeignKey("AccommodationTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.OwnsOne("PropertyApi.Domain.ShortStay.ValueObjects.PoolDetails", "PoolDetails", b1 =>
+                        {
+                            b1.Property<Guid>("ShortStayListingId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<bool>("IsHeated")
+                                .HasColumnType("boolean")
+                                .HasColumnName("PoolIsHeated");
+
+                            b1.Property<bool>("IsSeasonal")
+                                .HasColumnType("boolean")
+                                .HasColumnName("PoolIsSeasonal");
+
+                            b1.Property<string>("Location")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)")
+                                .HasColumnName("PoolLocation");
+
+                            b1.Property<string>("Type")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)")
+                                .HasColumnName("PoolType");
+
+                            b1.HasKey("ShortStayListingId");
+
+                            b1.ToTable("ShortStayListings");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ShortStayListingId");
+                        });
+
+                    b.Navigation("AccommodationType");
+
+                    b.Navigation("PoolDetails");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.ShortStayListingAmenity", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Listings.Entities.Amenity", "Amenity")
+                        .WithMany()
+                        .HasForeignKey("AmenityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PropertyApi.Domain.ShortStay.Entities.ShortStayListing", "ShortStayListing")
+                        .WithMany("ListingAmenities")
+                        .HasForeignKey("ShortStayListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Amenity");
+
+                    b.Navigation("ShortStayListing");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.ShortStayListingPhoto", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.ShortStay.Entities.ShortStayListing", "ShortStayListing")
+                        .WithMany("Photos")
+                        .HasForeignKey("ShortStayListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ShortStayListing");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.UnitBookingRange", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.ShortStay.Entities.Booking", "Booking")
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("PropertyApi.Domain.ShortStay.Entities.AccommodationUnit", "Unit")
+                        .WithMany("BookingRanges")
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Booking");
+
+                    b.Navigation("Unit");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Transactions.Entities.Transaction", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Bookings.Entities.VisitRequest", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("PayerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PropertyApi.Domain.Listings.Entities.Property", null)
+                        .WithMany()
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ReceiverId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
@@ -3201,6 +3864,12 @@ namespace PropertyApi.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("AgencyId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("PropertyApi.Infrastructure.Identity.Entities.ApplicationUser", null)
+                        .WithOne()
+                        .HasForeignKey("PropertyApi.Domain.Users.Entities.UserAccount", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("PropertyApi.Domain.Plans.Entities.Plan", null)
                         .WithMany()
@@ -3233,15 +3902,6 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Navigation("Messages");
 
                     b.Navigation("PropertyAmenities");
-
-                    b.Navigation("RentalDetails");
-
-                    b.Navigation("SaleDetails");
-                });
-
-            modelBuilder.Entity("PropertyApi.Domain.Lookups.Entities.Currency", b =>
-                {
-                    b.Navigation("Properties");
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.Lookups.Entities.District", b =>
@@ -3266,6 +3926,34 @@ namespace PropertyApi.Infrastructure.Migrations
             modelBuilder.Entity("PropertyApi.Domain.Lookups.Entities.PropertyType", b =>
                 {
                     b.Navigation("Properties");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.AccommodationType", b =>
+                {
+                    b.Navigation("Listings");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.AccommodationUnit", b =>
+                {
+                    b.Navigation("BookingRanges");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.RoomType", b =>
+                {
+                    b.Navigation("MinimumStayRules");
+
+                    b.Navigation("PricingRules");
+
+                    b.Navigation("Units");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.ShortStay.Entities.ShortStayListing", b =>
+                {
+                    b.Navigation("ListingAmenities");
+
+                    b.Navigation("Photos");
+
+                    b.Navigation("RoomTypes");
                 });
 #pragma warning restore 612, 618
         }

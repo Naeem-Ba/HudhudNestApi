@@ -57,7 +57,10 @@ function recordInstance(response) {
 
 function sendChallenge(phone) {
   const response = jsonPost('/api/auth/phone/registration/send-otp', { phoneNumber: phone });
-  const challengeId = response.status === 200 ? response.json('ChallengeId') : null;
+  // BUG-23: API responses use camelCase JSON keys since the B-11 migration
+  // (Program.cs sets PropertyNamingPolicy = JsonNamingPolicy.CamelCase) —
+  // reading 'ChallengeId' returned undefined on every real run.
+  const challengeId = response.status === 200 ? response.json('challengeId') : null;
   if (!challengeId) {
     throw new Error(
       `Could not create an isolated OTP race challenge. ` +
@@ -93,11 +96,38 @@ export function setup() {
     const register = jsonPost(
       '/api/auth/phone/registration/verify',
       registrationPayload(challengeId, marker));
-    const refreshToken = register.status === 200 ? register.json('RefreshToken') : null;
+    // BUG-30a: RefreshTokenCookie.Attach (PropertyApi/Security/Auth/RefreshTokenCookie.cs:26-36)
+    // moved the refresh token out of the JSON body and into an HttpOnly `refresh_token`
+    // cookie (Path=/api/auth) as a security hardening change; PhonePasswordAuthController's
+    // Result() helper (Controllers/PhonePasswordAuthController.cs:53-63) now always nulls the
+    // body's RefreshToken field before returning it. This script still read the body field, so
+    // it always got null and setup() threw before any VU could send a single race request --
+    // this was never a real latency/budget failure. Read the cookie instead, same as a real
+    // browser client does.
+    const refreshTokenCookie = register.cookies && register.cookies.refresh_token
+      ? register.cookies.refresh_token[0]
+      : null;
+    // BUG-31: ASP.NET Core's ResponseCookies.Append percent-encodes the cookie
+    // value it writes (verified locally: a 64-random-byte Base64 token with '+'/'/'/'='
+    // comes out on the wire as "...%2B...%2F...%3D%3D..."), and its own request-side
+    // Request.Cookies[name] reader percent-decodes it back on the way in -- so a real
+    // browser (or any ASP.NET Core-to-ASP.NET Core round trip) is symmetric and this is
+    // NOT a production bug. k6's response.cookies[name][0].value, however, returns the
+    // raw still-encoded string verbatim (confirmed against grafana/k6:0.54.0, the exact
+    // image this repo's CI uses, via an isolated repro server). Sending that raw string
+    // back as the JSON body's refreshToken hashed to a value with no matching DB row,
+    // so every concurrent request got 401 "no such token" -- explaining both the
+    // race_successes==0 (expected 1) and race_rejections==concurrency (expected
+    // concurrency-1) threshold failures, and why capture-auth-race-integrity.sh showed
+    // the original stored token was never touched by any request.
+    const refreshToken = register.status === 200 && refreshTokenCookie
+      ? decodeURIComponent(refreshTokenCookie.value)
+      : null;
     if (!refreshToken) {
       throw new Error(
         `Could not create a refresh-token race fixture. ` +
-        `status=${register.status}, body=${register.body.slice(0, 500)}`);
+        `status=${register.status}, body=${register.body.slice(0, 500)}, ` +
+        `cookies=${JSON.stringify(Object.keys(register.cookies || {}))}`);
     }
     return { raceAt, marker, refreshToken };
   }

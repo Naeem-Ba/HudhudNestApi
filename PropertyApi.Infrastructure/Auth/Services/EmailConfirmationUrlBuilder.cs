@@ -65,10 +65,14 @@ public sealed class EmailConfirmationUrlBuilder : IEmailConfirmationUrlBuilder
 
         var baseUrl = configuredUrl.Trim().TrimEnd('/');
 
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+        // BUG-26: see PasswordResetUrlBuilder's identical guard for why the scheme must be
+        // checked explicitly -- UriKind.Absolute alone accepts a rooted path like
+        // "/auth/verify-email" as a valid file:// URI on Linux but rejects it on Windows.
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
             throw new InvalidOperationException(
-                "Frontend:BaseUrl must be an absolute URL.");
+                "Frontend:BaseUrl must be an absolute HTTP(S) URL.");
         }
 
         if (_environment.IsProduction() && uri.Scheme != Uri.UriSchemeHttps)

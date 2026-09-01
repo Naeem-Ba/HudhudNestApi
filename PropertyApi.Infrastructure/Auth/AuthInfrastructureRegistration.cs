@@ -199,7 +199,6 @@ internal static class AuthInfrastructureRegistration
         services.AddScoped<IPasswordResetUrlBuilder, PasswordResetUrlBuilder>();
         services.AddScoped<IEmailConfirmationUrlBuilder, EmailConfirmationUrlBuilder>();
         services.AddScoped<IJwtTokenSettings, JwtTokenSettings>();
-        services.AddHostedService<OtpCleanupHostedService>();
         services.AddScoped<PhoneNumberLookupHashBackfill>();
     }
 
@@ -430,8 +429,6 @@ internal static class AuthInfrastructureRegistration
                     "SmsProvider:FromNumber is required in Production.")
                 .ValidateOnStart();
         }
-
-        services.AddScoped<IOtpCodeRepository, OtpCodeRepository>();
 
         var stagingTestSupportEnabled =
             StagingTestSupportPolicy.IsEnabled(environment, configuration);

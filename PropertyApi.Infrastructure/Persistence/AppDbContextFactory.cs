@@ -13,6 +13,12 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
 {
     public AppDbContext CreateDbContext(string[] args)
     {
+        // Must match Program.cs's startup switch (see MigrationCompletenessTests.cs for why):
+        // without it, the design-time model differs from the shipped one on every
+        // CreatedAt/UpdatedAt/DeletedAt column, and `dotnet ef migrations add` emits a wall of
+        // spurious AlterColumn operations that do not reflect any real entity change.
+        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
         var currentDirectory = Directory.GetCurrentDirectory();
 
         var apiProjectPath = Path.Combine(currentDirectory, "PropertyApi");

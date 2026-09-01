@@ -893,6 +893,26 @@ jobs:
           REDIS_HA_OUTPUT_DIR: artifacts/redis-ha
         run: |
           set -euo pipefail
+          mkdir -p "${REDIS_HA_OUTPUT_DIR}"
+          # No managed Redis HA provider (e.g. Upstash Multi-Zone) is wired to
+          # Staging yet, and this pipeline no longer treats that absence as a
+          # failure (see docs/REDIS-HA.md "Production Redis HA Decision" and
+          # "Provider-Neutral Production Gate"). The mandatory, always-enforced
+          # proof of Redis HA capability is the redis-sentinel-ha job below,
+          # which is provider-independent. If/when a real managed provider is
+          # configured for Staging, set REDIS_HA_EVIDENCE_JSON and this step
+          # resumes strict, fail-closed validation of that provider's evidence.
+          if [ -z "${REDIS_HA_EVIDENCE_JSON:-}" ]; then
+            echo "::notice::REDIS_HA_EVIDENCE_JSON is not configured. Skipping managed-provider Redis HA evidence validation -- this is not a failure. See docs/REDIS-HA.md."
+            {
+              echo "# Redis HA Provider Evidence"
+              echo ""
+              echo "Status: skipped (no managed Redis HA provider configured for Staging)"
+              echo ""
+              echo "Redis HA capability is instead proven by the provider-neutral redis-sentinel-ha job."
+            } > "${REDIS_HA_OUTPUT_DIR}/redis-ha-validation-summary.md"
+            exit 0
+          fi
           bash scripts/verify-redis-ha.sh
 
       - name: Upload Redis HA validation artifacts
@@ -904,12 +924,72 @@ jobs:
           retention-days: 30
           path: artifacts/redis-ha/**
 
+  redis-sentinel-ha:
+    name: Redis Sentinel HA Failover Drill (self-hosted, CI-native)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # No `if:` restriction: unlike validate-redis-ha-topology and
+    # redis-staging-failover above (which depend on a managed provider and a
+    # live Staging deployment), this job is fully self-contained -- it brings
+    # up a real Redis OSS + Replication + Sentinel topology in this job's own
+    # Docker daemon and kills the real primary container. It costs nothing
+    # and depends on nothing external, so it runs on every pull_request and
+    # push, not just master, giving real HA-failover coverage per change
+    # instead of only at release time. See docs/REDIS-HA.md.
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate Docker Compose configuration
+        run: |
+          set -euo pipefail
+          docker compose -f "${COMPOSE_FILE}" config --quiet
+
+      - name: Start Redis Sentinel HA topology
+        run: |
+          set -euo pipefail
+          docker compose \
+            -f "${COMPOSE_FILE}" \
+            up \
+            -d \
+            --wait \
+            --wait-timeout 60 \
+            redis-primary \
+            redis-replica \
+            redis-sentinel-1 \
+            redis-sentinel-2 \
+            redis-sentinel-3
+          docker compose -f "${COMPOSE_FILE}" ps
+
+      - name: Run Redis Sentinel HA failover drill
+        env:
+          REDIS_SENTINEL_HA_OUTPUT_DIR: artifacts/redis-sentinel-ha
+        run: |
+          set -euo pipefail
+          bash scripts/verify-redis-sentinel-ha.sh
+
+      - name: Upload Redis Sentinel HA drill artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: redis-sentinel-ha-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: artifacts/redis-sentinel-ha/**
+
+      - name: Stop Redis Sentinel HA topology
+        if: always()
+        run: |
+          docker compose -f "${COMPOSE_FILE}" down -v --remove-orphans
+
   staging-smoke:
     name: Mandatory Staging Deploy + E2E Smoke
     needs:
       - build-test-container
       - observability-validation
       - validate-redis-ha-topology
+      - redis-sentinel-ha
 
     if: >-
       github.event_name == 'workflow_dispatch' ||
@@ -1093,9 +1173,29 @@ jobs:
           REDIS_FAILOVER_JUNIT_PATH: artifacts/redis-failover/redis-failover-junit.xml
         run: |
           set -euo pipefail
+          # No managed Redis HA provider is wired to Staging yet (no
+          # REDIS_PROVIDER_FAILOVER_COMMAND secret configured). This live,
+          # provider-triggered drill against the real Staging deployment
+          # stays valuable for whenever a managed provider IS configured, but
+          # its absence must not fail the pipeline -- the mandatory,
+          # always-enforced proof of Redis HA capability is the
+          # redis-sentinel-ha job, which needs no external provider. See
+          # docs/REDIS-HA.md.
+          if [ -z "${REDIS_PROVIDER_FAILOVER_COMMAND:-}" ]; then
+            echo "::notice::REDIS_PROVIDER_FAILOVER_COMMAND is not configured. Skipping the live managed-provider failover drill -- this is not a failure. See docs/REDIS-HA.md."
+            mkdir -p "$(dirname "${REDIS_FAILOVER_SUMMARY_PATH}")"
+            {
+              echo "# Redis Failover Drill (managed provider)"
+              echo ""
+              echo "Status: skipped (no managed Redis HA provider configured for Staging)"
+            } > "${REDIS_FAILOVER_SUMMARY_PATH}"
+            echo "skipped=true" >> "${GITHUB_ENV}"
+            exit 0
+          fi
           bash scripts/test-redis-failover.sh
 
       - name: Verify Redis post-failover recovery evidence
+        if: env.skipped != 'true'
         shell: bash
         env:
           REDIS_FAILOVER_REPORT_PATH: artifacts/redis-failover/redis-failover-report.json
@@ -1119,6 +1219,7 @@ jobs:
       - build-test-container
       - observability-validation
       - validate-redis-ha-topology
+      - redis-sentinel-ha
       - staging-smoke
       - redis-staging-failover
       - performance-validation
@@ -1129,6 +1230,7 @@ jobs:
        github.ref == 'refs/heads/master') &&
       needs.build-test-container.result == 'success' &&
        needs.observability-validation.result == 'success' &&
+       needs.redis-sentinel-ha.result == 'success' &&
        needs.staging-smoke.result == 'success' &&
        needs.redis-staging-failover.result == 'success' &&
        needs.performance-validation.result == 'success' &&
@@ -1143,6 +1245,10 @@ jobs:
           set -euo pipefail
           if [ "${{ needs.staging-smoke.result }}" != "success" ]; then
             echo "::error::Production is blocked because the mandatory Staging gate did not succeed."
+            exit 1
+          fi
+          if [ "${{ needs.redis-sentinel-ha.result }}" != "success" ]; then
+            echo "::error::Production is blocked because the Redis Sentinel HA failover drill did not succeed."
             exit 1
           fi
           if [ "${{ needs.performance-validation.result }}" != "success" ]; then

@@ -118,4 +118,5 @@ jobs:
             artifacts/performance/baseline-comparison.json
             artifacts/performance/service-logs.txt
             artifacts/performance/container-resources.jsonl
+            artifacts/performance/container-resources-timeseries.jsonl
             artifacts/performance/redis-memory.txt
