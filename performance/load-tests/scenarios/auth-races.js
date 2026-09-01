@@ -96,11 +96,25 @@ export function setup() {
     const register = jsonPost(
       '/api/auth/phone/registration/verify',
       registrationPayload(challengeId, marker));
-    const refreshToken = register.status === 200 ? register.json('refreshToken') : null;
+    // BUG-30a: RefreshTokenCookie.Attach (PropertyApi/Security/Auth/RefreshTokenCookie.cs:26-36)
+    // moved the refresh token out of the JSON body and into an HttpOnly `refresh_token`
+    // cookie (Path=/api/auth) as a security hardening change; PhonePasswordAuthController's
+    // Result() helper (Controllers/PhonePasswordAuthController.cs:53-63) now always nulls the
+    // body's RefreshToken field before returning it. This script still read the body field, so
+    // it always got null and setup() threw before any VU could send a single race request --
+    // this was never a real latency/budget failure. Read the cookie instead, same as a real
+    // browser client does.
+    const refreshTokenCookie = register.cookies && register.cookies.refresh_token
+      ? register.cookies.refresh_token[0]
+      : null;
+    const refreshToken = register.status === 200 && refreshTokenCookie
+      ? refreshTokenCookie.value
+      : null;
     if (!refreshToken) {
       throw new Error(
         `Could not create a refresh-token race fixture. ` +
-        `status=${register.status}, body=${register.body.slice(0, 500)}`);
+        `status=${register.status}, body=${register.body.slice(0, 500)}, ` +
+        `cookies=${JSON.stringify(Object.keys(register.cookies || {}))}`);
     }
     return { raceAt, marker, refreshToken };
   }

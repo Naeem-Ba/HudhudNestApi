@@ -110,7 +110,14 @@ public sealed class PerformanceGateConfigurationTests
         Assert.Contains("item.distanceMeters", browse, StringComparison.Ordinal);
         Assert.DoesNotContain("response.json('Items')", browse, StringComparison.Ordinal);
         Assert.Contains("response.json('challengeId')", authRaces, StringComparison.Ordinal);
-        Assert.Contains("register.json('refreshToken')", authRaces, StringComparison.Ordinal);
+
+        // BUG-30a: RefreshTokenCookie.Attach (PropertyApi/Security/Auth/RefreshTokenCookie.cs)
+        // moved the refresh token out of the JSON body and into an HttpOnly `refresh_token`
+        // cookie as a security hardening change; PhonePasswordAuthController's Result()
+        // helper always nulls the body's RefreshToken field before returning it. auth-races.js
+        // must read the cookie, not the (permanently null) body field.
+        Assert.Contains("register.cookies.refresh_token", authRaces, StringComparison.Ordinal);
+        Assert.DoesNotContain("register.json('refreshToken')", authRaces, StringComparison.Ordinal);
     }
 
     [Fact]
