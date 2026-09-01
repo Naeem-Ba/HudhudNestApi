@@ -1121,7 +1121,7 @@
           "PropertyApi.Domain": "[1.0.0, )",
           "System.IdentityModel.Tokens.Jwt": "[8.22.0, )",
           "System.Security.Cryptography.Xml": "[10.0.11, )",
-          "Twilio": "[7.14.9, )"
+          "Twilio": "[8.0.0, )"
         }
       },
       "CloudinaryDotNet": {
@@ -1464,9 +1464,9 @@
       },
       "Twilio": {
         "type": "CentralTransitive",
-        "requested": "[7.14.9, )",
-        "resolved": "7.14.9",
-        "contentHash": "dYFgEoNofKasj2cpYddZT7yVkBexkQz4eTlQ4c72BO2H1H8UbTGGl9Aa7NIFBUuTcdNWOYwIZlHjmitlRng28g==",
+        "requested": "[8.0.0, )",
+        "resolved": "8.0.0",
+        "contentHash": "00l27ng5EJ670OecA3qwp/Tj2Z8UWacJCsNI6c+oO2biWpCCW1xwrYBNlKxl2Y0jOGZIxWDQU8VUQySFF593DA==",
         "dependencies": {
           "Microsoft.IdentityModel.Tokens": "8.3.1",
           "Newtonsoft.Json": "13.0.1",
