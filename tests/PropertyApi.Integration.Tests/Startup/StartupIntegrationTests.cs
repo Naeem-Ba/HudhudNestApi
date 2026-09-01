@@ -61,13 +61,24 @@ public sealed class StartupIntegrationTests : IAsyncLifetime
     [Trait("Feature", "RateLimiting")]
     public void Program_Should_Register_RateLimiter_Once_Without_Duplicate_Policy_Names()
     {
+        // BUG-28: AddRateLimiter was moved out of Program.cs and into its own extension
+        // method (RegisterRateLimiting -> AddPropertyApiRateLimiting) in
+        // Configuration/RateLimitingRegistration.cs during the Short-Stay Accommodation
+        // work (b41833a). This test was never updated, so it kept reading Program.cs --
+        // which calls the extension method but no longer contains "AddRateLimiter(" at
+        // all -- and found zero matches instead of the real registration.
         var programSource = File.ReadAllText(
             Path.Combine(FindRepositoryRoot(), "PropertyApi", "Program.cs"));
 
-        var addRateLimiterMatches = Regex.Matches(programSource, @"AddRateLimiter\s*\(");
+        Assert.Contains("AddPropertyApiRateLimiting", programSource);
+
+        var registrationSource = File.ReadAllText(
+            Path.Combine(FindRepositoryRoot(), "PropertyApi", "Configuration", "RateLimitingRegistration.cs"));
+
+        var addRateLimiterMatches = Regex.Matches(registrationSource, @"AddRateLimiter\s*\(");
         Assert.Single(addRateLimiterMatches);
 
-        var rateLimiterBlock = ExtractRateLimiterBlock(programSource);
+        var rateLimiterBlock = ExtractRateLimiterBlock(registrationSource);
 
         var policyNames = Regex
             .Matches(rateLimiterBlock, @"\.AddPolicy\(\s*""([^""]+)""")
@@ -100,13 +111,13 @@ public sealed class StartupIntegrationTests : IAsyncLifetime
 
     private static string ExtractRateLimiterBlock(string programSource)
     {
-        const string marker = "builder.Services.AddRateLimiter";
+        const string marker = "services.AddRateLimiter";
 
         var startIndex = programSource.IndexOf(marker, StringComparison.Ordinal);
 
         Assert.True(
             startIndex >= 0,
-            "Could not find the AddRateLimiter registration in Program.cs.");
+            "Could not find the AddRateLimiter registration in RateLimitingRegistration.cs.");
 
         var openParenIndex = programSource.IndexOf('(', startIndex);
 
