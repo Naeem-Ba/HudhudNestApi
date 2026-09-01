@@ -48,4 +48,12 @@
     <_ContentIncludedByDefault Remove="appsettings.Development.example.json" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- BUG-33: lets RateLimitingTests read the real auth-login/auth-register window
+         sizes from RedisRateLimitingDefaults directly, instead of duplicating those
+         TimeSpan values in test code where they could silently drift from the real
+         policy config (see PropertyApi.Infrastructure.csproj for the same pattern). -->
+    <InternalsVisibleTo Include="PropertyApi.Integration.Tests" />
+  </ItemGroup>
+
 </Project>
