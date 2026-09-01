@@ -1,4 +1,6 @@
-﻿namespace PropertyApi.Domain.Users.Entities;
+﻿using PropertyApi.Domain.Users.Enums;
+
+namespace PropertyApi.Domain.Users.Entities;
 
 /// <summary>
 /// Business profile of a platform user.
@@ -71,6 +73,34 @@ public sealed class UserAccount
     public Guid? PlanId { get; private set; }
 
     public DateTime? PlanSelectedAt { get; private set; }
+
+    /// <summary>
+    /// When the current PlanId stops granting benefits. Null means "no fixed end" — always
+    /// true for a self-service selection (SelectPlan never sets this; see its doc comment),
+    /// and true for an admin activation/extension that deliberately grants an open-ended
+    /// period. Only meaningful when PlanStatus is Active; see GetEffectivePlanStatus.
+    /// </summary>
+    public DateTime? PlanExpiresAt { get; private set; }
+
+    /// <summary>
+    /// Admin-controlled kill switch, distinct from time-based expiry — see PlanStatus's doc
+    /// comment for why Expired isn't a member of this enum. Defaults to Active because every
+    /// row that predates this field (self-service selections with no admin ever involved)
+    /// must read exactly as before: in force, no fixed end.
+    /// </summary>
+    public PlanStatus PlanStatus { get; private set; } = PlanStatus.Active;
+
+    /// <summary>Null until the first SelectPlan/ActivatePlanByAdmin call ever sets PlanId.</summary>
+    public PlanActivationSource? PlanActivationSource { get; private set; }
+
+    /// <summary>Set by CancelPlan; cleared again if an admin re-activates/extends afterwards.</summary>
+    public DateTime? PlanCancelledAt { get; private set; }
+
+    /// <summary>
+    /// The admin who most recently activated, extended, or cancelled this account's plan.
+    /// Null for a plan that has only ever been self-service-selected.
+    /// </summary>
+    public Guid? PlanGrantedByUserId { get; private set; }
 
     public DateTime CreatedAt { get; private set; }
 
@@ -316,7 +346,213 @@ public sealed class UserAccount
         PlanSelectedAt =
             utcNow;
 
+        // Self-service always means "in force, no fixed end, no admin involved" — even when
+        // this call is replacing a prior admin grant (a user picking a new plan themselves
+        // supersedes whatever an admin had set up for them before).
+        PlanExpiresAt =
+            null;
+
+        PlanStatus =
+            Enums.PlanStatus.Active;
+
+        PlanActivationSource =
+            Enums.PlanActivationSource.SelfService;
+
+        PlanCancelledAt =
+            null;
+
         UpdatedAt =
             utcNow;
     }
+
+    /// <summary>
+    /// Admin grants a plan to this account for free — no payment involved. Unlike
+    /// <see cref="SelectPlan"/>, the admin chooses the expiry explicitly (Plan carries no
+    /// billing-cycle field by design; see Plan's doc comment), so callers must resolve and
+    /// pass it themselves — e.g. utcNow.AddDays(durationDays).
+    /// </summary>
+    public void ActivatePlanByAdmin(
+        Guid planId,
+        DateTime? expiresAtUtc,
+        Guid adminUserId,
+        DateTime utcNow)
+    {
+        if (planId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Plan id is required.",
+                nameof(planId));
+        }
+
+        if (adminUserId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Performing admin id is required.",
+                nameof(adminUserId));
+        }
+
+        if (expiresAtUtc is { } expiry && expiry <= utcNow)
+        {
+            throw new ArgumentException(
+                "Plan expiry must be in the future.",
+                nameof(expiresAtUtc));
+        }
+
+        PlanId =
+            planId;
+
+        PlanSelectedAt =
+            utcNow;
+
+        PlanExpiresAt =
+            expiresAtUtc;
+
+        PlanStatus =
+            Enums.PlanStatus.Active;
+
+        PlanActivationSource =
+            Enums.PlanActivationSource.AdminGrant;
+
+        PlanCancelledAt =
+            null;
+
+        PlanGrantedByUserId =
+            adminUserId;
+
+        UpdatedAt =
+            utcNow;
+    }
+
+    /// <summary>
+    /// Admin extends the current plan by <paramref name="period"/>. Requires a plan to
+    /// already be selected — there is nothing to extend otherwise (use
+    /// <see cref="ActivatePlanByAdmin"/> for a first grant).
+    ///
+    /// Base date: the current PlanExpiresAt if the plan is still Active AND that date is
+    /// still in the future (an active, not-yet-expired plan keeps its remaining time and
+    /// gets the extension added on top); utcNow otherwise — i.e. an expired or cancelled
+    /// plan restarts from the moment the admin acts, per the spec's explicit rule, and this
+    /// call reactivates it (PlanStatus back to Active).
+    /// </summary>
+    public void ExtendPlan(
+        TimeSpan period,
+        Guid adminUserId,
+        DateTime utcNow)
+    {
+        if (PlanId is null)
+        {
+            throw new InvalidOperationException(
+                "Cannot extend a plan that was never selected.");
+        }
+
+        if (period <= TimeSpan.Zero)
+        {
+            throw new ArgumentException(
+                "Extension period must be positive.",
+                nameof(period));
+        }
+
+        if (adminUserId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Performing admin id is required.",
+                nameof(adminUserId));
+        }
+
+        var stillActiveAndFuture =
+            PlanStatus == Enums.PlanStatus.Active
+            && PlanExpiresAt is { } currentExpiry
+            && currentExpiry > utcNow;
+
+        var baseDate =
+            stillActiveAndFuture
+                ? PlanExpiresAt!.Value
+                : utcNow;
+
+        PlanExpiresAt =
+            baseDate.Add(period);
+
+        PlanStatus =
+            Enums.PlanStatus.Active;
+
+        PlanActivationSource =
+            Enums.PlanActivationSource.AdminGrant;
+
+        PlanCancelledAt =
+            null;
+
+        PlanGrantedByUserId =
+            adminUserId;
+
+        UpdatedAt =
+            utcNow;
+    }
+
+    /// <summary>
+    /// Admin cancels the current plan, effective immediately (see spec — no billing cycle
+    /// exists anywhere in this codebase to define an "at period end" alternative).
+    /// Deliberately does NOT null PlanId/PlanExpiresAt: the cancelled plan stays inspectable
+    /// on the row itself in addition to the audit-log trail the caller writes separately.
+    /// </summary>
+    public void CancelPlan(
+        Guid adminUserId,
+        DateTime utcNow)
+    {
+        if (PlanId is null)
+        {
+            throw new InvalidOperationException(
+                "Cannot cancel a plan that was never selected.");
+        }
+
+        if (adminUserId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Performing admin id is required.",
+                nameof(adminUserId));
+        }
+
+        PlanStatus =
+            Enums.PlanStatus.Cancelled;
+
+        PlanCancelledAt =
+            utcNow;
+
+        PlanGrantedByUserId =
+            adminUserId;
+
+        UpdatedAt =
+            utcNow;
+    }
+
+    /// <summary>
+    /// The status callers actually care about — see EffectivePlanStatus's doc comment for
+    /// why this is computed rather than a second persisted field.
+    /// </summary>
+    public EffectivePlanStatus GetEffectivePlanStatus(DateTime asOfUtc)
+    {
+        if (PlanId is null)
+        {
+            return EffectivePlanStatus.NoPlan;
+        }
+
+        if (PlanStatus == Enums.PlanStatus.Cancelled)
+        {
+            return EffectivePlanStatus.Cancelled;
+        }
+
+        if (PlanExpiresAt is { } expiresAt && expiresAt <= asOfUtc)
+        {
+            return EffectivePlanStatus.Expired;
+        }
+
+        return EffectivePlanStatus.Active;
+    }
+
+    /// <summary>
+    /// True only when the plan is genuinely in force right now — the check
+    /// IListingQuotaPolicy uses to decide whether to trust PlanId's own limit or fall back
+    /// to the free tier's.
+    /// </summary>
+    public bool HasActivePlanBenefits(DateTime asOfUtc)
+        => GetEffectivePlanStatus(asOfUtc) == EffectivePlanStatus.Active;
 }

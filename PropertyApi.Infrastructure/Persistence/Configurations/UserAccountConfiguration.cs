@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using PropertyApi.Domain.Agencies.Entities;
 using PropertyApi.Domain.Plans.Entities;
 using PropertyApi.Domain.Users.Entities;
+using PropertyApi.Domain.Users.Enums;
 using PropertyApi.Infrastructure.Identity.Entities;
 
 namespace PropertyApi.Infrastructure.Persistence.Configurations;
@@ -103,5 +104,29 @@ public sealed class UserAccountConfiguration
         builder.HasIndex(x => x.PlanId)
             .HasDatabaseName("IX_UserAccounts_PlanId")
             .HasFilter("\"PlanId\" IS NOT NULL");
+
+        // Subscription lifecycle (admin dashboard: activate/extend/cancel a plan for free).
+        // PlanStatus/PlanActivationSource stored as strings — same convention as
+        // PropertyConfiguration's HasConversion<string> for PropertyStatus, so a future
+        // member needs no data migration.
+        builder.Property(x => x.PlanStatus)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(PlanStatus.Active)
+            .IsRequired();
+
+        builder.Property(x => x.PlanActivationSource)
+            .HasConversion<string>()
+            .HasMaxLength(20);
+
+        // Restrict, not Cascade/SetNull: the admin who granted a plan is a fact about that
+        // grant, not something that should silently vanish if their own account is later
+        // deleted -- deletion of an admin account is expected to be exceedingly rare and,
+        // were it to happen, should surface as an explicit conflict rather than quietly
+        // erasing who activated a paying-adjacent benefit for another user.
+        builder.HasOne<ApplicationUser>()
+            .WithMany()
+            .HasForeignKey(x => x.PlanGrantedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

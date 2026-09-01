@@ -56,6 +56,8 @@ public static class DependencyInjection
         services.AddSingleton<PhoneOwnershipPolicy>();
         services.AddSingleton<IPhoneVerificationPolicy, PhoneVerificationPolicy>();
         services.AddScoped<IAdminService, AdminService>();
+        services.AddScoped<IAdminSubscriptionService, AdminSubscriptionService>();
+        services.AddScoped<IAdminListingService, AdminListingService>();
         services.AddScoped<IPropertyOwnershipService, PropertyOwnershipService>();
 
         // Password security service.

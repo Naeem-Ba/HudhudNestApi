@@ -19,7 +19,7 @@ public sealed class AdminServiceTests
             page: -10,
             pageSize: 500,
             role: "agent",
-            CancellationToken.None);
+            ct: CancellationToken.None);
 
         Assert.Equal(1, users.LastPage);
         Assert.Equal(100, users.LastPageSize);
@@ -157,6 +157,9 @@ public sealed class AdminServiceTests
             int page,
             int pageSize,
             string? role,
+            string? search = null,
+            string? planTier = null,
+            string? accountStatus = null,
             CancellationToken ct = default)
         {
             LastPage = page;
@@ -171,6 +174,11 @@ public sealed class AdminServiceTests
                 PageSize = pageSize
             });
         }
+
+        public Task<AdminUserDetailDto?> GetUserDetailAsync(
+            Guid userId,
+            CancellationToken ct = default)
+            => Task.FromResult<AdminUserDetailDto?>(null);
     }
 
     private sealed class FakeAdminIdentityService : IAdminIdentityService

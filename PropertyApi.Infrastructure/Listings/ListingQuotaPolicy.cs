@@ -38,7 +38,7 @@ internal sealed class ListingQuotaPolicy : IListingQuotaPolicy
         }
 
         return await ResolvePlanLimitAsync(
-            ownerAccount.PlanId,
+            ownerAccount,
             "اختر خطة أولاً لتحديد حصة الإعلانات المسموح بها.",
             ct);
     }
@@ -61,15 +61,15 @@ internal sealed class ListingQuotaPolicy : IListingQuotaPolicy
                 "تعذّر تحديد حصة الإعلانات لمكتبكم — تعذّر العثور على حساب مالك المكتب.");
 
         return await ResolvePlanLimitAsync(
-            owner.PlanId,
+            owner,
             "لم يختر مالك مكتبكم خطة بعد، فلا يمكن تحديد حصة الإعلانات المسموح بها للمكتب. " +
             "تواصلوا مع مالك المكتب لاختيار خطة.",
             ct);
     }
 
     /// <summary>
-    /// Resolves Plan.ListingLimit for a given PlanId. <paramref name="noPlanMessage"/> lets
-    /// the caller phrase "no plan" for the two different subjects it can mean (the acting
+    /// Resolves Plan.ListingLimit for <paramref name="account"/>. <paramref name="noPlanMessage"/>
+    /// lets the caller phrase "no plan" for the two different subjects it can mean (the acting
     /// owner themselves, or their agency's owner) without duplicating the resolution logic.
     ///
     /// Never returns a bypass for a state it cannot explain: null PlanId, or a PlanId that no
@@ -78,15 +78,29 @@ internal sealed class ListingQuotaPolicy : IListingQuotaPolicy
     /// account — but this is the one place a stale/orphaned reference could otherwise turn
     /// into an accidental unlimited quota, so it is checked anyway) both reject rather than
     /// silently allow.
+    ///
+    /// An expired or admin-cancelled plan (UserAccount.HasActivePlanBenefits == false) falls
+    /// back to the free tier's limit instead of trusting the stale PlanId's own — otherwise an
+    /// admin cancellation would be cosmetic, leaving the account's real quota untouched. This
+    /// is the one place that fallback needs to happen, since it's the only caller that turns a
+    /// plan into an enforced number.
     /// </summary>
     private async Task<int> ResolvePlanLimitAsync(
-        Guid? planId,
+        UserAccount account,
         string noPlanMessage,
         CancellationToken ct)
     {
-        if (planId is not { } id)
+        if (account.PlanId is not { } id)
         {
             throw new ConflictException(noPlanMessage);
+        }
+
+        if (!account.HasActivePlanBenefits(DateTime.UtcNow))
+        {
+            var freePlan = await _plans.GetByTierAsync(FreeTier, ct)
+                ?? throw new ConflictException("تعذّر العثور على الخطة المجانية.");
+
+            return freePlan.ListingLimit ?? int.MaxValue;
         }
 
         var plan = await _plans.GetByIdAsync(id, ct)
@@ -97,4 +111,6 @@ internal sealed class ListingQuotaPolicy : IListingQuotaPolicy
         // branch for "unlimited".
         return plan.ListingLimit ?? int.MaxValue;
     }
+
+    private const string FreeTier = "free";
 }
