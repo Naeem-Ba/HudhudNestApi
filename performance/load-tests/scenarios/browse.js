@@ -97,8 +97,13 @@ function validPagedResponse(response) {
   if (response.status !== 200) return false;
   try {
     const body = response.json();
-    return Array.isArray(body.Items) && Number.isInteger(body.TotalCount) &&
-      Number.isInteger(body.Page) && Number.isInteger(body.PageSize);
+    // BUG-23: API responses use camelCase JSON keys since the B-11 migration
+    // (Program.cs sets PropertyNamingPolicy = JsonNamingPolicy.CamelCase).
+    // This script was still reading the pre-B-11 PascalCase keys, which no
+    // longer exist on the wire — every check here silently evaluated against
+    // `undefined`.
+    return Array.isArray(body.items) && Number.isInteger(body.totalCount) &&
+      Number.isInteger(body.page) && Number.isInteger(body.pageSize);
   } catch (_) {
     return false;
   }
@@ -127,7 +132,7 @@ function detail(id) {
   recordInstance(response);
   let valid = false;
   try {
-    valid = response.status === 200 && response.json('Id') === id;
+    valid = response.status === 200 && response.json('id') === id;
   } catch (_) {
     valid = false;
   }
@@ -151,8 +156,8 @@ function geoSearch() {
   let valid = false;
   try {
     const body = response.json();
-    valid = response.status === 200 && Array.isArray(body.Items) &&
-      body.Items.every((item) => item.DistanceMeters <= radiusKm * 1000 + 1);
+    valid = response.status === 200 && Array.isArray(body.items) &&
+      body.items.every((item) => item.distanceMeters <= radiusKm * 1000 + 1);
   } catch (_) {
     valid = false;
   }
@@ -170,12 +175,12 @@ export function setup() {
     throw new Error('Safe PERF_BASE_URL and PERF_ENVIRONMENT are required.');
   }
   const response = http.get(`${baseUrl}/api/properties?page=1&pageSize=20`);
-  if (!validPagedResponse(response) || response.json('Items').length === 0) {
+  if (!validPagedResponse(response) || response.json('items').length === 0) {
     throw new Error(
       `The performance dataset is missing or the property-list contract is invalid. ` +
       `status=${response.status}, body=${response.body.slice(0, 500)}`);
   }
-  return { propertyIds: response.json('Items').map((item) => item.Id) };
+  return { propertyIds: response.json('items').map((item) => item.id) };
 }
 
 export function warmup(data) {
