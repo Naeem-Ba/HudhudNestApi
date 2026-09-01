@@ -107,8 +107,21 @@ export function setup() {
     const refreshTokenCookie = register.cookies && register.cookies.refresh_token
       ? register.cookies.refresh_token[0]
       : null;
+    // BUG-31: ASP.NET Core's ResponseCookies.Append percent-encodes the cookie
+    // value it writes (verified locally: a 64-random-byte Base64 token with '+'/'/'/'='
+    // comes out on the wire as "...%2B...%2F...%3D%3D..."), and its own request-side
+    // Request.Cookies[name] reader percent-decodes it back on the way in -- so a real
+    // browser (or any ASP.NET Core-to-ASP.NET Core round trip) is symmetric and this is
+    // NOT a production bug. k6's response.cookies[name][0].value, however, returns the
+    // raw still-encoded string verbatim (confirmed against grafana/k6:0.54.0, the exact
+    // image this repo's CI uses, via an isolated repro server). Sending that raw string
+    // back as the JSON body's refreshToken hashed to a value with no matching DB row,
+    // so every concurrent request got 401 "no such token" -- explaining both the
+    // race_successes==0 (expected 1) and race_rejections==concurrency (expected
+    // concurrency-1) threshold failures, and why capture-auth-race-integrity.sh showed
+    // the original stored token was never touched by any request.
     const refreshToken = register.status === 200 && refreshTokenCookie
-      ? refreshTokenCookie.value
+      ? decodeURIComponent(refreshTokenCookie.value)
       : null;
     if (!refreshToken) {
       throw new Error(
