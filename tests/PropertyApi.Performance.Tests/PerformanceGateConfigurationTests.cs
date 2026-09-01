@@ -118,6 +118,16 @@ public sealed class PerformanceGateConfigurationTests
         // must read the cookie, not the (permanently null) body field.
         Assert.Contains("register.cookies.refresh_token", authRaces, StringComparison.Ordinal);
         Assert.DoesNotContain("register.json('refreshToken')", authRaces, StringComparison.Ordinal);
+
+        // BUG-31: ASP.NET Core's ResponseCookies.Append percent-encodes the cookie value
+        // it writes ('+' -> '%2B', '/' -> '%2F', '=' -> '%3D'; verified against a real
+        // Microsoft.AspNetCore.App ResponseCookiesFeature) and its own Request.Cookies[name]
+        // reader percent-decodes it back, so a real browser round trip is symmetric. k6's
+        // response.cookies[name][0].value does not decode it (verified against the exact
+        // grafana/k6:0.54.0 image this repo's CI uses) -- auth-races.js must decode it
+        // itself before sending it back, or every concurrent request hashes to a value with
+        // no matching stored token and gets rejected as "not found" instead of racing.
+        Assert.Contains("decodeURIComponent(refreshTokenCookie.value)", authRaces, StringComparison.Ordinal);
     }
 
     [Fact]
