@@ -94,18 +94,23 @@ public sealed class PerformanceGateConfigurationTests
     }
 
     [Fact]
-    public void K6_contracts_use_the_APIs_configured_Pascal_case_JSON_names()
+    public void K6_contracts_use_the_APIs_configured_camelCase_JSON_names()
     {
+        // BUG-23: Program.cs has used JsonNamingPolicy.CamelCase since the B-11
+        // migration. This test (and, until fixed alongside it, the k6 scripts
+        // themselves) still asserted the pre-B-11 PascalCase contract, which no
+        // longer exists on the wire — every affected k6 check was silently
+        // evaluating against `undefined`.
         var browse = File.ReadAllText(Repo("performance", "load-tests", "scenarios", "browse.js"));
         var authRaces = File.ReadAllText(Repo("performance", "load-tests", "scenarios", "auth-races.js"));
         var program = File.ReadAllText(Repo("PropertyApi", "Program.cs"));
 
-        Assert.Contains("PropertyNamingPolicy = null", program, StringComparison.Ordinal);
-        Assert.Contains("response.json('Items')", browse, StringComparison.Ordinal);
-        Assert.Contains("item.DistanceMeters", browse, StringComparison.Ordinal);
-        Assert.DoesNotContain("response.json('items')", browse, StringComparison.Ordinal);
-        Assert.Contains("response.json('ChallengeId')", authRaces, StringComparison.Ordinal);
-        Assert.Contains("register.json('RefreshToken')", authRaces, StringComparison.Ordinal);
+        Assert.Contains("PropertyNamingPolicy = JsonNamingPolicy.CamelCase", program, StringComparison.Ordinal);
+        Assert.Contains("response.json('items')", browse, StringComparison.Ordinal);
+        Assert.Contains("item.distanceMeters", browse, StringComparison.Ordinal);
+        Assert.DoesNotContain("response.json('Items')", browse, StringComparison.Ordinal);
+        Assert.Contains("response.json('challengeId')", authRaces, StringComparison.Ordinal);
+        Assert.Contains("register.json('refreshToken')", authRaces, StringComparison.Ordinal);
     }
 
     [Fact]
