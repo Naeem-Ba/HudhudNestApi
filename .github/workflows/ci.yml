@@ -268,8 +268,12 @@ jobs:
                       ('Transactions'),
                       ('PropertyReviews'),
                       ('VisitRequests'),
-                      ('RentalDetails'),
-                      ('SaleDetails'),
+                      -- BUG-25: RentalDetails/SaleDetails were intentionally dropped by
+                      -- 20260829114019_OptionBAuditCleanup (rental/sale fields moved onto
+                      -- Properties directly per the "Option B" database architecture
+                      -- audit) — this check was never updated after that migration
+                      -- shipped, so every run failed here once restore/build could
+                      -- reach this step again.
                       ('AuditLogs'),
                       ('DataProtectionKeys'),
                       ('Users'),
