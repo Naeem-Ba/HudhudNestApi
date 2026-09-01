@@ -19,6 +19,23 @@
     { "migrationId": "20260709063950_RebindBusinessUserRelationshipsToUserAccounts", "classification": "HIGH_RISK", "recovery": "Restore pre-migration backup if relationship rebind is invalid." },
     { "migrationId": "20260709114331_CutOverIdentityToApplicationUser", "classification": "DESTRUCTIVE", "recovery": "Restore pre-migration backup; database downgrade is forbidden." },
     { "migrationId": "20260716192200_AddPhonePasswordAuthenticationAndReverification", "classification": "HIGH_RISK", "recovery": "Application rollback or forward-fix; restore only for corrupt data." },
-    { "migrationId": "20260728211500_AddPublishedPropertyGeoLocationPartialIndex", "classification": "HIGH_RISK", "recovery": "Drop the partial index concurrently if query-plan regression occurs; no data restore is required." }
+    { "migrationId": "20260728211500_AddPublishedPropertyGeoLocationPartialIndex", "classification": "HIGH_RISK", "recovery": "Drop the partial index concurrently if query-plan regression occurs; no data restore is required." },
+    { "migrationId": "20260819084018_ConvertTransactionFieldsToEnums", "classification": "HIGH_RISK", "recovery": "Narrows Transactions.TransactionType/Status/PaymentMethod to varchar(30) via AlterColumn; forward-fix or restore only if an existing value exceeds that length." },
+    { "migrationId": "20260819100239_AddPropertyNeighborhoodText", "classification": "ADDITIVE", "recovery": "Backward-compatible expansion." },
+    { "migrationId": "20260819111034_AddDistrictTextAndLocationSuggestions", "classification": "ADDITIVE", "recovery": "Backward-compatible expansion." },
+    { "migrationId": "20260821100110_AddUserRatings", "classification": "ADDITIVE", "recovery": "Application rollback may leave the table unused." },
+    { "migrationId": "20260821110644_AddUserBioAndContactInfo", "classification": "ADDITIVE", "recovery": "Backward-compatible expansion." },
+    { "migrationId": "20260821150021_AddUserProfileImagePublicId", "classification": "ADDITIVE", "recovery": "Backward-compatible expansion." },
+    { "migrationId": "20260823183821_AddListingExpiryWarningStamp", "classification": "ADDITIVE", "recovery": "Backward-compatible expansion." },
+    { "migrationId": "20260823195955_AddAgencyAndFeaturedListingPath", "classification": "ADDITIVE", "recovery": "Application rollback may leave new tables/columns unused." },
+    { "migrationId": "20260826073614_AddPropertyXminConcurrencyToken", "classification": "ADDITIVE", "recovery": "Empty migration; model-only change, xmin is a Postgres system column, no schema to revert." },
+    { "migrationId": "20260826102033_AddPlansAndUserPlanSelection", "classification": "ADDITIVE", "recovery": "Application rollback may leave the table unused." },
+    { "migrationId": "20260827091539_AddAgencyInvitations", "classification": "ADDITIVE", "recovery": "Application rollback may leave the table unused." },
+    { "migrationId": "20260827091846_AddPlanListingLimit", "classification": "HIGH_RISK", "recovery": "Backfills Plans.ListingLimit by tier via raw SQL; forward-fix if tier values change rather than restoring over newer plan data." },
+    { "migrationId": "20260827120052_AddTransactionAndUserAccountXminConcurrencyToken", "classification": "ADDITIVE", "recovery": "Empty migration; model-only change, same reasoning as AddPropertyXminConcurrencyToken." },
+    { "migrationId": "20260827152821_AddRentalTermOwnershipAndAreaUnitToProperty", "classification": "ADDITIVE", "recovery": "Backward-compatible expansion." },
+    { "migrationId": "20260828064403_AddAqarTechServicesMarketplace", "classification": "HIGH_RISK", "recovery": "Creates ServiceRequestNumberSeq via raw SQL alongside new tables; forward-fix, sequence recreation is idempotent-safe to rerun." },
+    { "migrationId": "20260829114019_OptionBAuditCleanup", "classification": "DESTRUCTIVE", "recovery": "Drops OtpCodes, RentalDetails, SaleDetails, ServiceReviewDocuments tables and Properties.PriceCurrencyId column. Already applied to production. Down() recreates the tables, but any data present between the drop and a restore is lost; do not run Down in production without a fresh pre-migration backup." },
+    { "migrationId": "20260829114909_AddShortStayAccommodation", "classification": "HIGH_RISK", "recovery": "Raw SQL: CREATE EXTENSION btree_gist plus an exclusion constraint on UnitBookingRanges; forward-fix, do not restore over newer booking data." }
   ]
 }
