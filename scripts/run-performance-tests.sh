@@ -108,6 +108,20 @@ case "${profile}" in
   pr)
     : "${PERF_DATASET_SIZE:=10000}"
     : "${PERF_VIRTUAL_USERS:=8}"
+    # BUG-30b: browse-cold/browse-warm are the only scenarios that run api1,
+    # api2, postgres, redis, and k6 all under concurrent load at once (every
+    # other scenario is far lighter -- auth-races/rate-limit-race top out at
+    # a handful of VUs against a single narrow endpoint). Direct evidence
+    # from Production Gate #170 (see container-resources-timeseries.jsonl in
+    # that run's artifact) showed postgres alone peaking at 177% CPU on a
+    # standard 2-vCPU GitHub-hosted runner while api1/api2 were also under
+    # load -- CPU oversubscription, not a code or query regression (query
+    # plans were already clean). A dedicated, lower VU count for just these
+    # two scenarios keeps them inside what a 2-vCPU runner can actually
+    # serve without contention, while every other scenario (and this
+    # profile's PERF_VIRTUAL_USERS default above, still used everywhere
+    # else) is unchanged.
+    : "${PERF_BROWSE_VIRTUAL_USERS:=5}"
     : "${PERF_TEST_DURATION:=20s}"
     : "${PERF_REQUIRE_APPROVED_BUDGETS:=false}"
     : "${PERF_REQUIRE_BASELINE:=false}"
@@ -115,6 +129,9 @@ case "${profile}" in
   release)
     : "${PERF_DATASET_SIZE:=25000}"
     : "${PERF_VIRTUAL_USERS:=15}"
+    # See the "pr" branch above for why browse-cold/browse-warm get their own,
+    # lower VU count instead of this profile's general PERF_VIRTUAL_USERS.
+    : "${PERF_BROWSE_VIRTUAL_USERS:=9}"
     : "${PERF_TEST_DURATION:=60s}"
     : "${PERF_REQUIRE_APPROVED_BUDGETS:=true}"
     : "${PERF_REQUIRE_BASELINE:=true}"
@@ -122,12 +139,18 @@ case "${profile}" in
   staging)
     : "${PERF_DATASET_SIZE:=100000}"
     : "${PERF_VIRTUAL_USERS:=30}"
+    # Not reduced: unlike pr/release, this profile has not been evidenced as
+    # CPU-oversubscribed on its own runner and was out of scope for this fix
+    # (BUG-30b evidence is from pr/release runs only). Revisit if the same
+    # signature shows up here.
+    : "${PERF_BROWSE_VIRTUAL_USERS:=30}"
     : "${PERF_TEST_DURATION:=5m}"
     : "${PERF_REQUIRE_APPROVED_BUDGETS:=true}"
     : "${PERF_REQUIRE_BASELINE:=true}"
     ;;
   *) fail "PERF_PROFILE must be pr, release, or staging." ;;
 esac
+export PERF_BROWSE_VIRTUAL_USERS
 
 export PERF_PROFILE="${profile}"
 export PERF_BASE_URL="${base_url}"
@@ -246,11 +269,13 @@ start_resource_sampler
 docker compose -f "${compose_file}" exec -T redis redis-cli FLUSHDB >/dev/null
 run_and_record "cold-cache browse workload" \
   docker compose -f "${compose_file}" --profile load run --rm \
-    -e PERF_CACHE_MODE=cold k6 run scenarios/browse.js
+    -e PERF_CACHE_MODE=cold -e PERF_VIRTUAL_USERS="${PERF_BROWSE_VIRTUAL_USERS}" \
+    k6 run scenarios/browse.js
 
 run_and_record "warm-cache browse workload" \
   docker compose -f "${compose_file}" --profile load run --rm \
-    -e PERF_CACHE_MODE=warm k6 run scenarios/browse.js
+    -e PERF_CACHE_MODE=warm -e PERF_VIRTUAL_USERS="${PERF_BROWSE_VIRTUAL_USERS}" \
+    k6 run scenarios/browse.js
 
 race_counter=0
 for race_kind in refresh otp; do
