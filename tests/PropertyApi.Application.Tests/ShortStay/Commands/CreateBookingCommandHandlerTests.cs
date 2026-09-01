@@ -221,7 +221,7 @@ public sealed class CreateBookingCommandHandlerTests
     private sealed class NoOpNotificationService : INotificationService
     {
         public Task NotifyNewMessageAsync(Guid recipientId, Guid senderId, string senderName, Guid messageId, Guid propertyId, CancellationToken ct = default) => Task.CompletedTask;
-        public Task NotifyPropertyUpdateAsync(Guid recipientId, Guid propertyId, string propertyTitle, NotificationType type, string detail, CancellationToken ct = default) => Task.CompletedTask;
+        public Task NotifyPropertyUpdateAsync(Guid recipientId, Guid propertyId, string propertyTitle, NotificationType type, string detail, Guid? relatedEntityId = null, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifySavedSearchMatchAsync(Guid recipientId, Guid propertyId, string propertyTitle, string savedSearchName, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifyUserRatedAsync(Guid recipientId, Guid raterId, string raterName, double overallScore, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifyListingExpiringSoonAsync(Guid recipientId, Guid propertyId, string propertyTitle, int daysRemaining, CancellationToken ct = default) => Task.CompletedTask;
