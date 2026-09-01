@@ -53,10 +53,18 @@ public sealed class PasswordResetUrlBuilder : IPasswordResetUrlBuilder
 
         var baseUrl = configuredUrl.Trim().TrimEnd('?', '&');
 
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+        // BUG-26: Uri.TryCreate(..., UriKind.Absolute, ...) parses a rooted path such as
+        // "/auth/reset-password" as a valid absolute file:// URI on Linux (it is a legal
+        // absolute filesystem path there) but rejects it on Windows -- so this check alone
+        // caught misconfiguration locally and in every Windows test run, while silently
+        // accepting it (and minting a file:///... reset link) on the Linux CI/production
+        // runtime. Require an actual http(s) scheme, matching the same guard already used
+        // for Email:Resend:BaseUrl and the Cloudinary URL elsewhere in this codebase.
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
             throw new InvalidOperationException(
-                "Frontend:PasswordResetUrl must be an absolute URL.");
+                "Frontend:PasswordResetUrl must be an absolute HTTP(S) URL.");
         }
 
         if (_environment.IsProduction() && uri.Scheme != Uri.UriSchemeHttps)
