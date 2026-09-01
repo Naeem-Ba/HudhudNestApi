@@ -40,6 +40,7 @@ BACKUP_FILE="${BACKUP_FILE}" MANIFEST_FILE="${MANIFEST_FILE}" \
 WORK_DIR="$(create_private_temp_dir)"
 cleanup() { rm -rf -- "${WORK_DIR}"; }
 trap cleanup EXIT INT TERM
+configure_gpg_home "${WORK_DIR}"
 PASSPHRASE_FILE="${WORK_DIR}/passphrase"
 DECRYPTED_FILE="${WORK_DIR}/restore.dump"
 printf '%s' "${BACKUP_ENCRYPTION_KEY}" > "${PASSPHRASE_FILE}"
