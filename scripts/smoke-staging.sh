@@ -43,7 +43,10 @@ trap cleanup EXIT
 require_value() {
   local name="$1"
   if [ -z "${!name:-}" ]; then
-    failure_message="${name} is required."
+    # This is deliberately not a placeholder or localhost fallback -- a
+    # missing value here means real Staging infrastructure has not been
+    # configured yet. See docs/testing/staging-smoke-runbook.md.
+    failure_message="${name} is required. In CI this comes from the repository's 'staging' GitHub Environment (Settings -> Environments -> staging -> Variables/Secrets, matching the list in docs/testing/staging-smoke-runbook.md); for local runs, export it yourself."
     echo "::error::${failure_message}"
     exit 1
   fi
