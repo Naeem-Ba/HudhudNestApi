@@ -174,7 +174,33 @@ jobs:
 
       - name: Install PostgreSQL and Redis clients
         run: |
-          sudo apt-get update
+          set -euo pipefail
+          # postgresql-client and redis-tools both come from Ubuntu's own
+          # default archive (azure.archive.ubuntu.com), never from the
+          # unrelated Microsoft package repo the GH-hosted runner image
+          # pre-configures for dotnet/mssql-tools. That Microsoft mirror
+          # intermittently returns 403 Forbidden (observed: run 33670057946,
+          # commit 9e166d460e7f6f8766ee2cd65bcc2cf2ebfb9a3c), and apt-get
+          # update fails closed on ANY configured repo erroring, even one
+          # this job never uses. Retry update a few times first in case it
+          # is transient; if the Microsoft repo is still failing after that,
+          # drop just that source list and retry once more. The subsequent
+          # apt-get install still fails the job loudly (uncaught) if the
+          # actually-required packages cannot be resolved, so this does not
+          # mask a real failure -- it only tolerates one we do not depend on.
+          for attempt in 1 2 3; do
+            if sudo apt-get update; then
+              break
+            fi
+            if [ "${attempt}" = "3" ]; then
+              echo "::warning::apt-get update kept failing after 3 attempts; removing the unrelated Microsoft package repo and retrying once more." >&2
+              sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
+              sudo apt-get update
+            else
+              echo "apt-get update failed (attempt ${attempt}/3); retrying in 5s..." >&2
+              sleep 5
+            fi
+          done
           sudo apt-get install -y \
             postgresql-client \
             redis-tools
