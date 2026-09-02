@@ -41,32 +41,35 @@ POSTGIS_VERSION="$(psql -X -v ON_ERROR_STOP=1 -tAc 'SELECT PostGIS_Lib_Version()
 LATEST_MIGRATION="$(psql -X -v ON_ERROR_STOP=1 -tAc 'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId" DESC LIMIT 1;' | xargs)"
 APPLICATION_COMMIT_SHA="${APPLICATION_COMMIT_SHA:-${GITHUB_SHA:-unknown}}"
 
-# The production database is Supabase-hosted. Supabase auto-provisions
-# platform-internal schemas and extensions on every project (Vault, Auth,
-# Storage, Realtime, GraphQL, pg_net, pg_cron, pgsodium, PgBouncer, its own
-# migration bookkeeping) that PropertyApi's application code never uses.
-# Confirmed via a real Recovery Gate run (2026-09-02): the previous
-# unscoped pg_dump included `CREATE EXTENSION IF NOT EXISTS supabase_vault
-# WITH SCHEMA vault;`, and pg_restore failed closed on it -- that extension
-# has no control file outside Supabase's own managed PostgreSQL fork, so it
-# cannot be installed on a disposable, non-Supabase PostgreSQL/PostGIS
-# instance. Every PropertyApi table lives in the default "public" schema --
-# see scripts/database/critical-tables.txt, whose existence check filters
-# on nspname='public' -- so scoping the dump to `--schema=public` (Supabase's
-# own documented approach for dumping a project's application data for
-# restore elsewhere) excludes all such platform-internal schemas without
-# needing to name each one. This does not affect PostGIS: restore-postgres.sh
-# already runs `CREATE EXTENSION IF NOT EXISTS postgis;` before pg_restore,
-# independently of what schema production installed it into, and PostgreSQL
-# extension existence is database-wide, so that pre-step makes any
-# postgis-related statement from the dump a harmless no-op.
+# The production database is Supabase-hosted. Supabase auto-provisions a
+# "vault" schema/extension (Supabase Vault) on every project that
+# PropertyApi's application code never uses. Confirmed via a real Recovery
+# Gate run (2026-09-02, run 33652899781): the previously unscoped pg_dump
+# included `CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA
+# vault;`, and pg_restore failed closed on it -- that extension has no
+# control file outside Supabase's own managed PostgreSQL fork, so it can
+# never be installed on the drill's disposable, non-Supabase PostgreSQL
+# instance. --exclude-schema=vault removes exactly that.
+#
+# A broader attempt to scope this to `--schema=public` only (excluding
+# every Supabase-internal schema by allow-listing just PropertyApi's own
+# schema) was tried and reverted: a real Recovery Gate run (2026-09-02, run
+# 33657896745) proved production's PostGIS extension is itself installed
+# in a schema other than "public" (most likely Supabase's own default
+# "extensions" schema) -- `--schema=public` silently dropped PostGIS's
+# `CREATE EXTENSION` entry from the dump too, and verify-backup.sh's
+# existing `EXTENSION .*postgis` TOC check correctly caught this before
+# any upload or restore was attempted. Do not reintroduce a `--schema=`
+# allow-list here without first confirming, from a real production
+# archive's `pg_restore --list` TOC, exactly which schema PostGIS lives in
+# -- guessing it again risks repeating the same failure.
 log "Creating PostgreSQL custom-format backup ${BACKUP_ID}."
 pg_dump \
   --format=custom \
   --compress=9 \
   --no-owner \
   --no-privileges \
-  --schema=public \
+  --exclude-schema=vault \
   --file="${RAW_DUMP}"
 
 pg_restore --list "${RAW_DUMP}" >/dev/null
