@@ -92,6 +92,71 @@ public sealed class AdminListingServiceTests
     }
 
     [Fact]
+    public async Task UnfeatureListingAsync_WhenListingMissing_ReturnsNotFound()
+    {
+        var propertyId = Guid.NewGuid();
+        var properties = new Mock<IPropertyRepository>();
+        properties.Setup(x => x.GetByIdAsync(propertyId, It.IsAny<CancellationToken>())).ReturnsAsync((Property?)null);
+
+        var service = BuildService(properties.Object, Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>());
+
+        var result = await service.UnfeatureListingAsync(propertyId, null, AdminId, null, CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.True(result.NotFound);
+    }
+
+    [Fact]
+    public async Task UnfeatureListingAsync_WhenSaveFails_RollsBackAndRethrows()
+    {
+        var property = Property.Create("منزل للإيجار", "وصف", Guid.NewGuid(), ListingType.ForRent);
+        property.MarkFeatured(TimeSpan.FromDays(30), DateTime.UtcNow);
+
+        var properties = FakeProperties(property);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("db unavailable"));
+
+        var service = BuildService(properties.Object, unitOfWork.Object, Mock.Of<IAuditLogService>());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.UnfeatureListingAsync(property.Id, null, AdminId, null, CancellationToken.None));
+
+        unitOfWork.Verify(x => x.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Verify(x => x.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task FeatureListingAsync_WhenListingMissing_ReturnsNotFound()
+    {
+        var propertyId = Guid.NewGuid();
+        var properties = new Mock<IPropertyRepository>();
+        properties.Setup(x => x.GetByIdAsync(propertyId, It.IsAny<CancellationToken>())).ReturnsAsync((Property?)null);
+
+        var service = BuildService(properties.Object, Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>());
+
+        var result = await service.FeatureListingAsync(propertyId, 30, null, AdminId, null, CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.True(result.NotFound);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(731)]
+    public async Task FeatureListingAsync_WithOutOfRangeDuration_ReturnsBadRequest(int days)
+    {
+        var property = Property.Create("شقة", "وصف", Guid.NewGuid(), ListingType.ForRent);
+        var properties = FakeProperties(property);
+        var service = BuildService(properties.Object, Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>());
+
+        var result = await service.FeatureListingAsync(property.Id, days, null, AdminId, null, CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+    }
+
+    [Fact]
     public async Task ExtendListingAsync_WhenListingMissing_ReturnsNotFound()
     {
         var propertyId = Guid.NewGuid();
@@ -119,6 +184,83 @@ public sealed class AdminListingServiceTests
         var result = await service.ExtendListingAsync(property.Id, days, null, AdminId, null, CancellationToken.None);
 
         Assert.False(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task ExtendListingAsync_WhenSaveFails_RollsBackAndRethrows()
+    {
+        var property = Property.Create("شقة للإيجار", "وصف", Guid.NewGuid(), ListingType.ForRent);
+        var properties = FakeProperties(property);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("db unavailable"));
+
+        var service = BuildService(properties.Object, unitOfWork.Object, Mock.Of<IAuditLogService>());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ExtendListingAsync(property.Id, 30, null, AdminId, null, CancellationToken.None));
+
+        unitOfWork.Verify(x => x.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Verify(x => x.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetUserPropertiesAsync_FiltersByStatus_OrdersByNewest_AndPaginates()
+    {
+        var ownerId = Guid.NewGuid();
+        var older = Property.Create("قديم", "وصف", ownerId, ListingType.ForRent);
+        var newer = Property.Create("جديد", "وصف", ownerId, ListingType.ForSale);
+        newer.MarkFeatured(TimeSpan.FromDays(10), DateTime.UtcNow);
+        newer.CreatedAt = older.CreatedAt.AddMinutes(5);
+
+        var properties = new Mock<IPropertyRepository>();
+        properties.Setup(x => x.GetByOwnerAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Property> { older, newer });
+
+        var service = BuildService(properties.Object, Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>());
+
+        var result = await service.GetUserPropertiesAsync(ownerId, page: 1, pageSize: 10, status: null, CancellationToken.None);
+
+        Assert.Equal(2, result.TotalCount);
+        Assert.Equal(newer.Id, result.Items[0].Id);
+        Assert.True(result.Items[0].IsFeatured);
+        Assert.Equal(older.Id, result.Items[1].Id);
+    }
+
+    [Fact]
+    public async Task GetUserPropertiesAsync_WithStatusFilter_ReturnsOnlyMatchingStatus()
+    {
+        var ownerId = Guid.NewGuid();
+        var draft = Property.Create("مسودة", "وصف", ownerId, ListingType.ForRent);
+        var expired = Property.Create("منتهي", "وصف", ownerId, ListingType.ForSale);
+        expired.ChangeStatus(PropertyStatus.Expired);
+
+        var properties = new Mock<IPropertyRepository>();
+        properties.Setup(x => x.GetByOwnerAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Property> { draft, expired });
+
+        var service = BuildService(properties.Object, Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>());
+
+        var result = await service.GetUserPropertiesAsync(ownerId, page: 1, pageSize: 10, status: "Expired", CancellationToken.None);
+
+        Assert.Single(result.Items);
+        Assert.Equal(expired.Id, result.Items[0].Id);
+    }
+
+    [Fact]
+    public async Task GetUserPropertiesAsync_ClampsPageAndPageSize()
+    {
+        var ownerId = Guid.NewGuid();
+        var properties = new Mock<IPropertyRepository>();
+        properties.Setup(x => x.GetByOwnerAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Property>());
+
+        var service = BuildService(properties.Object, Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>());
+
+        var result = await service.GetUserPropertiesAsync(ownerId, page: 0, pageSize: 1000, status: null, CancellationToken.None);
+
+        Assert.Equal(1, result.Page);
+        Assert.Equal(100, result.PageSize);
     }
 
     private static AdminListingService BuildService(

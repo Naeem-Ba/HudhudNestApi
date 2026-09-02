@@ -140,6 +140,132 @@ public sealed class AdminSubscriptionServiceTests
     }
 
     [Fact]
+    public async Task ActivatePlanAsync_WhenSaveFails_RollsBackAndRethrows()
+    {
+        var userId = Guid.NewGuid();
+        var account = UserAccount.Create(userId, "Naeem", "User", DateTime.UtcNow);
+        var plan = BuildPlan("premium");
+
+        var accounts = FakeAccounts(userId, account);
+        var plans = new Mock<IPlanRepository>();
+        plans.Setup(x => x.GetByTierAsync("premium", It.IsAny<CancellationToken>())).ReturnsAsync(plan);
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("db unavailable"));
+
+        var service = BuildService(accounts.Object, plans.Object, unitOfWork.Object, Mock.Of<IAuditLogService>());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ActivatePlanAsync(userId, "premium", 30, null, AdminId, null, CancellationToken.None));
+
+        unitOfWork.Verify(x => x.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Verify(x => x.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    [InlineData(3651)]
+    public async Task ExtendSubscriptionAsync_WithOutOfRangeDuration_ReturnsBadRequest(int days)
+    {
+        var userId = Guid.NewGuid();
+        var service = BuildService(
+            Mock.Of<IUserAccountRepository>(), Mock.Of<IPlanRepository>(), Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>());
+
+        var result = await service.ExtendSubscriptionAsync(userId, days, null, AdminId, null, CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task ExtendSubscriptionAsync_WhenUserAccountMissing_ReturnsUserNotFound()
+    {
+        var userId = Guid.NewGuid();
+        var accounts = new Mock<IUserAccountRepository>();
+        accounts.Setup(x => x.GetByIdAsync(userId, It.IsAny<CancellationToken>())).ReturnsAsync((UserAccount?)null);
+
+        var service = BuildService(accounts.Object, Mock.Of<IPlanRepository>(), Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>());
+
+        var result = await service.ExtendSubscriptionAsync(userId, 30, null, AdminId, null, CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.True(result.NotFound);
+    }
+
+    [Fact]
+    public async Task ExtendSubscriptionAsync_WhenSaveFails_RollsBackAndRethrows()
+    {
+        var userId = Guid.NewGuid();
+        var account = UserAccount.Create(userId, "Naeem", "User", DateTime.UtcNow);
+        account.ActivatePlanByAdmin(Guid.NewGuid(), DateTime.UtcNow.AddDays(10), Guid.NewGuid(), DateTime.UtcNow);
+
+        var accounts = FakeAccounts(userId, account);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("db unavailable"));
+
+        var service = BuildService(accounts.Object, Mock.Of<IPlanRepository>(), unitOfWork.Object, Mock.Of<IAuditLogService>());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ExtendSubscriptionAsync(userId, 30, null, AdminId, null, CancellationToken.None));
+
+        unitOfWork.Verify(x => x.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Verify(x => x.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CancelSubscriptionAsync_WhenUserAccountMissing_ReturnsUserNotFound()
+    {
+        var userId = Guid.NewGuid();
+        var accounts = new Mock<IUserAccountRepository>();
+        accounts.Setup(x => x.GetByIdAsync(userId, It.IsAny<CancellationToken>())).ReturnsAsync((UserAccount?)null);
+
+        var service = BuildService(accounts.Object, Mock.Of<IPlanRepository>(), Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>());
+
+        var result = await service.CancelSubscriptionAsync(userId, null, AdminId, null, CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.True(result.NotFound);
+    }
+
+    [Fact]
+    public async Task CancelSubscriptionAsync_WithoutAPriorPlan_ReturnsConflict()
+    {
+        var userId = Guid.NewGuid();
+        var account = UserAccount.Create(userId, "Naeem", "User", DateTime.UtcNow);
+
+        var accounts = FakeAccounts(userId, account);
+        var service = BuildService(accounts.Object, Mock.Of<IPlanRepository>(), Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>());
+
+        var result = await service.CancelSubscriptionAsync(userId, null, AdminId, null, CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.True(result.Conflict);
+    }
+
+    [Fact]
+    public async Task CancelSubscriptionAsync_WhenSaveFails_RollsBackAndRethrows()
+    {
+        var userId = Guid.NewGuid();
+        var account = UserAccount.Create(userId, "Naeem", "User", DateTime.UtcNow);
+        account.ActivatePlanByAdmin(Guid.NewGuid(), DateTime.UtcNow.AddDays(10), Guid.NewGuid(), DateTime.UtcNow);
+
+        var accounts = FakeAccounts(userId, account);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("db unavailable"));
+
+        var service = BuildService(accounts.Object, Mock.Of<IPlanRepository>(), unitOfWork.Object, Mock.Of<IAuditLogService>());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CancelSubscriptionAsync(userId, null, AdminId, null, CancellationToken.None));
+
+        unitOfWork.Verify(x => x.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Verify(x => x.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ActivatePlanAsync_WhenUserAccountMissing_ReturnsUserNotFound()
     {
         var userId = Guid.NewGuid();

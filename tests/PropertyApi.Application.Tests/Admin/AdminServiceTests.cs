@@ -27,6 +27,19 @@ public sealed class AdminServiceTests
     }
 
     [Fact]
+    public async Task GetUserDetailAsync_DelegatesToRepository()
+    {
+        var users = new FakeAdminUserQueryRepository();
+        var service = new AdminService(users, new FakeAdminIdentityService());
+        var userId = Guid.NewGuid();
+
+        var detail = await service.GetUserDetailAsync(userId, CancellationToken.None);
+
+        Assert.Null(detail);
+        Assert.Equal(userId, users.LastDetailUserId);
+    }
+
+    [Fact]
     public void GetRoles_ReturnsAllowedRoleNames()
     {
         var service = new AdminService(
@@ -152,6 +165,7 @@ public sealed class AdminServiceTests
         public int LastPage { get; private set; }
         public int LastPageSize { get; private set; }
         public string? LastRole { get; private set; }
+        public Guid LastDetailUserId { get; private set; }
 
         public Task<PagedResult<AdminUserDto>> GetUsersWithPaginationAsync(
             int page,
@@ -178,7 +192,10 @@ public sealed class AdminServiceTests
         public Task<AdminUserDetailDto?> GetUserDetailAsync(
             Guid userId,
             CancellationToken ct = default)
-            => Task.FromResult<AdminUserDetailDto?>(null);
+        {
+            LastDetailUserId = userId;
+            return Task.FromResult<AdminUserDetailDto?>(null);
+        }
     }
 
     private sealed class FakeAdminIdentityService : IAdminIdentityService

@@ -70,6 +70,67 @@ public sealed class ListingQuotaPolicyTests
             () => policy.GetActiveListingLimitAsync(owner));
     }
 
+    /// <summary>
+    /// The regression case for the admin-cancellation-must-not-be-cosmetic rule: an account
+    /// whose paid plan was cancelled by an admin (UserAccount.CancelPlan) must fall back to
+    /// the free tier's own limit instead of the stale, no-longer-benefiting PlanId's limit.
+    /// </summary>
+    [Fact]
+    public async Task IndividualOwner_WithCancelledPlan_FallsBackToFreeTierLimit()
+    {
+        var owner = UserAccount.Create(Guid.NewGuid(), "Test", "Owner", DateTime.UtcNow);
+        var paidPlanId = Guid.NewGuid();
+        owner.ActivatePlanByAdmin(paidPlanId, DateTime.UtcNow.AddDays(30), Guid.NewGuid(), DateTime.UtcNow);
+        owner.CancelPlan(Guid.NewGuid(), DateTime.UtcNow);
+
+        var plans = new Mock<IPlanRepository>();
+        plans.Setup(x => x.GetByTierAsync("free", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(BuildPlan("free", 1));
+
+        var policy = new ListingQuotaPolicy(plans.Object, Mock.Of<IAgencyRepository>());
+
+        var limit = await policy.GetActiveListingLimitAsync(owner);
+
+        Assert.Equal(1, limit);
+        // The stale paid-plan id must never be consulted once benefits have lapsed.
+        plans.Verify(x => x.GetByIdAsync(paidPlanId, It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>Same fallback, reached via natural expiry rather than an explicit cancel.</summary>
+    [Fact]
+    public async Task IndividualOwner_WithExpiredPlan_FallsBackToFreeTierLimit()
+    {
+        var owner = UserAccount.Create(Guid.NewGuid(), "Test", "Owner", DateTime.UtcNow);
+        owner.ActivatePlanByAdmin(Guid.NewGuid(), DateTime.UtcNow.AddSeconds(-1), Guid.NewGuid(), DateTime.UtcNow.AddMinutes(-1));
+
+        var plans = new Mock<IPlanRepository>();
+        plans.Setup(x => x.GetByTierAsync("free", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(BuildPlan("free", 1));
+
+        var policy = new ListingQuotaPolicy(plans.Object, Mock.Of<IAgencyRepository>());
+
+        var limit = await policy.GetActiveListingLimitAsync(owner);
+
+        Assert.Equal(1, limit);
+    }
+
+    [Fact]
+    public async Task IndividualOwner_WithCancelledPlan_WhenFreeTierIsMissing_ThrowsRatherThanBypassing()
+    {
+        var owner = UserAccount.Create(Guid.NewGuid(), "Test", "Owner", DateTime.UtcNow);
+        owner.ActivatePlanByAdmin(Guid.NewGuid(), DateTime.UtcNow.AddDays(30), Guid.NewGuid(), DateTime.UtcNow);
+        owner.CancelPlan(Guid.NewGuid(), DateTime.UtcNow);
+
+        var plans = new Mock<IPlanRepository>();
+        plans.Setup(x => x.GetByTierAsync("free", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Plan?)null);
+
+        var policy = new ListingQuotaPolicy(plans.Object, Mock.Of<IAgencyRepository>());
+
+        await Assert.ThrowsAsync<ConflictException>(
+            () => policy.GetActiveListingLimitAsync(owner));
+    }
+
     [Fact]
     public async Task IndividualOwner_WithPlanIdThatNoLongerResolves_ThrowsRatherThanBypassing()
     {

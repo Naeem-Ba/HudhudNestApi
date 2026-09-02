@@ -1,3 +1,4 @@
+using PropertyApi.Domain.Users;
 using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Domain.Users.Enums;
 
@@ -39,6 +40,24 @@ public sealed class UserAccountSubscriptionTests
 
         Assert.Throws<ArgumentException>(() =>
             account.ActivatePlanByAdmin(Guid.NewGuid(), Now.AddDays(-1), Guid.NewGuid(), Now));
+    }
+
+    [Fact]
+    public void ActivatePlanByAdmin_WithEmptyPlanId_Throws()
+    {
+        var account = UserAccount.Create(Guid.NewGuid(), "Naeem", "User", Now);
+
+        Assert.Throws<ArgumentException>(() =>
+            account.ActivatePlanByAdmin(Guid.Empty, Now.AddDays(30), Guid.NewGuid(), Now));
+    }
+
+    [Fact]
+    public void ActivatePlanByAdmin_WithEmptyAdminId_Throws()
+    {
+        var account = UserAccount.Create(Guid.NewGuid(), "Naeem", "User", Now);
+
+        Assert.Throws<ArgumentException>(() =>
+            account.ActivatePlanByAdmin(Guid.NewGuid(), Now.AddDays(30), Guid.Empty, Now));
     }
 
     [Fact]
@@ -95,6 +114,38 @@ public sealed class UserAccountSubscriptionTests
 
         Assert.Throws<InvalidOperationException>(() =>
             account.ExtendPlan(TimeSpan.FromDays(30), Guid.NewGuid(), Now));
+    }
+
+    [Fact]
+    public void ExtendPlan_WithZeroOrNegativePeriod_Throws()
+    {
+        var account = UserAccount.Create(Guid.NewGuid(), "Naeem", "User", Now);
+        account.ActivatePlanByAdmin(Guid.NewGuid(), Now.AddDays(30), Guid.NewGuid(), Now);
+
+        Assert.Throws<ArgumentException>(() =>
+            account.ExtendPlan(TimeSpan.Zero, Guid.NewGuid(), Now));
+        Assert.Throws<ArgumentException>(() =>
+            account.ExtendPlan(TimeSpan.FromDays(-1), Guid.NewGuid(), Now));
+    }
+
+    [Fact]
+    public void ExtendPlan_WithEmptyAdminId_Throws()
+    {
+        var account = UserAccount.Create(Guid.NewGuid(), "Naeem", "User", Now);
+        account.ActivatePlanByAdmin(Guid.NewGuid(), Now.AddDays(30), Guid.NewGuid(), Now);
+
+        Assert.Throws<ArgumentException>(() =>
+            account.ExtendPlan(TimeSpan.FromDays(10), Guid.Empty, Now));
+    }
+
+    [Fact]
+    public void CancelPlan_WithEmptyAdminId_Throws()
+    {
+        var account = UserAccount.Create(Guid.NewGuid(), "Naeem", "User", Now);
+        account.ActivatePlanByAdmin(Guid.NewGuid(), Now.AddDays(30), Guid.NewGuid(), Now);
+
+        Assert.Throws<ArgumentException>(() =>
+            account.CancelPlan(Guid.Empty, Now));
     }
 
     [Fact]
@@ -176,5 +227,13 @@ public sealed class UserAccountSubscriptionTests
         Assert.Equal(PlanStatus.Active, account.PlanStatus);
         Assert.Equal(PlanActivationSource.SelfService, account.PlanActivationSource);
         Assert.Null(account.PlanCancelledAt);
+    }
+
+    [Fact]
+    public void SubscriptionLifecyclePolicy_ExposesTheDocumentedDurationPresets()
+    {
+        Assert.Equal(new[] { 30, 90, 180, 365 }, SubscriptionLifecyclePolicy.SuggestedDurationDaysPresets);
+        Assert.Equal(1, SubscriptionLifecyclePolicy.MinAdminDurationDays);
+        Assert.Equal(3650, SubscriptionLifecyclePolicy.MaxAdminDurationDays);
     }
 }
