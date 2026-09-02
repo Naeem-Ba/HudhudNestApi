@@ -91,58 +91,6 @@ jobs:
             propertyapi-database-recovery:local \
             bash /workspace/scripts/database/apply-retention.sh
             
-      - name: DEBUG - connectivity verification (temporary, remove after diagnosis)
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
-          BACKUP_AWS_REGION: ${{ secrets.BACKUP_AWS_REGION }}
-          BACKUP_S3_ENDPOINT_URL: ${{ secrets.BACKUP_S3_ENDPOINT_URL }}
-          BACKUP_STORAGE_URI: ${{ secrets.BACKUP_STORAGE_URI }}
-        run: |
-          set -euo pipefail
-          source scripts/database/common.sh
-          parse_s3_uri "${BACKUP_STORAGE_URI}"
-          aws_arguments
-
-          WORK_DIR="$(create_private_temp_dir)"
-          trap 'rm -rf -- "${WORK_DIR}"' EXIT
-          OBJECTS_JSON="${WORK_DIR}/objects.json"
-
-          echo "== Step 1: network reachability =="
-          curl -sv --max-time 10 "${BACKUP_S3_ENDPOINT_URL:-https://s3.amazonaws.com}" 2>&1 | tail -15 || true
-
-          echo "== Step 2: credentials check =="
-          aws "${AWS_ARGS[@]}" sts get-caller-identity || echo "STS failed or unsupported — not necessarily an error for non-AWS providers"
-
-          echo "== Step 3: bucket existence =="
-          if ! aws "${AWS_ARGS[@]}" s3api head-bucket --bucket "${S3_BUCKET}" 2>"${WORK_DIR}/head-error.log"; then
-            cat "${WORK_DIR}/head-error.log" >&2
-            fail "Bucket '${S3_BUCKET}' does not exist or is inaccessible — refusing to proceed with retention."
-          fi
-
-          if ! aws "${AWS_ARGS[@]}" s3api list-objects-v2 \
-            --bucket "${S3_BUCKET}" \
-            --prefix "${S3_PREFIX:+${S3_PREFIX}/}backups/" \
-            --output json > "${OBJECTS_JSON}" 2> "${WORK_DIR}/list-error.log"; then
-            if grep -q "NoSuchKey" "${WORK_DIR}/list-error.log"; then
-              log "Bucket confirmed to exist; treating NoSuchKey on empty prefix as no objects (known R2 behavior)."
-              echo '{"Contents": []}' > "${OBJECTS_JSON}"
-            else
-              cat "${WORK_DIR}/list-error.log" >&2
-              fail "list-objects-v2 failed."
-            fi
-          fi
-
-          echo "== Step 4: prefix listing =="
-          aws "${AWS_ARGS[@]}" s3api list-objects-v2 \
-            --bucket "${S3_BUCKET}" \
-            --prefix "${S3_PREFIX:+${S3_PREFIX}/}backups/" \
-            --max-items 5 \
-            --output json || echo "RESULT: list-objects-v2 failed with exit code $?"
-          echo "Parsed bucket name: [${S3_BUCKET}]"
-          echo "Parsed prefix: [${S3_PREFIX}]"
-          
       - name: Publish non-sensitive backup evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
