@@ -95,7 +95,12 @@ def is_structurally_noncoverable(absolute_path: Path) -> bool:
     exempt a file that genuinely does appear in coverage data.
     """
     try:
-        source = absolute_path.read_text(encoding="utf-8")
+        # utf-8-sig: some files in this repo are saved with a UTF-8 BOM. Reading with
+        # plain "utf-8" leaves the BOM glued to the first line's first token (e.g.
+        # "﻿using ..."), which fails the `line.startswith("using ")` check below and
+        # makes the whole file look unrecognized — even a pure interface file. utf-8-sig
+        # strips a leading BOM if present and behaves exactly like utf-8 otherwise.
+        source = absolute_path.read_text(encoding="utf-8-sig")
     except OSError:
         return False
 
