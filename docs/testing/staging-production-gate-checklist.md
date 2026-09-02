@@ -1,5 +1,31 @@
 # Staging and Production gate checklist
 
+## Live configuration status (checked 2026-09-01 via `gh api repos/Naeem-Ba/PropertyApi/environments/staging/...`)
+
+The GitHub Environment `staging` **exists** (created 2026-07-12, no protection rules, no branch
+restriction) but currently has **zero Variables and zero Secrets** configured on it. A stray
+*repository-level* `STAGING_BASE_URL` variable (`https://staging-api.example.com`, a leftover
+placeholder from initial repo setup) was found and removed on 2026-09-01, because repo-level
+variables leak into every environment/workflow and are not what `docs/testing/staging-smoke-runbook.md`
+specifies -- values must live on the `staging` **environment**, not the repository root. Its presence
+was also the reason the workflow's failure mode changed from `STAGING_BASE_URL is required` to
+`PRODUCTION_BASE_URL is required`: `require_value` checks `STAGING_BASE_URL` first, and the stray
+value made that specific check pass.
+
+Until the repository/environment owner configures the real values below on the `staging` GitHub
+Environment (Settings -> Environments -> staging -> Environment secrets / Environment variables),
+`Mandatory Staging Deploy + E2E Smoke` fails closed by design with an explicit, actionable message
+naming the missing variable -- this is correct and expected, not a bug. No agent or automation may
+fabricate these values; only the environment owner has the real Staging infrastructure to supply them.
+
+Separately (out of scope for the `staging` environment, noted here only as a related finding): the
+`deploy-production` job in `production-gate.yml` declares `environment: production`, but no GitHub
+Environment named exactly `production` currently exists in this repository (only `production-release`
+does, and it already has `RENDER_API_KEY`/`RENDER_SERVICE_ID` configured). GitHub auto-creates an
+environment with no protection rules the first time such a job runs, so this does not block CI, but it
+means `production` currently has no required-reviewer protection. This is a separate decision for the
+repository owner and was intentionally left untouched here.
+
 ## Infrastructure
 
 - [ ] Stable external HTTPS Staging URL exists.
