@@ -91,4 +91,13 @@ public enum NotificationType
 
     /// <summary>Short-stay: a new review was left for a listing. Sent to the host.</summary>
     ShortStayReviewAdded = 31,
+
+    /// <summary>The owner proposed an alternate date/time for a Pending VisitRequest. Sent to the requester.</summary>
+    VisitRescheduleProposed = 32,
+
+    /// <summary>The requester accepted the owner's alternate date/time. Sent to the property owner.</summary>
+    VisitRescheduleAccepted = 33,
+
+    /// <summary>The requester declined the owner's alternate date/time. Sent to the property owner.</summary>
+    VisitRescheduleDeclined = 34,
 }

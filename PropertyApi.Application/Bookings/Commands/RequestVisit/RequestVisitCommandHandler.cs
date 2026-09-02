@@ -81,12 +81,22 @@ public sealed class RequestVisitCommandHandler : IRequestHandler<RequestVisitCom
          */
         try
         {
+            // ✅ إصلاح: كانت الملاحظة (VisitorNote) التي يكتبها الزائر عند إرسال
+            // الطلب تُبنى بالإنكليزية ولا تتضمن الملاحظة إطلاقًا — فيصل المالك
+            // إشعار "طلب زيارة" بدون أي أثر لما كتبه الزائر. أضيفت هنا صراحة،
+            // ومُرِّر relatedEntityId ليتمكن المعلن من التصرف (تأكيد/رفض/موعد
+            // بديل) مباشرة من بطاقة الإشعار دون البحث عن الزيارة يدويًا.
+            var noteSuffix = string.IsNullOrWhiteSpace(request.VisitorNote)
+                ? string.Empty
+                : $" — ملاحظة الزائر: {request.VisitorNote.Trim()}";
+
             await _notifications.NotifyPropertyUpdateAsync(
                 recipientId: property.OwnerId,
                 propertyId: property.Id,
                 propertyTitle: property.Title,
                 type: NotificationType.VisitRequested,
-                detail: $"{request.VisitorName} requested a visit scheduled for {request.ProposedAt:dd/MM/yyyy HH:mm}.",
+                detail: $"{request.VisitorName} بتاريخ {request.ProposedAt:dd/MM/yyyy HH:mm}.{noteSuffix}",
+                relatedEntityId: visit.Id,
                 ct: ct);
         }
         catch (Exception ex)

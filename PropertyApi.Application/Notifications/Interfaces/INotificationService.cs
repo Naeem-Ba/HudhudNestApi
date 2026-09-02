@@ -19,6 +19,7 @@ public interface INotificationService
         string propertyTitle,
         NotificationType type,
         string detail,
+        Guid? relatedEntityId = null,
         CancellationToken ct = default);
 
     /// <summary>

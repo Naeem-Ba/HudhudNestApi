@@ -26,7 +26,10 @@ public sealed class VisitRepository : IVisitRepository
             .AnyAsync(v =>
                 v.PropertyId == propertyId &&
                 v.RequesterId == requesterId &&
-                v.Status == VisitStatus.Pending, ct);
+                // ✅ إصلاح: RescheduleProposed يُحسب أيضًا "معلّقًا" — الزائر ينتظر
+                // ردّه على موعد بديل اقترحه المالك، فلا يجوز له فتح طلب زيارة
+                // جديد للعقار نفسه بالتوازي أثناء ذلك.
+                (v.Status == VisitStatus.Pending || v.Status == VisitStatus.RescheduleProposed), ct);
 
     public async Task<IReadOnlyList<VisitRequest>> GetByRequesterIdAsync(
         Guid requesterId, CancellationToken ct = default)

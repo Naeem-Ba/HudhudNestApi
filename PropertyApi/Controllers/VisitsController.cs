@@ -3,10 +3,13 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using PropertyApi.Application.Bookings.Commands.AcceptRescheduledVisit;
 using PropertyApi.Application.Bookings.Commands.CancelVisit;
 using PropertyApi.Application.Bookings.Commands.CompleteVisit;
 using PropertyApi.Application.Bookings.Commands.ConfirmVisit;
+using PropertyApi.Application.Bookings.Commands.DeclineRescheduledVisit;
 using PropertyApi.Application.Bookings.Commands.DeclineVisit;
+using PropertyApi.Application.Bookings.Commands.ProposeAlternateVisit;
 using PropertyApi.Application.Bookings.Commands.RequestVisit;
 using PropertyApi.Application.Bookings.DTOs;
 using PropertyApi.Application.Bookings.Queries.GetMyVisits;
@@ -89,6 +92,43 @@ public sealed class VisitsController : ControllerBase
         return NoContent();
     }
 
+    [HttpPut("{id:guid}/propose-alternate")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ProposeAlternate(
+        Guid id,
+        [FromBody] ProposeAlternateRequest dto,
+        CancellationToken ct)
+    {
+        await _mediator.Send(
+            new ProposeAlternateVisitCommand(id, GetUserId(), dto.ProposedAt, dto.Note), ct);
+        return NoContent();
+    }
+
+    [HttpPut("{id:guid}/accept-reschedule")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AcceptReschedule(Guid id, CancellationToken ct)
+    {
+        await _mediator.Send(new AcceptRescheduledVisitCommand(id, GetUserId()), ct);
+        return NoContent();
+    }
+
+    [HttpPut("{id:guid}/decline-reschedule")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeclineReschedule(Guid id, CancellationToken ct)
+    {
+        await _mediator.Send(new DeclineRescheduledVisitCommand(id, GetUserId()), ct);
+        return NoContent();
+    }
+
     [HttpPut("{id:guid}/complete")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -131,3 +171,5 @@ public sealed record RequestVisitRequest(
     string? VisitorNote);
 
 public sealed record OwnerResponseRequest(string? Note);
+
+public sealed record ProposeAlternateRequest(DateTime ProposedAt, string? Note);
