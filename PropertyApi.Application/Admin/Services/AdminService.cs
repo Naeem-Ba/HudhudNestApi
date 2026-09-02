@@ -22,6 +22,9 @@ public sealed class AdminService : IAdminService
         int page,
         int pageSize,
         string? role,
+        string? search = null,
+        string? planTier = null,
+        string? accountStatus = null,
         CancellationToken ct = default)
     {
         page = Math.Max(page, 1);
@@ -33,8 +36,16 @@ public sealed class AdminService : IAdminService
             page,
             pageSize,
             normalizedRole,
+            search,
+            planTier,
+            accountStatus,
             ct);
     }
+
+    public Task<AdminUserDetailDto?> GetUserDetailAsync(
+        Guid userId,
+        CancellationToken ct = default)
+        => _users.GetUserDetailAsync(userId, ct);
 
     public IReadOnlyList<string> GetRoles()
         => RoleNames.All;

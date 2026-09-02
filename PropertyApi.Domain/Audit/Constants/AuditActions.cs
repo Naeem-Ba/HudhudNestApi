@@ -20,4 +20,14 @@ public static class AuditActions
     public const string PhoneVerificationRestricted = "PhoneVerificationRestricted";
     public const string PhoneNumberChangeRequested = "PhoneNumberChangeRequested";
     public const string PhoneNumberChanged = "PhoneNumberChanged";
+
+    // -- Admin dashboard: subscription lifecycle --------------------------
+    public const string PlanActivatedByAdmin = "PlanActivatedByAdmin";
+    public const string PlanExtendedByAdmin = "PlanExtendedByAdmin";
+    public const string PlanCancelledByAdmin = "PlanCancelledByAdmin";
+
+    // -- Admin dashboard: listing lifecycle --------------------------------
+    public const string ListingFeaturedByAdmin = "ListingFeaturedByAdmin";
+    public const string ListingUnfeaturedByAdmin = "ListingUnfeaturedByAdmin";
+    public const string ListingExtendedByAdmin = "ListingExtendedByAdmin";
 }

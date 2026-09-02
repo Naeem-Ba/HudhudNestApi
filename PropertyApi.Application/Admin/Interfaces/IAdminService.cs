@@ -9,6 +9,13 @@ public interface IAdminService
         int page,
         int pageSize,
         string? role,
+        string? search = null,
+        string? planTier = null,
+        string? accountStatus = null,
+        CancellationToken ct = default);
+
+    Task<AdminUserDetailDto?> GetUserDetailAsync(
+        Guid userId,
         CancellationToken ct = default);
 
     IReadOnlyList<string> GetRoles();

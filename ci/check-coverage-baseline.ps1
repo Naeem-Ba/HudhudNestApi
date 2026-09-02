@@ -29,6 +29,7 @@ $totalBranchesValid = 0
 $authLinesCovered = 0
 $authLinesValid = 0
 $authGeneratedClassesExcluded = 0
+$generatedClassesExcluded = 0
 
 function Test-IsGeneratedCoverageClass {
     param(
@@ -47,12 +48,45 @@ foreach ($file in $coverageFiles) {
     [xml] $document = Get-Content -Path $file.FullName -Raw
     $coverage = $document.coverage
 
-    $totalLinesCovered += [int] $coverage.GetAttribute("lines-covered")
-    $totalLinesValid += [int] $coverage.GetAttribute("lines-valid")
-    $totalBranchesCovered += [int] $coverage.GetAttribute("branches-covered")
-    $totalBranchesValid += [int] $coverage.GetAttribute("branches-valid")
-
     $classes = @($coverage.packages.package.classes.class)
+
+    # EF migrations/Designer snapshots are generated, never unit-tested by design (they run
+    # only via `dotnet ef database update` against a real database) — same reasoning the
+    # auth-sensitive loop below already applies. Excluding them from the *global* totals too
+    # keeps this baseline measuring code that could plausibly be tested, rather than being
+    # diluted every time a migration lands (a single migration can add thousands of
+    # never-covered generated lines with zero relationship to actual test coverage).
+    $generatedLinesValid = 0
+    $generatedLinesCovered = 0
+    $generatedBranchesValid = 0
+    $generatedBranchesCovered = 0
+
+    foreach ($class in $classes) {
+        $className = [string] $class.name
+        $fileName = [string] $class.filename
+
+        if (Test-IsGeneratedCoverageClass -ClassName $className -FileName $fileName) {
+            $generatedClassesExcluded++
+
+            $lines = @($class.lines.line)
+            $generatedLinesValid += $lines.Count
+            $generatedLinesCovered += @($lines | Where-Object { [int] $_.hits -gt 0 }).Count
+            foreach ($line in $lines) {
+                if ($line.branch -eq "true") {
+                    $conditionCoverage = [string] $line.'condition-coverage'
+                    if ($conditionCoverage -match '\((\d+)/(\d+)\)') {
+                        $generatedBranchesCovered += [int] $Matches[1]
+                        $generatedBranchesValid += [int] $Matches[2]
+                    }
+                }
+            }
+        }
+    }
+
+    $totalLinesCovered += [int] $coverage.GetAttribute("lines-covered") - $generatedLinesCovered
+    $totalLinesValid += [int] $coverage.GetAttribute("lines-valid") - $generatedLinesValid
+    $totalBranchesCovered += [int] $coverage.GetAttribute("branches-covered") - $generatedBranchesCovered
+    $totalBranchesValid += [int] $coverage.GetAttribute("branches-valid") - $generatedBranchesValid
 
     foreach ($class in $classes) {
         $className = [string] $class.name
@@ -104,6 +138,7 @@ $summary = @(
     "| Branch coverage | $branchCoverage% | $minimumBranchCoverage% |",
     "| Auth-sensitive line coverage | $authLineCoverage% | $minimumAuthLineCoverage% |",
     "",
+    "Generated (Migrations/Designer) classes excluded from global totals: $generatedClassesExcluded",
     "Auth-sensitive generated classes excluded: $authGeneratedClassesExcluded"
 )
 
@@ -118,6 +153,7 @@ $summary | Set-Content -Path $summaryPath -Encoding utf8
     branchCoveragePercent = $branchCoverage
     authLineCoveragePercent = $authLineCoverage
     authGeneratedClassesExcluded = $authGeneratedClassesExcluded
+    generatedClassesExcluded = $generatedClassesExcluded
     minimumLineCoveragePercent = $minimumLineCoverage
     minimumBranchCoveragePercent = $minimumBranchCoverage
     minimumAuthLineCoveragePercent = $minimumAuthLineCoverage

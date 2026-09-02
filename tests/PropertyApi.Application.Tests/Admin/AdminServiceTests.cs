@@ -19,11 +19,24 @@ public sealed class AdminServiceTests
             page: -10,
             pageSize: 500,
             role: "agent",
-            CancellationToken.None);
+            ct: CancellationToken.None);
 
         Assert.Equal(1, users.LastPage);
         Assert.Equal(100, users.LastPageSize);
         Assert.Equal(RoleNames.Agent, users.LastRole);
+    }
+
+    [Fact]
+    public async Task GetUserDetailAsync_DelegatesToRepository()
+    {
+        var users = new FakeAdminUserQueryRepository();
+        var service = new AdminService(users, new FakeAdminIdentityService());
+        var userId = Guid.NewGuid();
+
+        var detail = await service.GetUserDetailAsync(userId, CancellationToken.None);
+
+        Assert.Null(detail);
+        Assert.Equal(userId, users.LastDetailUserId);
     }
 
     [Fact]
@@ -152,11 +165,15 @@ public sealed class AdminServiceTests
         public int LastPage { get; private set; }
         public int LastPageSize { get; private set; }
         public string? LastRole { get; private set; }
+        public Guid LastDetailUserId { get; private set; }
 
         public Task<PagedResult<AdminUserDto>> GetUsersWithPaginationAsync(
             int page,
             int pageSize,
             string? role,
+            string? search = null,
+            string? planTier = null,
+            string? accountStatus = null,
             CancellationToken ct = default)
         {
             LastPage = page;
@@ -170,6 +187,14 @@ public sealed class AdminServiceTests
                 Page = page,
                 PageSize = pageSize
             });
+        }
+
+        public Task<AdminUserDetailDto?> GetUserDetailAsync(
+            Guid userId,
+            CancellationToken ct = default)
+        {
+            LastDetailUserId = userId;
+            return Task.FromResult<AdminUserDetailDto?>(null);
         }
     }
 

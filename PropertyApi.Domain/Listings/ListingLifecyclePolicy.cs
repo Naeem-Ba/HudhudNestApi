@@ -69,4 +69,15 @@ public static class ListingLifecyclePolicy
     /// Price, in USD, of promoting one listing for one FeaturedPeriod.
     /// </summary>
     public const decimal FeaturedListingFeeUsd = 5.00m;
+
+    // -- Admin-granted feature/extend (no payment) -----------------
+    //
+    // The admin dashboard lets an admin choose the duration explicitly rather than always
+    // granting exactly one FeaturedPeriod/PublicationPeriod — these bounds only reject an
+    // obviously-wrong input, mirroring SubscriptionLifecyclePolicy's reasoning.
+
+    public const int MinAdminGrantDays = 1;
+
+    /// <summary>~2 years — generous, but still catches a unit mistake in the input.</summary>
+    public const int MaxAdminGrantDays = 730;
 }

@@ -1,11 +1,11 @@
 namespace PropertyApi.Application.Admin.DTOs;
 
 /// <summary>
-/// One row of the admin user-management list — extended (admin dashboard: plan/ads
-/// summary) beyond the original identity+roles shape so the list satisfies the spec's
-/// minimum-columns requirement without a second round trip per row.
+/// Full detail behind AdminUserDto's list row — powers the admin user-detail page's
+/// "الخطة والاشتراك" section. Superset of AdminUserDto rather than reusing it as a base
+/// class: the two are shaped for different screens and shouldn't need to change together.
 /// </summary>
-public sealed class AdminUserDto
+public sealed class AdminUserDetailDto
 {
     public Guid Id { get; init; }
     public string? Email { get; init; }
@@ -15,17 +15,20 @@ public sealed class AdminUserDto
     public string? DisplayName { get; init; }
     public DateTime CreatedAt { get; init; }
     public IReadOnlyList<string> Roles { get; init; } = Array.Empty<string>();
-
-    /// <summary>"Active" | "Disabled" — derived from ApplicationUser.IsDeleted.</summary>
     public string AccountStatus { get; init; } = string.Empty;
 
-    /// <summary>Null when the user has never selected a plan.</summary>
     public string? PlanTier { get; init; }
-
-    /// <summary>"NoPlan" | "Active" | "Expired" | "Cancelled" — UserAccount.GetEffectivePlanStatus.</summary>
+    public string? PlanNameKey { get; init; }
     public string PlanStatus { get; init; } = string.Empty;
-
+    public DateTime? PlanStartedAt { get; init; }
     public DateTime? PlanExpiresAt { get; init; }
+    public DateTime? PlanCancelledAt { get; init; }
+
+    /// <summary>"SelfService" | "AdminGrant" | null (never selected).</summary>
+    public string? PlanActivationSource { get; init; }
+
+    /// <summary>Null means unlimited (see Plan.ListingLimit's doc comment).</summary>
+    public int? ListingLimit { get; init; }
 
     public int TotalListings { get; init; }
     public int ActiveListings { get; init; }

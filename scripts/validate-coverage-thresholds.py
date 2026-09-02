@@ -13,6 +13,20 @@ from pathlib import Path
 AUTH_PATTERN = re.compile(r"(Auth|Identity|Security|Otp|Token|Login|Register|Password)", re.IGNORECASE)
 BRANCH_COUNTS_PATTERN = re.compile(r"\((\d+)/(\d+)\)")
 
+BLOCK_COMMENT_PATTERN = re.compile(r"/\*.*?\*/", re.DOTALL)
+LINE_COMMENT_PATTERN = re.compile(r"//[^\n]*")
+VERBATIM_STRING_PATTERN = re.compile(r'@"(?:[^"]|"")*"')
+STRING_LITERAL_PATTERN = re.compile(r'"(?:\\.|[^"\\])*"')
+CHAR_LITERAL_PATTERN = re.compile(r"'(?:\\.|[^'\\])'")
+METHOD_BODY_PATTERN = re.compile(r"\)\s*\{")
+TYPE_OPEN_LINE_PATTERN = re.compile(
+    r"^(?:public|internal|private|protected|static|sealed|partial|abstract|new|\s)*"
+    r"(?P<keyword>class|interface|enum|record|struct)\b[^{]*\{?$"
+)
+CONST_FIELD_LINE_PATTERN = re.compile(
+    r"^(?:public|internal|private|protected|static|readonly|\s)*const\s+[\w.\[\]<>,?]+\s+\w+\s*=\s*[^;]+;$"
+)
+
 
 def percent(covered: int, valid: int) -> float:
     if valid <= 0:
@@ -49,6 +63,97 @@ def is_generated_or_infra(file_name: str, class_name: str) -> bool:
         or normalized.endswith(".AssemblyInfo.cs")
         or ".Migrations." in class_name
     )
+
+
+def strip_comments_and_literals(source: str) -> str:
+    stripped = BLOCK_COMMENT_PATTERN.sub("", source)
+    stripped = LINE_COMMENT_PATTERN.sub("", stripped)
+    stripped = VERBATIM_STRING_PATTERN.sub('""', stripped)
+    stripped = STRING_LITERAL_PATTERN.sub('""', stripped)
+    stripped = CHAR_LITERAL_PATTERN.sub("''", stripped)
+    return stripped
+
+
+def is_structurally_noncoverable(absolute_path: Path) -> bool:
+    """
+    True only for a C# file whose declared types cannot possibly contain a single
+    coverable line: a pure interface (or several), a plain enum, or a static class made
+    up solely of `const` field declarations (e.g. an audit-action-name constants class).
+
+    Coverlet emits no <class>/<line> entries at all for such types — interface members
+    are signatures with no IL body, enum members are integer constants, and `const`
+    fields are inlined at every call site — so their total absence from every coverage
+    report is structurally expected, not evidence of an untested change. Treating that
+    absence as "missing coverage data" produces a false-positive failure that no amount
+    of testing the code that *uses* these types can ever fix.
+
+    Deliberately conservative: this walks the file line by line and a single line it
+    cannot positively recognize disqualifies the whole file, falling back to the
+    original (stricter) "missing from coverage data" failure. It only ever gets called
+    once a file is already fully absent from every coverage report, so under-recognizing
+    a valid interface/enum layout only forgoes the fix for that file — it can never
+    exempt a file that genuinely does appear in coverage data.
+    """
+    try:
+        # utf-8-sig: some files in this repo are saved with a UTF-8 BOM. Reading with
+        # plain "utf-8" leaves the BOM glued to the first line's first token (e.g.
+        # "﻿using ..."), which fails the `line.startswith("using ")` check below and
+        # makes the whole file look unrecognized — even a pure interface file. utf-8-sig
+        # strips a leading BOM if present and behaves exactly like utf-8 otherwise.
+        source = absolute_path.read_text(encoding="utf-8-sig")
+    except OSError:
+        return False
+
+    cleaned = strip_comments_and_literals(source)
+
+    if "=>" in cleaned or METHOD_BODY_PATTERN.search(cleaned):
+        return False  # an expression-bodied or block-bodied member exists somewhere.
+
+    type_stack: list[str] = []
+    saw_recognized_type = False
+
+    for raw_line in cleaned.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith(("using ", "namespace ", "[")):
+            continue
+
+        type_open = TYPE_OPEN_LINE_PATTERN.match(line)
+        if type_open:
+            saw_recognized_type = True
+            type_stack.append(type_open.group("keyword"))
+            continue
+
+        if line == "{":
+            if not type_stack:
+                return False
+            continue
+
+        if line == "}":
+            if not type_stack:
+                return False
+            type_stack.pop()
+            continue
+
+        if not type_stack:
+            return False  # a top-level statement outside any recognized type body.
+
+        enclosing = type_stack[-1]
+        if enclosing in ("interface", "enum"):
+            # Already proven free of member bodies by the guard above — every remaining
+            # line here can only be a signature, an enum member, or a parameter of a
+            # signature wrapped onto its own line.
+            continue
+
+        # enclosing is class/record/struct: the only content a non-coverable type like
+        # this may declare is a bare `const` field.
+        if CONST_FIELD_LINE_PATTERN.match(line):
+            continue
+
+        return False
+
+    return saw_recognized_type and not type_stack
 
 
 def parse_branch_counts(line_element: ET.Element) -> tuple[int, int]:
@@ -217,6 +322,7 @@ def evaluate_changed_code(policy: dict, repository_root: Path, line_hits_by_file
         "reason": "Changed-code coverage is enforced for pull_request events only.",
         "changedProductionFiles": [],
         "unmappedChangedProductionFiles": [],
+        "nonCoverableChangedProductionFiles": [],
         "changedExecutableLines": 0,
         "changedCoveredLines": 0,
         "changedLineCoveragePercent": 100.0,
@@ -244,9 +350,18 @@ def evaluate_changed_code(policy: dict, repository_root: Path, line_hits_by_file
         if not is_policy_production_file(path, changed_policy):
             continue
 
-        result["changedProductionFiles"].append(path)
         coverage_lines = line_hits_by_file.get(path)
         branch_lines = branch_counts_by_file.get(path, {})
+
+        if coverage_lines is None and is_structurally_noncoverable(repository_root / path):
+            # A pure interface, enum, or const-only class — Coverlet emits no coverage
+            # entries for these at all (see is_structurally_noncoverable's doc comment),
+            # so they are excluded from the changed-code population entirely rather than
+            # being counted as either covered or a gap.
+            result["nonCoverableChangedProductionFiles"].append(path)
+            continue
+
+        result["changedProductionFiles"].append(path)
 
         if coverage_lines is None:
             result["unmappedChangedProductionFiles"].append(path)
@@ -311,6 +426,15 @@ def write_summary(output_directory: Path, report: dict):
         "",
         f"Changed-code status: {report['changedCode']['status']}",
     ]
+
+    non_coverable = report["changedCode"].get("nonCoverableChangedProductionFiles") or []
+    if non_coverable:
+        lines += [
+            "",
+            "Structurally non-coverable changed files (interfaces/enums/const-only classes, "
+            "excluded from the changed-code population):",
+        ]
+        lines += [f"- {path}" for path in non_coverable]
 
     if report["failures"]:
         lines += ["", "Failures:"]

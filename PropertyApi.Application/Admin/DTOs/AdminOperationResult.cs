@@ -37,5 +37,16 @@ public sealed record AdminOperationResult
             Message = "The requested role is invalid.",
             Errors = allowedRoles.ToArray()
         };
+
+    /// <summary>
+    /// A state conflict distinct from a bad request — e.g. "cannot extend a plan that was
+    /// never selected." Mapped to 409 by AdminController.ToActionResult.
+    /// </summary>
+    public static AdminOperationResult ConflictResult(string message) => new()
+    {
+        Succeeded = false,
+        Conflict = true,
+        Message = message
+    };
 }
 
