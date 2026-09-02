@@ -2,7 +2,15 @@ name: propertyapi-database-recovery
 
 services:
   source-postgres:
-    image: postgis/postgis:16-3.4
+    # Must match ci/Dockerfile.database-recovery's base image major version
+    # (currently postgis/postgis:17-3.5) and the real production PostgreSQL
+    # major version -- assert_postgres_client_matches_server in
+    # scripts/database/common.sh refuses to run pg_dump/pg_restore across a
+    # client/server major-version mismatch. When fresh_backup runs against
+    # the real production database (see database-restore-drill.yml), the
+    # source here is bypassed for backup but restore-postgres below is still
+    # the actual restore target, so it must track production's major version.
+    image: postgis/postgis:17-3.5
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -14,7 +22,12 @@ services:
       retries: 30
 
   restore-postgres:
-    image: postgis/postgis:16-3.4
+    # See source-postgres above: must match the production PostgreSQL major
+    # version, or the restore step's assert_postgres_client_matches_server
+    # check fails closed (this is exactly what happened on real CI: real
+    # production reports server major 17, so the drill's disposable restore
+    # target must be 17 too, not a stale 16 pin).
+    image: postgis/postgis:17-3.5
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
