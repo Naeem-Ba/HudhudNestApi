@@ -63,6 +63,52 @@ public sealed class NotificationServiceSignalRTests
         Assert.False(dto.IsRead);
     }
 
+    // fix/visit-request-notification-actions: VisitRequested/VisitConfirmed/VisitDeclined/
+    // VisitCancelled/VisitRescheduleProposed/VisitRescheduleAccepted/VisitRescheduleDeclined
+    // used to fall through to the generic "تحديث على العقار" default below instead of a
+    // dedicated Arabic template — this is the regression guard for each of those seven
+    // dedicated branches, plus the relatedEntityId plumbing added alongside them.
+    [Theory]
+    [Trait("Category", "Integration")]
+    [Trait("Feature", "Notifications")]
+    [InlineData(NotificationType.VisitRequested, "طلب زيارة جديد")]
+    [InlineData(NotificationType.VisitConfirmed, "تم تأكيد موعد زيارتك")]
+    [InlineData(NotificationType.VisitDeclined, "تم رفض طلب زيارتك")]
+    [InlineData(NotificationType.VisitCancelled, "ألغى الزائر طلب الزيارة")]
+    [InlineData(NotificationType.VisitRescheduleProposed, "اقترح مالك العقار")]
+    [InlineData(NotificationType.VisitRescheduleAccepted, "وافق الزائر على الموعد البديل")]
+    [InlineData(NotificationType.VisitRescheduleDeclined, "رفض الزائر الموعد البديل")]
+    public async Task NotifyPropertyUpdateAsync_ForEachVisitNotificationType_UsesItsDedicatedArabicTemplate(
+        NotificationType type, string expectedArabicPhrase)
+    {
+        var recipientId = Guid.NewGuid();
+        var propertyId = Guid.NewGuid();
+        var visitId = Guid.NewGuid();
+
+        var repository = new CapturingNotificationRepository();
+        var hubContext = new CapturingNotificationHubContext();
+        var service = new NotificationService(repository, hubContext, NullLogger<NotificationService>.Instance);
+
+        await service.NotifyPropertyUpdateAsync(
+            recipientId,
+            propertyId,
+            "شقة في المزة",
+            type,
+            "الموعد: 01/01/2027 10:00",
+            relatedEntityId: visitId,
+            ct: CancellationToken.None);
+
+        var stored = Assert.Single(repository.Notifications);
+        Assert.Equal(type, stored.Type);
+        Assert.Contains(expectedArabicPhrase, stored.Message);
+        Assert.Contains("شقة في المزة", stored.Message);
+        Assert.Equal(visitId, stored.RelatedEntityId);
+
+        var payload = Assert.Single(hubContext.Clients.LastArguments);
+        var dto = Assert.IsType<NotificationDto>(payload);
+        Assert.Equal(visitId, dto.RelatedEntityId);
+    }
+
     private sealed class CapturingNotificationRepository : INotificationRepository
     {
         public List<Notification> Notifications { get; } = new();
