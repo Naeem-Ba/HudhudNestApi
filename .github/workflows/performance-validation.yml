@@ -32,7 +32,27 @@ concurrency:
 jobs:
   performance-validation:
     name: Two replicas + k6 + PostgreSQL analysis
-    runs-on: ubuntu-latest
+    # BUG-33: the `release` and `staging` profiles run api1 + api2 + postgres +
+    # redis + k6 all concurrently under real load (25k/100k-row datasets,
+    # up to 30 VUs). Evidence from Production Gate #215
+    # (container-resources-timeseries.jsonl in that run's performance
+    # artifact) showed postgres peaking at 182.82% CPU -- full saturation of
+    # a standard 2-vCPU GitHub-hosted runner, with api1/api2 concurrently at
+    # 91-93% each -- causing browse-cold/browse-warm to miss their p95/p99/RPS
+    # budgets even though query plans stayed clean (EXPLAIN ANALYZE gate
+    # passed) and the identical commit tree passed cleanly minutes earlier
+    # under the lighter `pr` profile. That's CPU oversubscription on the
+    # runner, not a code or query regression -- see BUG-30b below for the
+    # earlier, insufficient mitigation (VU tuning alone) of the same
+    # signature. `pr` profile stays on a standard runner since it has not
+    # shown this signature (BUG-30b evidence and this run were both
+    # release/staging only).
+    #
+    # Requires "Larger runners" to be provisioned for this repository/org
+    # (Settings -> Actions -> Runners -> Larger runners; needs GitHub Team or
+    # Enterprise Cloud). Falls back to ubuntu-latest if unset via
+    # workflow_dispatch/workflow_call with an unrecognized profile.
+    runs-on: ${{ (inputs.profile == 'release' || inputs.profile == 'staging') && 'ubuntu-latest-4-cores' || 'ubuntu-latest' }}
     timeout-minutes: 180
     env:
       PERF_ENVIRONMENT: CI
