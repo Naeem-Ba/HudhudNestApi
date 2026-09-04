@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PropertyApi.Infrastructure.Persistence;
-using PropertyApi.Observability;
 using StackExchange.Redis;
 
 namespace PropertyApi.Controllers;
@@ -35,7 +34,7 @@ public sealed class ObservabilitySyntheticController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Execute(CancellationToken cancellationToken)
     {
-        if (!IsAuthorized())
+        if (!ObservabilityTestAuthorization.IsAuthorized(Request, _configuration, _environment))
         {
             return NotFound();
         }
@@ -49,40 +48,5 @@ public sealed class ObservabilitySyntheticController : ControllerBase
         response.EnsureSuccessStatusCode();
 
         return Ok(new { result = "ok" });
-    }
-
-    public sealed record AlertTestStateRequest(bool Firing);
-
-    // Lets scripts/verify-observability.sh drive a real Prometheus alert through a full
-    // firing -> resolved lifecycle without ever writing to Prometheus's rule files at runtime:
-    // the rule itself (observability/render/prometheus/rules) is permanent and just watches
-    // this gauge. Same Staging-only + shared-secret gate as the sibling "synthetic" endpoint.
-    [HttpPost("synthetic/alert-test-state")]
-    [AllowAnonymous]
-    public IActionResult SetAlertTestState([FromBody] AlertTestStateRequest request)
-    {
-        if (!IsAuthorized())
-        {
-            return NotFound();
-        }
-
-        PropertyApiTelemetry.SetSyntheticAlertTestState(request.Firing);
-        return Ok(new { result = "ok", firing = request.Firing });
-    }
-
-    private bool IsAuthorized()
-    {
-        if (!_environment.IsStaging() ||
-            !_configuration.GetValue<bool>("Staging:TestSupport:Enabled"))
-        {
-            return false;
-        }
-
-        var expectedKey = _configuration["Staging:TestSupport:CleanupSecret"];
-        var suppliedKey = Request.Headers["X-Observability-Test-Key"].ToString();
-        return !string.IsNullOrWhiteSpace(expectedKey) &&
-            System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
-                System.Text.Encoding.UTF8.GetBytes(expectedKey),
-                System.Text.Encoding.UTF8.GetBytes(suppliedKey));
     }
 }
