@@ -180,7 +180,8 @@ public static class PropertyApiObservabilityExtensions
             return;
         }
 
-        tracing.AddOtlpExporter(exporter => ConfigureExporter(exporter, options, endpoint));
+        tracing.AddOtlpExporter(exporter =>
+            ConfigureExporter(exporter, options, endpoint, "v1/traces"));
     }
 
     private static void AddMetricOtlpExporter(
@@ -194,7 +195,7 @@ public static class PropertyApiObservabilityExtensions
 
         metrics.AddOtlpExporter((exporter, reader) =>
         {
-            ConfigureExporter(exporter, options, endpoint);
+            ConfigureExporter(exporter, options, endpoint, "v1/metrics");
             reader.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds =
                 options.Metrics.ExportIntervalMilliseconds;
             reader.PeriodicExportingMetricReaderOptions.ExportTimeoutMilliseconds =
@@ -205,17 +206,32 @@ public static class PropertyApiObservabilityExtensions
     private static void ConfigureExporter(
         OtlpExporterOptions exporter,
         PropertyApiObservabilityOptions options,
-        Uri endpoint)
+        Uri endpoint,
+        string signalPath)
     {
-        exporter.Endpoint = endpoint;
-        exporter.Protocol = options.Otlp.Protocol.Equals("grpc", StringComparison.OrdinalIgnoreCase)
-            ? OtlpExportProtocol.Grpc
-            : OtlpExportProtocol.HttpProtobuf;
+        var isHttpProtobuf = !options.Otlp.Protocol.Equals("grpc", StringComparison.OrdinalIgnoreCase);
+
+        // The .NET SDK only appends a signal-specific path (v1/traces, v1/metrics) to the
+        // *generic* OTEL_EXPORTER_OTLP_ENDPOINT env var it reads itself; setting
+        // OtlpExporterOptions.Endpoint directly in code, as we do here, is treated as an
+        // already-complete, signal-specific endpoint and used verbatim -- confirmed by curling
+        // a real deployed collector: the base URL alone got 404, only .../v1/traces got 200.
+        // So for HTTP/protobuf we append the standard OTLP path ourselves whenever the
+        // configured endpoint is just a bare host (no path of its own); gRPC needs no path.
+        exporter.Endpoint = isHttpProtobuf && IsBareHost(endpoint)
+            ? new Uri(endpoint, signalPath)
+            : endpoint;
+        exporter.Protocol = isHttpProtobuf
+            ? OtlpExportProtocol.HttpProtobuf
+            : OtlpExportProtocol.Grpc;
         exporter.Headers = string.IsNullOrWhiteSpace(options.Otlp.Headers)
             ? null
             : options.Otlp.Headers;
         exporter.TimeoutMilliseconds = options.Otlp.ExportTimeoutMilliseconds;
     }
+
+    private static bool IsBareHost(Uri endpoint) =>
+        endpoint.AbsolutePath is "" or "/";
 
     private static bool TryGetEndpoint(
         PropertyApiObservabilityOptions options,
