@@ -8,6 +8,7 @@ using PropertyApi.Application.Bookings.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Contact.Interfaces;
 using PropertyApi.Application.Favorites.Interfaces;
+using PropertyApi.Application.Investments.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Application.Plans.Interfaces;
@@ -21,6 +22,7 @@ using PropertyApi.Application.ShortStay.Services;
 using PropertyApi.Infrastructure.Admin;
 using PropertyApi.Infrastructure.Analytics;
 using PropertyApi.Infrastructure.Bookings;
+using PropertyApi.Infrastructure.Investments;
 using PropertyApi.Infrastructure.Listings;
 using PropertyApi.Infrastructure.Notifications;
 using PropertyApi.Infrastructure.Reviews;
@@ -86,6 +88,15 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IBookingRepository, BookingRepository>();
         services.AddScoped<IShortStayReviewRepository, ShortStayReviewRepository>();
         services.AddScoped<IPricingCalculationService, PricingCalculationService>();
+
+        // Investment Discovery module (Phase 1)
+        services.AddScoped<IInvestmentProjectRepository, InvestmentProjectRepository>();
+        services.AddScoped<IInvestmentProjectFinancialsRepository, InvestmentProjectFinancialsRepository>();
+        services.AddScoped<IInvestmentRiskAssessmentRepository, InvestmentRiskAssessmentRepository>();
+        services.AddScoped<IInvestmentDocumentRepository, InvestmentDocumentRepository>();
+        services.AddScoped<IInvestmentUpdateRepository, InvestmentUpdateRepository>();
+        services.AddScoped<IInvestmentWatchlistRepository, InvestmentWatchlistRepository>();
+        services.AddScoped<IInvestmentInterestRepository, InvestmentInterestRepository>();
 
         return services;
     }
