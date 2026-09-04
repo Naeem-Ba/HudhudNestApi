@@ -442,6 +442,467 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.ToTable("VisitRequests", (string)null);
                 });
 
+            modelBuilder.Entity("PropertyApi.Domain.Investments.Entities.InvestmentDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DocumentHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("DocumentType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<Guid>("InvestmentProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("StorageProvider")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvestmentProjectId");
+
+                    b.HasIndex("InvestmentProjectId", "IsPublic");
+
+                    b.ToTable("InvestmentDocuments", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Investments.Entities.InvestmentInterest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("InvestmentProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvestmentProjectId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "InvestmentProjectId")
+                        .IsUnique();
+
+                    b.ToTable("InvestmentInterests", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Investments.Entities.InvestmentProject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("ExpectedReturnMax")
+                        .HasColumnType("decimal(9,4)");
+
+                    b.Property<decimal>("ExpectedReturnMin")
+                        .HasColumnType("decimal(9,4)");
+
+                    b.Property<int>("InvestmentTermMonths")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal?>("MaximumInvestment")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("MinimumInvestment")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProjectType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid>("PropertyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<decimal>("RaisedAmount")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("RiskLevel")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("ScheduledPublishAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ShortDescription")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateOnly?>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("TargetAmount")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EndDate");
+
+                    b.HasIndex("OwnerUserId");
+
+                    b.HasIndex("ProjectType");
+
+                    b.HasIndex("PropertyId");
+
+                    b.HasIndex("StartDate");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("InvestmentProjects", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Investments.Entities.InvestmentProjectFinancials", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("BrokerCost")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("ConstructionCost")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("ContingencyReserve")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<decimal>("ExpectedProfit")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("ExpectedRevenue")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("FinancingCost")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid>("InvestmentProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("NotaryCost")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("OperatingCost")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("PurchasePrice")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("RenovationCost")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("Taxes")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("TotalProjectCost")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvestmentProjectId")
+                        .IsUnique();
+
+                    b.ToTable("InvestmentProjectFinancials", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Investments.Entities.InvestmentRiskAssessment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("DeveloperRisk")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("FinancingRisk")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("InvestmentProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LiquidityRisk")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("MarketRisk")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ProjectRisk")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("RiskLevel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("RiskScore")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RiskSummary")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvestmentProjectId")
+                        .IsUnique();
+
+                    b.ToTable("InvestmentRiskAssessments", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Investments.Entities.InvestmentUpdate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("InvestmentProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("PublishedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("UpdateType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvestmentProjectId", "PublishedAt");
+
+                    b.ToTable("InvestmentUpdates", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Investments.Entities.InvestmentWatchlistItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("InvestmentProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvestmentProjectId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "InvestmentProjectId")
+                        .IsUnique();
+
+                    b.ToTable("InvestmentWatchlistItems", (string)null);
+                });
+
             modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.Amenity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3342,6 +3803,87 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Navigation("Property");
 
                     b.Navigation("Requester");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Investments.Entities.InvestmentDocument", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Investments.Entities.InvestmentProject", null)
+                        .WithMany()
+                        .HasForeignKey("InvestmentProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Investments.Entities.InvestmentInterest", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Investments.Entities.InvestmentProject", null)
+                        .WithMany()
+                        .HasForeignKey("InvestmentProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Investments.Entities.InvestmentProject", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PropertyApi.Domain.Listings.Entities.Property", null)
+                        .WithMany()
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Investments.Entities.InvestmentProjectFinancials", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Investments.Entities.InvestmentProject", null)
+                        .WithMany()
+                        .HasForeignKey("InvestmentProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Investments.Entities.InvestmentRiskAssessment", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Investments.Entities.InvestmentProject", null)
+                        .WithMany()
+                        .HasForeignKey("InvestmentProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Investments.Entities.InvestmentUpdate", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Investments.Entities.InvestmentProject", null)
+                        .WithMany()
+                        .HasForeignKey("InvestmentProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Investments.Entities.InvestmentWatchlistItem", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Investments.Entities.InvestmentProject", null)
+                        .WithMany()
+                        .HasForeignKey("InvestmentProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.Favorite", b =>

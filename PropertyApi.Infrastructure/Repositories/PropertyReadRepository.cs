@@ -27,7 +27,12 @@ public sealed class PropertyReadRepository : IPropertyReadRepository
                 p.IsPublished,
                 p.Images.FirstOrDefault(i => i.IsMain) != null
                     ? p.Images.First(i => i.IsMain).Url
-                    : null))
+                    : null,
+                p.CountryCode,
+                p.Latitude,
+                p.Longitude,
+                p.PurchasePrice ?? p.ColdRent,
+                p.CurrencyCode))
             .FirstOrDefaultAsync(ct);
     }
 }

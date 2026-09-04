@@ -22,6 +22,7 @@ using PropertyApi.Domain.Services.Entities;
 using PropertyApi.Infrastructure.Identity.Entities;
 using PropertyApi.Infrastructure.Security.DataProtection;
 using PropertyApi.Domain.ShortStay.Entities;
+using PropertyApi.Domain.Investments.Entities;
 
 
 
@@ -102,6 +103,15 @@ public sealed class AppDbContext
     public DbSet<Booking> ShortStayBookings => Set<Booking>();
     public DbSet<ShortStayReview> ShortStayReviews => Set<ShortStayReview>();
     public DbSet<HostVerificationRecord> HostVerificationRecords => Set<HostVerificationRecord>();
+
+    // Investment Discovery module (Phase 1)
+    public DbSet<InvestmentProject> InvestmentProjects => Set<InvestmentProject>();
+    public DbSet<InvestmentProjectFinancials> InvestmentProjectFinancials => Set<InvestmentProjectFinancials>();
+    public DbSet<InvestmentRiskAssessment> InvestmentRiskAssessments => Set<InvestmentRiskAssessment>();
+    public DbSet<InvestmentDocument> InvestmentDocuments => Set<InvestmentDocument>();
+    public DbSet<InvestmentUpdate> InvestmentUpdates => Set<InvestmentUpdate>();
+    public DbSet<InvestmentWatchlistItem> InvestmentWatchlistItems => Set<InvestmentWatchlistItem>();
+    public DbSet<InvestmentInterest> InvestmentInterests => Set<InvestmentInterest>();
 
     // -- Model Configuration -------------------------------------
     protected override void OnModelCreating(ModelBuilder builder)

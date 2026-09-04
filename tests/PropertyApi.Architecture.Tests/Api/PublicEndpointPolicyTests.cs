@@ -104,6 +104,18 @@ public sealed class PublicEndpointPolicyTests
             // Public contact form; abuse is bounded by the "contact" rate-limit policy.
             "ContactController.Submit",
 
+            // Investment Discovery Portal (Phase 1): the projects a visitor browses/analyzes
+            // before signing up, same rationale as the property catalogue above. Every one of
+            // these is read-only (or, for the calculator, a stateless indicative computation)
+            // and rate-limited under "public-read".
+            "InvestmentsController.GetProjects",
+            "InvestmentsController.GetProjectById",
+            "InvestmentsController.GetProjectFinancials",
+            "InvestmentsController.GetProjectRisk",
+            "InvestmentsController.GetProjectDocuments",
+            "InvestmentsController.GetProjectUpdates",
+            "InvestmentsController.Calculate",
+
             // Operational surface.
             "ObservabilitySyntheticController.Execute",
 
