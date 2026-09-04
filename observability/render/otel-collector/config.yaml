@@ -1,0 +1,79 @@
+# otel-collector config for the real Staging deployment on Render.
+#
+# Differs from observability/otel-collector/config.yaml (the local docker-compose config) in
+# exactly the ways Render's platform requires:
+#   - Render forwards public traffic to a single HTTP port per service (${env:PORT} at
+#     runtime) -- the OTLP receiver binds there instead of a fixed 4317/4318.
+#   - Traces and metrics are pushed to Tempo/Prometheus over their public HTTPS URLs
+#     (otlphttp / prometheusremotewrite exporters) instead of a private Docker network --
+#     Render's free plan cannot receive private-network traffic, but a plain outbound public
+#     HTTPS call from this collector works exactly like the API's own outbound calls to
+#     Cloudinary/Resend/the database.
+#   - No "prometheus" pull-style exporter and no spanmetrics connector: the app already
+#     exports http.server.request.duration (and friends) directly via its own OTLP metrics
+#     pipeline (see PropertyApi.Observability.PropertyApiObservabilityExtensions), so nothing
+#     needs to be derived from spans here.
+#
+# TEMPO_PUBLIC_URL / PROMETHEUS_REMOTE_WRITE_URL are resolved from Render environment
+# variables at container start (see Dockerfile entrypoint).
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:${env:PORT}
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+  transform/redaction:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - delete_key(attributes, "http.request.header.authorization")
+          - delete_key(attributes, "http.request.header.cookie")
+          - delete_key(attributes, "http.response.header.set-cookie")
+          - delete_key(attributes, "db.connection_string")
+          - delete_key(attributes, "db.statement")
+          - delete_key(attributes, "db.query.text")
+          - delete_key(attributes, "url.query")
+          - delete_key(attributes, "url.full")
+          - delete_key(attributes, "user.email")
+          - delete_key(attributes, "user.phone")
+          - delete_key(attributes, "auth.token")
+          - delete_key(attributes, "auth.otp")
+          - delete_key(attributes, "redis.key")
+  batch:
+    timeout: 2s
+    send_batch_size: 512
+
+exporters:
+  otlphttp/tempo:
+    endpoint: ${env:TEMPO_PUBLIC_URL}
+    tls:
+      insecure: false
+  prometheusremotewrite:
+    endpoint: ${env:PROMETHEUS_REMOTE_WRITE_URL}
+    tls:
+      insecure: false
+    resource_to_telemetry_conversion:
+      enabled: true
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, transform/redaction, batch]
+      exporters: [otlphttp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheusremotewrite]
