@@ -43,6 +43,12 @@ public sealed class RateLimitingGuardTests
                 "Staging-only: returns 404 unless IHostEnvironment.IsStaging() and " +
                 "Staging:TestSupport:Enabled are both true. Not reachable in Production at all.",
 
+            ["ObservabilityAlertTestController.SetAlertTestState"] =
+                "Staging-only: same gate as ObservabilitySyntheticController.Execute above " +
+                "(ObservabilityTestAuthorization.IsAuthorized checks IsStaging() and " +
+                "Staging:TestSupport:Enabled), plus a shared-secret header. Not reachable in " +
+                "Production at all.",
+
             ["OperationalController.BuildInfo"] =
                 "Gated by StagingTestSupportAuthorization (Staging + constant-time secret " +
                 "compare, 404 otherwise) -- a stronger control than a per-IP rate limit, and " +
