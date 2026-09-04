@@ -6,6 +6,7 @@ using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Listings.Queries.GetPropertyForManagement;
 using PropertyApi.Application.Listings.Queries.GetMyProperties;
 using PropertyApi.Domain.Enums;
+using PropertyApi.Domain.Listings;
 using PropertyApi.Domain.Listings.Entities;
 
 namespace PropertyApi.Application.Tests.Listings;
@@ -96,7 +97,8 @@ public sealed class PropertyPublicationWorkflowTests
 
         Assert.True(property.IsPublished);
         Assert.NotNull(property.PublishedAt);
-        Assert.True(property.ExpiresAt > DateTime.UtcNow.AddDays(89));
+        Assert.True(
+            property.ExpiresAt > DateTime.UtcNow.Add(ListingLifecyclePolicy.PublicationPeriod).AddMinutes(-10));
         unitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 

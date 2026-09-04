@@ -11,7 +11,7 @@ namespace PropertyApi.Infrastructure.Listings;
 
 /// <summary>
 /// Enforces the listing publication window that the public pricing page promises:
-/// three months of visibility, a warning before it ends, then expiry, then deletion
+/// one month of visibility, a warning before it ends, then expiry, then deletion
 /// after a grace period unless the owner pays to extend.
 ///
 /// Why this service has to exist even though search already hides expired listings:

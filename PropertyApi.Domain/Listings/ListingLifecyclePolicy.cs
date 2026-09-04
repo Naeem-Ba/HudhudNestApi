@@ -27,14 +27,21 @@ public static class ListingLifecyclePolicy
     /// <summary>
     /// How long a listing stays published from the moment it is published. Also the
     /// length granted by a paid extension.
+    ///
+    /// Was 90 days (three months) — shortened to 30 days (one month) so free listings
+    /// turn over faster and stay current. Deliberately a fixed day count rather than
+    /// DateTime.AddMonths(1): the same "N days, not N calendar months" convention as
+    /// FeaturedPeriod below, so a listing published on the 31st behaves the same as one
+    /// published on the 1st, with no per-month day-count or time-zone surprises — this
+    /// type already stores every instant in UTC (see PublishedAt/ExpiresAt on Property).
     /// </summary>
-    public static readonly TimeSpan PublicationPeriod = TimeSpan.FromDays(90);
+    public static readonly TimeSpan PublicationPeriod = TimeSpan.FromDays(30);
 
     /// <summary>
     /// How far ahead of ExpiresAt the owner is warned. One warning per publication
     /// period — Property.ExpiryWarningSentAt is the idempotency stamp.
     /// </summary>
-    public static readonly TimeSpan ExpiryWarningLeadTime = TimeSpan.FromDays(7);
+    public static readonly TimeSpan ExpiryWarningLeadTime = TimeSpan.FromDays(5);
 
     /// <summary>
     /// How long an expired listing survives, hidden, before it is deleted. The listing
