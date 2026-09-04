@@ -1,0 +1,78 @@
+@startuml Sequence_ImageUpload
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+title مخطط تسلسلي — رفع صور العقار (Image Upload)
+autonumber
+
+actor "مالك العقار" as Owner
+participant "PropertyImagesController" as Ctrl
+participant "UploadPropertyImagesCommandHandler" as Handler
+participant "IPropertyOwnershipService" as Ownership
+participant "IPropertyImageRepository" as ImageRepo
+participant "IMediaStorageService\n(CloudinaryMediaStorageService)" as Storage
+participant "Cloudinary" as Cloudinary
+database "PostgreSQL\n(PropertyImages)" as Db
+
+Owner -> Ctrl : POST /api/properties/{id}/images\nmultipart/form-data\n(حتى 10 ملفات، الحد 20 ميجابايت للطلب)
+activate Ctrl
+Ctrl -> Ctrl : تحويل IFormFileCollection\n→ UploadPropertyImageFileDto (Stream, FileName,\nContentType, Length) — لا يعرف MediatR بـ ASP.NET
+Ctrl -> Handler : UploadPropertyImagesCommand
+activate Handler
+
+Handler -> Ownership : EnsureOwnerAsync(propertyId, userId,\n"upload images to")
+alt العقار غير موجود / ليس المالك
+    Ownership --> Handler : NotFoundException / ForbiddenException
+    Handler --> Ctrl : NotFound / Forbidden
+    Ctrl --> Owner : 404 / 403
+else مالك مؤكَّد
+    Ownership --> Handler : تأكيد
+
+    Handler -> ImageRepo : CountImagesAsync(propertyId)
+    ImageRepo -> Db : SELECT COUNT(*)
+    Db --> ImageRepo : العدد الحالي
+    alt تجاوز الحد الأقصى (20 صورة لكل عقار)
+        Handler --> Ctrl : ValidationFailed
+        Ctrl --> Owner : 400 Bad Request
+    else ضمن الحد
+        loop لكل ملف مرفوع
+            Handler -> Handler : تحقق: الحجم ≤ 5MB، \nContentType ∈ {jpeg,png,webp}،\nالامتداد مطابق، وتوقيع الملف الثنائي\n(magic bytes) يطابق النوع المُعلن
+        end
+        alt أي ملف فشل التحقق
+            Handler --> Ctrl : ValidationFailed(الرسالة)
+            Ctrl --> Owner : 400 Bad Request
+        else كل الملفات صالحة
+            loop لكل ملف صالح
+                Handler -> Storage : UploadImageAsync(stream, fileName,\ncontentType, "property-images")
+                Storage -> Cloudinary : رفع عبر Cloudinary SDK
+                alt فشل الرفع
+                    Cloudinary --> Storage : خطأ
+                    Storage --> Handler : StorageResult(Failed)
+                    Handler -> Storage : DeleteImageAsync لكل الصور\nالمرفوعة سابقًا في هذا الطلب\n(تراجع/Cleanup)
+                    Handler --> Ctrl : StorageFailed
+                    Ctrl --> Owner : 400 Bad Request
+                else نجاح
+                    Cloudinary --> Storage : {Url, PublicId}
+                    Storage --> Handler : StorageResult(Success)
+                    Handler -> Handler : بناء PropertyImage\n(IsMain = أول صورة فقط إن لم توجد صور سابقًا،\nSortOrder تسلسلي)
+                    Handler -> ImageRepo : Add(image)
+                end
+            end
+            Handler -> Db : SaveChangesAsync\n(إدراج كل صفوف PropertyImage دفعة واحدة)
+            Db --> Handler : تم الحفظ
+            Handler --> Ctrl : Success(الصور المرفوعة)
+            Ctrl --> Owner : 200 OK [{id, url, isMain, sortOrder}, ...]
+        end
+    end
+end
+deactivate Handler
+deactivate Ctrl
+
+note over Storage
+  نفس النمط بالضبط تُستخدم فيه:
+  POST /api/Users/me/avatar (الصورة الرمزية)
+  POST /api/agencies/{id}/logo (شعار المكتب العقاري)
+  فرق الحد: 2.5MB للشعار، عبر SetAgencyLogoCommand.
+end note
+
+@enduml

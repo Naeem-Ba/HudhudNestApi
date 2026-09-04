@@ -1,0 +1,77 @@
+@startuml Sequence_Reviews
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+title مخطط تسلسلي — إضافة تقييم لعقار (Reviews)
+autonumber
+
+actor "زائر سبق أن زار العقار" as Reviewer
+participant "ReviewsController" as Ctrl
+participant "AddReviewCommandHandler" as Handler
+participant "IPropertyReadRepository" as PropRepo
+participant "IPropertyReviewRepository" as ReviewRepo
+participant "IVisitRepository" as VisitRepo
+participant "PropertyReview\n(Domain Entity)" as Domain
+participant "INotificationService" as Notif
+database "PostgreSQL" as Db
+
+Reviewer -> Ctrl : POST /api/reviews\n{propertyId, rating, comment}
+activate Ctrl
+Ctrl -> Handler : AddReviewCommand
+activate Handler
+
+Handler -> PropRepo : GetByIdAsync(propertyId)
+PropRepo -> Db : SELECT
+Db --> PropRepo : Property
+alt العقار غير موجود
+    PropRepo --> Handler : null
+    Handler --> Ctrl : NotFoundException → 404
+else موجود
+    PropRepo --> Handler : Property (OwnerId, Title)
+
+    alt المُقيِّم هو مالك العقار نفسه
+        Handler --> Ctrl : DomainException\n"لا يمكن للمالك تقييم عقاره." → 400
+    else ليس المالك
+        Handler -> ReviewRepo : HasUserReviewedAsync(propertyId, reviewerId)
+        ReviewRepo -> Db : SELECT (فحص أولي، بالإضافة إلى\nقيد UNIQUE في قاعدة البيانات\nكخط دفاع ثانٍ)
+        Db --> ReviewRepo : موجود؟
+
+        alt قام بالتقييم من قبل
+            ReviewRepo --> Handler : true
+            Handler --> Ctrl : DomainException\n"لقد قمت بتقييم هذا العقار مسبقاً." → 400
+        else لم يُقيِّم من قبل
+            ReviewRepo --> Handler : false
+            Handler -> VisitRepo : HasCompletedVisitAsync(propertyId, reviewerId)
+            VisitRepo -> Db : SELECT VisitRequest\nWHERE Status = Completed
+            Db --> VisitRepo : وجود زيارة مكتملة؟
+
+            alt لا توجد زيارة بحالة Completed
+                VisitRepo --> Handler : false
+                Handler --> Ctrl : DomainException\n"يمكن كتابة تقييم فقط بعد إتمام\nزيارة فعلية للعقار." → 400
+            else توجد زيارة مكتملة (شرط لا بد منه)
+                VisitRepo --> Handler : true
+                Handler -> Domain : PropertyReview.Create(\npropertyId, reviewerId, rating, comment)
+                Domain -> Domain : تحقق قاعدة النطاق:\nRating يجب أن يكون بين 1 و 5
+                Domain --> Handler : PropertyReview
+                Handler -> ReviewRepo : AddAsync(review)
+                Handler -> Db : SaveChangesAsync
+                Db --> Handler : تم الحفظ
+                Handler -> Notif : NotifyPropertyUpdateAsync\n(ReviewAdded → مالك العقار)\n(best-effort، لا يُسقط الطلب عند الفشل)
+                Handler --> Ctrl : PropertyReviewDto
+                Ctrl --> Reviewer : 201 Created
+            end
+        end
+    end
+end
+deactivate Handler
+deactivate Ctrl
+
+note over Handler
+  ترتيب الفحوصات متعمَّد (مبدأ Fail Fast):
+  عقار موجود → ليس المالك → لم يُقيِّم مسبقًا →
+  توجد زيارة Completed. كل فحص أرخص من
+  الذي يليه، والفحص الأخير (الزيارة) يتطلب Join
+  أكبر فجاء أخيرًا.
+end note
+
+@enduml

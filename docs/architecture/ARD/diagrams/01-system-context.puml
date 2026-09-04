@@ -1,0 +1,62 @@
+@startuml System_Context
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName "Segoe UI"
+title مخطط سياق النظام (System Context) — PropertyApi
+
+left to right direction
+
+actor "زائر / باحث عقاري\n(Renter / Buyer)" as Visitor
+actor "مالك عقار / وسيط\n(Property Owner / Agent)" as Owner
+actor "مالك مكتب عقاري\n(Agency Owner)" as AgencyOwner
+actor "مسؤول النظام\n(Admin)" as Admin
+actor "مزوّد خدمات\n(Service Provider)" as ServiceProvider
+
+package "أنظمة العميل (Client Applications)" {
+  [تطبيق الويب Angular SPA\n(Wohnungsmieten repo)\nNetlify: realestateworld.world] as WebApp
+  [تطبيق الجوال\n(Capacitor iOS/Android)] as MobileApp
+}
+
+node "PropertyApi\n(.NET 8 Web API)\n<<هذا النظام / this system>>" as System
+
+package "أنظمة خارجية (External Systems)" {
+  database "PostgreSQL + PostGIS\n(بيانات تشغيلية)" as Postgres
+  database "Redis\n(تحديد المعدل، التخزين المؤقت،\nSignalR backplane)" as Redis
+  [Cloudinary\n(تخزين ومعالجة الصور)] as Cloudinary
+  [Resend / SMTP\n(بريد إلكتروني معاملاتي)] as Email
+  [بوابة SMS\n(HTTP SMS Gateway)] as Sms
+  [Google Identity\n(OAuth / One Tap)] as Google
+  [Apple Sign In] as Apple
+  [Have I Been Pwned\nAPI v3 (k-anonymity)] as HIBP
+  [OpenTelemetry Collector\n→ Prometheus / Grafana / Tempo] as Otel
+}
+
+Visitor --> WebApp
+Visitor --> MobileApp
+Owner --> WebApp
+Owner --> MobileApp
+AgencyOwner --> WebApp
+Admin --> WebApp
+ServiceProvider --> WebApp
+
+WebApp --> System : HTTPS/JSON, REST\n+ SignalR (WebSocket)
+MobileApp --> System : HTTPS/JSON, REST
+
+System --> Postgres : Npgsql / EF Core\n(قراءة وكتابة البيانات)
+System --> Redis : StackExchange.Redis\n(rate limit, cache, pub/sub)
+System --> Cloudinary : REST API\n(رفع/حذف صور العقارات، الشعارات،\nالصور الرمزية)
+System --> Email : REST (Resend) أو SMTP\n(تأكيد الحساب، استعادة كلمة المرور،\nتنبيهات أمنية)
+System --> Sms : REST\n(رموز OTP للهاتف)
+System --> Google : تحقق من ID Token
+System --> Apple : تحقق من Identity Token
+System --> HIBP : فحص كلمات مرور مخترقة\n(SHA-1 k-anonymity range query)
+System --> Otel : OTLP/gRPC\n(traces, metrics, logs)
+
+note right of System
+  حدود النظام: PropertyApi هو الواجهة الخلفية
+  الوحيدة. الواجهة الأمامية (Angular) مستودع
+  Git منفصل تمامًا؛ لا كود مشترك، فقط عقد HTTP.
+end note
+
+@enduml

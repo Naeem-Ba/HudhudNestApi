@@ -1,0 +1,91 @@
+@startuml Components
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName "Segoe UI"
+skinparam componentStyle rectangle
+title مخطط المكوّنات (Component Diagram) — الطبقات المعمارية لمشروع PropertyApi
+
+package "PropertyApi (طبقة العرض / API Layer)" as ApiLayer {
+  [Controllers\n(30 وحدة تحكم: Auth, Agencies,\nProperties, Reviews, Visits,\nAdmin, ShortStay, Services ...)] as Controllers
+  [Middleware\n(Exception, PhoneVerification,\nSecurity Headers, CSRF)] as Middleware
+  [Security\n(JWT, CSRF, Rate Limiting,\nForwardedHeaders, Staging Guard)] as Security
+  [Observability\n(OpenTelemetry bootstrap)] as ObsBootstrap
+  [SignalR Hub\n(NotificationHub)] as Hub
+}
+
+package "PropertyApi.Application (طبقة التطبيق)" as AppLayer {
+  [MediatR Commands/Queries\n(CQRS لكل وحدة عمل:\nAuth, Agencies, Listings,\nBookings, Reviews, ShortStay,\nServices, Admin, Analytics ...)] as CQRS
+  [Pipeline Behaviors\nTelemetry → Logging → Validation] as Behaviors
+  [FluentValidation Validators] as Validators
+  [Application Interfaces\n(IMediaStorageService,\nINotificationService, ISmsService,\nIEmailSender ...)] as AppInterfaces
+  [Auth Orchestration\n(SocialAuthenticationOrchestrator,\nPhoneVerificationPolicy ...)] as AuthOrch
+}
+
+package "PropertyApi.Domain (طبقة النطاق)" as DomainLayer {
+  [الكيانات (Entities)\nAgency, Property, VisitRequest,\nPropertyReview, ShortStayListing,\nServiceRequest, UserAccount ...] as Entities
+  [قواعد العمل والقيم الثابتة\n(Domain Exceptions, Enums,\nValue Objects)] as DomainRules
+}
+
+package "PropertyApi.Infrastructure (طبقة البنية التحتية)" as InfraLayer {
+  [Persistence\n(AppDbContext — EF Core / Npgsql,\nUnitOfWork, 37+ Migrations)] as Persistence
+  [Repositories] as Repos
+  [Auth Infrastructure\n(Identity, JWT issuing,\nRefreshToken store, SMS, Apple/Google\ntoken verification)] as AuthInfra
+  [Media\n(CloudinaryMediaStorageService,\nStagingSmokeMediaStorageService)] as Media
+  [Email\n(Resend / SMTP senders + Templates)] as EmailInfra
+  [Caching\n(Redis distributed cache,\nOutput Cache, Security-stamp cache)] as Caching
+  [Notifications\n(SignalR + persisted Notification)] as NotifInfra
+  [Health & Performance\n(health checks, DB diagnostics)] as HealthInfra
+}
+
+database "PostgreSQL + PostGIS" as Db
+database "Redis" as Redis
+cloud "Cloudinary" as Cloudinary
+cloud "Resend / SMTP" as EmailExt
+cloud "بوابة SMS" as SmsExt
+cloud "Google / Apple" as OAuthExt
+cloud "OpenTelemetry Collector" as OtelExt
+
+Controllers --> CQRS : IMediator.Send()
+Controllers --> Security
+Middleware --> Security
+Controllers --> Hub
+
+CQRS --> Behaviors
+Behaviors --> Validators
+CQRS --> AppInterfaces
+CQRS --> AuthOrch
+CQRS --> Entities : يستدعي سلوك النطاق
+AuthOrch --> Entities
+
+AppInterfaces <|.. AuthInfra
+AppInterfaces <|.. Media
+AppInterfaces <|.. EmailInfra
+AppInterfaces <|.. NotifInfra
+AppInterfaces <|.. Caching
+
+Entities --> DomainRules
+
+Persistence --> Db
+Repos --> Persistence
+CQRS --> Repos
+
+AuthInfra --> Db
+AuthInfra --> SmsExt
+AuthInfra --> OAuthExt
+Media --> Cloudinary
+EmailInfra --> EmailExt
+Caching --> Redis
+NotifInfra --> Redis : SignalR backplane (اختياري)
+ObsBootstrap --> OtelExt
+HealthInfra --> Db
+HealthInfra --> Redis
+
+note bottom of AppLayer
+  اتجاه الاعتماد يتبع Clean Architecture:
+  API → Application → Domain
+  Infrastructure → Application (تنفيذ الواجهات) → Domain
+  Domain لا يعتمد على أي طبقة أخرى.
+end note
+
+@enduml
