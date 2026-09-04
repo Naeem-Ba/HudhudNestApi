@@ -29,7 +29,7 @@ public sealed class InvestmentDocumentRepository : IInvestmentDocumentRepository
                   document.IsPublic &&
                   project.Status == InvestmentProjectStatus.Published
             orderby document.CreatedAt descending
-            select new InvestmentDocumentDto(document.Id, document.DocumentType, document.FileName, document.Version, document.PublishedAt, document.Url);
+            select new InvestmentDocumentDto(document.Id, document.DocumentType, document.FileName, document.Version, document.PublishedAt, document.Url, document.IsPublic);
 
         return await query.ToListAsync(ct);
     }
@@ -40,7 +40,7 @@ public sealed class InvestmentDocumentRepository : IInvestmentDocumentRepository
             .AsNoTracking()
             .Where(d => d.InvestmentProjectId == investmentProjectId)
             .OrderByDescending(d => d.CreatedAt)
-            .Select(d => new InvestmentDocumentDto(d.Id, d.DocumentType, d.FileName, d.Version, d.PublishedAt, d.Url))
+            .Select(d => new InvestmentDocumentDto(d.Id, d.DocumentType, d.FileName, d.Version, d.PublishedAt, d.Url, d.IsPublic))
             .ToListAsync(ct);
     }
 

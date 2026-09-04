@@ -11,6 +11,7 @@ using PropertyApi.Application.Investments.Commands.PublishInvestmentProject;
 using PropertyApi.Application.Investments.Commands.RejectInvestmentProject;
 using PropertyApi.Application.Investments.Commands.RemoveInvestmentDocument;
 using PropertyApi.Application.Investments.Commands.ScheduleInvestmentProject;
+using PropertyApi.Application.Investments.Commands.SetInvestmentDocumentVisibility;
 using PropertyApi.Application.Investments.Commands.SetInvestmentProjectFinancials;
 using PropertyApi.Application.Investments.Commands.SetInvestmentProjectRiskAssessment;
 using PropertyApi.Application.Investments.Commands.SubmitInvestmentProjectForReview;
@@ -209,6 +210,16 @@ public sealed class AdminInvestmentsController : ControllerBase
         return NoContent();
     }
 
+    [HttpPut("projects/{id:guid}/documents/{documentId:guid}/visibility")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetDocumentVisibility(
+        Guid id, Guid documentId, [FromBody] SetInvestmentDocumentVisibilityRequest request, CancellationToken ct)
+    {
+        await _sender.Send(new SetInvestmentDocumentVisibilityCommand(id, documentId, request.IsPublic), ct);
+        return NoContent();
+    }
+
     // ── Updates ───────────────────────────────────────────────────
 
     [HttpPost("projects/{id:guid}/updates")]
@@ -283,6 +294,8 @@ public sealed record SetInvestmentProjectRiskRequest(
     Domain.Investments.Enums.InvestmentRiskLevel DeveloperRisk,
     int RiskScore,
     string RiskSummary);
+
+public sealed record SetInvestmentDocumentVisibilityRequest(bool IsPublic);
 
 public sealed record AddInvestmentUpdateRequest(
     string Title,
