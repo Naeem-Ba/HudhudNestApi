@@ -35,7 +35,15 @@ public sealed class PublishInvestmentProjectCommandHandlerTests
 
     private static IReadOnlyList<InvestmentDocumentDto> AllRequiredDocuments() =>
         PublishInvestmentProjectCommandHandler.RequiredPublicDocumentTypes
-            .Select(type => new InvestmentDocumentDto(Guid.NewGuid(), type, "file.pdf", 1, DateTime.UtcNow, "https://example.com/file.pdf"))
+            .Select(type => new InvestmentDocumentDto(Guid.NewGuid(), type, "file.pdf", 1, DateTime.UtcNow, "https://example.com/file.pdf", IsPublic: true))
+            .ToList();
+
+    /// <summary>Same required types, but never marked public — must still fail readiness. This is
+    /// the exact scenario a real HTTP integration test (Phase 2) caught the handler getting
+    /// wrong when it queried through the Published-status-gated repository method instead.</summary>
+    private static IReadOnlyList<InvestmentDocumentDto> AllRequiredDocumentsButPrivate() =>
+        PublishInvestmentProjectCommandHandler.RequiredPublicDocumentTypes
+            .Select(type => new InvestmentDocumentDto(Guid.NewGuid(), type, "file.pdf", 1, null, "https://example.com/file.pdf", IsPublic: false))
             .ToList();
 
     private PublishInvestmentProjectCommandHandler BuildHandler(
@@ -51,7 +59,7 @@ public sealed class PublishInvestmentProjectCommandHandlerTests
         riskRepo.Setup(x => x.GetByProjectIdAsync(project.Id, It.IsAny<CancellationToken>())).ReturnsAsync(risk);
 
         var documentsRepo = new Mock<IInvestmentDocumentRepository>();
-        documentsRepo.Setup(x => x.GetPublicDocumentsAsync(project.Id, It.IsAny<CancellationToken>())).ReturnsAsync(documents);
+        documentsRepo.Setup(x => x.GetAllDocumentsForAdminAsync(project.Id, It.IsAny<CancellationToken>())).ReturnsAsync(documents);
 
         return new PublishInvestmentProjectCommandHandler(
             ProjectsReturning(project).Object,
@@ -85,6 +93,16 @@ public sealed class PublishInvestmentProjectCommandHandlerTests
         var project = ScheduledProject();
         var handler = BuildHandler(
             project, MakeFinancials(project.Id), MakeRiskAssessment(project.Id), documents: Array.Empty<InvestmentDocumentDto>());
+
+        await Assert.ThrowsAsync<DomainException>(() => handler.Handle(new PublishInvestmentProjectCommand(project.Id), default));
+    }
+
+    [Fact]
+    public async Task Publish_Throws_WhenRequiredDocumentsExistButAreNotPublic()
+    {
+        var project = ScheduledProject();
+        var handler = BuildHandler(
+            project, MakeFinancials(project.Id), MakeRiskAssessment(project.Id), AllRequiredDocumentsButPrivate());
 
         await Assert.ThrowsAsync<DomainException>(() => handler.Handle(new PublishInvestmentProjectCommand(project.Id), default));
     }

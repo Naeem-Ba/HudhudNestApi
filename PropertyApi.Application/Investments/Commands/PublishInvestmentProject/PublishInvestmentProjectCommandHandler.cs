@@ -60,8 +60,15 @@ public sealed class PublishInvestmentProjectCommandHandler : IRequestHandler<Pub
         if (riskAssessment is null)
             missing.Add("تقييم المخاطر");
 
-        var publicDocuments = await _documents.GetPublicDocumentsAsync(project.Id, ct);
-        var publicDocumentTypes = publicDocuments.Select(d => d.DocumentType).ToHashSet();
+        // Deliberately NOT GetPublicDocumentsAsync: that repository method additionally requires
+        // the parent project's Status to already be Published (Phase 1 §20 gate) — but at this
+        // point in the workflow the project is still Scheduled, one step away from becoming
+        // Published. Using it here made every publish attempt fail the document-readiness check
+        // even with the exact required documents correctly attached and public (caught by a real
+        // HTTP integration test in Phase 2 — the Application-layer unit test for this handler
+        // mocks IInvestmentDocumentRepository directly, so it never exercised the real gate).
+        var allDocuments = await _documents.GetAllDocumentsForAdminAsync(project.Id, ct);
+        var publicDocumentTypes = allDocuments.Where(d => d.IsPublic).Select(d => d.DocumentType).ToHashSet();
         var missingDocumentTypes = RequiredPublicDocumentTypes
             .Where(required => !publicDocumentTypes.Contains(required))
             .ToList();

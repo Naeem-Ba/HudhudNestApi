@@ -98,13 +98,27 @@ public sealed class InvestmentProjectRepository : IInvestmentProjectRepository
             .Select(ToDetailsDtoExpression())
             .FirstOrDefaultAsync(ct);
 
-    private IQueryable<(InvestmentProject Project, Property Property)> Joined() =>
+    /// <summary>
+    /// Deliberately a POCO, not a <c>ValueTuple</c>/anonymous-tuple projection: composing further
+    /// <c>.Where()</c> calls on a queryable already projected to a <c>(T1, T2)</c> tuple made EF
+    /// Core re-materialize the tuple mid-query and fail to translate the result ("could not be
+    /// translated" against Postgres — caught by a real HTTP integration test in Phase 2; the
+    /// Application-layer unit tests never exercise this because they mock the repository). A
+    /// named class composes cleanly through multiple chained `.Where()`s.
+    /// </summary>
+    private sealed class ProjectWithProperty
+    {
+        public required InvestmentProject Project { get; init; }
+        public required Property Property { get; init; }
+    }
+
+    private IQueryable<ProjectWithProperty> Joined() =>
         from project in _db.InvestmentProjects.AsNoTracking()
         join property in _db.Properties.AsNoTracking() on project.PropertyId equals property.Id
-        select new ValueTuple<InvestmentProject, Property>(project, property);
+        select new ProjectWithProperty { Project = project, Property = property };
 
-    private static IQueryable<(InvestmentProject Project, Property Property)> ApplyPublicFilters(
-        IQueryable<(InvestmentProject Project, Property Property)> query,
+    private static IQueryable<ProjectWithProperty> ApplyPublicFilters(
+        IQueryable<ProjectWithProperty> query,
         InvestmentProjectFilterDto filter)
     {
         if (!string.IsNullOrWhiteSpace(filter.Search))
@@ -141,7 +155,7 @@ public sealed class InvestmentProjectRepository : IInvestmentProjectRepository
         return query;
     }
 
-    private static System.Linq.Expressions.Expression<Func<(InvestmentProject Project, Property Property), InvestmentProjectListDto>>
+    private static System.Linq.Expressions.Expression<Func<ProjectWithProperty, InvestmentProjectListDto>>
         ToListDtoExpression() => x => new InvestmentProjectListDto(
             x.Project.Id,
             x.Project.Title,
@@ -162,7 +176,7 @@ public sealed class InvestmentProjectRepository : IInvestmentProjectRepository
             x.Project.RiskLevel,
             x.Project.PublishedAt);
 
-    private static System.Linq.Expressions.Expression<Func<(InvestmentProject Project, Property Property), InvestmentProjectDetailsDto>>
+    private static System.Linq.Expressions.Expression<Func<ProjectWithProperty, InvestmentProjectDetailsDto>>
         ToDetailsDtoExpression() => x => new InvestmentProjectDetailsDto(
             x.Project.Id,
             x.Project.PropertyId,
