@@ -12,19 +12,24 @@ was also the reason the workflow's failure mode changed from `STAGING_BASE_URL i
 `PRODUCTION_BASE_URL is required`: `require_value` checks `STAGING_BASE_URL` first, and the stray
 value made that specific check pass.
 
-Until the repository/environment owner configures the real values below on the `staging` GitHub
-Environment (Settings -> Environments -> staging -> Environment secrets / Environment variables),
-`Mandatory Staging Deploy + E2E Smoke` fails closed by design with an explicit, actionable message
-naming the missing variable -- this is correct and expected, not a bug. No agent or automation may
-fabricate these values; only the environment owner has the real Staging infrastructure to supply them.
+**Update (2026-09-04): resolved.** The `staging` GitHub Environment now has all required Variables
+(`STAGING_BASE_URL`, `PRODUCTION_BASE_URL`, `STAGING_SMOKE_PHONE_PREFIX`, `STAGING_PROMETHEUS_URL`,
+`STAGING_TEMPO_URL`) and Secrets (`STAGING_DEPLOY_HOOK_URL`, `STAGING_SMOKE_PASSWORD`,
+`STAGING_SMOKE_FIXED_OTP`, `STAGING_SMOKE_CLEANUP_SECRET`) configured, and a real Staging deployment
+exists on Render (`propertyapi-staging-api` + dedicated Postgres/Redis) -- see [[render-staging-deployment]]
+memory for the live resource names. `scripts/verify-observability.sh` passes end-to-end against it.
 
-Separately (out of scope for the `staging` environment, noted here only as a related finding): the
-`deploy-production` job in `production-gate.yml` declares `environment: production`, but no GitHub
-Environment named exactly `production` currently exists in this repository (only `production-release`
-does, and it already has `RENDER_API_KEY`/`RENDER_SERVICE_ID` configured). GitHub auto-creates an
-environment with no protection rules the first time such a job runs, so this does not block CI, but it
-means `production` currently has no required-reviewer protection. This is a separate decision for the
-repository owner and was intentionally left untouched here.
+Separately: the `deploy-production` job in `production-gate.yml` declares `environment: production`.
+That GitHub Environment now exists (auto-created 2026-09-04 the first time `deploy-production` ran off
+a `master` push), but **attempting to configure "Required reviewers" protection on it fails**: GitHub
+returns `Please ensure the billing plan supports the required reviewers protection rule` for this
+private repository under the current org billing plan. Until that plan is upgraded (or reviewer
+protection is otherwise made available), `deploy-production`'s trigger was narrowed to
+`github.event_name == 'workflow_dispatch'` only (2026-09-04) -- it no longer also accepts a plain push
+to `main`/`master` -- so an actual Production deploy always requires someone to deliberately run the
+workflow by hand, rather than firing automatically off a merge with zero human gate. This is a
+mitigation, not equivalent to real required-reviewer protection: anyone with push access can still run
+`workflow_dispatch` alone. Revisit if/when the billing plan changes.
 
 ## Infrastructure
 
