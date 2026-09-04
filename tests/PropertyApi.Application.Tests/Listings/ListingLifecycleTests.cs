@@ -698,7 +698,8 @@ public sealed class ListingLifecycleTests
         Assert.Equal(TransactionStatus.Completed, fee.Status);
         Assert.Equal(PropertyStatus.Available, property.Status);
         Assert.True(property.IsPublished);
-        Assert.True(newExpiresAt > DateTime.UtcNow.AddDays(80));
+        Assert.True(
+            newExpiresAt > DateTime.UtcNow.Add(ListingLifecyclePolicy.PublicationPeriod).AddMinutes(-10));
     }
 
     [Fact]

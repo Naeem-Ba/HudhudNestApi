@@ -96,7 +96,39 @@ public sealed class UploadUserAvatarCommandHandler
             uploadResult.PublicId,
             now);
 
-        await _uow.SaveChangesAsync(ct);
+        try
+        {
+            await _uow.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // نجح الرفع إلى Cloudinary لكن فشل حفظ الرابط بقاعدة البيانات — يجب ألا يبقى
+            // الملف يتيمًا هناك بلا أي سجل يشير إليه، ويجب ألا يظهر للمستخدم كنجاح رغم أن
+            // حسابه لم يتغيّر فعليًا. نحذف الصورة المرفوعة للتو (best-effort — فشل الحذف
+            // هنا لا يجب أن يُخفي رسالة الفشل الأصلية) ونُعيد StorageFailed بدل ترك
+            // الاستثناء يصعد كخطأ 500 عام لا يوضّح للمستخدم ما حدث فعليًا.
+            _logger.LogError(
+                ex,
+                "Failed to save uploaded avatar URL. UserId={UserId}, PublicId={PublicId}",
+                request.UserId,
+                uploadResult.PublicId);
+
+            try
+            {
+                await _storage.DeleteImageAsync(uploadResult.PublicId!, ct);
+            }
+            catch (Exception cleanupEx)
+            {
+                _logger.LogWarning(
+                    cleanupEx,
+                    "Failed to clean up orphaned avatar after a save failure. UserId={UserId}, PublicId={PublicId}",
+                    request.UserId,
+                    uploadResult.PublicId);
+            }
+
+            return UploadUserAvatarResult.StorageFailed(
+                "تم رفع الصورة لكن تعذّر حفظها في حسابك. حاول مرة أخرى.");
+        }
 
         /*
          * حذف الصورة القديمة من التخزين السحابي غير حرج — الصورة الجديدة
