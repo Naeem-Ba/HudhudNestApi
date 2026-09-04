@@ -1214,7 +1214,7 @@ jobs:
           path: artifacts/redis-failover/**
 
   deploy-production:
-    name: Production Deployment (environment approval required)
+    name: Production Deployment (manual trigger required)
     needs:
       - build-test-container
       - observability-validation
@@ -1224,10 +1224,18 @@ jobs:
       - redis-staging-failover
       - performance-validation
       - production-deployment-gate
+    # workflow_dispatch only -- deliberately NOT `|| github.ref == 'refs/heads/main' ||
+    # github.ref == 'refs/heads/master'` (which this job used to also accept). A plain push
+    # to main/master still runs every gate job above for CI coverage, but can no longer reach
+    # this job on its own: `environment: production` below is meant to require a human
+    # reviewer's approval, but GitHub rejects configuring "Required reviewers" on a private
+    # repo under this org's current billing plan ("Please ensure the billing plan supports
+    # the required reviewers protection rule"). Until that's resolved (upgrade the plan, or
+    # move required-reviewer protection elsewhere), restricting the trigger to an explicit,
+    # deliberate workflow_dispatch is the only available guard against an unattended deploy
+    # firing straight off a merge -- see docs/testing/staging-production-gate-checklist.md.
     if: >-
-      (github.event_name == 'workflow_dispatch' ||
-       github.ref == 'refs/heads/main' ||
-       github.ref == 'refs/heads/master') &&
+      github.event_name == 'workflow_dispatch' &&
       needs.build-test-container.result == 'success' &&
        needs.observability-validation.result == 'success' &&
        needs.redis-sentinel-ha.result == 'success' &&
