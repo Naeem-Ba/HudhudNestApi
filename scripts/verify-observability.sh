@@ -13,7 +13,6 @@ REPORT="${OBSERVABILITY_REPORT:-artifacts/observability/observability-verificati
 RUN_ID="obs-$(date -u +%Y%m%dT%H%M%SZ)-${RANDOM}"
 STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 CORRELATION_ID="obs-${RUN_ID}"
-RULE_FILE="observability/prometheus/rules/.observability-test-alert.yml"
 
 for command in curl jq; do
   command -v "${command}" >/dev/null || { echo "${command} is required"; exit 2; }
@@ -25,8 +24,6 @@ if [ -z "${TEST_KEY}" ]; then
 fi
 
 mkdir -p "$(dirname "${REPORT}")"
-rm -f "${RULE_FILE}"
-trap 'rm -f "${RULE_FILE}"' EXIT
 
 curl --fail --silent --show-error \
   -X POST \
@@ -101,31 +98,47 @@ if metric_found 'histogram_quantile(0.95, sum by (le) (rate(http_server_request_
   queries_valid=true
 fi
 
-cat > "${RULE_FILE}" <<'YAML'
-groups:
-  - name: property-api-controlled-alert-test
-    rules:
-      - alert: PropertyApiControlledObservabilityTest
-        expr: vector(1) > 0
-        for: 0s
-        labels: { severity: test }
-        annotations:
-          runbook_url: docs/observability/alert-test-report.md
-YAML
-curl --fail --silent --show-error -X POST "${PROMETHEUS_URL}/-/reload" >/dev/null
-sleep 7
-firing=false
-curl --fail --silent --show-error "${PROMETHEUS_URL}/api/v1/alerts" |
-  jq -e '.data.alerts[] | select(.labels.alertname == "PropertyApiControlledObservabilityTest" and .state == "firing")' >/dev/null && firing=true
+# The alert rule itself is permanent, baked into Prometheus's configuration at deploy time
+# (observability/prometheus/rules for local docker-compose; observability/render/prometheus
+# for the real Staging deployment) and watches a Staging-only synthetic gauge instead of a
+# rule file rewritten at runtime -- that mechanism only ever worked locally because Prometheus
+# and this script shared a bind-mounted checkout; it cannot reach a real, remotely-deployed
+# Staging Prometheus. Toggling the gauge through the API exercises the exact same full
+# firing-then-resolved alert lifecycle in both environments via one code path.
+set_alert_test_gauge() {
+  curl --fail --silent --show-error \
+    -X POST \
+    -H 'Content-Type: application/json' \
+    -H "X-Correlation-ID: ${CORRELATION_ID}-alert" \
+    -H "X-Observability-Test-Key: ${TEST_KEY}" \
+    --data "{\"firing\":$1}" \
+    "${API_BASE_URL}/internal/observability/synthetic/alert-test-state" >/dev/null
+}
 
-sed -i 's/expr: vector(1) > 0/expr: vector(0) > 0/' "${RULE_FILE}"
-curl --fail --silent --show-error -X POST "${PROMETHEUS_URL}/-/reload" >/dev/null
-sleep 7
+alert_is_firing() {
+  curl --fail --silent --show-error "${PROMETHEUS_URL}/api/v1/alerts" |
+    jq -e '.data.alerts[] | select(.labels.alertname == "PropertyApiControlledObservabilityTest" and .state == "firing")' >/dev/null
+}
+
+set_alert_test_gauge true
+firing=false
+for _ in $(seq 1 15); do
+  if alert_is_firing; then
+    firing=true
+    break
+  fi
+  sleep 2
+done
+
+set_alert_test_gauge false
 resolved=false
-if ! curl --fail --silent --show-error "${PROMETHEUS_URL}/api/v1/alerts" |
-  jq -e '.data.alerts[] | select(.labels.alertname == "PropertyApiControlledObservabilityTest" and .state == "firing")' >/dev/null; then
-  resolved=true
-fi
+for _ in $(seq 1 15); do
+  if ! alert_is_firing; then
+    resolved=true
+    break
+  fi
+  sleep 2
+done
 
 leaked=()
 for sentinel in TEST_PASSWORD_SHOULD_NOT_APPEAR TEST_OTP_SHOULD_NOT_APPEAR \

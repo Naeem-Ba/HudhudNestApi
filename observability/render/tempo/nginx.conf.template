@@ -1,0 +1,16 @@
+server {
+    listen ${PORT};
+
+    # Tempo's OTLP-HTTP ingest port -- where the Staging otel-collector sends traces.
+    location /v1/traces {
+        proxy_pass http://127.0.0.1:4318/v1/traces;
+        proxy_set_header Host $host;
+    }
+
+    # Everything else (scripts/verify-observability.sh's /api/search, /api/traces/{id}, and
+    # Tempo's own /ready) goes to Tempo's query API.
+    location / {
+        proxy_pass http://127.0.0.1:3200;
+        proxy_set_header Host $host;
+    }
+}

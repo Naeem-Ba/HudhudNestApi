@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
+using StackExchange.Redis;
 using PropertyApi.Application;
 using PropertyApi.Infrastructure;
 using PropertyApi.Infrastructure.Hubs;
@@ -35,6 +36,30 @@ var redisRateLimitingEnabled =
     ?? builder.Environment.IsProduction();
 
 var useRedisRateLimiting = redisRateLimitingEnabled && hasRedisConnectionString;
+
+// General-purpose, always-available Redis connection -- independent of Redis rate limiting
+// (RedisRateLimitingServiceCollectionExtensions.TryAddSingleton reuses this same
+// registration when rate limiting is also enabled, rather than opening a second
+// connection). Registered whenever a Redis connection string exists, in every environment,
+// not just Production: OpenTelemetry's AddRedisInstrumentation() call below only produces
+// Redis spans for IConnectionMultiplexer instances it can discover via DI, and
+// ObservabilitySyntheticController's dependency check needs a real Redis ping it can trace.
+if (hasRedisConnectionString)
+{
+    builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+    {
+        var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Redis");
+        var options = RedisConfigurationOptionsFactory.Build(redisConnectionString!);
+        var multiplexer = ConnectionMultiplexer.Connect(options);
+
+        logger.LogInformation(
+            "Redis connection initialized. IsConnected={IsConnected}, Endpoints={Endpoints}",
+            multiplexer.IsConnected,
+            string.Join(",", multiplexer.GetEndPoints().Select(e => e.ToString())));
+
+        return multiplexer;
+    });
+}
 
 builder.Services.AddHsts(options =>
 {

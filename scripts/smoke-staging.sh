@@ -9,7 +9,7 @@ failure_message="Staging smoke bootstrap failed."
 
 write_bootstrap_failure() {
   local exit_code="$1"
-  if [ "${exit_code}" -eq 0 ] || [ -f "${artifacts_dir}/staging-smoke-report.json" ]; then
+  if [ "${exit_code}" -eq 0 ] || [ -s "${artifacts_dir}/staging-smoke-report.json" ]; then
     return
   fi
 

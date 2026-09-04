@@ -1,0 +1,17 @@
+groups:
+  - name: property-api-controlled-alert-test
+    rules:
+      - alert: PropertyApiControlledObservabilityTest
+        expr: propertyapi_synthetic_alert_test_state > 0
+        for: 0s
+        labels: { severity: test }
+        annotations:
+          summary: Controlled observability smoke test alert (expected to fire briefly)
+          runbook_url: docs/observability/alert-test-report.md
+
+# This rule is permanent and deployed as-is (locally and on Staging) -- it is never rewritten
+# at runtime. scripts/verify-observability.sh drives its firing/resolution by toggling the
+# propertyapi_synthetic_alert_test_state gauge through
+# POST /internal/observability/synthetic/alert-test-state, a Staging-only, shared-secret-gated
+# endpoint (see PropertyApi/Controllers/ObservabilitySyntheticController.cs). The gauge is
+# always 0 -- and the alert never fires -- outside a controlled test invocation.

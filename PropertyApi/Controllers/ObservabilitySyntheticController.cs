@@ -34,23 +34,16 @@ public sealed class ObservabilitySyntheticController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Execute(CancellationToken cancellationToken)
     {
-        if (!_environment.IsStaging() ||
-            !_configuration.GetValue<bool>("Staging:TestSupport:Enabled"))
-        {
-            return NotFound();
-        }
-
-        var expectedKey = _configuration["Staging:TestSupport:CleanupSecret"];
-        var suppliedKey = Request.Headers["X-Observability-Test-Key"].ToString();
-        if (string.IsNullOrWhiteSpace(expectedKey) ||
-            !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
-                System.Text.Encoding.UTF8.GetBytes(expectedKey),
-                System.Text.Encoding.UTF8.GetBytes(suppliedKey)))
+        if (!ObservabilityTestAuthorization.IsAuthorized(Request, _configuration, _environment))
         {
             return NotFound();
         }
 
         await _dbContext.Database.ExecuteSqlRawAsync("SELECT 1", cancellationToken);
+
+        // IConnectionMultiplexer is now registered unconditionally whenever a Redis
+        // connection string exists (Program.cs), independent of Redis rate limiting -- so
+        // this works, and is traced by AddRedisInstrumentation(), in every environment.
         await _redis.GetDatabase().PingAsync();
 
         using var response = await _httpClientFactory

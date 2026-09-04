@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 
 namespace PropertyApi.Security.RateLimiting;
@@ -51,7 +52,12 @@ public static class RedisRateLimitingServiceCollectionExtensions
                 "Redis rate limit policies must define PermitLimit > 0 and WindowSeconds > 0.")
             .ValidateOnStart();
 
-        services.AddSingleton<IConnectionMultiplexer>(sp =>
+        // TryAddSingleton, not AddSingleton: Program.cs already registers a general-purpose
+        // IConnectionMultiplexer whenever a Redis connection string exists (used by tracing
+        // instrumentation and the observability synthetic check, among others), independent
+        // of whether Redis rate limiting itself is enabled. Reuse that one connection instead
+        // of opening a second one when both happen to be active (Production).
+        services.TryAddSingleton<IConnectionMultiplexer>(sp =>
         {
             var logger = sp.GetRequiredService<ILoggerFactory>()
                 .CreateLogger("RedisRateLimiting");
@@ -70,7 +76,7 @@ public static class RedisRateLimitingServiceCollectionExtensions
                     "Redis rate limiting is enabled, but Redis connection string is missing.");
             }
 
-            var redisOptions = BuildRedisConfigurationOptions(options.ConnectionString);
+            var redisOptions = RedisConfigurationOptionsFactory.Build(options.ConnectionString);
 
             var multiplexer = ConnectionMultiplexer.Connect(redisOptions);
 
@@ -101,62 +107,6 @@ public static class RedisRateLimitingServiceCollectionExtensions
             ?? configuration["Redis:ConnectionString"]
             ?? configuration["REDIS_CONNECTION_STRING"]
             ?? configuration["REDIS_URL"];
-    }
-
-    private static ConfigurationOptions BuildRedisConfigurationOptions(string connectionString)
-    {
-        if (connectionString.StartsWith("redis://", StringComparison.OrdinalIgnoreCase) ||
-            connectionString.StartsWith("rediss://", StringComparison.OrdinalIgnoreCase))
-        {
-            return BuildRedisConfigurationOptionsFromUri(connectionString);
-        }
-
-        var options = ConfigurationOptions.Parse(connectionString);
-
-        options.AbortOnConnectFail = false;
-        options.ConnectRetry = 3;
-        options.ConnectTimeout = 5000;
-        options.SyncTimeout = 5000;
-
-        return options;
-    }
-
-    private static ConfigurationOptions BuildRedisConfigurationOptionsFromUri(string connectionString)
-    {
-        var uri = new Uri(connectionString);
-
-        var options = new ConfigurationOptions
-        {
-            AbortOnConnectFail = false,
-            ConnectRetry = 3,
-            ConnectTimeout = 5000,
-            SyncTimeout = 5000,
-
-            // Upstash غالبًا يحتاج SSL.
-            // rediss:// يعني SSL صراحة.
-            Ssl = uri.Scheme.Equals("rediss", StringComparison.OrdinalIgnoreCase) ||
-                  uri.Host.Contains("upstash.io", StringComparison.OrdinalIgnoreCase)
-        };
-
-        var port = uri.Port > 0 ? uri.Port : 6379;
-        options.EndPoints.Add(uri.Host, port);
-
-        if (!string.IsNullOrWhiteSpace(uri.UserInfo))
-        {
-            var userInfoParts = uri.UserInfo.Split(':', 2);
-
-            if (userInfoParts.Length == 2)
-            {
-                options.User = Uri.UnescapeDataString(userInfoParts[0]);
-                options.Password = Uri.UnescapeDataString(userInfoParts[1]);
-            }
-            else
-            {
-                options.Password = Uri.UnescapeDataString(userInfoParts[0]);
-            }
-        }
-
-        return options;
     }
 
     private static bool IsLocalhostRedis(string? connectionString)

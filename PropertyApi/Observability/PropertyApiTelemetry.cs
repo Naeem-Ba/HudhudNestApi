@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Threading;
 
 namespace PropertyApi.Observability;
 
@@ -85,6 +86,24 @@ public static class PropertyApiTelemetry
             "propertyapi.properties.duration",
             unit: "ms",
             description: "Property API request duration in milliseconds.");
+
+    // Staging-only: toggled exclusively by ObservabilitySyntheticController's alert-test-state
+    // endpoint, which is itself gated by Staging:TestSupport:Enabled and a shared secret. Exists
+    // solely so scripts/verify-observability.sh can exercise a full Prometheus alert lifecycle
+    // (firing then resolving) against a real, permanently-configured alert rule instead of
+    // rewriting rule files on disk at runtime -- see observability/render/prometheus/rules.
+    private static long _syntheticAlertTestState;
+
+    private static readonly ObservableGauge<long> SyntheticAlertTestState =
+        Meter.CreateObservableGauge(
+            "propertyapi.synthetic.alert_test_state",
+            () => Interlocked.Read(ref _syntheticAlertTestState),
+            description: "Staging-only synthetic gauge toggled by the observability smoke test " +
+                "to exercise a full Prometheus alert firing/resolution cycle. Always 0 outside " +
+                "controlled test invocations.");
+
+    public static void SetSyntheticAlertTestState(bool firing) =>
+        Interlocked.Exchange(ref _syntheticAlertTestState, firing ? 1 : 0);
 
     public static void RecordHttpRequest(
         RequestTelemetryRoute route,
