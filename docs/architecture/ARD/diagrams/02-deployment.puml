@@ -1,0 +1,91 @@
+@startuml Deployment
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName "Segoe UI"
+title مخطط النشر (Deployment Diagram) — بيئتا Staging و Production على Render
+
+node "جهاز المستخدم\n(Browser / Mobile)" as Client
+
+cloud "Netlify" {
+  node "Production Frontend\nrealestateworld.world\n(main branch)" as FeProd
+  node "Staging Frontend\nstaging--bizorealestateworld\n.netlify.app (staging branch)" as FeStage
+}
+
+cloud "Render.com — My project (prj-d5b6uk2li9vc73bhpe20)" {
+  node "بيئة Production" as RenderProd {
+    node "Web Service\npropertyapi-api\n(Docker: dotnet/aspnet:8.0-jammy-chiseled-extra)\nASPNETCORE_HTTP_PORTS=8080" as ApiProd
+    database "propertyapi-production-db\n(PostgreSQL + PostGIS)" as DbProd
+  }
+
+  node "بيئة Staging (معزولة)" as RenderStage {
+    node "Web Service\npropertyapi-staging-api\n(srv-dacpbgf40ujc73epheig)\nDocker, Free plan, فرع master\nAuto-Deploy: off" as ApiStage
+    database "propertyapi-staging-db\n(PostgreSQL 18, Free،\nبدون نسخ احتياطي، صلاحية ~30 يومًا)" as DbStage
+  }
+}
+
+cloud "Upstash" {
+  database "Redis (Production)" as RedisProd
+}
+
+node "Render Redis (Valkey 8)\npropertyapi-redis\n(معاد استخدامه لبيئة Staging)" as RedisStage
+
+cloud "خدمات SaaS خارجية" {
+  [Cloudinary\n(صور — بيئة إنتاج مشتركة،\nمفاتيح API منفصلة لكل بيئة)] as Cloudinary
+  [Resend\n(دومين موثّق واحد: realestateworld.world\nمفاتيح API منفصلة لكل بيئة)] as Resend
+  [Google / Apple OAuth] as OAuthProviders
+  [بوابة SMS] as Sms
+}
+
+node "مجموعة المراقبة (Observability Stack)\ndocker-compose.observability.yml" as ObsStack {
+  [OpenTelemetry Collector]
+  [Prometheus]
+  [Grafana]
+  [Tempo]
+}
+
+node "GitHub Actions\n(CI/CD)" as CI {
+  [production-gate.yml\nبناء + اختبارات + بوابة إصدار] as Gate
+  [Docker Build\nPropertyApi/Dockerfile\nci/Dockerfile.migrator] as Build
+}
+
+Client --> FeProd
+Client --> FeStage
+
+FeProd --> ApiProd : HTTPS (CORS مقيّد بأصل الواجهة)
+FeStage --> ApiStage : HTTPS (CORS مقيّد بأصل Staging)
+
+ApiProd --> DbProd : Npgsql (اتصال TLS)
+ApiProd --> RedisProd : TLS
+ApiStage --> DbStage : Npgsql
+ApiStage --> RedisStage : TCP (داخل شبكة Render)
+
+ApiProd --> Cloudinary
+ApiStage --> Cloudinary
+ApiProd --> Resend
+ApiStage --> Resend
+ApiProd --> OAuthProviders
+ApiStage --> OAuthProviders
+ApiProd --> Sms
+ApiStage --> Sms
+
+ApiProd --> ObsStack : OTLP/gRPC
+ApiStage --> ObsStack : OTLP/gRPC
+
+Gate --> Build
+Build --> ApiStage : نشر عبر Deploy Hook\n(يدوي، بعد نجاح البوابة)
+Gate ..> DbProd : لا نشر تلقائي على Production\n(بوابة تحقق فقط)
+
+note bottom of RenderStage
+  ForwardedHeaders__Enabled=false على Staging
+  (لا يوجد نطاق IP وكيل موثّق منشور من Render)؛
+  Production يستخدم KnownNetworks صراحة.
+end note
+
+note right of DbStage
+  ترحيلات EF Core (Migrations) لا تُطبَّق تلقائيًا
+  عند الإقلاع؛ تُنفَّذ عبر tools/PropertyApi.Migrator
+  كخطوة نشر منفصلة.
+end note
+
+@enduml

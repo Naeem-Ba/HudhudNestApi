@@ -1,0 +1,78 @@
+@startuml Sequence_Authentication
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+title مخطط تسلسلي — المصادقة (Login + Refresh + CSRF)
+autonumber
+
+actor "المستخدم\n(Angular SPA)" as User
+participant "AuthController" as Ctrl
+participant "CsrfController" as Csrf
+participant "LoginCommandHandler\n(MediatR)" as Handler
+participant "Identity /\nUserManager" as Identity
+database "PostgreSQL" as Db
+participant "RefreshTokenCookie\n(HttpOnly)" as Cookie
+participant "JWT Issuer" as Jwt
+
+== تسجيل الدخول (Login) ==
+User -> Ctrl : POST /api/auth/login\n{email, password}
+activate Ctrl
+Ctrl -> Handler : LoginCommand
+activate Handler
+Handler -> Identity : التحقق من كلمة المرور
+Identity -> Db : قراءة UserAccount + \nمحاولات الدخول الفاشلة
+Db --> Identity : بيانات الحساب
+alt بيانات صحيحة وغير مقفل
+    Identity --> Handler : نجاح
+    Handler -> Jwt : إصدار Access Token (30 دقيقة)\n+ Refresh Token (30 يومًا)
+    Handler -> Db : حفظ RefreshToken جديد
+    Handler --> Ctrl : LoginResult(Success, AccessToken, RefreshToken)
+    Ctrl -> Cookie : Attach(refresh_token,\nHttpOnly, Secure, SameSite=None)
+    Ctrl --> User : 200 OK\n{accessToken, expiresIn}\n(بدون refreshToken في الجسم)
+else بيانات خاطئة / حساب مقفل
+    Identity --> Handler : فشل
+    Handler -> Handler : إرسال تنبيه أمني بالبريد\n(في حال القفل)
+    Handler --> Ctrl : LoginResult(Failed)
+    Ctrl --> User : 401 Unauthorized\n(نفس الرسالة دائمًا — لا يكشف\nعن وجود الحساب من عدمه)
+end
+deactivate Handler
+deactivate Ctrl
+
+== الحصول على رمز CSRF (مطلوب قبل أي طلب غير آمن لاحق) ==
+User -> Csrf : GET /api/security/csrf-token
+activate Csrf
+Csrf -> Csrf : IAntiforgery.GetAndStoreTokens()
+Csrf --> User : 200 OK { csrfToken }\n+ Cookie XSRF-TOKEN (JS-readable)
+deactivate Csrf
+note right of User
+  الواجهة تخزّن csrfToken وترسله كـ
+  X-XSRF-TOKEN على كل طلب غير آمن
+  (refresh/logout) — ضروري لأن SPA
+  والـ API لا يشتركان بنفس النطاق
+  في staging/production فلا يمكن
+  الاعتماد على قراءة الكوكي المرسل
+  من الخادم مباشرة.
+end note
+
+== تحديث التوكن (Silent Refresh, كل ~30 دقيقة) ==
+User -> Ctrl : POST /api/auth/refresh\nCookie: refresh_token\nHeader: X-XSRF-TOKEN
+activate Ctrl
+Ctrl -> Ctrl : CookieCsrfProtectionMiddleware\nيتحقق من تطابق التوكن
+Ctrl -> Handler : RefreshTokenCommand
+activate Handler
+Handler -> Db : التحقق من صلاحية\nوعدم إعادة استخدام الرمز
+alt رمز صالح
+    Handler -> Jwt : إصدار Access Token جديد\n+ تدوير Refresh Token
+    Handler -> Db : إبطال القديم، حفظ الجديد
+    Handler --> Ctrl : Success
+    Ctrl -> Cookie : Attach(refresh_token الجديد)
+    Ctrl --> User : 200 OK { accessToken, expiresIn }
+else إعادة استخدام رمز مُبطَل (سرقة محتملة)
+    Handler -> Handler : RefreshTokenReuseHandler:\n1) إبطال كل الرموز النشطة للمستخدم\n2) تدوير SecurityStamp\n(يُبطل كل Access Token الحالية أيضًا)\n3) تسجيل حدث تدقيق RefreshTokenReuseDetected
+    Handler --> Ctrl : Failed
+    Ctrl --> User : 401 Unauthorized
+end
+deactivate Handler
+deactivate Ctrl
+
+@enduml

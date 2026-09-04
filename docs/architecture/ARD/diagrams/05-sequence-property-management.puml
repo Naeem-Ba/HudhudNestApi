@@ -1,0 +1,79 @@
+@startuml Sequence_PropertyManagement
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+title مخطط تسلسلي — إدارة العقارات (إنشاء وتحديث ونشر عقار)
+autonumber
+
+actor "مالك العقار\n(Owner)" as Owner
+participant "PropertiesController" as Ctrl
+participant "MediatR\n(IMediator)" as Mediator
+participant "ValidationBehavior\n(FluentValidation)" as Validation
+participant "CreatePropertyCommandHandler" as CreateHandler
+participant "UpdatePropertyCommandHandler" as UpdateHandler
+participant "IPropertyOwnershipService" as Ownership
+participant "INotificationService" as Notif
+database "PostgreSQL\n(Properties, PropertyPriceHistory)" as Db
+
+== إنشاء عقار (Create) ==
+Owner -> Ctrl : POST /api/properties\n{...بيانات العقار}
+activate Ctrl
+Ctrl -> Ctrl : استبدال OwnerId بمعرّف المستخدم\nمن التوكن (لا يُؤخذ من جسم الطلب)
+Ctrl -> Mediator : CreatePropertyCommand
+activate Mediator
+Mediator -> Validation : التحقق من صحة الحقول
+alt فشل التحقق
+    Validation --> Mediator : ValidationException
+    Mediator --> Ctrl : 422 Unprocessable Entity
+else نجاح التحقق
+    Validation -> CreateHandler : تمرير الطلب
+    activate CreateHandler
+    CreateHandler -> Db : إدراج Property جديد\n(IsPublished = true افتراضيًا)
+    Db --> CreateHandler : PropertyId
+    CreateHandler --> Mediator : propertyId
+    deactivate CreateHandler
+    Mediator --> Ctrl : propertyId
+    Ctrl --> Owner : 201 Created\n{id, isPublished, nextAction: "UploadImages"}
+end
+deactivate Mediator
+deactivate Ctrl
+
+== تحديث عقار (Update) — تحقق الملكية ==
+Owner -> Ctrl : PUT /api/properties/{id}\n{...حقول محدّثة}
+activate Ctrl
+Ctrl -> Mediator : UpdatePropertyCommand\n{PropertyId, RequestingUserId}
+activate Mediator
+Mediator -> UpdateHandler : تمرير الطلب
+activate UpdateHandler
+UpdateHandler -> Ownership : GetOwnedPropertyOrThrowAsync(\npropertyId, userId, "update")
+Ownership -> Db : SELECT Property WHERE Id = propertyId
+Db --> Ownership : Property (OwnerId, ...)
+alt العقار غير موجود
+    Ownership --> UpdateHandler : NotFoundException
+    UpdateHandler --> Mediator : (استثناء) → 404
+else المستخدم ليس مالك العقار
+    Ownership --> UpdateHandler : ForbiddenException
+    UpdateHandler --> Mediator : (استثناء) → 403
+else المستخدم هو المالك
+    Ownership --> UpdateHandler : Property (مع صلاحية التعديل)
+    UpdateHandler -> UpdateHandler : تطبيق الحقول غير الفارغة فقط\n(كل حقل مُرسَل بقيمة != null يُستبدل)
+    UpdateHandler -> Db : RecordPriceChangesAsync:\nإدراج PropertyPriceHistory لكل حقل سعر تغيّر\n(ColdRent / WarmRent / PurchasePrice)
+    UpdateHandler -> Db : SaveChangesAsync\n(تحديث العقار + سجلات الأسعار\nفي معاملة واحدة)
+    Db --> UpdateHandler : تم الحفظ
+    UpdateHandler -> Notif : NotifyPropertyUpdateAsync\n(لكل تغيّر: الحالة، الأسعار، النشر/الإلغاء)\n(best-effort — فشل الإشعار لا يُسقط الطلب)
+    UpdateHandler --> Mediator : true
+    Mediator --> Ctrl : true
+    Ctrl --> Owner : 204 No Content
+end
+deactivate UpdateHandler
+deactivate Mediator
+deactivate Ctrl
+
+note over Ownership
+  IPropertyOwnershipService.EnsureOwnerAsync هو نقطة
+  التحقق المركزية المُعاد استخدامها في كل الأوامر التي
+  تلمس عقارًا (تحديث، حذف، نشر، رفع صور، حذف صورة، تعيين
+  الصورة الرئيسية) — تمنع تكرار منطق التفويض في كل معالج.
+end note
+
+@enduml

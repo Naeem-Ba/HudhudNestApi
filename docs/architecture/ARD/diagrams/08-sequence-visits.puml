@@ -1,0 +1,82 @@
+@startuml Sequence_Visits
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+title مخطط تسلسلي — طلب زيارة عقار وحالاتها (Visits)
+autonumber
+
+actor "الزائر\n(Requester)" as Visitor
+actor "مالك العقار\n(Owner)" as Owner
+participant "VisitsController" as Ctrl
+participant "RequestVisitCommandHandler" as ReqHandler
+participant "ConfirmVisitCommandHandler /\nDeclineVisitCommandHandler /\nProposeAlternateVisitCommandHandler" as OwnerHandlers
+participant "IVisitRepository" as VisitRepo
+participant "IPropertyReadRepository" as PropRepo
+participant "INotificationService\n(+ SignalR Hub)" as Notif
+database "PostgreSQL\n(VisitRequests)" as Db
+
+== طلب زيارة (Requester) ==
+Visitor -> Ctrl : POST /api/visits\n{propertyId, proposedAt,\nvisitorName, visitorPhone, visitorNote}
+activate Ctrl
+Ctrl -> ReqHandler : RequestVisitCommand
+activate ReqHandler
+ReqHandler -> PropRepo : GetByIdAsync(propertyId)
+PropRepo --> ReqHandler : Property
+alt العقار غير منشور
+    ReqHandler --> Ctrl : DomainException → 400
+else الطالب هو مالك العقار نفسه
+    ReqHandler --> Ctrl : DomainException → 400
+else يوجد طلب Pending سابق لنفس المستخدم والعقار
+    ReqHandler -> VisitRepo : HasPendingVisitAsync(propertyId, requesterId)
+    VisitRepo --> ReqHandler : true
+    ReqHandler --> Ctrl : DomainException → 400
+else يمكن إنشاء الطلب
+    ReqHandler -> ReqHandler : VisitRequest.Create(...)\nالحالة الابتدائية = Pending
+    ReqHandler -> Db : SaveChangesAsync
+    ReqHandler -> Notif : NotifyPropertyUpdateAsync\n(VisitRequested → المالك، مع ملاحظة الزائر\nومعرّف الزيارة relatedEntityId)\n(best-effort)
+    Notif -> Owner : إشعار فوري عبر SignalR\n(NotificationHub) + سجل Notification
+    ReqHandler --> Ctrl : VisitDto (Status = Pending)
+    Ctrl --> Visitor : 201 Created
+end
+deactivate ReqHandler
+deactivate Ctrl
+
+== رد المالك ==
+Owner -> Ctrl : PUT /api/visits/{id}/confirm\nأو /decline\nأو /propose-alternate {proposedAt, note}
+activate Ctrl
+Ctrl -> OwnerHandlers : Confirm/Decline/ProposeAlternateVisitCommand
+activate OwnerHandlers
+OwnerHandlers -> VisitRepo : تحميل VisitRequest + تحقق\nأن المستدعي هو مالك العقار المرتبط
+alt ليس المالك
+    OwnerHandlers --> Ctrl : Forbidden → 403
+else المالك مؤكَّد
+    OwnerHandlers -> Db : تحديث الحالة:\nConfirmed | Declined | RescheduleProposed
+    OwnerHandlers -> Notif : إشعار الزائر بالرد
+    Notif -> Visitor : إشعار فوري (SignalR)
+    OwnerHandlers --> Ctrl : 204 No Content
+end
+deactivate OwnerHandlers
+deactivate Ctrl
+
+== الزائر يرد على موعد بديل (إن اقتُرح) ==
+Visitor -> Ctrl : PUT /api/visits/{id}/accept-reschedule\nأو /decline-reschedule
+Ctrl -> Db : RescheduleProposed → Confirmed | Declined
+
+== إتمام أو إلغاء ==
+Owner -> Ctrl : PUT /api/visits/{id}/complete
+Ctrl -> Db : Confirmed → Completed
+Visitor -> Ctrl : DELETE /api/visits/{id}
+Ctrl -> Db : Pending/Confirmed → Cancelled
+
+note over Db
+  آلة الحالات (VisitStatus):
+  Pending → Confirmed → Completed
+       → Declined
+       → RescheduleProposed → Confirmed | Declined
+  أي حالة نشطة → Cancelled (من الزائر)
+
+  Completed هي الحالة الوحيدة التي تفتح إمكانية
+  إضافة تقييم لاحقًا — انظر مخطط "تسلسلي — التقييمات".
+end note
+
+@enduml
