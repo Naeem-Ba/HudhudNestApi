@@ -211,11 +211,14 @@ ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
         }
         catch (Exception ex)
         {
+            // Privacy: never log the caller's exact device coordinates (a precise
+            // lat/lng can pinpoint a home address). Round to ~11km so the log still
+            // helps diagnose which region a failing query targeted.
             _logger.LogError(
                 ex,
-                "Geo property search failed for lat {Latitude}, lng {Longitude}, radius {RadiusKm} km.",
-                filter.Latitude,
-                filter.Longitude,
+                "Geo property search failed near lat {LatitudeRounded}, lng {LongitudeRounded} (rounded), radius {RadiusKm} km.",
+                Math.Round(filter.Latitude, 1),
+                Math.Round(filter.Longitude, 1),
                 filter.RadiusKm);
             throw;
         }

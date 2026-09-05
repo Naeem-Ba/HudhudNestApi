@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
+using PropertyApi.Application.Common.Security;
 using StackExchange.Redis;
 
 namespace PropertyApi.Security.RateLimiting;
@@ -153,7 +154,7 @@ return current
         _logger.LogWarning(
             "Redis rate limit rejected request. Policy={PolicyName}, Partition={PartitionKey}, Count={Count}, Limit={Limit}",
             policyName,
-            partitionKey,
+            PiiMasking.MaskIpsInText(partitionKey),
             count,
             policy.PermitLimit);
 

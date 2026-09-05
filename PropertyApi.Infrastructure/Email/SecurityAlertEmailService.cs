@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Common.Security;
 
 namespace PropertyApi.Infrastructure.Email;
 
@@ -96,16 +97,16 @@ This is an automated security alert - do not reply to this email.
 
             _logger.LogInformation(
                 "Security alert email sent to {Email} for {FailedCount} failed attempt(s) from IP {IpAddress}",
-                userEmail,
+                PiiMasking.MaskEmail(userEmail),
                 failedAttemptCount,
-                ipAddress ?? "Unknown");
+                PiiMasking.MaskIp(ipAddress));
         }
         catch (Exception ex)
         {
             _logger.LogError(
                 ex,
                 "Failed to send security alert email to {Email}",
-                userEmail);
+                PiiMasking.MaskEmail(userEmail));
             throw;
         }
     }
@@ -178,7 +179,7 @@ This is an automated security alert - do not reply to this email.
 
             _logger.LogInformation(
                 "Password change request email sent to {Email} after {FailedCount} failed attempts",
-                userEmail,
+                PiiMasking.MaskEmail(userEmail),
                 failedAttemptCount);
         }
         catch (Exception ex)
@@ -186,7 +187,7 @@ This is an automated security alert - do not reply to this email.
             _logger.LogError(
                 ex,
                 "Failed to send password change request email to {Email}",
-                userEmail);
+                PiiMasking.MaskEmail(userEmail));
             throw;
         }
     }
@@ -261,15 +262,15 @@ This is an automated security alert - do not reply to this email.
 
             _logger.LogWarning(
                 "Account locked notification sent to {Email} from IP {IpAddress}",
-                userEmail,
-                ipAddress ?? "Unknown");
+                PiiMasking.MaskEmail(userEmail),
+                PiiMasking.MaskIp(ipAddress));
         }
         catch (Exception ex)
         {
             _logger.LogError(
                 ex,
                 "Failed to send account locked notification to {Email}",
-                userEmail);
+                PiiMasking.MaskEmail(userEmail));
             throw;
         }
     }
@@ -323,14 +324,14 @@ This is an automated notification - do not reply to this email.
 
             _logger.LogInformation(
                 "Password change confirmation sent to {Email}",
-                userEmail);
+                PiiMasking.MaskEmail(userEmail));
         }
         catch (Exception ex)
         {
             _logger.LogError(
                 ex,
                 "Failed to send password change confirmation to {Email}",
-                userEmail);
+                PiiMasking.MaskEmail(userEmail));
         }
     }
 }

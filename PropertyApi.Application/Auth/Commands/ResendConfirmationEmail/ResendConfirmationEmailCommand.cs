@@ -2,6 +2,7 @@ using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Common.Security;
 
 namespace PropertyApi.Application.Auth.Commands.ResendConfirmationEmail;
 
@@ -71,7 +72,7 @@ public sealed class ResendConfirmationEmailCommandHandler
         {
             _logger.LogInformation(
                 "Confirmation resend requested for {Email}; nothing to send.",
-                email);
+                PiiMasking.MaskEmail(email));
 
             return ResendConfirmationEmailResult.Ok();
         }

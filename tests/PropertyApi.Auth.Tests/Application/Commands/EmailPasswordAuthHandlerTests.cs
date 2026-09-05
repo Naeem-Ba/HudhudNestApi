@@ -448,6 +448,7 @@ public sealed class RegisterCommandHandlerTests
                 accounts.Object,
                 unitOfWork,
                 Mock.Of<IEmailVerificationService>(),
+                Mock.Of<IConsentRecordRepository>(),
                 NullLogger<RegisterCommandHandler>.Instance);
 
         // Act
@@ -541,6 +542,7 @@ public sealed class RegisterCommandHandlerTests
                 accounts.Object,
                 unitOfWork,
                 emailVerification.Object,
+                Mock.Of<IConsentRecordRepository>(),
                 NullLogger<RegisterCommandHandler>.Instance);
 
         // Act
@@ -676,6 +678,7 @@ public sealed class RegisterCommandHandlerTests
                 new Mock<IUserAccountRepository>().Object,
                 Mock.Of<IUnitOfWork>(),
                 emailVerification.Object,
+                Mock.Of<IConsentRecordRepository>(),
                 NullLogger<RegisterCommandHandler>.Instance);
 
         // Act

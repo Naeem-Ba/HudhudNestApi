@@ -13,6 +13,7 @@ using PropertyApi.Application.Auth.Commands.ResetPassword;
 using PropertyApi.Application.Auth.Commands.SocialLogin;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
+using PropertyApi.Application.Common.Security;
 using PropertyApi.Security.Auth;
 
 namespace PropertyApi.Controllers;
@@ -55,7 +56,10 @@ public sealed class AuthController : ControllerBase
             FirstName: dto.FirstName,
             LastName: dto.LastName,
             Email: dto.Email,
-            Password: dto.Password), ct);
+            Password: dto.Password,
+            PrivacyPolicyAccepted: dto.PrivacyPolicyAccepted,
+            PrivacyPolicyVersion: dto.PrivacyPolicyVersion,
+            ConsentSource: dto.ConsentSource), ct);
 
         if (result.Conflict)
             return Conflict(new { message = result.Message });
@@ -111,7 +115,7 @@ public sealed class AuthController : ControllerBase
             {
                 _logger.LogInformation(
                     "Login succeeded from IP {IpAddress}.",
-                    ipAddress);
+                    PiiMasking.MaskIp(ipAddress));
 
                 // RELEASE-BLOCKERS-AR.md B-13: the refresh token now travels only in an
                 // HttpOnly cookie, never in a body a script on the page could read.
@@ -388,11 +392,19 @@ public sealed class AuthController : ControllerBase
 }
 
 // HTTP request DTOs kept in API layer to preserve the public API shape.
+//
+// PrivacyPolicyAccepted/PrivacyPolicyVersion/ConsentSource are additive and optional
+// (docs/privacy/privacy-gaps.md, P1) -- an older client build that predates the consent
+// checkbox simply omits them, and registration proceeds exactly as it did before this
+// change, just without a ConsentRecord (see RegisterCommand's doc comment).
 public sealed record RegisterRequest(
     string FirstName,
     string LastName,
     string Email,
-    string Password);
+    string Password,
+    bool PrivacyPolicyAccepted = false,
+    string? PrivacyPolicyVersion = null,
+    string? ConsentSource = null);
 
 public sealed record LoginRequest(
     string Email,

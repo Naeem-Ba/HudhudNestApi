@@ -8,13 +8,17 @@ using PropertyApi.Application.Reviews.Queries.GetRatingEligibility;
 using PropertyApi.Application.Reviews.Queries.GetUserRatings;
 using PropertyApi.Application.Users.Commands.ChangePassword;
 using PropertyApi.Application.Users.Commands.DeleteUser;
+using PropertyApi.Application.Users.Commands.RecordConsent;
 using PropertyApi.Application.Users.Commands.SelectPlan;
 using PropertyApi.Application.Users.Commands.UpdateUser;
 using PropertyApi.Application.Users.Commands.UploadUserAvatar;
+using PropertyApi.Application.Users.Commands.WithdrawConsent;
 using PropertyApi.Application.Users.DTOs;
 using PropertyApi.Application.Users.Queries.GetCurrentUser;
+using PropertyApi.Application.Users.Queries.GetMyConsents;
 using PropertyApi.Application.Users.Queries.GetUserById;
 using PropertyApi.Application.Users.Queries.GetUserProfile;
+using PropertyApi.Domain.Enums;
 
 namespace PropertyApi.Controllers;
 
@@ -266,6 +270,64 @@ public sealed class UsersController : ControllerBase
         return NoContent();
     }
 
+    // POST /api/Users/me/consents — records that the caller just explicitly agreed to one
+    // version of one policy document, from one client surface. The client must only ever
+    // call this in direct response to the user actually checking an unchecked consent
+    // checkbox and submitting — see docs/privacy/privacy-gaps.md (P1).
+    [HttpPost("me/consents")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> RecordConsent(
+        [FromBody] RecordConsentRequest dto,
+        CancellationToken ct)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var result = await _sender.Send(
+            new RecordConsentCommand(userId, dto.PolicyType, dto.PolicyVersion, dto.Source),
+            ct);
+
+        return Ok(result);
+    }
+
+    // GET /api/Users/me/consents — every consent record the caller has, including
+    // withdrawn ones, so they (or support, on their behalf) can see the full history.
+    [HttpGet("me/consents")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetMyConsents(CancellationToken ct)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var result = await _sender.Send(new GetMyConsentsQuery(userId), ct);
+
+        return Ok(result);
+    }
+
+    // DELETE /api/Users/me/consents/{policyType} — withdraws every currently-active
+    // consent the caller has for that policy type. Does not remove the historical rows;
+    // WithdrawnAtUtc is set instead (see ConsentRecord's doc comment).
+    [HttpDelete("me/consents/{policyType}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> WithdrawConsent(
+        ConsentPolicyType policyType,
+        CancellationToken ct)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var withdrawnCount = await _sender.Send(
+            new WithdrawConsentCommand(userId, policyType),
+            ct);
+
+        return Ok(new { withdrawnCount });
+    }
+
     private bool TryGetCurrentUserId(out Guid userId)
     {
         var userIdText = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -289,6 +351,11 @@ public sealed record ChangePasswordRequest(
     string NewPassword);
 
 public sealed record SelectPlanRequest(string Tier);
+
+public sealed record RecordConsentRequest(
+    ConsentPolicyType PolicyType,
+    string PolicyVersion,
+    ConsentSource Source);
 
 public sealed record RateUserRequest(
     int Credibility,

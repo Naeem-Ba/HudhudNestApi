@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Common.Security;
 using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Domain.Users.Entities;
 
@@ -132,7 +133,7 @@ public sealed class ForgotPasswordCommandHandler
         {
             _logger.LogInformation(
                 "Password reset requested for non-existing or deleted email {Email}.",
-                email);
+                PiiMasking.MaskEmail(email));
         }
 
         // Always return the same response to prevent account enumeration.

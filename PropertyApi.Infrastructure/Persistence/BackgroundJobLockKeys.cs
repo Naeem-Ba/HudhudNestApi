@@ -28,4 +28,6 @@ public static class BackgroundJobLockKeys
     public const long PhoneVerificationReminder = 20260825_1003;
 
     public const long OtpCleanup = 20260825_1004;
+
+    public const long AuditLogRetention = 20260905_1005;
 }

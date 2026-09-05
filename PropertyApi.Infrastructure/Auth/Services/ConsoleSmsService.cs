@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Common.Security;
 using System.Net.Http.Json;
 
 namespace PropertyApi.Infrastructure.Auth.Services;
@@ -29,10 +30,14 @@ public sealed class ConsoleSmsService : ISmsService
         string otp,
         CancellationToken ct = default)
     {
+        // Dev-mode only (never registered in Staging/Production, see
+        // AuthInfrastructureRegistration) — the OTP itself is printed on purpose so a
+        // developer can complete the flow without a real SMS provider, but the phone
+        // number is masked; nothing here needs it in full.
         _logger.LogWarning("═══════════════════════════════════════════════");
         _logger.LogWarning(
             "  [DEV MODE] OTP for {Phone}: {OTP}",
-            phoneNumber,
+            PiiMasking.MaskPhone(phoneNumber),
             otp);
         _logger.LogWarning("═══════════════════════════════════════════════");
 
@@ -100,7 +105,7 @@ public sealed class TwilioSmsService : ISmsService
             {
                 _logger.LogWarning(
                     "Twilio SMS failed for {Phone}. MessageSid={MessageSid}, Status={Status}",
-                    phoneNumber,
+                    PiiMasking.MaskPhone(phoneNumber),
                     message.Sid,
                     message.Status);
             }
@@ -109,12 +114,12 @@ public sealed class TwilioSmsService : ISmsService
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("SMS sending was cancelled for {Phone}.", phoneNumber);
+            _logger.LogWarning("SMS sending was cancelled for {Phone}.", PiiMasking.MaskPhone(phoneNumber));
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send SMS to {Phone}.", phoneNumber);
+            _logger.LogError(ex, "Failed to send SMS to {Phone}.", PiiMasking.MaskPhone(phoneNumber));
             return false;
         }
     }
@@ -170,19 +175,19 @@ public sealed class HttpSmsService : ISmsService
                 _logger.LogWarning(
                     "HTTP SMS provider returned non-success status code {StatusCode} for {Phone}.",
                     response.StatusCode,
-                    phoneNumber);
+                    PiiMasking.MaskPhone(phoneNumber));
             }
 
             return response.IsSuccessStatusCode;
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("HTTP SMS sending was cancelled for {Phone}.", phoneNumber);
+            _logger.LogWarning("HTTP SMS sending was cancelled for {Phone}.", PiiMasking.MaskPhone(phoneNumber));
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "HTTP SMS failed for {Phone}.", phoneNumber);
+            _logger.LogError(ex, "HTTP SMS failed for {Phone}.", PiiMasking.MaskPhone(phoneNumber));
             return false;
         }
     }

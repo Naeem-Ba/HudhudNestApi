@@ -36,10 +36,14 @@ public sealed class ChangePasswordCommandHandlerTests
             new Mock<
                 ILogger<ChangePasswordCommandHandler>>();
 
+        var refreshTokens =
+            CreateRefreshTokenMock();
+
         var sut =
             new ChangePasswordCommandHandler(
                 identity.Object,
                 auditLogs.Object,
+                refreshTokens.Object,
                 logger.Object);
 
         var command =
@@ -83,6 +87,14 @@ public sealed class ChangePasswordCommandHandlerTests
 
         VerifyAuditNeverCalled(
             auditLogs);
+
+        refreshTokens.Verify(
+            x => x.RevokeActiveTokensForUserAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]
@@ -114,10 +126,14 @@ public sealed class ChangePasswordCommandHandlerTests
             new Mock<
                 ILogger<ChangePasswordCommandHandler>>();
 
+        var refreshTokens =
+            CreateRefreshTokenMock();
+
         var sut =
             new ChangePasswordCommandHandler(
                 identity.Object,
                 auditLogs.Object,
+                refreshTokens.Object,
                 logger.Object);
 
         var command =
@@ -161,6 +177,14 @@ public sealed class ChangePasswordCommandHandlerTests
 
         VerifyAuditNeverCalled(
             auditLogs);
+
+        refreshTokens.Verify(
+            x => x.RevokeActiveTokensForUserAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]
@@ -207,10 +231,14 @@ public sealed class ChangePasswordCommandHandlerTests
             new Mock<
                 ILogger<ChangePasswordCommandHandler>>();
 
+        var refreshTokens =
+            CreateRefreshTokenMock();
+
         var sut =
             new ChangePasswordCommandHandler(
                 identity.Object,
                 auditLogs.Object,
+                refreshTokens.Object,
                 logger.Object);
 
         var command =
@@ -258,6 +286,14 @@ public sealed class ChangePasswordCommandHandlerTests
         VerifyAuditNeverCalled(
             auditLogs);
 
+        refreshTokens.Verify(
+            x => x.RevokeActiveTokensForUserAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
         VerifyWarningContains(
             logger,
             "Password change failed");
@@ -281,10 +317,14 @@ public sealed class ChangePasswordCommandHandlerTests
             new Mock<
                 ILogger<ChangePasswordCommandHandler>>();
 
+        var refreshTokens =
+            CreateRefreshTokenMock();
+
         var sut =
             new ChangePasswordCommandHandler(
                 identity.Object,
                 auditLogs.Object,
+                refreshTokens.Object,
                 logger.Object);
 
         var command =
@@ -323,6 +363,14 @@ public sealed class ChangePasswordCommandHandlerTests
         identity.Verify(
             x => x.UpdateSecurityStampAsync(
                 userId,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        refreshTokens.Verify(
+            x => x.RevokeActiveTokensForUserAsync(
+                userId,
+                It.IsAny<DateTime>(),
+                "127.0.0.1",
                 It.IsAny<CancellationToken>()),
             Times.Once);
 
@@ -395,10 +443,14 @@ public sealed class ChangePasswordCommandHandlerTests
             new Mock<
                 ILogger<ChangePasswordCommandHandler>>();
 
+        var refreshTokens =
+            CreateRefreshTokenMock();
+
         var sut =
             new ChangePasswordCommandHandler(
                 identity.Object,
                 auditLogs.Object,
+                refreshTokens.Object,
                 logger.Object);
 
         var command =
@@ -508,10 +560,14 @@ public sealed class ChangePasswordCommandHandlerTests
             new Mock<
                 ILogger<ChangePasswordCommandHandler>>();
 
+        var refreshTokens =
+            CreateRefreshTokenMock();
+
         var sut =
             new ChangePasswordCommandHandler(
                 identity.Object,
                 auditLogs.Object,
+                refreshTokens.Object,
                 logger.Object);
 
         var command =
@@ -569,10 +625,14 @@ It.Is<string?>(
             new Mock<
                 ILogger<ChangePasswordCommandHandler>>();
 
+        var refreshTokens =
+            CreateRefreshTokenMock();
+
         var sut =
             new ChangePasswordCommandHandler(
                 identity.Object,
                 auditLogs.Object,
+                refreshTokens.Object,
                 logger.Object);
 
         var command =
@@ -657,6 +717,24 @@ It.Is<string?>(
                 IdentityOperationResult.Success());
 
         return identity;
+    }
+
+    private static Mock<IRefreshTokenRepository>
+        CreateRefreshTokenMock()
+    {
+        var refreshTokens =
+            new Mock<IRefreshTokenRepository>();
+
+        refreshTokens
+            .Setup(
+                x => x.RevokeActiveTokensForUserAsync(
+                    It.IsAny<Guid>(),
+                    It.IsAny<DateTime>(),
+                    It.IsAny<string?>(),
+                    It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        return refreshTokens;
     }
 
     private static Mock<IAuditLogService>
