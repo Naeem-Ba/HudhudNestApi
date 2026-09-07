@@ -525,6 +525,63 @@ public sealed class UserAccount
     }
 
     /// <summary>
+    /// Scrubs every personal-data field this profile carries, in place, as part of account
+    /// deletion (see DeleteUserCommandHandler). This is deliberately NOT a hard delete of the
+    /// row: Property.OwnerId, Message.SenderId/ReceiverId, PropertyReview.ReviewerId,
+    /// UserRating.RatedUserId/RaterId, VisitRequest.RequesterId, Agency.OwnerUserId and others
+    /// all reference UserAccounts with DeleteBehavior.Restrict (see their configurations) —
+    /// the row must keep existing so that business/marketplace data other people rely on
+    /// (listings, reviews, message history, ratings) stays intact and referentially valid.
+    ///
+    /// FirstName/LastName cannot become empty (both are NOT NULL and validated non-blank by
+    /// Create/UpdateProfile), so they take a fixed, unmistakable placeholder instead of being
+    /// merely cleared — anything reading OwnerName/ReviewerName etc. after this call renders
+    /// "Deleted User" rather than blank text or a stale real name.
+    ///
+    /// AgencyId/PlanId/PlanGrantedByUserId and their timestamps are left untouched: they are
+    /// business/billing state, not personal data, and changing them here would silently affect
+    /// agency membership counts or plan bookkeeping as a side effect of what the caller asked
+    /// for (account deletion) — see docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md for why this
+    /// is flagged as a business decision rather than resolved unilaterally.
+    ///
+    /// Caller contract: read ProfileImagePublicId *before* calling this (it is cleared here) if
+    /// the caller needs it to delete the asset from Cloudinary — this method only updates the
+    /// database row, it has no knowledge of external storage.
+    /// </summary>
+    public void Anonymize(DateTime utcNow)
+    {
+        FirstName =
+            "Deleted";
+
+        LastName =
+            "User";
+
+        DisplayName =
+            null;
+
+        TaxNumber =
+            null;
+
+        ProfileImageUrl =
+            null;
+
+        ProfileImagePublicId =
+            null;
+
+        WhatsAppNumber =
+            null;
+
+        Bio =
+            null;
+
+        ContactInfo =
+            null;
+
+        UpdatedAt =
+            utcNow;
+    }
+
+    /// <summary>
     /// The status callers actually care about — see EffectivePlanStatus's doc comment for
     /// why this is computed rather than a second persisted field.
     /// </summary>

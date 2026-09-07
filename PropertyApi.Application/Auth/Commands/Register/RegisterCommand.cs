@@ -5,7 +5,9 @@ using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Common.Security;
 using PropertyApi.Application.Users.Interfaces;
+using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Domain.Users.Entities;
 using System.Text.RegularExpressions;
@@ -16,7 +18,17 @@ public sealed record RegisterCommand(
     string FirstName,
     string LastName,
     string Email,
-    string Password)
+    string Password,
+
+    // Optional and additive on purpose (docs/privacy/privacy-gaps.md, P1): an older
+    // client build that predates the consent checkbox simply omits these, and
+    // registration proceeds exactly as before -- just without a ConsentRecord, which is
+    // the pre-existing status quo, not a regression. Only ever set when the caller
+    // actually just checked an unchecked consent checkbox and submitted the form; see
+    // RegisterCommandHandler.RecordConsentIfAcceptedAsync.
+    bool PrivacyPolicyAccepted = false,
+    string? PrivacyPolicyVersion = null,
+    string? ConsentSource = null)
     : IRequest<RegisterResult>;
 
 public sealed record RegisterResult
@@ -73,6 +85,9 @@ public sealed class RegisterCommandHandler
     private readonly IEmailVerificationService
         _emailVerification;
 
+    private readonly IConsentRecordRepository
+        _consents;
+
     private readonly ILogger<RegisterCommandHandler>
         _logger;
 
@@ -81,12 +96,14 @@ public sealed class RegisterCommandHandler
         IUserAccountRepository accounts,
         IUnitOfWork unitOfWork,
         IEmailVerificationService emailVerification,
+        IConsentRecordRepository consents,
         ILogger<RegisterCommandHandler> logger)
     {
         _identity = identity;
         _accounts = accounts;
         _unitOfWork = unitOfWork;
         _emailVerification = emailVerification;
+        _consents = consents;
         _logger = logger;
     }
 
@@ -184,7 +201,7 @@ public sealed class RegisterCommandHandler
 
                 _logger.LogWarning(
                     "Registration failed for email {Email}. Errors: {Errors}",
-                    email,
+                    PiiMasking.MaskEmail(email),
                     string.Join(
                         ", ",
                         createResult.Errors));
@@ -224,6 +241,19 @@ public sealed class RegisterCommandHandler
             await _accounts.AddAsync(
                 account,
                 ct);
+
+            /*
+             * 3b. Record Privacy Policy consent, if the caller actually just checked
+             * the (never pre-checked) consent checkbox and submitted the form -- see
+             * the RegisterCommand doc comment. Committed atomically with the account
+             * itself: a consent record must never exist for an account that failed to
+             * commit, nor an account exist with no chance to have recorded consent
+             * alongside it.
+             */
+            TryRecordConsent(
+                userId,
+                request,
+                now);
 
             /*
              * UnitOfWork.CommitTransactionAsync does not implicitly
@@ -321,6 +351,41 @@ public sealed class RegisterCommandHandler
         => email
             .Trim()
             .ToLowerInvariant();
+
+    /// <summary>
+    /// Adds a ConsentRecord to the same unit of work as the rest of registration, but
+    /// only when the caller actually sent a real acceptance: a missing/empty version or
+    /// an unrecognized source means an older client that predates the consent checkbox,
+    /// not a rejected consent, so it is silently skipped rather than failing the whole
+    /// registration over an optional field an old build never knew to send.
+    /// </summary>
+    private void TryRecordConsent(
+        Guid userId,
+        RegisterCommand request,
+        DateTime nowUtc)
+    {
+        if (!request.PrivacyPolicyAccepted ||
+            string.IsNullOrWhiteSpace(request.PrivacyPolicyVersion))
+        {
+            return;
+        }
+
+        var source = Enum.TryParse<ConsentSource>(
+            request.ConsentSource,
+            ignoreCase: true,
+            out var parsedSource)
+                ? parsedSource
+                : ConsentSource.Web;
+
+        var consent = ConsentRecord.Create(
+            userId,
+            ConsentPolicyType.PrivacyPolicy,
+            request.PrivacyPolicyVersion,
+            source,
+            nowUtc);
+
+        _consents.Add(consent);
+    }
 }
 
 public sealed class RegisterCommandValidator

@@ -221,6 +221,20 @@ public static class RateLimitingRegistration
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                         QueueLimit = 0
                     }));
+
+            // Phase 5 (Account Deletion): irreversible, high-risk, authenticated action.
+            // Same cadence as auth-password-reset -- the closest existing equivalent (a rare,
+            // sensitive, per-identity operation that must not be brute-forceable).
+            options.AddPolicy("account-delete", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 3,
+                        Window = TimeSpan.FromHours(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
         });
 
         return services;

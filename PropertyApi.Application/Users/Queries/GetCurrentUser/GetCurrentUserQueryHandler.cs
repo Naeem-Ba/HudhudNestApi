@@ -78,6 +78,7 @@ public sealed class GetCurrentUserQueryHandler
             CountryCode = account.CountryCode,
             EmailConfirmed = identity.EmailConfirmed,
             PhoneConfirmed = identity.PhoneConfirmed,
+            HasPassword = identity.HasPassword,
             PlanTier = planTier,
             PlanSelectedAt = account.PlanSelectedAt,
             CreatedAt = account.CreatedAt,

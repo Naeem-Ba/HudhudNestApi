@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Common.Models;
+using PropertyApi.Application.Common.Security;
 using IdentityEmailSender = Microsoft.AspNetCore.Identity.UI.Services.IEmailSender;
 
 namespace PropertyApi.Infrastructure.Email;
@@ -108,7 +109,7 @@ public sealed class ResendEmailSender
         {
             _logger.LogInformation(
                 "Resend accepted the message to {Email} with subject {Subject}.",
-                message.To,
+                PiiMasking.MaskEmail(message.To),
                 message.Subject);
 
             return;
@@ -122,7 +123,7 @@ public sealed class ResendEmailSender
 
         _logger.LogError(
             "Resend rejected the message to {Email}. Status {StatusCode}. Response: {Response}",
-            message.To,
+            PiiMasking.MaskEmail(message.To),
             (int)response.StatusCode,
             body);
 

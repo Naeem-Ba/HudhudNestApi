@@ -81,6 +81,7 @@ public sealed class AppDbContext
     public DbSet<SavedSearch> SavedSearches => Set<SavedSearch>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+    public DbSet<ConsentRecord> ConsentRecords => Set<ConsentRecord>();
 
     // AqarTech Services Marketplace
     public DbSet<ServiceProvider> ServiceProviders => Set<ServiceProvider>();

@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.DTOs;
 using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Common.Security;
 
 namespace PropertyApi.Application.Auth.Commands.AddEmail;
 
@@ -135,7 +136,7 @@ public sealed class AddEmailCommandHandler
 
         _logger.LogInformation(
             "Email verification sent to {Email} for identity {IdentityId}.",
-            email,
+            PiiMasking.MaskEmail(email),
             identity.IdentityId);
 
         return AddEmailResult.Ok();

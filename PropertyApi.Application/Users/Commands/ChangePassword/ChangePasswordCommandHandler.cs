@@ -16,16 +16,20 @@ public sealed class ChangePasswordCommandHandler
 
     private readonly IAuditLogService _auditLogs;
 
+    private readonly IRefreshTokenRepository _refreshTokens;
+
     private readonly ILogger<ChangePasswordCommandHandler>
         _logger;
 
     public ChangePasswordCommandHandler(
         IChangePasswordIdentityService identity,
         IAuditLogService auditLogs,
+        IRefreshTokenRepository refreshTokens,
         ILogger<ChangePasswordCommandHandler> logger)
     {
         _identity = identity;
         _auditLogs = auditLogs;
+        _refreshTokens = refreshTokens;
         _logger = logger;
     }
 
@@ -105,6 +109,19 @@ public sealed class ChangePasswordCommandHandler
                     stampResult.Errors));
         }
 
+        /*
+         * A password change must not leave pre-existing refresh tokens usable,
+         * exactly like the reset-password flow (ResetPasswordCommandHandler) —
+         * otherwise a session obtained before the change (e.g. by someone who
+         * had briefly gained access) would keep working after the owner
+         * "secures" the account by changing the password.
+         */
+        await _refreshTokens.RevokeActiveTokensForUserAsync(
+            identity.IdentityId,
+            changedAtUtc,
+            request.IpAddress,
+            cancellationToken);
+
         await _auditLogs.LogAsync(
             userId:
                 identity.IdentityId,
@@ -127,6 +144,9 @@ public sealed class ChangePasswordCommandHandler
 
                         securityStampUpdated =
                             stampResult.Succeeded,
+
+                        refreshTokensRevoked =
+                            true,
 
                         timestamp =
                             changedAtUtc

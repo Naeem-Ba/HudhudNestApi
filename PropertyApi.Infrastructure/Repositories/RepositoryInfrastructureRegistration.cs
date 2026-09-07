@@ -63,6 +63,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddHostedService<ListingExpiryHostedService>();
         services.AddScoped<IPropertyImageRepository, PropertyImageRepository>();
         services.AddScoped<IFavoriteRepository, FavoriteRepository>();
+        services.AddScoped<IConsentRecordRepository, ConsentRecordRepository>();
         services.AddScoped<IContactMessageRepository, ContactMessageRepository>();
         services.AddScoped<IUserDirectoryReadService, UserDirectoryReadService>();
         services.AddScoped<IUserAccountRepository, UserAccountRepository>();

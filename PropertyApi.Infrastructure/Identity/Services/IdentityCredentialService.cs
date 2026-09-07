@@ -162,6 +162,59 @@ public sealed class IdentityCredentialService
         return Result(await _users.UpdateAsync(user));
     }
 
+    /// <summary>
+    /// See <see cref="IDeleteUserIdentityService.AnonymizeCredentialsAsync"/> for the
+    /// contract. Login removal happens first and its own failures are folded into the
+    /// aggregate result instead of short-circuiting, so one unremovable login link does not
+    /// leave the email/phone still exposed — the caller (DeleteUserCommandHandler) treats
+    /// any failure here as blocking and rolls back the whole deletion transaction.
+    /// </summary>
+    public async Task<IdentityOperationResult> AnonymizeCredentialsAsync(
+        Guid id, string anonymizedEmail, DateTime utcNow, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(anonymizedEmail);
+
+        var user = await Load(id, ct);
+        var errors = new List<string>();
+
+        var logins = await _users.GetLoginsAsync(user);
+        foreach (var login in logins)
+        {
+            var removeResult = await _users.RemoveLoginAsync(
+                user,
+                login.LoginProvider,
+                login.ProviderKey);
+
+            if (!removeResult.Succeeded)
+            {
+                errors.AddRange(removeResult.Errors.Select(e => e.Description));
+            }
+        }
+
+        var normalizedEmail = anonymizedEmail.ToUpperInvariant();
+
+        user.Email = anonymizedEmail;
+        user.NormalizedEmail = normalizedEmail;
+        user.EmailConfirmed = false;
+        user.UserName = anonymizedEmail;
+        user.NormalizedUserName = normalizedEmail;
+        user.PhoneNumber = null;
+        user.NormalizedPhoneNumber = null;
+        user.PhoneNumberLookupHash = null;
+        user.PhoneNumberConfirmed = false;
+        user.UpdatedAt = utcNow;
+
+        var updateResult = await _users.UpdateAsync(user);
+        if (!updateResult.Succeeded)
+        {
+            errors.AddRange(updateResult.Errors.Select(e => e.Description));
+        }
+
+        return errors.Count == 0
+            ? IdentityOperationResult.Success()
+            : IdentityOperationResult.Failed(errors);
+    }
+
     private Task<ApplicationUser> Load(Guid id, CancellationToken ct) =>
         IdentityAdapterMapping.RequireAsync(_users, id, ct);
 

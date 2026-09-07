@@ -61,6 +61,18 @@ internal sealed class FaultingPureIdentityService
         ct);
 
     public Task<IdentityOperationResult>
+    AnonymizeCredentialsAsync(
+        Guid identityId,
+        string anonymizedEmail,
+        DateTime utcNow,
+        CancellationToken ct = default)
+    => ((IDeleteUserIdentityService)_inner).AnonymizeCredentialsAsync(
+        identityId,
+        anonymizedEmail,
+        utcNow,
+        ct);
+
+    public Task<IdentityOperationResult>
     SetPhoneNumberAsync(
         Guid identityId,
         string? phoneNumber,

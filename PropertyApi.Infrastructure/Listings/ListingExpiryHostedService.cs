@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Listings;
@@ -93,6 +94,7 @@ public sealed class ListingExpiryHostedService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var notifications = scope.ServiceProvider.GetRequiredService<INotificationService>();
+        var mediaStorage = scope.ServiceProvider.GetRequiredService<IMediaStorageService>();
 
         await db.Database.OpenConnectionAsync(ct);
         try
@@ -111,7 +113,7 @@ public sealed class ListingExpiryHostedService : BackgroundService
                     // hearing about the first one.
                     var warned = await WarnExpiringSoonAsync(db, notifications, now, ct);
                     var expired = await ExpireElapsedAsync(db, notifications, now, ct);
-                    var deleted = await DeleteAfterGraceAsync(db, now, ct);
+                    var deleted = await DeleteAfterGraceAsync(db, mediaStorage, now, ct);
 
                     // Independent of the three phases above and ordered last only because it
                     // is the cheapest: a listing can lose its featured placement while its
@@ -221,23 +223,33 @@ public sealed class ListingExpiryHostedService : BackgroundService
     /// Phase 3 — delete listings whose grace period has run out.
     /// </summary>
     /// <remarks>
-    /// Soft delete. Property.MarkExpiredListingDeletedBySystem() sets IsDeleted, which the
-    /// global query filter honours everywhere, so the listing disappears from every read
-    /// path while the row survives. Nothing in this codebase physically removes a Property,
-    /// and an unattended sweep is the last place to start.
+    /// Soft delete for the Property row itself. Property.MarkExpiredListingDeletedBySystem()
+    /// sets IsDeleted, which the global query filter honours everywhere, so the listing
+    /// disappears from every read path while the row survives. Nothing in this codebase
+    /// physically removes a Property, and an unattended sweep is the last place to start.
+    ///
+    /// The listing's Cloudinary image binaries are a different story on purpose: they are
+    /// remote, external, and not covered by the soft-delete query filter at all — before
+    /// this fix nothing anywhere ever deleted them, so every listing that ever expired left
+    /// its photos orphaned in cloud storage forever (docs/privacy/privacy-gaps.md, P1).
+    /// This phase now removes them for real (best-effort — a Cloudinary failure for one
+    /// image must not block the sweep or the rest of the images), even though the Property
+    /// row itself stays soft-deleted like everything else.
     ///
     /// No notification is sent here on purpose: the owner was already told at expiry, with
     /// the deadline stated. A second message whose only content is "it is now gone" arrives
     /// too late to be acted on.
     /// </remarks>
-    private static async Task<int> DeleteAfterGraceAsync(
+    private async Task<int> DeleteAfterGraceAsync(
         AppDbContext db,
+        IMediaStorageService mediaStorage,
         DateTime now,
         CancellationToken ct)
     {
         var graceCutoff = now.Subtract(ListingLifecyclePolicy.GracePeriodBeforeDeletion);
 
         var candidates = await db.Properties
+            .Include(p => p.Images)
             .Where(p =>
                 p.Status == PropertyStatus.Expired &&
                 p.ExpiresAt != null &&
@@ -246,12 +258,34 @@ public sealed class ListingExpiryHostedService : BackgroundService
             .Take(MaxItemsPerPhase)
             .ToListAsync(ct);
 
+        var imagePublicIds = candidates
+            .SelectMany(p => p.Images)
+            .Where(image => !string.IsNullOrWhiteSpace(image.PublicId))
+            .Select(image => image.PublicId!)
+            .ToList();
+
         foreach (var property in candidates)
         {
             property.MarkExpiredListingDeletedBySystem();
         }
 
         await db.SaveChangesAsync(ct);
+
+        foreach (var publicId in imagePublicIds)
+        {
+            try
+            {
+                await mediaStorage.DeleteImageAsync(publicId, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Failed to delete Cloudinary image {PublicId} during the listing-expiry sweep.",
+                    publicId);
+            }
+        }
+
         return candidates.Count;
     }
 

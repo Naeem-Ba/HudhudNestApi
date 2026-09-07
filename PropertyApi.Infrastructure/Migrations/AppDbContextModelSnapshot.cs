@@ -3355,6 +3355,45 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.ToTable("Transactions", (string)null);
                 });
 
+            modelBuilder.Entity("PropertyApi.Domain.Users.Entities.ConsentRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ConsentedAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("PolicyType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("PolicyVersion")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("WithdrawnAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConsentedAtUtc");
+
+                    b.HasIndex("UserId", "PolicyType");
+
+                    b.ToTable("ConsentRecords", (string)null);
+                });
+
             modelBuilder.Entity("PropertyApi.Domain.Users.Entities.UserAccount", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4418,6 +4457,15 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", null)
                         .WithMany()
                         .HasForeignKey("ReceiverId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Users.Entities.ConsentRecord", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

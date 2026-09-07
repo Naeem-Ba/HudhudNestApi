@@ -165,6 +165,10 @@ internal static class AuthInfrastructureRegistration
 
         services.AddScoped<IIdentityRoleService, IdentityRoleService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
+
+        // Off by default (AuditLogRetention:Enabled) until an operator explicitly sets a
+        // retention window — see AuditLogRetentionHostedService's own doc comment.
+        services.AddHostedService<AuditLogRetentionHostedService>();
     }
 
     private static void AddSocialAuthentication(
