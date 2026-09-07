@@ -29,7 +29,10 @@ internal static class RedisRateLimitingDefaults
             ["service-request-documents"] = Policy(20, TimeSpan.FromHours(1)),
             // Short-Stay Accommodation — same cadence as visits/public-search respectively.
             ["shortstay-booking"] = Policy(10, TimeSpan.FromHours(1)),
-            ["shortstay-search"] = Policy(120, TimeSpan.FromMinutes(1))
+            ["shortstay-search"] = Policy(120, TimeSpan.FromMinutes(1)),
+            // Phase 5 (Account Deletion): same cadence as auth-password-reset — see
+            // RateLimitingRegistration's in-memory fallback policy for the full rationale.
+            ["account-delete"] = Policy(3, TimeSpan.FromHours(1))
         };
 
     private static RedisFixedWindowRateLimitPolicyOptions Policy(

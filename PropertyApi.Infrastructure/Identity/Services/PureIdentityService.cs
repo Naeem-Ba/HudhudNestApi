@@ -58,4 +58,5 @@ public sealed class PureIdentityService : IIdentityCapabilityAdapter
     public Task<IdentityOperationResult> ConfirmEmailAsync(Guid id, string token, CancellationToken ct = default) => _credentials.ConfirmEmailAsync(id, token, ct);
     public Task<IdentityOperationResult> SetPhoneNumberAsync(Guid id, string? phone, DateTime at, CancellationToken ct = default) => _credentials.SetPhoneNumberAsync(id, phone, at, ct);
     public Task<IdentityOperationResult> SoftDeleteAsync(Guid id, DateTime at, CancellationToken ct = default) => _credentials.SoftDeleteAsync(id, at, ct);
+    public Task<IdentityOperationResult> AnonymizeCredentialsAsync(Guid id, string anonymizedEmail, DateTime utcNow, CancellationToken ct = default) => _credentials.AnonymizeCredentialsAsync(id, anonymizedEmail, utcNow, ct);
 }

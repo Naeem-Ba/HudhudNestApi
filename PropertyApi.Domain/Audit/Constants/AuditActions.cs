@@ -20,6 +20,7 @@ public static class AuditActions
     public const string PhoneVerificationRestricted = "PhoneVerificationRestricted";
     public const string PhoneNumberChangeRequested = "PhoneNumberChangeRequested";
     public const string PhoneNumberChanged = "PhoneNumberChanged";
+    public const string AccountDeletionCompleted = "AccountDeletionCompleted";
 
     // -- Admin dashboard: subscription lifecycle --------------------------
     public const string PlanActivatedByAdmin = "PlanActivatedByAdmin";

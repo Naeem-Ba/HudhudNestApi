@@ -250,16 +250,25 @@ public sealed class UsersController : ControllerBase
         return NoContent();
     }
 
+    // DELETE /api/Users/me — deletes the CALLER's own account only. UserId always comes from
+    // the authenticated principal's claims, never from the request body or URL, so this can
+    // never be pointed at another user's account (see DeleteUserCommand's doc comment).
     [HttpDelete("me")]
+    [EnableRateLimiting("account-delete")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> DeleteAccount(CancellationToken ct)
+    public async Task<IActionResult> DeleteAccount(
+        [FromBody] DeleteAccountRequest? dto,
+        CancellationToken ct)
     {
         if (!TryGetCurrentUserId(out var userId))
             return Unauthorized();
 
-        var result = await _sender.Send(new DeleteUserCommand(userId), ct);
+        var result = await _sender.Send(new DeleteUserCommand(
+            UserId: userId,
+            CurrentPassword: dto?.CurrentPassword,
+            IpAddress: GetClientIp()), ct);
 
         if (result.NotFound)
             return Unauthorized();
@@ -349,6 +358,12 @@ public sealed record UpdateProfileRequest(
 public sealed record ChangePasswordRequest(
     string CurrentPassword,
     string NewPassword);
+
+// CurrentPassword is optional at the model-binding level because a social-login-only
+// account has no password to submit at all — DeleteUserCommandHandler is what actually
+// requires it (returns CURRENT_PASSWORD_REQUIRED) when the identity has one.
+public sealed record DeleteAccountRequest(
+    string? CurrentPassword = null);
 
 public sealed record SelectPlanRequest(string Tier);
 

@@ -29,6 +29,15 @@ public sealed class UserDto
     public bool PhoneConfirmed { get; set; }
 
     /// <summary>
+    /// Whether this identity has a password set (false for a social-login-only account —
+    /// see IdentityAccountSnapshot.HasPassword). Not sensitive: a capability flag, not a
+    /// credential. Added for the account-deletion confirmation flow (Phase 5), which must
+    /// not ask a social-only user for a password they were never given — see
+    /// docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md §10.
+    /// </summary>
+    public bool HasPassword { get; set; }
+
+    /// <summary>
     /// null means the user has not explicitly chosen a plan yet — a distinct state
     /// from being on the free plan. See UserAccount.PlanId's doc comment.
     /// </summary>
