@@ -20,12 +20,23 @@ public sealed class UserAccountRepository : IUserAccountRepository
         _db = db;
     }
 
+    // BUG FIX: this query was `.AsNoTracking()`, which directly contradicted this class's own
+    // documented contract above ("The repository tracks changes only") — every caller that
+    // loads an account here (UpdateUserCommandHandler, DeleteUserCommandHandler,
+    // UploadUserAvatarCommandHandler, SelectPlanCommandHandler, RateUserCommandHandler,
+    // AddServiceReviewCommandHandler, AdminSubscriptionService, ...) mutates the returned
+    // entity in place and then calls IUnitOfWork.SaveChangesAsync(), expecting EF Core's change
+    // tracker to pick up the modification. With AsNoTracking, the entity is detached: no
+    // ChangeTracker entry is ever created, AppDbContext.SaveChangesAsync's
+    // `ChangeTracker.Entries()` sweep never sees it, and every one of those writes silently
+    // no-ops — confirmed empirically (see UserProfilePersistenceTests, a real HTTP round trip
+    // through PUT and DELETE /api/Users/me against a real Postgres database) for both profile
+    // updates and the GDPR account-deletion anonymization this repository now also backs.
     public async Task<UserAccount?> GetByIdAsync(
         Guid id,
         CancellationToken ct = default)
     {
         return await _db.UserAccounts
-            .AsNoTracking()
             .SingleOrDefaultAsync(
                 account => account.Id == id,
                 ct);

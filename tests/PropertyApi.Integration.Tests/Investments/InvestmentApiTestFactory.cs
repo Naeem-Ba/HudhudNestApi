@@ -20,6 +20,7 @@ using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.Users.Constants;
 using PropertyApi.Domain.Users.Entities;
 using PropertyApi.Infrastructure.Persistence;
+using PropertyApi.Infrastructure.Persistence.Seeds;
 
 namespace PropertyApi.Integration.Tests.Investments;
 
@@ -78,11 +79,24 @@ public sealed class InvestmentApiTestFactory : WebApplicationFactory<Program>
     /// <summary>Applies pending migrations (no-op if already current) and truncates every
     /// mutable table so each test class starts from a clean, isolated slate — never touches a
     /// database this factory did not itself connect to via the injected connection string.</summary>
+    ///
+    /// <remarks>
+    /// Accessing <see cref="Services"/> above builds and starts the WebApplicationFactory host,
+    /// which runs <c>Program.cs</c>'s best-effort <c>SeedReferenceDataAsync()</c> (roles,
+    /// governorates, etc.) *before* the <see cref="AppDbContext.Database.MigrateAsync"/> call
+    /// below has created any schema — against a brand-new database that first-run seed attempt
+    /// fails (tables don't exist yet) and is swallowed by design (it must not block the app from
+    /// serving requests). Re-running the same idempotent seeder here, after migrations, closes
+    /// that startup race so role-dependent fixtures (e.g. <see cref="SeedUserAsync"/> with an
+    /// "ADMIN" role) don't depend on seeding having already succeeded by luck of test ordering
+    /// against a shared database.
+    /// </remarks>
     public async Task PrepareDatabaseAsync()
     {
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.MigrateAsync();
+        await DatabaseSeeder.SeedAsync(scope.ServiceProvider);
         await TruncateMutableTablesAsync(db);
     }
 
