@@ -6,14 +6,16 @@ using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.Reviews.Commands.RateUser;
 using PropertyApi.Application.Reviews.Queries.GetRatingEligibility;
 using PropertyApi.Application.Reviews.Queries.GetUserRatings;
+using PropertyApi.Application.Users.Commands.CancelAccountDeletion;
 using PropertyApi.Application.Users.Commands.ChangePassword;
-using PropertyApi.Application.Users.Commands.DeleteUser;
 using PropertyApi.Application.Users.Commands.RecordConsent;
+using PropertyApi.Application.Users.Commands.RequestDeleteUser;
 using PropertyApi.Application.Users.Commands.SelectPlan;
 using PropertyApi.Application.Users.Commands.UpdateUser;
 using PropertyApi.Application.Users.Commands.UploadUserAvatar;
 using PropertyApi.Application.Users.Commands.WithdrawConsent;
 using PropertyApi.Application.Users.DTOs;
+using PropertyApi.Application.Users.Queries.ExportMyData;
 using PropertyApi.Application.Users.Queries.GetCurrentUser;
 using PropertyApi.Application.Users.Queries.GetMyConsents;
 using PropertyApi.Application.Users.Queries.GetUserById;
@@ -250,12 +252,21 @@ public sealed class UsersController : ControllerBase
         return NoContent();
     }
 
-    // DELETE /api/Users/me — deletes the CALLER's own account only. UserId always comes from
-    // the authenticated principal's claims, never from the request body or URL, so this can
-    // never be pointed at another user's account (see DeleteUserCommand's doc comment).
+    // DELETE /api/Users/me — SCHEDULES deletion of the CALLER's own account (Finding F7,
+    // docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md): re-authenticates immediately, then starts
+    // a cancellable delay window rather than anonymizing synchronously — the account remains
+    // fully usable until AccountDeletionSweepHostedService executes the request once its
+    // ScheduledFor date arrives. UserId always comes from the authenticated principal's claims,
+    // never from the request body or URL, so this can never be pointed at another user's
+    // account (see RequestDeleteUserCommand's doc comment).
+    //
+    // BREAKING CHANGE from the previous immediate-deletion behavior: this used to return 204 on
+    // an already-completed deletion; it now returns 202 with the scheduled date, since the
+    // account is not yet anonymized when this call returns. Any client built against the old
+    // contract needs updating.
     [HttpDelete("me")]
     [EnableRateLimiting("account-delete")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> DeleteAccount(
@@ -265,10 +276,9 @@ public sealed class UsersController : ControllerBase
         if (!TryGetCurrentUserId(out var userId))
             return Unauthorized();
 
-        var result = await _sender.Send(new DeleteUserCommand(
+        var result = await _sender.Send(new RequestDeleteUserCommand(
             UserId: userId,
-            CurrentPassword: dto?.CurrentPassword,
-            IpAddress: GetClientIp()), ct);
+            CurrentPassword: dto?.CurrentPassword), ct);
 
         if (result.NotFound)
             return Unauthorized();
@@ -276,7 +286,58 @@ public sealed class UsersController : ControllerBase
         if (!result.Success)
             return BadRequest(new { errors = result.Errors });
 
+        return Accepted(new { scheduledFor = result.ScheduledFor });
+    }
+
+    // POST /api/Users/me/deletion/cancel — cancels a pending deletion request made via
+    // DELETE /api/Users/me, any time before its delay window elapses (Finding F7). No
+    // re-authentication: an authenticated session is already at least as strong a bar as the
+    // one that started the request, and requiring the password again here would make backing
+    // out of a deletion harder than starting one.
+    [HttpPost("me/deletion/cancel")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CancelAccountDeletion(CancellationToken ct)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var result = await _sender.Send(new CancelAccountDeletionCommand(userId), ct);
+
+        if (result.NotFound)
+            return Unauthorized();
+
+        if (result.NoPendingRequest)
+            return NotFound();
+
         return NoContent();
+    }
+
+    // GET /api/Users/me/export — self-service data export (Finding F7,
+    // docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md). UserId always comes from the
+    // authenticated principal, never from a route/query parameter, so this can never return
+    // another user's data (see AccountDataExportRepository's own doc comment). Returned
+    // directly as the JSON response body -- see AccountDataExportDto for what is included and
+    // deliberately excluded.
+    [HttpGet("me/export")]
+    [EnableRateLimiting("data-export")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ExportMyData(CancellationToken ct)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var export = await _sender.Send(new ExportMyDataQuery(userId), ct);
+
+        if (export is null)
+            return Unauthorized();
+
+        Response.Headers.ContentDisposition =
+            $"attachment; filename=\"propertyapi-account-export-{DateTime.UtcNow:yyyyMMdd}.json\"";
+
+        return Ok(export);
     }
 
     // POST /api/Users/me/consents — records that the caller just explicitly agreed to one

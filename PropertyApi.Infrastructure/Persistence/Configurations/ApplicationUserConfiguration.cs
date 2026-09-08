@@ -12,6 +12,14 @@ public sealed class ApplicationUserConfiguration
     {
         builder.ToTable("Users");
 
+        // Case-sensitive, on the raw column -- kept for backward compatibility, but this is
+        // NOT what protects against a case-variant duplicate (e.g. "user@example.com" vs
+        // "USER@example.com"). That real protection is the functional unique index
+        // IX_Users_Email_Lower on lower("Email"), added by raw SQL in the
+        // AddEmailLowerCaseUniqueIndex migration (Finding F3,
+        // docs/DATABASE-PRODUCTION-READINESS.md) -- EF Core's fluent API has no first-class way
+        // to declare a Postgres expression index, so it isn't modeled here; don't let the two
+        // drift apart without updating both.
         builder.HasIndex(user => user.Email)
             .IsUnique();
 

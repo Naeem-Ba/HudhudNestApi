@@ -82,6 +82,7 @@ public sealed class GetCurrentUserQueryHandler
             PlanTier = planTier,
             PlanSelectedAt = account.PlanSelectedAt,
             CreatedAt = account.CreatedAt,
+            DeletionScheduledFor = account.DeletionScheduledFor,
             Roles = roles.ToList().AsReadOnly()
         };
     }

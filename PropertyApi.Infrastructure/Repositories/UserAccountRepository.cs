@@ -50,4 +50,18 @@ public sealed class UserAccountRepository : IUserAccountRepository
 
         await _db.UserAccounts.AddAsync(account, ct);
     }
+
+    public async Task<IReadOnlyList<Guid>> GetDueForDeletionAsync(
+        DateTime asOfUtc,
+        int batchSize,
+        CancellationToken ct = default)
+    {
+        return await _db.UserAccounts
+            .AsNoTracking()
+            .Where(a => !a.IsDeleted && a.DeletionScheduledFor != null && a.DeletionScheduledFor <= asOfUtc)
+            .OrderBy(a => a.DeletionScheduledFor)
+            .Take(batchSize)
+            .Select(a => a.Id)
+            .ToListAsync(ct);
+    }
 }

@@ -235,6 +235,21 @@ public static class RateLimitingRegistration
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                         QueueLimit = 0
                     }));
+
+            // Finding F7 (docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md): self-service data
+            // export. A heavier read than most /me endpoints (assembles the account's full
+            // owned-data graph), so capped lower than an ordinary authenticated GET but not as
+            // tightly as account-delete -- there is no irreversible action here to brute-force.
+            options.AddPolicy("data-export", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 5,
+                        Window = TimeSpan.FromHours(24),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
         });
 
         return services;
