@@ -61,7 +61,10 @@ x-api-environment: &api-environment
 
 services:
   postgres:
-    image: postgis/postgis:16-3.4
+    # Must match ci/postgres-version.env (production runs PostgreSQL 17 -- see
+    # that file's comment). scripts/database/check-postgres-version-consistency.sh
+    # fails CI if this line ever drifts from that canonical value.
+    image: postgis/postgis:17-3.5
     command:
       - postgres
       - -c

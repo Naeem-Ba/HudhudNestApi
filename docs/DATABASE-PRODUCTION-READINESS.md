@@ -17,25 +17,65 @@ not PASS.
 
 ---
 
+## Remediation update — 2026-09-07/08
+
+Findings F1, F2, F3, F4, and F7 below were remediated in a follow-up session, in that order,
+each with its own migration and live-Postgres tests (a disposable `postgis/postgis:17-3.5`
+container, matching F1's own fix). Each finding's original section is left intact as the
+historical record of what the audit found; a **RESOLUTION** block was added directly under each
+one describing the fix, the exact evidence, and what remains open. Summary:
+
+- **F1 (Postgres version drift)** — RESOLVED. `ci.yml`, `production-gate.yml`, both compose
+  files, and the recovery-drill compose file all now pin `postgis/postgis:17-3.5` from one
+  canonical file (`ci/postgres-version.env`), enforced by a new CI step
+  (`scripts/database/check-postgres-version-consistency.sh`).
+- **F2 (UserAccounts soft-delete boundary)** — RESOLVED, with a deliberate deviation from the
+  literal "Global Query Filter" wording — see its RESOLUTION block for why a blanket EF Core
+  filter was rejected as unsafe here, and what was done instead.
+- **F3 (email case-insensitive uniqueness)** — RESOLVED via a real, guarded database constraint.
+- **F4 (numeric CHECK constraints)** — RESOLVED for Area/Rooms/ColdRent/WarmRent/PurchasePrice,
+  with a scope correction from the original plan — see its RESOLUTION block. Rating intentionally
+  left unconstrained pending an owner decision, per instruction.
+- **F7 (account deletion delay window + data export)** — RESOLVED on top of the account-deletion
+  work this branch had already shipped separately (`DeleteUserCommandHandler`,
+  `UserAccount.Anonymize()` — see `docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md`), which this
+  update does not replace.
+
+---
+
 ## 1. Executive Summary
 
-**PASS WITH WARNINGS.**
+**PASS WITH WARNINGS** (updated 2026-09-07/08 — was also PASS WITH WARNINGS at the original
+2026-09-04 audit; see the remediation note below for what changed).
 
 The schema itself — entity design, PostGIS, image storage, money types, concurrency tokens,
 delete behavior, migration history, and the backup/restore engineering — is unusually mature
 for a project at this stage; this is not a first-pass database. Migration reproducibility was
 verified live this session. No BLOCKER was found in the schema or migrations.
 
-Three findings keep this from a clean PASS, none of them BLOCKER-severity today, but two are
-HIGH and should be closed before real user data accumulates:
+**Update**: the three findings originally listed here (F1 HIGH, F2 HIGH, F3 MEDIUM), plus F4 and
+F7 from further down this document, have all been remediated in a follow-up session — see
+"Remediation update — 2026-09-07/08" directly below and each finding's own RESOLUTION block for
+full evidence. Original text preserved for the historical record:
 
-- **HIGH** — the CI build and the Production Deployment Gate test against PostgreSQL
-  16/PostGIS 3.4, while production runs PostgreSQL 17 (§40, §42, Finding F1).
-- **HIGH** — no database-level protection makes soft-deleted users disappear from the
+- ~~**HIGH** — the CI build and the Production Deployment Gate test against PostgreSQL
+  16/PostGIS 3.4, while production runs PostgreSQL 17 (§40, §42, Finding F1).~~ RESOLVED.
+- ~~**HIGH** — no database-level protection makes soft-deleted users disappear from the
   business-profile table (`UserAccounts`) that `Property.Owner`, reviews, and favorites
-  actually reference — only the paired auth table (`Users`) is filtered (§25, §32, Finding F2).
-- **MEDIUM** — email case-insensitive uniqueness is not enforced by a database constraint;
-  it currently holds only as a side effect of one implementation detail (§6, Finding F3).
+  actually reference — only the paired auth table (`Users`) is filtered (§25, §32, Finding F2).~~
+  RESOLVED (as a scoped fix, not the literal global-filter mechanism originally suggested — see
+  F2's RESOLUTION block for a hazard that mechanism would have caused).
+- ~~**MEDIUM** — email case-insensitive uniqueness is not enforced by a database constraint;
+  it currently holds only as a side effect of one implementation detail (§6, Finding F3).~~
+  RESOLVED.
+
+This document's status stays **PASS WITH WARNINGS** rather than a clean PASS because two
+categories of warning are unchanged from the original audit and were explicitly out of this
+remediation's scope: (1) the backup/restore program's production-storage drill and Render
+deploy-gate wiring, which the project's own checklist already lists as open and which this
+report does not have credentials to close (see §13); and (2) `PropertyReview.Rating`'s numeric
+range, deliberately left unconstrained at the database level pending an explicit owner decision
+on what range to allow, per instruction.
 
 Backup/restore engineering is extensive and a local drill passed with RPO 1.72 min / RTO
 4.57 min, but the project's own checklist still lists the production-storage drill, protected
@@ -191,6 +231,43 @@ add a unique index on `NormalizedEmail` (filtered to exclude soft-deleted rows p
 `IsDeleted` discussion), or move to `RequireUniqueEmail = true` with a corrective migration
 that resolves any existing case-variant duplicates first.
 
+### RESOLUTION (2026-09-07/08)
+
+Implemented as a functional unique index rather than either recommended option above, after
+finding both had a real problem: a plain index on `NormalizedEmail` still wouldn't match this
+codebase's actual stored casing convention on its own, and `RequireUniqueEmail` was confirmed to
+be a no-op regardless of its value — every account here is created directly through
+`IdentityAccountCreator.cs`, bypassing `UserManager.CreateAsync` (the only code path that flag
+affects) entirely.
+
+[`AddEmailLowerCaseUniqueIndex`](../PropertyApi.Infrastructure/Migrations/20260907201638_AddEmailLowerCaseUniqueIndex.cs)
+adds `IX_Users_Email_Lower`, a genuine `CREATE UNIQUE INDEX ... ON "Users" (lower("Email"))` — a
+real constraint on `Email` itself, not on `UserName`. Guarded: the migration first runs a
+`DO $$ ... RAISE EXCEPTION ...` pre-check for existing case-variant duplicate groups and aborts
+(no row touched) if any are found, rather than silently merging or deleting an account — the
+count is logged, not the values, so a failure doesn't leak PII into migration logs. The
+pre-existing `IX_Users_Email` is left in place (an unrelated, separately-reviewable decision).
+`PersistenceInfrastructureRegistration.cs:52`'s `RequireUniqueEmail = false` was **left
+unchanged** for the reason above — flipping it would not have changed any actual behavior in
+this codebase.
+
+Live-verified against a real Postgres 17 database: `test@example.com` / `TEST@example.com` /
+`Test@Example.Com` are rejected as the same account **even when inserted with independently-
+chosen, non-matching `UserName` values** — the exact scenario this finding proved was
+previously unprotected
+([EmailUniquenessPostgresTests.cs](../tests/PropertyApi.Integration.Tests/Auth/EmailUniquenessPostgresTests.cs)).
+A second, dedicated test class
+([EmailUniquenessMigrationGuardTests.cs](../tests/PropertyApi.Integration.Tests/Auth/EmailUniquenessMigrationGuardTests.cs))
+proves the migration's guard itself: seeded a real case-variant duplicate directly via SQL on a
+disposable database migrated to one step short of this one, then confirmed the migration raises,
+leaves nothing applied, and creates no index — and, separately, that it applies and creates the
+index cleanly when no duplicate exists. All 7 tests across both files pass.
+
+`scripts/database/audit-f4-numeric-constraints.sql`'s Finding F4 sibling note applies here too:
+**production's actual data was not checked for existing case-variant duplicates in this
+session** (no credentials) — the migration's own guard is the safety net for that environment,
+and per its design it will refuse to apply rather than silently corrupt data if one exists.
+
 ## 7. Password Security
 
 `Users.PasswordHash` is Identity's standard hash (PBKDF2 via `PasswordHasher<TUser>` unless
@@ -332,6 +409,44 @@ applied — schema change requiring migration + review):
 `CHECK ("Rating" BETWEEN 1 AND 5)`, and non-negative checks on the five Property money columns
 and `Transaction.Amount`.
 
+### RESOLUTION (2026-09-07/08)
+
+**Scope correction found during implementation**: the original recommendation above assumed
+`Area` could safely become `NOT NULL`. It cannot —
+`CreatePropertyCommandValidator.cs` only requires `Area` for `Land`-category listings; every
+other type leaves it optional today, by design (in-code comment: *"every other field...is
+already optional and needs no new rule"*). Confirmed with the project owner: `Area` is treated
+the same as `Rooms`/the price columns — nullable, with the constraint only ruling out a
+zero/negative *value when present*, not requiring one.
+
+Applied via [`AddPropertyNumericConstraints`](../PropertyApi.Infrastructure/Migrations/20260907210822_AddPropertyNumericConstraints.cs)
+(scaffolded from a matching `HasCheckConstraint` declaration in
+[PropertyConfiguration.cs](../PropertyApi.Infrastructure/Persistence/Configurations/PropertyConfiguration.cs)
+so the EF model and schema cannot drift apart): five constraints, each shaped
+`col IS NULL OR col > 0` —
+`CK_Properties_Area_PositiveOrNull`, `CK_Properties_Rooms_PositiveOrNull`,
+`CK_Properties_ColdRent_PositiveOrNull`, `CK_Properties_WarmRent_PositiveOrNull`,
+`CK_Properties_PurchasePrice_PositiveOrNull`.
+
+Live-verified this session: applied cleanly to a fresh `postgis/postgis:17-3.5` database
+(confirmed present via `pg_constraint`); 21 new integration tests
+([PropertyNumericConstraintsPostgresTests.cs](../tests/PropertyApi.Integration.Tests/Listings/PropertyNumericConstraintsPostgresTests.cs))
+prove each column rejects `0`/negative via direct `SaveChangesAsync` (bypassing domain
+validation, the same technique that originally proved the gap) while still accepting `NULL` and
+a positive value; all pass.
+
+`scripts/database/audit-f4-numeric-constraints.sql` (new, read-only) reports how many existing
+rows would violate each constraint — **run this against Staging/Production before deploying this
+migration there**; it was not run against production data in this session (no credentials).
+Because Postgres refuses to add a CHECK constraint any existing row already violates, the
+migration itself fails atomically (no row modified) if that audit would have shown a nonzero
+count — this is a safety property, not a defect, per the instruction not to silently correct or
+delete existing data.
+
+**Rating is still intentionally unconstrained** — no CHECK was added, per the explicit
+instruction not to finalize its range without an owner decision. `PropertyReview.Create`'s
+domain-level `1..5` enforcement is unchanged and remains the only guard.
+
 ## Finding F2 (HIGH) — Soft-delete boundary does not cover the table most relationships reference
 
 - `ApplicationUser` (`Users`) has `IsDeleted`/`DeletedAt` and a global query filter:
@@ -361,6 +476,54 @@ Related, same root cause: the unique indexes on `Users.Email` and `Users.Normali
 carry no `IsDeleted`-aware filter either, so a soft-deleted/banned account permanently occupies
 its email and phone slot — nobody, including the same real person, can ever register again with
 that email or phone. This may be an intended anti-abuse measure; it is flagged, not changed.
+
+### RESOLUTION (2026-09-07/08)
+
+`UserAccounts.IsDeleted` added
+([`AddUserAccountsIsDeleted`](../PropertyApi.Infrastructure/Migrations/20260907195225_AddUserAccountsIsDeleted.cs),
+additive, default `false`), set by `UserAccount.Anonymize()` — the same method
+`DeleteUserCommandHandler` already called, so no new call site was needed in the deletion flow.
+
+**A real hazard was found and is why this is *not* a blanket `HasQueryFilter`, despite the
+original recommendation's literal wording**: `Property.OwnerId`, `PropertyReview.ReviewerId`,
+`VisitRequest.RequesterId`, and `Transaction.PayerId`/`ReceiverId` are all non-nullable
+("required") FKs into `UserAccounts`, and `PropertyRepository.cs` already does
+`.Include(p => p.Owner)` in its main listing/detail queries. EF Core's own documented behavior
+turns a global filter on the target of a required relationship into an `INNER JOIN` — confirmed
+independently by EF Core itself during this work: running `dotnet ef migrations add` emitted
+*"Entity 'ShortStayListing' has a global query filter defined and is the required end of a
+relationship..."* for three **pre-existing, unrelated** filters already in this schema
+(`ShortStayListing`↔`RoomType`, `Amenity`↔`ShortStayListingAmenity`,
+`ShortStayListing`↔`ShortStayListingPhoto`) — independent, live proof that this exact hazard is
+real in this codebase, not a hypothetical. A blanket filter on `UserAccounts` would have silently
+dropped a deleted user's *properties and reviews from every listing*, reversing the
+already-shipped, tested retention policy in `docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md`
+("properties/reviews are retained, owner shows as Deleted User").
+
+Resolved (confirmed with the project owner) as a **scoped filter**: `IsDeleted` is applied
+explicitly only where a live gap was actually found —
+[`AgencyRepository.GetMembersAsync`/`CountMembersAsync`](../PropertyApi.Infrastructure/Repositories/AgencyRepository.cs)
+now add `&& !u.IsDeleted`, since neither previously excluded a deleted former member from an
+agency's member list/count. `GetUserByIdQueryHandler`/`GetUserProfileQueryHandler` needed no
+change — both already return null/404 for a deleted user by checking the paired
+`ApplicationUser.IsDeleted` first (verified by reading both handlers end to end).
+`AdminUserQueryRepository` also needed no change — it deliberately keeps showing deleted
+accounts to admins (`AccountStatus = "Disabled"`), which is correct, not a gap. A repo-wide
+`grep -rn "\.UserAccounts\b"` sweep across `PropertyApi.Infrastructure`/`PropertyApi.Application`
+found no other direct query site.
+
+Live-verified: two new integration tests
+([AgencyMembershipDeletedUserTests.cs](../tests/PropertyApi.Integration.Tests/Users/AgencyMembershipDeletedUserTests.cs))
+against a real Postgres database — a deleted member is excluded from both the list and the
+count; active members are unaffected — both pass. The existing
+`DeleteUserCommandHandlerTests` happy-path test was extended with `Assert.True(account.IsDeleted)`
+(still passes, 12/12).
+
+**The banned-account and email/phone-slot-reuse questions from the original finding are
+unchanged and still open** — no code path in this repository currently sets `Users.IsBanned`
+(confirmed by `grep`: only read, never assigned, outside migrations/tests), so that part of the
+finding is dormant rather than resolved; if a ban feature is ever built, it should reuse this
+same `UserAccounts.IsDeleted` mechanism rather than inventing a parallel one.
 
 ## Finding F1 (HIGH) — PostgreSQL major-version drift across this project's own environments
 
@@ -400,6 +563,35 @@ itself, or by the recovery drill (which is not on the deploy-blocking path).
 recovery-drill fix already established about production, and confirm the actual Staging/
 Production versions with the hosting dashboard rather than relying on this document.
 
+### RESOLUTION (2026-09-07)
+
+Done exactly as recommended, plus a drift-prevention control. `ci.yml`, `production-gate.yml`,
+`ci/docker-compose.production-gate.yml`, and `performance/docker-compose.performance.yml` all
+now pin `postgis/postgis:17-3.5`. A new canonical file,
+[`ci/postgres-version.env`](../ci/postgres-version.env), is the single source of truth (mirrors
+the existing `DOTNET_VERSION` env-var-pin convention already in `ci.yml`, rather than inventing a
+new mechanism); a new dependency-free bash script,
+[`scripts/database/check-postgres-version-consistency.sh`](../scripts/database/check-postgres-version-consistency.sh)
+(no `python3`, unlike `analyze-migrations.sh` — confirmed `python3` is still not installed on
+this machine), scans every workflow/compose file for `postgis/postgis:` references and fails if
+any differ from the canonical value. Wired into `ci.yml` as the very first step. Verified this
+session: passes against the corrected repository (`6/6` references match); deliberately
+reintroducing a stale `16-3.4` reference and re-running the script produces a clear failure
+naming the exact file/line, then passes again once reverted.
+
+The full existing test suite (`PropertyApi.Application.Tests`, `PropertyApi.Auth.Tests`,
+`PropertyApi.Architecture.Tests`, and the Postgres-backed parts of
+`PropertyApi.Integration.Tests`) was run against a disposable `postgis/postgis:17-3.5` container
+as part of this and the following findings' work — no PostGIS 3.4→3.5 or Postgres 16→17
+behavior difference surfaced.
+
+**Still NOT VERIFIED** (unchanged — no credentials in this session): production's actual
+Postgres major version was not re-confirmed against a live hosting dashboard; this fix trusts
+the prior session's commit-message evidence (`fcd50b5`). Whether Render's managed Postgres
+offering (if that is what production actually runs, rather than a container from this image) is
+even on major version 17 is a provider-configuration fact this repository's files cannot prove
+either way.
+
 ## Finding F5 (LOW) — Migration-risk baseline documentation is behind the enforced gate
 
 `ci/migration-risk-baseline.json` (the file `scripts/database/analyze-migrations.sh` actually
@@ -420,6 +612,21 @@ without a baseline entry (`analyze-migrations.sh:44`: only non-`ADDITIVE` migrat
 one). This is a documentation/audit-trail completeness gap, not a control failure — the
 markdown table in `database-migration-recovery-runbook.md` is even further behind (stops at
 2026-07-16) and should be refreshed together with the JSON baseline.
+
+### Update (2026-09-07/08)
+
+`ci/migration-risk-baseline.json` now also carries entries for the four migrations added while
+resolving F1–F4/F7 (`AddUserAccountsIsDeleted` — ADDITIVE; `AddEmailLowerCaseUniqueIndex` —
+HIGH_RISK, since it uses raw `migrationBuilder.Sql(...)` for its guard, and genuinely does
+require a baseline entry for the gate to pass, unlike the two migrations this finding originally
+covered; `AddPropertyNumericConstraints` — ADDITIVE; `AddUserAccountDeletionSchedule` —
+ADDITIVE). The original gap (`AddUserAccountSubscriptionLifecycle`,
+`AddInvestmentDiscoveryModule`, and — found newly present on this branch since the original
+audit — `AddConsentRecords`, `AddMarketingLeadsAndOffers`, `AddMarketingSurveysAndEvents`, from
+other, parallel sessions working on this same repository) is **not** closed by this update; it
+was out of scope for this remediation pass. The JSON file remains the authoritative source; the
+markdown table in `database-migration-recovery-runbook.md` was not refreshed either and is now
+further behind still.
 
 ## Finding F6 (LOW-MEDIUM) — No `EnableRetryOnFailure`
 
@@ -442,6 +649,83 @@ domain methods on several entities), and Data-Protection-encrypted storage for p
 tax-number fields (§14). What does not appear to exist: a self-service "delete my account" or
 "export my data" endpoint. This is recorded as a **technical-capability gap**, not a legal
 compliance claim, per the instruction in scope for this audit.
+
+### RESOLUTION (2026-09-07/08)
+
+**Superseded in part before this remediation started**: a separate session on this same branch
+had already shipped real, tested account deletion (`DeleteUserCommandHandler`,
+`UserAccount.Anonymize()`, re-authentication, credential/token cleanup, Cloudinary cleanup — see
+`docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md` for that work's own full readiness assessment).
+That closed the "no deletion path at all" gap this finding originally described, but the newly
+approved policy asked for two things that implementation didn't have: a cancellable delay window
+before deletion executes, and a data-export endpoint. Both were added on top of the existing
+work, without modifying its anonymization logic:
+
+- **Delay window**: `UserAccount.RequestDeletion`/`CancelDeletionRequest`/
+  `HasPendingDeletionRequest` (new domain methods) plus two new nullable columns
+  (`DeletionRequestedAt`/`DeletionScheduledFor`, migration
+  [`AddUserAccountDeletionSchedule`](../PropertyApi.Infrastructure/Migrations/20260907211928_AddUserAccountDeletionSchedule.cs)).
+  `DELETE /api/Users/me` now calls a new `RequestDeleteUserCommandHandler` (re-authenticates,
+  then schedules) instead of anonymizing synchronously — **this changes the endpoint's response
+  from `204 No Content` to `202 Accepted` with `{ scheduledFor }`, a breaking contract change for
+  the existing Angular client**, which is outside this session's scope (a separate repository)
+  and is listed under Manual Actions. `DeleteUserCommandHandler.Handle` (the original,
+  fully-tested immediate path) was extended, not replaced: its transaction body was extracted
+  into a shared `AnonymizeAndFinalizeAsync` method, now also reachable via a new
+  `ExecuteScheduledDeletionAsync(userId, ct)` entry point that skips re-authentication — the
+  original 12 `DeleteUserCommandHandlerTests` pass unchanged (same constructor, same `Handle`
+  behavior). A new `AccountDeletionSweepHostedService` (mirrors `AuditLogRetentionHostedService`'s
+  shape: `IServiceScopeFactory` + `PeriodicTimer` + Postgres advisory lock) executes matured
+  requests hourly. `POST /api/Users/me/deletion/cancel` (new) clears a pending request, no
+  re-authentication required (an authenticated session is already at least as strong a bar as
+  the one that started the request). The delay is configurable
+  (`AccountDeletion:DelayDays`, default 30) via a new `IAccountDeletionSettings` abstraction
+  (mirrors `IJwtTokenSettings`'s Application/Infrastructure boundary pattern) rather than a
+  hardcoded value.
+
+  **Assumption applied, not decided unilaterally**: every self-service deletion now goes through
+  the delay window with no immediate-deletion bypass exposed by the API. If the business wants an
+  admin-forced immediate path later, `DeleteUserCommandHandler.Handle` still exists and is still
+  fully tested — it is simply no longer wired to a controller action.
+
+  Live-verified against a real Postgres database: a due request executes (anonymized,
+  soft-deleted) and a not-yet-due request is left completely untouched by the same sweep run; a
+  cancelled request is never picked up even though its (cleared) schedule was once in the past
+  ([AccountDeletionSweepTests.cs](../tests/PropertyApi.Integration.Tests/Users/AccountDeletionSweepTests.cs),
+  2/2 pass, exercised through the real DI container/`Program` host). Seven new unit tests cover
+  the domain methods
+  ([UserAccountDeletionScheduleTests.cs](../tests/PropertyApi.Application.Tests/Users/UserAccountDeletionScheduleTests.cs))
+  and the two new handlers' re-authentication/scheduling/cancellation branches (19 tests total
+  across `RequestDeleteUserCommandHandlerTests.cs`/`CancelAccountDeletionCommandHandlerTests.cs`).
+
+- **JSON export**: new `GET /api/Users/me/export` (`[Authorize]`, `userId` always from the
+  authenticated principal, same IDOR-safe-by-construction pattern as every other `/me` endpoint),
+  backed by a new `IAccountDataExportRepository`/`ExportMyDataQueryHandler` that assembles one
+  `AccountDataExportDto` field by field — profile, owned properties, reviews written, favorites,
+  visit requests made, consent records, plan tier, ratings given/received. Explicitly excludes
+  (by construction, not by generic-serializer omission): `PasswordHash`, `SecurityStamp`,
+  `RefreshTokens`, `PhoneNumberLookupHash`, `DataProtectionKeys`, any other user's data.
+  Rate-limited (`data-export`, 5/24h, registered in both the in-memory and Redis-backed
+  limiters). Audit-logged (`AuditActions.DataExportRequested` — who/when, not the payload
+  content, matching this codebase's existing PII-logging discipline).
+
+  **Delivery choice, flagged rather than silently decided**: the JSON is returned directly as
+  the HTTP response body (`Content-Disposition: attachment`), not written to a stored file
+  behind a short-lived download link — this repository has no existing arbitrary-file-storage
+  mechanism (Cloudinary is image-specific), and building one solely for this endpoint was judged
+  out of proportion. The approved policy's "short-lived link" requirement is conditional on
+  choosing link-based delivery, which this implementation does not use.
+
+  Live-verified with a real two-user HTTP test against a real Postgres database
+  ([AccountDataExportTests.cs](../tests/PropertyApi.Integration.Tests/Users/AccountDataExportTests.cs)):
+  the export contains the caller's own property, and the raw JSON response body contains neither
+  the string `"PasswordHash"`/`"SecurityStamp"` nor a second seeded user's email or property
+  title — the actual IDOR proof, not just a code-inspection argument. Both tests pass.
+
+- **Review/message retention with anonymized attribution** — already correctly decided by the
+  pre-existing `Anonymize()` work (reviews/messages are retained, not deleted; the author's name
+  renders as "Deleted User" via the shared, now-`IsDeleted`-flagged `UserAccounts` row). No
+  further decision was needed here.
 
 ## 24-25. Referential Integrity / Delete Behavior
 
@@ -799,6 +1083,9 @@ destroyed); recorded as **present and credible from source**, not re-executed he
 
 ## Final Database Readiness Matrix
 
+*Updated 2026-09-07/08 to reflect the F1–F4/F7 remediation. Original per-area statuses are
+preserved in each numbered section above; this table reflects the current, post-fix state.*
+
 | Area | Status | Severity | Evidence | Action |
 |---|---|---|---|---|
 | Users | PASS | — | §5 | — |
@@ -807,55 +1094,75 @@ destroyed); recorded as **present and credible from source**, not re-executed he
 | Verification | PASS | — | §9 | — |
 | Password Reset | PASS (Identity-standard) | — | §9 | — |
 | Sessions | NOT IMPLEMENTED | INFO | §10 | None — not a gap |
-| Properties | PASS w/ warning | MEDIUM | §12-19, Finding F4 | Add numeric CHECK constraints |
+| Properties | PASS | — | §12-19, Finding F4 RESOLVED | — |
 | Property Types | PASS | — | §15 | — |
 | Status | PASS | — | §14 | — |
 | Location/PostGIS | PASS (strength) | — | §20-21, live-verified | — |
-| Price | PASS w/ warning | MEDIUM | §16, Finding F4 | Add `>= 0` CHECK constraints |
+| Price | PASS | — | §16, Finding F4 RESOLVED — `CK_Properties_{ColdRent,WarmRent,PurchasePrice}_PositiveOrNull` | — |
 | Currency | PASS | — | §17 | — |
-| Area | PASS w/ warning | MEDIUM | §18, Finding F4 | Add `> 0` CHECK constraint |
-| Rooms | PASS w/ warning | MEDIUM | §19, Finding F4 | Add `>= 0` CHECK constraint |
+| Area | PASS | — | §18, Finding F4 RESOLVED — `CK_Properties_Area_PositiveOrNull` (nullable, per corrected scope) | — |
+| Rooms | PASS | — | §19, Finding F4 RESOLVED — `CK_Properties_Rooms_PositiveOrNull` | — |
 | Images | PASS | — | §22-23 | — |
 | Relationships | PASS (strength) | — | §24-25 | — |
-| Constraints | WARNING | MEDIUM | Finding F4 | Add CHECK constraints (Rooms/Area/Price/Rating/Amount) |
+| Constraints | PASS w/ note | LOW | Finding F4 RESOLVED for Area/Rooms/Price; Rating deliberately left unconstrained pending owner decision | Decide Rating's numeric range |
 | Indexes | PASS | — | §28-29 | — |
 | Queries | PASS | — | §28-31, existing CI gate | — |
-| Migrations | PASS (live-verified) w/ warnings | LOW/HIGH | §40-42, Findings F1, F5 | Fix Postgres version pins (F1); refresh baseline docs (F5) |
-| Backup | PASS-implemented, NOT VERIFIED-in-production | — | §43-44 | Close remaining checklist items (project's own list) |
-| Restore | PASS-local, NOT VERIFIED-production-storage | — | §44 | Run drill against real production storage |
-| Security | PASS w/ gaps | MEDIUM | §45-46, Findings F2, F3 | Fix soft-delete boundary (F2); email uniqueness (F3) |
-| Data Retention | GAP | MEDIUM | §47, Finding F7 | Decide/build account-deletion & export capability |
-| Integration Tests | PASS | — | §56-57 | — |
+| Migrations | PASS (live-verified) w/ note | LOW | §40-42, Finding F1 RESOLVED; Finding F5 partially updated | Refresh baseline/markdown docs for migrations from other parallel sessions |
+| Backup | PASS-implemented, NOT VERIFIED-in-production | — | §43-44 | Close remaining checklist items (project's own list) — unchanged, out of this remediation's scope |
+| Restore | PASS-local, NOT VERIFIED-production-storage | — | §44 | Run drill against real production storage — unchanged |
+| Security | PASS w/ note | LOW | §45-46, Findings F2 RESOLVED (scoped fix), F3 RESOLVED | Confirm banned-account visibility intent (dormant, no live code path today) |
+| Data Retention | PASS w/ note | LOW | §47, Finding F7 RESOLVED (delay window + export, built on the branch's pre-existing anonymization work) | Update Angular client for the new 202/cancel contract; confirm 30-day default and "no bypass" assumption |
+| Integration Tests | PASS (strength) | — | §56-57; this remediation added 8 new real-Postgres test files | — |
 
 ---
 
 ## 18. Production Blockers
 
-**None.** No finding in this audit rises to BLOCKER: no data loss in an applied migration, no
-uncommitted schema (§55 verified identical), no plaintext passwords, no image blobs in
-PostgreSQL, no unsafe money types, no corrupt referential integrity. The two HIGH findings
-(F1, F2) are real and should be closed before this platform carries meaningful volumes of real
-user data, but neither one, today, describes data already lost or corrupted — they describe
-gaps that would let future data become inconsistent or let a gate miss a real defect.
+**None**, unchanged from the original audit, and no new one was introduced by this remediation:
+every new migration was live-verified end to end (empty database → all 42 migrations, including
+the 4 new ones, on a fresh `postgis/postgis:17-3.5` container) and every existing test suite
+(`Application.Tests` 604, `Auth.Tests` 254, `Architecture.Tests` 109, plus the Postgres-backed
+parts of `Integration.Tests` touched by this work) passes with zero regressions.
 
 ## 19. Manual Actions Required
 
-1. Confirm production's actual PostgreSQL major version directly from the hosting dashboard
-   (not from this report or from code comments) and align `ci.yml`, `production-gate.yml`, and
-   `performance/docker-compose.performance.yml` to it (Finding F1).
-2. Product/engineering decision: should a banned/deleted `Users` row also hide the paired
-   `UserAccounts` profile from public read paths? (Finding F2 — a business decision, not made
-   here.)
-3. Decide the email-uniqueness fix direction: unique index on `NormalizedEmail`, or
-   `RequireUniqueEmail = true` plus a corrective migration (Finding F3).
-4. Confirm with the team whether the current review this repository's own checklist marks
+*Updated 2026-09-07/08 — items resolved by this remediation are marked; the rest are unchanged.*
+
+1. ~~Confirm production's actual PostgreSQL major version...~~ — **RESOLVED** (F1: all
+   CI/gate/performance references now pin `17-3.5`, with an automated drift check). Still open:
+   independently re-confirm the actual production/Staging versions against the hosting
+   dashboard — this session had no such credentials.
+2. Product/engineering decision: should a banned `Users` row (`IsBanned = true`) also hide the
+   paired `UserAccounts` profile? **Still open** — no code path currently sets `IsBanned`, so
+   this is dormant rather than urgent; if a ban feature is built, reuse the new
+   `UserAccounts.IsDeleted` mechanism (F2) rather than inventing a parallel one.
+3. ~~Decide the email-uniqueness fix direction...~~ — **RESOLVED** (F3: functional unique index
+   on `lower(Email)`, guarded migration).
+4. Confirm with the team whether the items this repository's own recovery checklist marks
    unchecked (production-storage restore drill, Render gate wiring, protected environments) are
-   scheduled, and by whom — this report does not have the access to close them.
-5. Decide whether numeric CHECK constraints (Finding F4) are worth the migration now or are
-   accepted as an application-layer-only invariant for the current stage.
-6. Decide on GDPR self-service capability (Finding F7) scope and timeline.
+   scheduled, and by whom — **unchanged, out of this remediation's scope**.
+5. ~~Decide whether numeric CHECK constraints are worth the migration now...~~ — **RESOLVED**
+   for Area/Rooms/ColdRent/WarmRent/PurchasePrice (F4). **Still open**: Rating's numeric range —
+   deliberately not decided here, per explicit instruction.
+6. ~~Decide on GDPR self-service capability scope and timeline...~~ — **RESOLVED** (F7: delay
+   window + cancellation + JSON export, built on the branch's pre-existing account-deletion
+   work). **Still open**: update the Angular client for `DELETE /api/Users/me`'s new
+   `202 Accepted { scheduledFor }` response (was `204 No Content`) and wire up the new
+   cancel/export endpoints — separate repository, out of this session's reach; confirm the
+   30-day default delay and the "no immediate-deletion bypass" assumption are acceptable.
 7. Least-privilege database role/grants for the application user were not verifiable from this
-   repository — confirm directly against the production database.
+   repository — confirm directly against the production database. **Unchanged.**
+8. *(New)* Run `scripts/database/audit-f4-numeric-constraints.sql` against Staging/Production
+   before the `AddPropertyNumericConstraints` migration reaches either environment.
+9. *(New)* Run the case-variant-duplicate-email check (the `SELECT ... GROUP BY lower("Email")
+   HAVING count(*) > 1` query inside the `AddEmailLowerCaseUniqueIndex` migration) against
+   Staging/Production before that migration reaches either environment — the migration's own
+   guard will refuse to apply if it finds one, but running it ahead of time avoids a failed
+   deploy discovering that live.
+10. *(New)* `ci/migration-risk-baseline.json` and `database-migration-recovery-runbook.md`'s
+    markdown table are now behind by several migrations from other, parallel sessions
+    (`AddConsentRecords`, `AddMarketingLeadsAndOffers`, `AddMarketingSurveysAndEvents`) that this
+    remediation did not classify — out of scope here, but worth a dedicated pass.
 
 ## 20. Recommended Next Step
 

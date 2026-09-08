@@ -56,6 +56,45 @@ public static class RateLimitingRegistration
                         QueueLimit = 0
                     }));
 
+            // Landing-page waitlist / lead capture — same cadence as "contact", the closest
+            // existing equivalent (one anonymous, unauthenticated form submission).
+            options.AddPolicy("leads-submit", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 5,
+                        Window = TimeSpan.FromHours(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
+            // Landing-page willingness-to-pay survey — same cadence as "leads-submit": one
+            // anonymous, unauthenticated submission per visitor.
+            options.AddPolicy("surveys-submit", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 5,
+                        Window = TimeSpan.FromHours(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
+            // Marketing conversion-funnel events (page view, CTA click, ...) — much higher
+            // cadence than a form submission since a single visit fires several of these.
+            options.AddPolicy("marketing-events", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 60,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
             options.AddPolicy("auth-login", httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
                     partitionKey: GetClientRateLimitPartitionKey(httpContext),
@@ -232,6 +271,21 @@ public static class RateLimitingRegistration
                     {
                         PermitLimit = 3,
                         Window = TimeSpan.FromHours(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
+            // Finding F7 (docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md): self-service data
+            // export. A heavier read than most /me endpoints (assembles the account's full
+            // owned-data graph), so capped lower than an ordinary authenticated GET but not as
+            // tightly as account-delete -- there is no irreversible action here to brute-force.
+            options.AddPolicy("data-export", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 5,
+                        Window = TimeSpan.FromHours(24),
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                         QueueLimit = 0
                     }));

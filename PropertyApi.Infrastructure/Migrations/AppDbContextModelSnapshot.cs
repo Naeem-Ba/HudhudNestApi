@@ -1354,7 +1354,18 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.HasIndex("CountryCode", "City", "Status", "IsPublished", "IsDeleted")
                         .HasDatabaseName("IX_Properties_Search");
 
-                    b.ToTable("Properties", (string)null);
+                    b.ToTable("Properties", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Properties_Area_PositiveOrNull", "\"Area\" IS NULL OR \"Area\" > 0");
+
+                            t.HasCheckConstraint("CK_Properties_ColdRent_PositiveOrNull", "\"ColdRent\" IS NULL OR \"ColdRent\" > 0");
+
+                            t.HasCheckConstraint("CK_Properties_PurchasePrice_PositiveOrNull", "\"PurchasePrice\" IS NULL OR \"PurchasePrice\" > 0");
+
+                            t.HasCheckConstraint("CK_Properties_Rooms_PositiveOrNull", "\"Rooms\" IS NULL OR \"Rooms\" > 0");
+
+                            t.HasCheckConstraint("CK_Properties_WarmRent_PositiveOrNull", "\"WarmRent\" IS NULL OR \"WarmRent\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.PropertyAmenity", b =>
@@ -1768,6 +1779,305 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.HasIndex("IsActive");
 
                     b.ToTable("PropertyTypes", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Marketing.Entities.Lead", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Campaign")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid?>("OfferId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("UserType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("OfferId");
+
+                    b.HasIndex("Source");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UserType");
+
+                    b.ToTable("Leads", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Marketing.Entities.MarketingEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Campaign")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("LeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("OfferId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Path")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("SessionId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("EventType");
+
+                    b.HasIndex("LeadId");
+
+                    b.HasIndex("OfferId");
+
+                    b.HasIndex("SessionId");
+
+                    b.HasIndex("EventType", "CreatedAt");
+
+                    b.ToTable("MarketingEvents", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Marketing.Entities.Offer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("DiscountType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("DiscountValue")
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<DateTime?>("EndsAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("MaxRedemptions")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<int>("RedeemedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("StartsAtUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("TargetPlanTier")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Terms")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("Status", "StartsAtUtc", "EndsAtUtc");
+
+                    b.ToTable("Offers", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Offers_RedeemedCount_NonNegative", "\"RedeemedCount\" >= 0");
+
+                            t.HasCheckConstraint("CK_Offers_RedeemedCount_WithinMax", "\"MaxRedemptions\" IS NULL OR \"RedeemedCount\" <= \"MaxRedemptions\"");
+                        });
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Marketing.Entities.SurveyResponse", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("AcceptableCommissionPercent")
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<string>("BiggestProblem")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<decimal?>("ExpectedMonthlyPriceUsd")
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<decimal?>("ExpectedPerListingPriceUsd")
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("LeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("MostImportantFeature")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("PreferredPaymentModel")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<int?>("PropertyCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SimilarToolName")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("SubscriptionBlocker")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("TeamSize")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool?>("UsesSimilarToolCurrently")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool?>("WantsTrialBeforePaying")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("WillingnessToPay")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("LeadId");
+
+                    b.HasIndex("PreferredPaymentModel");
+
+                    b.HasIndex("WillingnessToPay");
+
+                    b.ToTable("SurveyResponses", (string)null);
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.Messaging.Entities.ContactMessage", b =>
@@ -3421,6 +3731,12 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<DateTime?>("DeletionRequestedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletionScheduledFor")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<string>("DisplayName")
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
@@ -3429,6 +3745,9 @@ namespace PropertyApi.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("LastName")
                         .IsRequired()
@@ -3504,6 +3823,12 @@ namespace PropertyApi.Infrastructure.Migrations
                         .HasFilter("\"AgencyId\" IS NOT NULL");
 
                     b.HasIndex("CountryCode");
+
+                    b.HasIndex("DeletionScheduledFor")
+                        .HasDatabaseName("IX_UserAccounts_DeletionScheduledFor_Pending")
+                        .HasFilter("\"DeletionScheduledFor\" IS NOT NULL");
+
+                    b.HasIndex("IsDeleted");
 
                     b.HasIndex("PlanGrantedByUserId");
 
@@ -4070,6 +4395,35 @@ namespace PropertyApi.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("District");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Marketing.Entities.Lead", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Marketing.Entities.Offer", null)
+                        .WithMany()
+                        .HasForeignKey("OfferId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Marketing.Entities.MarketingEvent", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Marketing.Entities.Lead", null)
+                        .WithMany()
+                        .HasForeignKey("LeadId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PropertyApi.Domain.Marketing.Entities.Offer", null)
+                        .WithMany()
+                        .HasForeignKey("OfferId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Marketing.Entities.SurveyResponse", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Marketing.Entities.Lead", null)
+                        .WithMany()
+                        .HasForeignKey("LeadId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.Messaging.Entities.Message", b =>

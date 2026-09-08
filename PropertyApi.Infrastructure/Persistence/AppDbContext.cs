@@ -23,6 +23,7 @@ using PropertyApi.Infrastructure.Identity.Entities;
 using PropertyApi.Infrastructure.Security.DataProtection;
 using PropertyApi.Domain.ShortStay.Entities;
 using PropertyApi.Domain.Investments.Entities;
+using PropertyApi.Domain.Marketing.Entities;
 
 
 
@@ -66,6 +67,10 @@ public sealed class AppDbContext
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<PhoneOtpChallenge> PhoneOtpChallenges => Set<PhoneOtpChallenge>();
     public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
+    public DbSet<Lead> Leads => Set<Lead>();
+    public DbSet<Offer> Offers => Set<Offer>();
+    public DbSet<SurveyResponse> SurveyResponses => Set<SurveyResponse>();
+    public DbSet<MarketingEvent> MarketingEvents => Set<MarketingEvent>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<VisitRequest> VisitRequests => Set<VisitRequest>();
@@ -142,6 +147,10 @@ public sealed class AppDbContext
         builder.Entity<Amenity>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<Message>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ContactMessage>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<Lead>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<Offer>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<SurveyResponse>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<MarketingEvent>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ApplicationUser>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<Notification>().HasQueryFilter(n => !n.IsDeleted);
         builder.Entity<VisitRequest>().HasQueryFilter(v => !v.IsDeleted);

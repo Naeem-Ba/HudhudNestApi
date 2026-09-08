@@ -46,7 +46,7 @@ public sealed class TestApplication : WebApplicationFactory<Program>
     {
         TestSecuritySettings.EnsureEnvironmentConfigured();
         _environmentName = environmentName;
-        _configuration = CreateDefaultConfiguration(environmentName);
+        _configuration = CreateDefaultConfiguration(environmentName, _databaseName);
 
         if (configurationOverrides is not null)
         {
@@ -99,6 +99,22 @@ public sealed class TestApplication : WebApplicationFactory<Program>
         IDictionary<string, string?>? configurationOverrides = null)
     {
         return new TestApplication("Testing", configurationOverrides);
+    }
+
+    /// <summary>Runs <paramref name="action"/> against a fresh DI scope over this fixture's
+    /// InMemory database — for seeding fixture data directly (e.g. an Offer/Lead row) or
+    /// asserting on persisted state without going through the HTTP pipeline.</summary>
+    public async Task<T> InScopeAsync<T>(Func<IServiceProvider, Task<T>> action)
+    {
+        using var scope = Services.CreateScope();
+        return await action(scope.ServiceProvider);
+    }
+
+    /// <inheritdoc cref="InScopeAsync{T}"/>
+    public async Task InScopeAsync(Func<IServiceProvider, Task> action)
+    {
+        using var scope = Services.CreateScope();
+        await action(scope.ServiceProvider);
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -162,13 +178,27 @@ public sealed class TestApplication : WebApplicationFactory<Program>
         base.Dispose(disposing);
     }
 
-    private static Dictionary<string, string?> CreateDefaultConfiguration(string environmentName)
+    private static Dictionary<string, string?> CreateDefaultConfiguration(string environmentName, string databaseName)
     {
         var settings = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
         {
             ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=propertyapi_test;Username=postgres;Password=not-used;Trust Server Certificate=true",
             ["ConnectionStrings:Redis"] = "localhost:6379",
             ["Redis:ConnectionString"] = "localhost:6379",
+
+            // CI enables the Redis-backed limiter for the whole test process (see
+            // RateLimiting__Redis__Enabled in ci.yml), and every TestApplication-derived host
+            // in the suite otherwise shares the same real Redis instance and the same
+            // "ip:{loopback}" partition key (RateLimitingRegistration.GetClientRateLimitPartitionKey
+            // falls back to the caller's IP for unauthenticated requests, and every TestServer
+            // client shares one). Without a per-instance namespace, two IClassFixture<TestApplication>
+            // test classes running unauthenticated requests against the same tightly-windowed
+            // policy (e.g. "account-delete" = 3/hour, "leads-submit" = 5/hour) exhaust each
+            // other's quota and fail with 429 depending on run/class order -- reproduced against
+            // AccountDeletionAuthenticationTests and LeadsControllerTests in the same suite run.
+            // Same fix as PhoneAuthWebApplicationFactory: give each fixture instance its own key
+            // prefix so state never crosses test classes, even on the one shared Redis instance.
+            ["RateLimiting:Redis:InstanceName"] = $"PropertyApiTests:TestApplication:{databaseName}:",
             ["Jwt:Issuer"] =
     TestSecuritySettings.JwtIssuer,
 

@@ -32,9 +32,15 @@ public sealed class UserProfilePersistenceTests : IAsyncLifetime
         return Task.CompletedTask;
     }
 
-    [Fact(DisplayName = "DELETE /api/Users/me actually anonymizes the UserAccount row in the database")]
-    public async Task DeleteAccount_PersistsAnonymizedProfile()
+    [Fact(DisplayName = "DELETE /api/Users/me actually persists the deletion schedule to the database")]
+    public async Task DeleteAccount_PersistsDeletionSchedule()
     {
+        // Finding F7 (docs/DATABASE-PRODUCTION-READINESS.md): DELETE /api/Users/me now
+        // schedules deletion (delay window) instead of anonymizing synchronously -- this test
+        // was originally written against the old immediate-anonymization behavior; updated to
+        // assert the new contract while keeping its original purpose (a real HTTP-to-Postgres
+        // round trip, re-read from a fresh scope, proves persistence actually happened). The
+        // sweep's own execution behavior is covered separately by AccountDeletionSweepTests.
         var user = await _factory.SeedUserAsync("profile-persistence-delete");
 
         using var client = _factory.AuthedClient(user.AccessToken);
@@ -46,8 +52,8 @@ public sealed class UserProfilePersistenceTests : IAsyncLifetime
 
         var body = response.IsSuccessStatusCode ? string.Empty : await response.Content.ReadAsStringAsync();
         Assert.True(
-            response.StatusCode == HttpStatusCode.NoContent,
-            $"Expected 204, got {response.StatusCode}: {body}");
+            response.StatusCode == HttpStatusCode.Accepted,
+            $"Expected 202, got {response.StatusCode}: {body}");
 
         await _factory.InScopeAsync(async services =>
         {
@@ -58,9 +64,11 @@ public sealed class UserProfilePersistenceTests : IAsyncLifetime
                 .AsNoTracking()
                 .SingleAsync(a => a.Id == user.Id);
 
-            Assert.Equal("Deleted", reloaded.FirstName);
-            Assert.Equal("User", reloaded.LastName);
-            Assert.Null(reloaded.ProfileImagePublicId);
+            // Not anonymized yet -- only the sweep does that, once ScheduledFor arrives.
+            Assert.False(reloaded.IsDeleted);
+            Assert.Equal("Test", reloaded.FirstName);
+            Assert.True(reloaded.HasPendingDeletionRequest);
+            Assert.NotNull(reloaded.DeletionScheduledFor);
         });
     }
 

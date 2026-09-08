@@ -264,6 +264,15 @@ public sealed class GetCurrentUserQueryHandlerTests
             throw new NotSupportedException(
                 "This test repository is read-only.");
         }
+
+        public Task<IReadOnlyList<Guid>> GetDueForDeletionAsync(
+            DateTime asOfUtc,
+            int batchSize,
+            CancellationToken ct = default)
+        {
+            throw new NotSupportedException(
+                "Not exercised by GetCurrentUserQueryHandlerTests.");
+        }
     }
 
     /// <summary>None of these tests select a plan, so account.PlanId is always null and

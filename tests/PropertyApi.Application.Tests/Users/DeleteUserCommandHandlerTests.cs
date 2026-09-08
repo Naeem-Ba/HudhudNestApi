@@ -297,6 +297,11 @@ public sealed class DeleteUserCommandHandlerTests
         Assert.Null(account.ProfileImageUrl);
         Assert.Null(account.ProfileImagePublicId);
 
+        // Finding F2: Anonymize() also flags the row so AgencyRepository (and any future
+        // "primary subject" UserAccounts read) can exclude it -- see UserAccount.IsDeleted's
+        // doc comment for why this is a scoped flag, not a global EF Core query filter.
+        Assert.True(account.IsDeleted);
+
         identity.Verify(
             x => x.AnonymizeCredentialsAsync(
                 userId,

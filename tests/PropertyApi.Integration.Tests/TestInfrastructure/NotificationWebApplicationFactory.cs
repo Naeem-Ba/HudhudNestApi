@@ -14,6 +14,8 @@ namespace PropertyApi.Integration.Tests.TestInfrastructure;
 public sealed class NotificationWebApplicationFactory
     : WebApplicationFactory<Program>
 {
+    private readonly string _instanceId = Guid.NewGuid().ToString("N");
+
     public NotificationWebApplicationFactory()
     {
         TestSecuritySettings.EnsureEnvironmentConfigured();
@@ -65,7 +67,15 @@ public sealed class NotificationWebApplicationFactory
                     ["Cloudinary:ApiSecret"] = "test",
 
                     ["Cors:AllowedOrigins:0"] =
-                        "http://localhost:4200"
+                        "http://localhost:4200",
+
+                    // CI enables the Redis-backed limiter for the whole test process, and every
+                    // TestApplication-derived host in the suite otherwise shares the same real
+                    // Redis instance/key namespace and the same "ip:{loopback}" partition (see
+                    // TestApplication's CreateDefaultConfiguration for the full rationale and the
+                    // cross-class 429 flakiness this fixes).
+                    ["RateLimiting:Redis:InstanceName"] =
+                        $"PropertyApiTests:NotificationWebApplicationFactory:{_instanceId}:"
                 };
 
             TestHostConfiguration.AddDataProtectionSettings(

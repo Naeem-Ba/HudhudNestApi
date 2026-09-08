@@ -41,7 +41,10 @@ jobs:
 
     services:
       postgres:
-        image: postgis/postgis:16-3.4
+        # Must match ci/postgres-version.env (production runs PostgreSQL 17 --
+        # see that file's comment). scripts/database/check-postgres-version-consistency.sh
+        # fails this workflow if this line ever drifts from that canonical value.
+        image: postgis/postgis:17-3.5
 
         env:
           POSTGRES_USER: postgres
@@ -115,6 +118,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+
+      - name: Verify Postgres/PostGIS version consistency (Finding F1)
+        run: bash scripts/database/check-postgres-version-consistency.sh
 
       - name: Setup .NET ${{ env.DOTNET_VERSION }}
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
