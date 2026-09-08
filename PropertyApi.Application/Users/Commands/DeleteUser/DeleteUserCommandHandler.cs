@@ -25,6 +25,17 @@ namespace PropertyApi.Application.Users.Commands.DeleteUser;
 /// See docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md for the full data-dependency map this
 /// implements and the retention/business-decision boundaries it deliberately does NOT cross
 /// (e.g. properties/agencies/reviews owned by the deleted user are preserved, not deleted).
+///
+/// Finding F7 (Phase 2 database-readiness audit): the public "delete my account" entry point
+/// is now <see cref="PropertyApi.Application.Users.Commands.RequestDeleteUser.RequestDeleteUserCommandHandler"/>,
+/// which schedules this class's <see cref="ExecuteScheduledDeletionAsync"/> for later, cancellable
+/// execution instead of calling <see cref="Handle"/> synchronously. <see cref="Handle"/> itself
+/// is unchanged and remains fully valid — kept for any future caller that legitimately needs an
+/// immediate, re-authenticated deletion with no grace period (e.g. an admin action, not built
+/// here — see docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md's F7 section for why "no bypass" was
+/// the assumption applied rather than a decision made unilaterally). Both entry points share the
+/// same anonymization transaction via <see cref="AnonymizeAndFinalizeAsync"/>, so there is exactly
+/// one place that logic can drift.
 /// </summary>
 public sealed class DeleteUserCommandHandler
     : IRequestHandler<DeleteUserCommand, DeleteUserResult>
@@ -106,6 +117,53 @@ public sealed class DeleteUserCommandHandler
             }
         }
 
+        return await AnonymizeAndFinalizeAsync(
+            identity,
+            request.IpAddress,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes an already-decided, already-due deletion with no re-authentication step — the
+    /// scheduled-deletion sweep's entry point (Finding F7): by the time a request's
+    /// <c>DeletionScheduledFor</c> arrives, the owner authenticated once already, at request
+    /// time, and had the entire delay window to cancel. There is no password or IP address to
+    /// check against here (a background sweep has neither), which is exactly why this is a
+    /// separate method from <see cref="Handle"/> rather than a "skip re-auth" flag threaded
+    /// through <see cref="DeleteUserCommand"/>.
+    /// </summary>
+    public async Task<DeleteUserResult> ExecuteScheduledDeletionAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var identity =
+            await _identity.FindByIdAsync(
+                userId,
+                cancellationToken);
+
+        if (identity is null ||
+            identity.IsDeleted)
+        {
+            return DeleteUserResult.UserNotFound();
+        }
+
+        return await AnonymizeAndFinalizeAsync(
+            identity,
+            ipAddress: null,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// The shared core both <see cref="Handle"/> and <see cref="ExecuteScheduledDeletionAsync"/>
+    /// call once re-authentication (if any) has already happened and <paramref name="identity"/>
+    /// is confirmed to exist and not already be deleted. See the class doc comment for why this
+    /// extraction exists.
+    /// </summary>
+    private async Task<DeleteUserResult> AnonymizeAndFinalizeAsync(
+        IdentityAccountSnapshot identity,
+        string? ipAddress,
+        CancellationToken cancellationToken)
+    {
         var account =
             await _accounts.GetByIdAsync(
                 identity.UserAccountId,
@@ -220,7 +278,7 @@ public sealed class DeleteUserCommandHandler
         await _refreshTokens.RevokeActiveTokensForUserAsync(
             identity.IdentityId,
             now,
-            request.IpAddress,
+            ipAddress,
             cancellationToken);
 
         await _securityStampCacheInvalidator.InvalidateAsync(
@@ -247,7 +305,7 @@ public sealed class DeleteUserCommandHandler
         await _auditLogs.LogAsync(
             userId: identity.IdentityId,
             action: AuditActions.AccountDeletionCompleted,
-            ipAddress: request.IpAddress,
+            ipAddress: ipAddress,
             oldValue: null,
             newValue: JsonSerializer.Serialize(
                 new

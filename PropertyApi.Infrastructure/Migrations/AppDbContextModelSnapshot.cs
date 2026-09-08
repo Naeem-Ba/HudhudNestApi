@@ -1354,7 +1354,18 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.HasIndex("CountryCode", "City", "Status", "IsPublished", "IsDeleted")
                         .HasDatabaseName("IX_Properties_Search");
 
-                    b.ToTable("Properties", (string)null);
+                    b.ToTable("Properties", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Properties_Area_PositiveOrNull", "\"Area\" IS NULL OR \"Area\" > 0");
+
+                            t.HasCheckConstraint("CK_Properties_ColdRent_PositiveOrNull", "\"ColdRent\" IS NULL OR \"ColdRent\" > 0");
+
+                            t.HasCheckConstraint("CK_Properties_PurchasePrice_PositiveOrNull", "\"PurchasePrice\" IS NULL OR \"PurchasePrice\" > 0");
+
+                            t.HasCheckConstraint("CK_Properties_Rooms_PositiveOrNull", "\"Rooms\" IS NULL OR \"Rooms\" > 0");
+
+                            t.HasCheckConstraint("CK_Properties_WarmRent_PositiveOrNull", "\"WarmRent\" IS NULL OR \"WarmRent\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.PropertyAmenity", b =>
@@ -3421,6 +3432,12 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<DateTime?>("DeletionRequestedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletionScheduledFor")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<string>("DisplayName")
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
@@ -3429,6 +3446,9 @@ namespace PropertyApi.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("LastName")
                         .IsRequired()
@@ -3504,6 +3524,12 @@ namespace PropertyApi.Infrastructure.Migrations
                         .HasFilter("\"AgencyId\" IS NOT NULL");
 
                     b.HasIndex("CountryCode");
+
+                    b.HasIndex("DeletionScheduledFor")
+                        .HasDatabaseName("IX_UserAccounts_DeletionScheduledFor_Pending")
+                        .HasFilter("\"DeletionScheduledFor\" IS NOT NULL");
+
+                    b.HasIndex("IsDeleted");
 
                     b.HasIndex("PlanGrantedByUserId");
 

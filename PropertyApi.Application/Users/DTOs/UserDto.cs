@@ -47,6 +47,14 @@ public sealed class UserDto
 
     public DateTime CreatedAt { get; set; }
 
+    /// <summary>
+    /// Finding F7 (docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md): null means no deletion is
+    /// currently pending. Set when the account owner has called DELETE /api/Users/me and the
+    /// delay window has not yet elapsed or been cancelled — lets a client show "your account
+    /// will be deleted on X — cancel" without a separate call.
+    /// </summary>
+    public DateTime? DeletionScheduledFor { get; set; }
+
     public IReadOnlyList<string> Roles { get; set; } = Array.Empty<string>();
 }
 

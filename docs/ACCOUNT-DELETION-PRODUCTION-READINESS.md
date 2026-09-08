@@ -317,3 +317,32 @@ STATUS: PASS WITH WARNINGS
 No BLOCKER-level issue exists: no unauthorized deletion path, no evidence a token or session survives deletion, no half-deleted state possible, and no invented business policy was smuggled in where the spec asked for an explicit decision instead. The warnings are: (1) a production domain does not yet exist to finish the store-listing configuration, (2) a subset of verification (real-Postgres E2E, Angular component tests, live credentialed UI/device tests) could not be run in this sandbox and is honestly disclosed rather than assumed, and (3) several business decisions about non-identity data owned by a deleted user (listings, agency ownership, investment projects) are deliberately left to the business rather than decided here.
 
 **Phase 6 is not started.**
+
+---
+
+## 21. Update — Finding F7 delay window + data export (2026-09-07/08)
+
+A separate Phase 2 database-readiness audit (`docs/DATABASE-PRODUCTION-READINESS.md`) reviewed
+this phase's work and found it complete for anonymization/token-revocation/cleanup, but short of
+a newly-approved policy on two points: a cancellable delay window before deletion executes, and
+a JSON export endpoint. Both were added in a follow-up session **without modifying this phase's
+anonymization logic** — see `docs/DATABASE-PRODUCTION-READINESS.md`'s Finding F7 RESOLUTION
+block for full evidence (migrations, tests, live-Postgres proof). Summary of what changed here:
+
+- `DELETE /api/Users/me` now **schedules** deletion (re-authenticates immediately, then starts a
+  30-day-default, configurable, cancellable delay window) instead of anonymizing synchronously.
+  **This is a breaking response-contract change**: `204 No Content` → `202 Accepted` with
+  `{ scheduledFor }`. The Angular Danger-Zone modal built in this phase (§10) was **not**
+  updated — it is a separate repository outside the follow-up session's reach — and needs its
+  success handling changed from "assume immediate completion" to "show the scheduled date and a
+  cancel option," consistent with the delay window rather than this phase's original immediate
+  behavior.
+- New `POST /api/Users/me/deletion/cancel` and `GET /api/Users/me/export` endpoints exist and
+  have no corresponding frontend UI yet.
+- The core guarantees this document already established — re-authentication, atomic
+  Identity+UserAccount anonymization, token revocation, Cloudinary cleanup, retained
+  properties/reviews/messages with anonymized attribution — are **unchanged**; the delay window
+  wraps when that logic runs, not what it does.
+
+**Manual follow-up needed** (frontend, separate repository, not done here): update the Danger
+Zone flow for the new response contract and add UI for cancellation and export.

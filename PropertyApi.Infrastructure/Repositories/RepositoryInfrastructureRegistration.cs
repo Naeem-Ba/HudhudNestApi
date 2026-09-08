@@ -67,6 +67,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IContactMessageRepository, ContactMessageRepository>();
         services.AddScoped<IUserDirectoryReadService, UserDirectoryReadService>();
         services.AddScoped<IUserAccountRepository, UserAccountRepository>();
+        services.AddScoped<IAccountDataExportRepository, PropertyApi.Infrastructure.Users.AccountDataExportRepository>();
         services.AddScoped<IMessageRepository, MessageRepository>();
         services.AddScoped<IPlanRepository, PlanRepository>();
 

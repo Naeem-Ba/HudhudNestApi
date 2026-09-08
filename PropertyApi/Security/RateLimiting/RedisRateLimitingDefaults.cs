@@ -32,7 +32,10 @@ internal static class RedisRateLimitingDefaults
             ["shortstay-search"] = Policy(120, TimeSpan.FromMinutes(1)),
             // Phase 5 (Account Deletion): same cadence as auth-password-reset — see
             // RateLimitingRegistration's in-memory fallback policy for the full rationale.
-            ["account-delete"] = Policy(3, TimeSpan.FromHours(1))
+            ["account-delete"] = Policy(3, TimeSpan.FromHours(1)),
+            // Finding F7: self-service data export — see RateLimitingRegistration's in-memory
+            // fallback policy for the full rationale.
+            ["data-export"] = Policy(5, TimeSpan.FromHours(24))
         };
 
     private static RedisFixedWindowRateLimitPolicyOptions Policy(

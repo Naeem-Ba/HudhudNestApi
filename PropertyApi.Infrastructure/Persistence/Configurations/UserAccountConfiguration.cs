@@ -79,6 +79,21 @@ public sealed class UserAccountConfiguration
 
         builder.HasIndex(x => x.CountryCode);
 
+        // Set only by UserAccount.Anonymize() (account deletion). Deliberately NOT a
+        // HasQueryFilter here -- see UserAccount.IsDeleted's own doc comment and
+        // docs/DATABASE-PRODUCTION-READINESS.md Finding F2 for the required-navigation/INNER
+        // JOIN hazard a blanket global filter would create for Property.Owner and friends.
+        // Callers that need to hide a deleted account (agency member lists/counts, any future
+        // "browse users" directory) filter on this explicitly instead.
+        builder.HasIndex(x => x.IsDeleted);
+
+        // Finding F7 (docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md): the delay-window sweep
+        // (AccountDeletionSweepHostedService) polls for "DeletionScheduledFor <= now" on every
+        // tick. Filtered: the vast majority of rows never have a pending deletion request.
+        builder.HasIndex(x => x.DeletionScheduledFor)
+            .HasDatabaseName("IX_UserAccounts_DeletionScheduledFor_Pending")
+            .HasFilter("\"DeletionScheduledFor\" IS NOT NULL");
+
         // Agency membership. Nullable, and null for every account that exists today —
         // belonging to an agency is opt-in and adds nothing to an independent user.
         builder.HasOne<Agency>()

@@ -14,6 +14,9 @@ using PropertyApi.Infrastructure.Identity.Services;
 using PropertyApi.Infrastructure.Lookups;
 using PropertyApi.Infrastructure.Persistence.Backfills;
 using PropertyApi.Infrastructure.Settings;
+using PropertyApi.Infrastructure.Users;
+using PropertyApi.Application.Users.Commands.DeleteUser;
+using PropertyApi.Application.Users.Interfaces;
 using IdentityEmailSender = Microsoft.AspNetCore.Identity.UI.Services.IEmailSender;
 
 namespace PropertyApi.Infrastructure.Auth;
@@ -30,7 +33,8 @@ internal static class AuthInfrastructureRegistration
             configuration);
 
         AddIdentityCapabilities(
-            services);
+            services,
+            configuration);
 
         AddSocialAuthentication(
             services,
@@ -82,7 +86,8 @@ internal static class AuthInfrastructureRegistration
     }
 
     private static void AddIdentityCapabilities(
-        IServiceCollection services)
+        IServiceCollection services,
+        IConfiguration configuration)
     {
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
@@ -169,6 +174,21 @@ internal static class AuthInfrastructureRegistration
         // Off by default (AuditLogRetention:Enabled) until an operator explicitly sets a
         // retention window — see AuditLogRetentionHostedService's own doc comment.
         services.AddHostedService<AuditLogRetentionHostedService>();
+
+        // Finding F7 (docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md) — always on, unlike audit
+        // log retention, since executing a deletion the owner already explicitly requested (and
+        // had the whole delay window to cancel) is not a new retention policy being invented.
+        services.AddOptions<AccountDeletionOptions>()
+            .Bind(configuration.GetSection(AccountDeletionOptions.SectionName));
+        services.AddScoped<IAccountDeletionSettings, AccountDeletionSettings>();
+
+        // Registered as itself (not only reachable via IRequestHandler<DeleteUserCommand,_>)
+        // so AccountDeletionSweepHostedService can call ExecuteScheduledDeletionAsync directly
+        // — that method is not part of the MediatR pipeline, since a background sweep has no
+        // HTTP request to route through ISender.
+        services.AddScoped<DeleteUserCommandHandler>();
+
+        services.AddHostedService<AccountDeletionSweepHostedService>();
     }
 
     private static void AddSocialAuthentication(

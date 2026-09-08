@@ -47,16 +47,22 @@ public sealed class AgencyRepository : IAgencyRepository
     public async Task<IReadOnlyList<UserAccount>> GetMembersAsync(
         Guid agencyId,
         CancellationToken ct = default)
+        // !u.IsDeleted (Finding F2): a deleted member's account is anonymized, not removed --
+        // without this, "Deleted User" would keep appearing in and counting toward the
+        // agency's member list forever. See UserAccount.IsDeleted's doc comment for why this
+        // is a scoped filter here rather than a global EF Core query filter.
         => await _db.UserAccounts
             .AsNoTracking()
-            .Where(u => u.AgencyId == agencyId)
+            .Where(u => u.AgencyId == agencyId && !u.IsDeleted)
             .OrderBy(u => u.AgencyJoinedAt)
             .ToListAsync(ct);
 
     public async Task<int> CountMembersAsync(Guid agencyId, CancellationToken ct = default)
+        // See GetMembersAsync above for why !u.IsDeleted is required here too -- this count
+        // feeds agency-size/business logic and must not include anonymized former members.
         => await _db.UserAccounts
             .AsNoTracking()
-            .CountAsync(u => u.AgencyId == agencyId, ct);
+            .CountAsync(u => u.AgencyId == agencyId && !u.IsDeleted, ct);
 
     public async Task<int> ClearAgencyAttributionAsync(
         Guid agencyId,

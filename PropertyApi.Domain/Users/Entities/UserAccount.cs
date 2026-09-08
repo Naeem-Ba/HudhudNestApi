@@ -106,6 +106,98 @@ public sealed class UserAccount
 
     public DateTime UpdatedAt { get; private set; }
 
+    /// <summary>
+    /// Set only by <see cref="Anonymize"/> as part of account deletion (see that method's doc
+    /// comment). Deliberately NOT wired into a global EF Core query filter (see
+    /// UserAccountConfiguration.cs and docs/DATABASE-PRODUCTION-READINESS.md Finding F2): every
+    /// FK from Property/PropertyReview/VisitRequest/Transaction into UserAccounts is a
+    /// *required* relationship, and EF Core turns a global filter on the target of a required
+    /// navigation into an INNER JOIN -- which would silently drop a deleted user's retained
+    /// properties/reviews from every listing instead of just anonymizing the owner's name.
+    /// Read this flag explicitly wherever a UserAccounts row is queried as the primary subject
+    /// (a public profile, a directory/member listing) rather than as an incidental navigation
+    /// off another entity.
+    /// </summary>
+    public bool IsDeleted { get; private set; }
+
+    /// <summary>
+    /// When the account owner asked to delete their account (F7 GDPR erasure flow). Null means
+    /// no deletion is currently pending. Kept even after the deletion actually executes (see
+    /// <see cref="Anonymize"/>) as the historical record of when the request was made.
+    /// </summary>
+    public DateTime? DeletionRequestedAt { get; private set; }
+
+    /// <summary>
+    /// When <see cref="RequestDeletion"/> scheduled the account for anonymization -- a
+    /// background sweep (Infrastructure layer) picks up any account where this is in the past.
+    /// Null means no deletion is currently pending.
+    /// Cleared by <see cref="CancelDeletionRequest"/>; left set (not cleared) once the deletion
+    /// actually executes, for the same historical-record reason as
+    /// <see cref="DeletionRequestedAt"/>.
+    /// </summary>
+    public DateTime? DeletionScheduledFor { get; private set; }
+
+    /// <summary>
+    /// True while a deletion request is outstanding and has not yet executed or been
+    /// cancelled -- the account remains fully usable during this window (that is what makes
+    /// cancellation meaningful); only the scheduled sweep, once <see cref="DeletionScheduledFor"/>
+    /// arrives, calls <see cref="Anonymize"/>.
+    /// </summary>
+    public bool HasPendingDeletionRequest => DeletionScheduledFor is not null && !IsDeleted;
+
+    /// <summary>
+    /// Starts the account-deletion delay window (Finding F7,
+    /// docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md). Idempotent by design: calling this again
+    /// while a request is already pending does not push the date further out -- a user who
+    /// clicks "delete my account" twice must not be able to (accidentally or not) extend their
+    /// own grace period indefinitely; they get the schedule from the *first* request.
+    /// </summary>
+    public DateTime RequestDeletion(TimeSpan delay, DateTime utcNow)
+    {
+        if (IsDeleted)
+        {
+            throw new InvalidOperationException(
+                "Cannot request deletion for an account that is already deleted.");
+        }
+
+        if (HasPendingDeletionRequest)
+        {
+            return DeletionScheduledFor!.Value;
+        }
+
+        if (delay <= TimeSpan.Zero)
+        {
+            throw new ArgumentException(
+                "Deletion delay must be positive.",
+                nameof(delay));
+        }
+
+        DeletionRequestedAt = utcNow;
+        DeletionScheduledFor = utcNow.Add(delay);
+        UpdatedAt = utcNow;
+
+        return DeletionScheduledFor.Value;
+    }
+
+    /// <summary>
+    /// Cancels a pending deletion request during its delay window. The account was never
+    /// touched by <see cref="Anonymize"/> (that only runs once the sweep actually executes a
+    /// matured request), so cancelling is exactly "clear the schedule" -- there is nothing to
+    /// restore.
+    /// </summary>
+    public void CancelDeletionRequest(DateTime utcNow)
+    {
+        if (!HasPendingDeletionRequest)
+        {
+            throw new InvalidOperationException(
+                "There is no pending deletion request to cancel.");
+        }
+
+        DeletionRequestedAt = null;
+        DeletionScheduledFor = null;
+        UpdatedAt = utcNow;
+    }
+
     public static UserAccount Create(
         Guid id,
         string firstName,
@@ -542,7 +634,10 @@ public sealed class UserAccount
     /// business/billing state, not personal data, and changing them here would silently affect
     /// agency membership counts or plan bookkeeping as a side effect of what the caller asked
     /// for (account deletion) — see docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md for why this
-    /// is flagged as a business decision rather than resolved unilaterally.
+    /// is flagged as a business decision rather than resolved unilaterally. IsDeleted is set
+    /// here for exactly this reason: callers that need to stop counting/listing this account as
+    /// an active agency member (see AgencyRepository.GetMembersAsync/CountMembersAsync) can
+    /// check it explicitly, without this method having to also clear AgencyId itself.
     ///
     /// Caller contract: read ProfileImagePublicId *before* calling this (it is cleared here) if
     /// the caller needs it to delete the asset from Cloudinary — this method only updates the
@@ -576,6 +671,9 @@ public sealed class UserAccount
 
         ContactInfo =
             null;
+
+        IsDeleted =
+            true;
 
         UpdatedAt =
             utcNow;

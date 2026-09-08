@@ -11,7 +11,22 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
 {
     public void Configure(EntityTypeBuilder<Property> builder)
     {
-        builder.ToTable("Properties");
+        // Finding F4 (docs/DATABASE-PRODUCTION-READINESS.md): each column stays nullable --
+        // Area is legitimately optional except for Land listings
+        // (CreatePropertyCommandValidator.cs), and the three price columns are legitimately
+        // null depending on ListingType -- so every constraint is "no NULL" read as "no
+        // zero/negative placeholder", not literal column nullability. Declared here (not only
+        // in the AddPropertyNumericConstraints migration's raw SQL) so the EF Core model and
+        // the applied schema can never silently drift apart, matching the same pattern
+        // PlanConfiguration.cs already uses for CK_Plans_ListingLimit_PositiveOrUnlimited.
+        builder.ToTable("Properties", t =>
+        {
+            t.HasCheckConstraint("CK_Properties_Area_PositiveOrNull", "\"Area\" IS NULL OR \"Area\" > 0");
+            t.HasCheckConstraint("CK_Properties_Rooms_PositiveOrNull", "\"Rooms\" IS NULL OR \"Rooms\" > 0");
+            t.HasCheckConstraint("CK_Properties_ColdRent_PositiveOrNull", "\"ColdRent\" IS NULL OR \"ColdRent\" > 0");
+            t.HasCheckConstraint("CK_Properties_WarmRent_PositiveOrNull", "\"WarmRent\" IS NULL OR \"WarmRent\" > 0");
+            t.HasCheckConstraint("CK_Properties_PurchasePrice_PositiveOrNull", "\"PurchasePrice\" IS NULL OR \"PurchasePrice\" > 0");
+        });
 
         builder.HasKey(p => p.Id);
 

@@ -30,4 +30,6 @@ public static class BackgroundJobLockKeys
     public const long OtpCleanup = 20260825_1004;
 
     public const long AuditLogRetention = 20260905_1005;
+
+    public const long AccountDeletionSweep = 20260907_1006;
 }
