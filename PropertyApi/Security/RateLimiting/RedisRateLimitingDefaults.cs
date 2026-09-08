@@ -9,6 +9,12 @@ internal static class RedisRateLimitingDefaults
             ["verify-otp"] = Policy(5, TimeSpan.FromMinutes(15)),
             ["auth-password-reset"] = Policy(3, TimeSpan.FromHours(1)),
             ["contact"] = Policy(5, TimeSpan.FromHours(1)),
+            // Landing-page waitlist / lead capture — same cadence as "contact".
+            ["leads-submit"] = Policy(5, TimeSpan.FromHours(1)),
+            // Landing-page willingness-to-pay survey — same cadence as "leads-submit".
+            ["surveys-submit"] = Policy(5, TimeSpan.FromHours(1)),
+            // Marketing conversion-funnel events — higher cadence, one visit fires several.
+            ["marketing-events"] = Policy(60, TimeSpan.FromMinutes(1)),
             ["auth-login"] = Policy(10, TimeSpan.FromMinutes(1)),
             ["auth-register"] = Policy(5, TimeSpan.FromMinutes(10)),
             ["auth-refresh"] = Policy(20, TimeSpan.FromMinutes(5)),

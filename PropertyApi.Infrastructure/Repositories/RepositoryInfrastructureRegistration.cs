@@ -10,6 +10,7 @@ using PropertyApi.Application.Contact.Interfaces;
 using PropertyApi.Application.Favorites.Interfaces;
 using PropertyApi.Application.Investments.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
+using PropertyApi.Application.Marketing.Interfaces;
 using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Application.Plans.Interfaces;
 using PropertyApi.Application.Reviews.Interfaces;
@@ -65,6 +66,10 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IFavoriteRepository, FavoriteRepository>();
         services.AddScoped<IConsentRecordRepository, ConsentRecordRepository>();
         services.AddScoped<IContactMessageRepository, ContactMessageRepository>();
+        services.AddScoped<ILeadRepository, LeadRepository>();
+        services.AddScoped<IOfferRepository, OfferRepository>();
+        services.AddScoped<ISurveyResponseRepository, SurveyResponseRepository>();
+        services.AddScoped<IMarketingEventRepository, MarketingEventRepository>();
         services.AddScoped<IUserDirectoryReadService, UserDirectoryReadService>();
         services.AddScoped<IUserAccountRepository, UserAccountRepository>();
         services.AddScoped<IAccountDataExportRepository, PropertyApi.Infrastructure.Users.AccountDataExportRepository>();

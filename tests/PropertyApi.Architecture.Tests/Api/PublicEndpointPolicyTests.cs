@@ -104,6 +104,21 @@ public sealed class PublicEndpointPolicyTests
             // Public contact form; abuse is bounded by the "contact" rate-limit policy.
             "ContactController.Submit",
 
+            // Landing-page waitlist / lead capture; abuse is bounded by "leads-submit".
+            "LeadsController.Submit",
+
+            // Public "current offer" card (e.g. "first 100 agencies") on the marketing
+            // landing page — read-only, bounded by "public-read". No billing/payment
+            // gateway is involved (FRONTEND_BACKEND_CONTRACT.md §11.5).
+            "OffersController.GetActive",
+
+            // Landing-page willingness-to-pay survey; abuse is bounded by "surveys-submit".
+            "SurveysController.SubmitLanding",
+
+            // Marketing conversion-funnel tracking (page view, CTA click, ...); abuse is
+            // bounded by "marketing-events".
+            "MarketingEventsController.Track",
+
             // Investment Discovery Portal (Phase 1): the projects a visitor browses/analyzes
             // before signing up, same rationale as the property catalogue above. Every one of
             // these is read-only (or, for the calculator, a stateless indicative computation)
