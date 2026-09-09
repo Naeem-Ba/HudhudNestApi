@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.SocialDistribution.Commands.ActivateDistributionRule;
 using PropertyApi.Application.SocialDistribution.Commands.ActivateSocialChannel;
+using PropertyApi.Application.SocialDistribution.Commands.ApproveSocialContent;
 using PropertyApi.Application.SocialDistribution.Commands.ArchiveDistributionRule;
 using PropertyApi.Application.SocialDistribution.Commands.CancelSocialPublication;
 using PropertyApi.Application.SocialDistribution.Commands.ConnectSocialAccount;
@@ -16,16 +17,28 @@ using PropertyApi.Application.SocialDistribution.Commands.DeactivateDistribution
 using PropertyApi.Application.SocialDistribution.Commands.DeactivateSocialChannel;
 using PropertyApi.Application.SocialDistribution.Commands.DisconnectSocialAccount;
 using PropertyApi.Application.SocialDistribution.Commands.DispatchPropertyDistribution;
+using PropertyApi.Application.SocialDistribution.Commands.GenerateSocialMediaAsset;
 using PropertyApi.Application.SocialDistribution.Commands.PublishSocialPublication;
 using PropertyApi.Application.SocialDistribution.Commands.QueueSocialPublication;
+using PropertyApi.Application.SocialDistribution.Commands.RegenerateSocialMediaAsset;
+using PropertyApi.Application.SocialDistribution.Commands.RejectSocialContent;
+using PropertyApi.Application.SocialDistribution.Commands.RepostSocialPublication;
+using PropertyApi.Application.SocialDistribution.Commands.RescheduleSocialPublication;
+using PropertyApi.Application.SocialDistribution.Commands.ResolveDeadLetter;
 using PropertyApi.Application.SocialDistribution.Commands.RetrySocialPublication;
 using PropertyApi.Application.SocialDistribution.Commands.UpdateDistributionRule;
 using PropertyApi.Application.SocialDistribution.DTOs;
+using PropertyApi.Application.SocialDistribution.Queries.GetDeadLetterById;
 using PropertyApi.Application.SocialDistribution.Queries.GetDistributionRuleById;
+using PropertyApi.Application.SocialDistribution.Queries.GetPublisherCapabilities;
 using PropertyApi.Application.SocialDistribution.Queries.GetSocialAccountById;
+using PropertyApi.Application.SocialDistribution.Queries.GetSocialDashboardSummary;
+using PropertyApi.Application.SocialDistribution.Queries.GetSocialMediaAssetById;
 using PropertyApi.Application.SocialDistribution.Queries.GetSocialPublicationById;
 using PropertyApi.Application.SocialDistribution.Queries.GetSocialPublicationStatusHistory;
+using PropertyApi.Application.SocialDistribution.Queries.ListDeadLetters;
 using PropertyApi.Application.SocialDistribution.Queries.ListDistributionRules;
+using PropertyApi.Application.SocialDistribution.Queries.ListPublishers;
 using PropertyApi.Application.SocialDistribution.Queries.ListSocialAccounts;
 using PropertyApi.Application.SocialDistribution.Queries.ListSocialChannels;
 using PropertyApi.Application.SocialDistribution.Queries.ListSocialPublications;
@@ -152,6 +165,25 @@ public sealed class SocialDistributionController : ControllerBase
     public async Task<IActionResult> DisconnectAccount(Guid id, CancellationToken ct)
     {
         var result = await _mediator.Send(new DisconnectSocialAccountCommand(id), ct);
+        return Ok(result);
+    }
+
+    // ── Publishers (Phase 5) ─────────────────────────────────────────────────
+
+    [HttpGet("publishers")]
+    [ProducesResponseType(typeof(IReadOnlyList<SocialPublisherInfoDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPublishers(CancellationToken ct)
+    {
+        var result = await _mediator.Send(new ListPublishersQuery(), ct);
+        return Ok(result);
+    }
+
+    [HttpGet("publishers/{platform}/capabilities")]
+    [ProducesResponseType(typeof(SocialPublisherInfoDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPublisherCapabilities(SocialPlatform platform, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new GetPublisherCapabilitiesQuery(platform), ct);
         return Ok(result);
     }
 
@@ -287,6 +319,16 @@ public sealed class SocialDistributionController : ControllerBase
         return Ok(result);
     }
 
+    // ── Admin Dashboard (Phase 10) ──────────────────────────────────────────
+
+    [HttpGet("dashboard/summary")]
+    [ProducesResponseType(typeof(SocialDashboardSummaryDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetDashboardSummary(CancellationToken ct)
+    {
+        var result = await _mediator.Send(new GetSocialDashboardSummaryQuery(), ct);
+        return Ok(result);
+    }
+
     // ── Publications ─────────────────────────────────────────────────────
 
     [HttpGet("publications")]
@@ -300,11 +342,13 @@ public sealed class SocialDistributionController : ControllerBase
         [FromQuery] DateTime? toDate,
         [FromQuery] int page,
         [FromQuery] int pageSize,
+        [FromQuery] Guid? distributionRuleId,
+        [FromQuery] int? governorateId,
         CancellationToken ct)
     {
         var filter = new SocialPublicationFilterDto(
             propertyId, socialAccountId, platform, status, fromDate, toDate,
-            page == 0 ? 1 : page, pageSize == 0 ? 20 : pageSize);
+            page == 0 ? 1 : page, pageSize == 0 ? 20 : pageSize, distributionRuleId, governorateId);
 
         var result = await _mediator.Send(new ListSocialPublicationsQuery(filter), ct);
         return Ok(result);
@@ -365,6 +409,17 @@ public sealed class SocialDistributionController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("publications/{id:guid}/reschedule")]
+    [EnableRateLimiting("social-distribution-write")]
+    [ProducesResponseType(typeof(SocialPublicationDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ReschedulePublication(Guid id, [FromBody] ReschedulePublicationRequest dto, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new RescheduleSocialPublicationCommand(id, GetUserId(), dto.NewScheduledAt), ct);
+        return Ok(result);
+    }
+
     [HttpPost("publications/{id:guid}/retry")]
     [EnableRateLimiting("social-distribution-write")]
     [ProducesResponseType(typeof(SocialPublicationDto), StatusCodes.Status200OK)]
@@ -376,6 +431,17 @@ public sealed class SocialDistributionController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("publications/{id:guid}/repost")]
+    [EnableRateLimiting("social-distribution-write")]
+    [ProducesResponseType(typeof(SocialPublicationDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RepostPublication(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new RepostSocialPublicationCommand(id, GetUserId()), ct);
+        return Ok(result);
+    }
+
     [HttpPost("publications/{id:guid}/cancel")]
     [EnableRateLimiting("social-distribution-write")]
     [ProducesResponseType(typeof(SocialPublicationDto), StatusCodes.Status200OK)]
@@ -384,6 +450,109 @@ public sealed class SocialDistributionController : ControllerBase
     public async Task<IActionResult> CancelPublication(Guid id, CancellationToken ct)
     {
         var result = await _mediator.Send(new CancelSocialPublicationCommand(id, GetUserId()), ct);
+        return Ok(result);
+    }
+
+    // ── AI Social Content Review (Phase 8) ──────────────────────────────────
+
+    [HttpPost("publications/{id:guid}/content/approve")]
+    [EnableRateLimiting("social-distribution-write")]
+    [ProducesResponseType(typeof(SocialPublicationDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ApproveContent(Guid id, [FromBody] ApproveSocialContentRequest dto, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new ApproveSocialContentCommand(id, GetUserId(), dto.Note), ct);
+        return Ok(result);
+    }
+
+    [HttpPost("publications/{id:guid}/content/reject")]
+    [EnableRateLimiting("social-distribution-write")]
+    [ProducesResponseType(typeof(SocialPublicationDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RejectContent(Guid id, [FromBody] RejectSocialContentRequest dto, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new RejectSocialContentCommand(id, GetUserId(), dto.Note), ct);
+        return Ok(result);
+    }
+
+    // ── Dead Letters (Phase 6) ───────────────────────────────────────────────
+
+    [HttpGet("dead-letters")]
+    [ProducesResponseType(typeof(PropertyApi.Application.Properties.DTOs.PagedResult<SocialPublicationDeadLetterDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetDeadLetters([FromQuery] bool? resolved, [FromQuery] int page, [FromQuery] int pageSize, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new ListDeadLettersQuery(resolved, page == 0 ? 1 : page, pageSize == 0 ? 20 : pageSize), ct);
+        return Ok(result);
+    }
+
+    [HttpGet("dead-letters/{id:guid}")]
+    [ProducesResponseType(typeof(SocialPublicationDeadLetterDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetDeadLetterById(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new GetDeadLetterByIdQuery(id), ct);
+        return Ok(result);
+    }
+
+    /// <summary>Acknowledges a dead-lettered failure and, optionally, requeues the publication (spec §13/§29).</summary>
+    [HttpPost("dead-letters/{id:guid}/resolve")]
+    [EnableRateLimiting("social-distribution-write")]
+    [ProducesResponseType(typeof(SocialPublicationDeadLetterDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ResolveDeadLetter(Guid id, [FromBody] ResolveDeadLetterRequest dto, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new ResolveDeadLetterCommand(id, GetUserId(), dto.Note, dto.Requeue), ct);
+        return Ok(result);
+    }
+
+    /// <summary>Convenience alias for "resolve with Requeue=true" — spec's literal <c>POST /jobs/{jobId}/requeue</c> endpoint, expressed against the dead letter it corresponds to (Job ⇔ Publication is 1:1 in this design — see ISocialPublicationJobQueue's remarks).</summary>
+    [HttpPost("dead-letters/{id:guid}/requeue")]
+    [EnableRateLimiting("social-distribution-write")]
+    [ProducesResponseType(typeof(SocialPublicationDeadLetterDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RequeueDeadLetter(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new ResolveDeadLetterCommand(id, GetUserId(), Note: null, Requeue: true), ct);
+        return Ok(result);
+    }
+
+    // ── Social Media Assets (Phase 7) ────────────────────────────────────────
+
+    [HttpPost("assets/generate")]
+    [EnableRateLimiting("social-distribution-write")]
+    [ProducesResponseType(typeof(GeneratedSocialAssetResult), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> GenerateAsset([FromBody] GenerateSocialMediaAssetRequest dto, CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new GenerateSocialMediaAssetCommand(dto.PropertyId, dto.Platform, dto.Language ?? "ar", dto.ImageUrls ?? [], dto.Title, dto.Body, dto.AssetType),
+            ct);
+
+        return CreatedAtAction(nameof(GetAssetById), new { id = result.AssetId }, result);
+    }
+
+    [HttpGet("assets/{id:guid}")]
+    [ProducesResponseType(typeof(SocialMediaAssetDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAssetById(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new GetSocialMediaAssetByIdQuery(id), ct);
+        return Ok(result);
+    }
+
+    [HttpPost("assets/{id:guid}/regenerate")]
+    [EnableRateLimiting("social-distribution-write")]
+    [ProducesResponseType(typeof(GeneratedSocialAssetResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RegenerateAsset(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new RegenerateSocialMediaAssetCommand(id), ct);
         return Ok(result);
     }
 
@@ -440,3 +609,20 @@ public sealed record UpdateDistributionRuleRequest(
     DateTime? EndAt);
 
 public sealed record DistributionRuleValidationResult(bool IsValid, IReadOnlyList<string> Errors);
+
+public sealed record ResolveDeadLetterRequest(string? Note, bool Requeue);
+
+public sealed record GenerateSocialMediaAssetRequest(
+    Guid PropertyId,
+    SocialPlatform Platform,
+    string? Language,
+    IReadOnlyList<string>? ImageUrls,
+    string Title,
+    string Body,
+    SocialAssetType? AssetType);
+
+public sealed record ReschedulePublicationRequest(DateTime? NewScheduledAt);
+
+public sealed record ApproveSocialContentRequest(string? Note);
+
+public sealed record RejectSocialContentRequest(string Note);

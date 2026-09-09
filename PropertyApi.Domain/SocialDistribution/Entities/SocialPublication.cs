@@ -90,6 +90,12 @@ public sealed class SocialPublication : AuditableEntity
     /// predates the rule engine; stamped by <c>DistributionEngine</c> when a publication is the
     /// automatic product of rule evaluation.
     /// </summary>
+    /// <param name="isPromotionalRepost">
+    /// Phase 13 spec §"مثال UTM للترويج": true for a deliberate repost/promotion (a distinct
+    /// <c>utm_campaign=property_promotion</c>/<c>utm_content=promotion_{propertyId}</c> pair, so
+    /// reporting can separate this from routine auto-distribution traffic) — false (default)
+    /// keeps the exact pre-existing UTM behavior for every other caller.
+    /// </param>
     public static SocialPublication Create(
         Guid propertyId,
         Guid socialAccountId,
@@ -97,7 +103,8 @@ public sealed class SocialPublication : AuditableEntity
         SocialPlatform platform,
         int maxRetryCount = DefaultMaxRetryCount,
         Guid? distributionRuleId = null,
-        Guid? distributionRunId = null)
+        Guid? distributionRunId = null,
+        bool isPromotionalRepost = false)
     {
         if (propertyId == Guid.Empty)
             throw new DomainException("لا يمكن إنشاء منشور توزيع بلا عقار.");
@@ -117,12 +124,16 @@ public sealed class SocialPublication : AuditableEntity
             DistributionRuleId = distributionRuleId,
             DistributionRunId = distributionRunId,
             UtmMedium = SocialDistributionUtmDefaults.UtmMedium,
-            UtmCampaign = SocialDistributionUtmDefaults.UtmCampaign,
+            UtmCampaign = isPromotionalRepost
+                ? SocialDistributionUtmDefaults.UtmCampaignPromotion
+                : SocialDistributionUtmDefaults.UtmCampaign,
             UtmSource = SocialDistributionUtmDefaults.UtmSourceFor(platform),
         };
 
         // Depends on Id, which BaseEntity's field initializer already assigned above.
-        publication.UtmContent = SocialDistributionUtmDefaults.UtmContentForPublication(publication.Id);
+        publication.UtmContent = isPromotionalRepost
+            ? SocialDistributionUtmDefaults.UtmContentForPromotion(propertyId)
+            : SocialDistributionUtmDefaults.UtmContentForPublication(publication.Id);
 
         return publication;
     }
@@ -150,11 +161,37 @@ public sealed class SocialPublication : AuditableEntity
         if (Content is null)
             throw new InvalidStateTransitionException("لا يمكن جدولة/تفعيل منشور بلا محتوى.");
 
+        // Phase 8 spec §3: content pending human review (or rejected) must never reach the
+        // queue — a future AI-assisted generator that flags its own output unsafe relies on this
+        // gate, not on every caller remembering to check ReviewStatus itself.
+        if (Content.ReviewStatus != ContentReviewStatus.Approved)
+        {
+            throw new InvalidStateTransitionException(
+                $"لا يمكن جدولة/تفعيل منشور محتواه بانتظار المراجعة أو مرفوض (الحالة: {Content.ReviewStatus}).");
+        }
+
         if (scheduledAt is not null && scheduledAt < utcNow)
             throw new DomainException("لا يمكن جدولة النشر في وقت ماضٍ.");
 
         Status = SocialPublicationStatus.Queued;
         ScheduledAt = scheduledAt;
+    }
+
+    /// <summary>
+    /// Changes a still-Queued publication's scheduled time (Phase 12 spec §12: "إمكانية تعديل
+    /// الجدولة قبل التنفيذ") — deliberately a separate method from <see cref="Queue"/>, which only
+    /// works from Draft: once queued, this is the only way to move the time, and only while the
+    /// worker has not yet picked it up (Queued only — never Publishing/Published/Retrying, where
+    /// a reschedule could race a publish attempt already in flight or already completed).
+    /// </summary>
+    public void Reschedule(DateTime? newScheduledAt, DateTime utcNow)
+    {
+        EnsureStatus(SocialPublicationStatus.Queued, "إعادة الجدولة");
+
+        if (newScheduledAt is not null && newScheduledAt < utcNow)
+            throw new DomainException("لا يمكن جدولة النشر في وقت ماضٍ.");
+
+        ScheduledAt = newScheduledAt;
     }
 
     /// <summary>

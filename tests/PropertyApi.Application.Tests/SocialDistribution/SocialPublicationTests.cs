@@ -53,6 +53,25 @@ public sealed class SocialPublicationTests
     public void Create_EmptySocialAccountId_Throws() =>
         Assert.Throws<DomainException>(() => SocialPublication.Create(Guid.NewGuid(), Guid.Empty, Guid.NewGuid(), SocialPlatform.Facebook));
 
+    [Fact]
+    public void Create_PromotionalRepost_UsesDistinctCampaignAndPropertyScopedContent()
+    {
+        var propertyId = Guid.NewGuid();
+        var publication = SocialPublication.Create(propertyId, Guid.NewGuid(), Guid.NewGuid(), SocialPlatform.Facebook, isPromotionalRepost: true);
+
+        Assert.Equal("property_promotion", publication.UtmCampaign);
+        Assert.Equal($"promotion_{propertyId}", publication.UtmContent);
+    }
+
+    [Fact]
+    public void Create_NonRepost_KeepsOriginalCampaignAndPerPublicationContent()
+    {
+        var publication = MakePublication();
+
+        Assert.Equal("social_distribution", publication.UtmCampaign);
+        Assert.Equal($"publication_{publication.Id}", publication.UtmContent);
+    }
+
     // ── Queue ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -74,6 +93,37 @@ public sealed class SocialPublicationTests
     }
 
     [Fact]
+    public void Queue_ContentPendingReview_Throws()
+    {
+        var publication = MakePublicationWithContent();
+        publication.Content!.RequireReview("بانتظار مراجعة بشرية.");
+
+        Assert.Throws<InvalidStateTransitionException>(() => publication.Queue(null, DateTime.UtcNow));
+    }
+
+    [Fact]
+    public void Queue_ContentRejected_Throws()
+    {
+        var publication = MakePublicationWithContent();
+        publication.Content!.RequireReview("test");
+        publication.Content.Reject(Guid.NewGuid(), "غير مناسب.", DateTime.UtcNow);
+
+        Assert.Throws<InvalidStateTransitionException>(() => publication.Queue(null, DateTime.UtcNow));
+    }
+
+    [Fact]
+    public void Queue_ContentApprovedAfterReview_Succeeds()
+    {
+        var publication = MakePublicationWithContent();
+        publication.Content!.RequireReview("test");
+        publication.Content.Approve(Guid.NewGuid(), DateTime.UtcNow);
+
+        publication.Queue(null, DateTime.UtcNow);
+
+        Assert.Equal(SocialPublicationStatus.Queued, publication.Status);
+    }
+
+    [Fact]
     public void Queue_ScheduledInThePast_Throws()
     {
         var publication = MakePublicationWithContent();
@@ -92,6 +142,63 @@ public sealed class SocialPublicationTests
 
         Assert.False(publication.IsDueToPublish(now));
         Assert.True(publication.IsDueToPublish(now.AddHours(2)));
+    }
+
+    // ── Reschedule (Phase 12) ───────────────────────────────────────────────
+
+    [Fact]
+    public void Reschedule_WhileQueued_ChangesScheduledAt()
+    {
+        var publication = MakePublicationWithContent();
+        var now = DateTime.UtcNow;
+        publication.Queue(now.AddHours(1), now);
+
+        publication.Reschedule(now.AddHours(5), now);
+
+        Assert.Equal(now.AddHours(5), publication.ScheduledAt);
+        Assert.Equal(SocialPublicationStatus.Queued, publication.Status);
+    }
+
+    [Fact]
+    public void Reschedule_ToNull_MeansAsSoonAsPossible()
+    {
+        var publication = MakePublicationWithContent();
+        var now = DateTime.UtcNow;
+        publication.Queue(now.AddHours(1), now);
+
+        publication.Reschedule(null, now);
+
+        Assert.Null(publication.ScheduledAt);
+        Assert.True(publication.IsDueToPublish(now));
+    }
+
+    [Fact]
+    public void Reschedule_ToPastTime_Throws()
+    {
+        var publication = MakePublicationWithContent();
+        var now = DateTime.UtcNow;
+        publication.Queue(null, now);
+
+        Assert.Throws<DomainException>(() => publication.Reschedule(now.AddMinutes(-1), now));
+    }
+
+    [Fact]
+    public void Reschedule_WhileStillDraft_Throws()
+    {
+        var publication = MakePublicationWithContent();
+        Assert.Throws<InvalidStateTransitionException>(() => publication.Reschedule(DateTime.UtcNow.AddHours(1), DateTime.UtcNow));
+    }
+
+    [Fact]
+    public void Reschedule_AfterPublished_Throws()
+    {
+        var publication = MakePublicationWithContent();
+        var now = DateTime.UtcNow;
+        publication.Queue(null, now);
+        publication.StartPublishing(now);
+        publication.MarkPublished("ext-1", null, now);
+
+        Assert.Throws<InvalidStateTransitionException>(() => publication.Reschedule(now.AddHours(1), now));
     }
 
     [Fact]

@@ -1,3 +1,5 @@
+using PropertyApi.Domain.SocialDistribution.Enums;
+
 namespace PropertyApi.Application.SocialDistribution.DTOs;
 
 public sealed record SocialPostContentDto(
@@ -8,4 +10,6 @@ public sealed record SocialPostContentDto(
     string TargetUrl,
     IReadOnlyList<string> Hashtags,
     string Language,
-    int ContentVersion);
+    int ContentVersion,
+    ContentReviewStatus ReviewStatus,
+    string? ReviewNote);

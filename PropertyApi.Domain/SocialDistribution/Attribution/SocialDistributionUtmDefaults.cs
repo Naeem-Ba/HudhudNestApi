@@ -18,7 +18,13 @@ public static class SocialDistributionUtmDefaults
 
     public const string UtmCampaign = "social_distribution";
 
+    /// <summary>Phase 13 spec §"مثال UTM للترويج" — a deliberately different campaign name from <see cref="UtmCampaign"/>, so a report can separate "routine auto-distribution" traffic from "a deliberate repost/promotion" traffic.</summary>
+    public const string UtmCampaignPromotion = "property_promotion";
+
     public static string UtmContentForPublication(Guid publicationId) => $"publication_{publicationId}";
+
+    /// <summary>Phase 13 spec §"مثال UTM للترويج": <c>utm_content=promotion_{'{'}public-id{'}'}</c>.</summary>
+    public static string UtmContentForPromotion(Guid propertyId) => $"promotion_{propertyId}";
 
     /// <summary>Lowercase, UTM-safe token per platform — matches this codebase's own UTM charset (letters/digits/._-, spec §4).</summary>
     public static string UtmSourceFor(SocialPlatform platform) => platform switch

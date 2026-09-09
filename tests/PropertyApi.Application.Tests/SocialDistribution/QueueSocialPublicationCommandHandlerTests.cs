@@ -17,10 +17,11 @@ public sealed class QueueSocialPublicationCommandHandlerTests
         public Mock<ISocialPublicationStatusHistoryRepository> History { get; } = new();
         public Mock<ISocialAccountRepository> Accounts { get; } = new();
         public Mock<IPropertyRepository> Properties { get; } = new();
+        public Mock<ISocialPublicationJobQueue> JobQueue { get; } = new();
         public Mock<IUnitOfWork> UnitOfWork { get; } = new();
 
         public QueueSocialPublicationCommandHandler BuildHandler() => new(
-            Publications.Object, History.Object, Accounts.Object, Properties.Object, UnitOfWork.Object);
+            Publications.Object, History.Object, Accounts.Object, Properties.Object, JobQueue.Object, UnitOfWork.Object);
     }
 
     private static (SocialPublication publication, SocialAccount account) MakeDraftPublication()
@@ -52,6 +53,7 @@ public sealed class QueueSocialPublicationCommandHandlerTests
 
         Assert.Equal(SocialPublicationStatus.Queued, result.Status);
         fixture.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        fixture.JobQueue.Verify(x => x.EnqueueAsync(publication.Id, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -65,6 +67,8 @@ public sealed class QueueSocialPublicationCommandHandlerTests
 
         await Assert.ThrowsAsync<ConflictException>(() => fixture.BuildHandler().Handle(
             new QueueSocialPublicationCommand(publication.Id, Guid.NewGuid(), null), CancellationToken.None));
+
+        fixture.JobQueue.Verify(x => x.EnqueueAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

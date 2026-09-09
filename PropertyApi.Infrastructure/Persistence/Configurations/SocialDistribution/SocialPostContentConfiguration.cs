@@ -19,9 +19,20 @@ public sealed class SocialPostContentConfiguration : IEntityTypeConfiguration<So
         builder.Property(c => c.Language).IsRequired().HasMaxLength(5);
         builder.Property(c => c.Platform).IsRequired().HasConversion<string>().HasMaxLength(20);
 
+        // Phase 8: Human Review workflow.
+        builder.Property(c => c.ReviewStatus).IsRequired().HasConversion<string>().HasMaxLength(20);
+        builder.Property(c => c.ReviewNote).HasMaxLength(500);
+
         // The PublicationId FK/unique-index side of the 1:1 relationship is declared in
         // SocialPublicationConfiguration (builder.HasOne(p => p.Content).WithOne()...) — EF Core
         // needs it declared from exactly one side to avoid a duplicate/conflicting mapping.
         builder.HasIndex(c => c.PublicationId).IsUnique();
+
+        // Phase 7: FK-only (no navigation property) to the generated asset currently backing
+        // ImageUrl — SetNull rather than Restrict, since an asset expiring/being cleaned up later
+        // must not block deleting it just because a past (possibly already-Published) content row
+        // still points at it.
+        builder.HasOne<SocialMediaAsset>().WithMany().HasForeignKey(c => c.SocialMediaAssetId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(c => c.SocialMediaAssetId);
     }
 }

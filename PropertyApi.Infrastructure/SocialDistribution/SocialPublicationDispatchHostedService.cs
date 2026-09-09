@@ -3,21 +3,30 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.SocialDistribution.Commands.PublishSocialPublication;
 using PropertyApi.Application.SocialDistribution.Interfaces;
+using PropertyApi.Domain.SocialDistribution.Entities;
+using PropertyApi.Domain.SocialDistribution.Enums;
 using PropertyApi.Infrastructure.Persistence;
 
 namespace PropertyApi.Infrastructure.SocialDistribution;
 
 /// <summary>
-/// Polls for Queued (due) and Retrying (due-for-retry) publications and executes them through
+/// Polls the <see cref="ISocialPublicationJobQueue"/> Port for due jobs and executes each through
 /// the exact same <see cref="PublishSocialPublicationCommand"/> the manual "publish now" admin
-/// endpoint uses (spec §14: this IS the Job — see PublishSocialPublicationCommandHandler for why
-/// there is deliberately no separate worker-only execution path). Pattern mirrors
-/// ListingExpiryHostedService/SavedSearchMatchHostedService exactly: IServiceScopeFactory + a
-/// polling loop + a Postgres advisory lock, because this codebase has no real queue/worker
-/// infrastructure (Hangfire/Quartz/...) — see docs for what a real Job/Queue system would still
-/// need to add on top (leases, cross-instance exactly-once, backpressure).
+/// endpoint uses (spec Phase 3 §14 / Phase 6 §15: this IS the Worker — see
+/// PublishSocialPublicationCommandHandler for why there is deliberately no separate worker-only
+/// execution path). Pattern mirrors ListingExpiryHostedService/SavedSearchMatchHostedService
+/// exactly: IServiceScopeFactory + a polling loop + a Postgres advisory lock, because this
+/// codebase has no real queue/broker infrastructure (Hangfire/Quartz/SQS/...) — see docs for what
+/// a real Job/Queue system would still need to add on top (leases, cross-instance exactly-once,
+/// backpressure).
+///
+/// Phase 6 addition: after each job, a publication that landed in the TERMINAL
+/// <see cref="SocialPublicationStatus.Failed"/> state (never <c>Retrying</c> — that one will be
+/// picked up again automatically) is recorded as a <see cref="SocialPublicationDeadLetter"/> if
+/// one does not already exist for it — the durable, admin-visible failure ledger (spec §13).
 /// </summary>
 public sealed class SocialPublicationDispatchHostedService : BackgroundService
 {
@@ -82,28 +91,33 @@ public sealed class SocialPublicationDispatchHostedService : BackgroundService
                 _logger,
                 async () =>
                 {
-                    var publications = scope.ServiceProvider.GetRequiredService<ISocialPublicationRepository>();
+                    var jobQueue = scope.ServiceProvider.GetRequiredService<ISocialPublicationJobQueue>();
+                    var deadLetters = scope.ServiceProvider.GetRequiredService<ISocialPublicationDeadLetterRepository>();
+                    var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
                     var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
                     var now = DateTime.UtcNow;
 
-                    var candidates = (await publications.GetDueToPublishAsync(now, MaxItemsPerSweep, ct))
-                        .Concat(await publications.GetDueForRetryAsync(now, MaxItemsPerSweep, ct))
-                        .ToList();
+                    var jobs = await jobQueue.DequeueDueBatchAsync(MaxItemsPerSweep, now, ct);
 
                     var processed = 0;
-                    foreach (var publication in candidates)
+                    foreach (var job in jobs)
                     {
                         try
                         {
                             // Each Send runs its own StartPublishing→...→SaveChanges cycle
                             // (PublishSocialPublicationCommandHandler) — one candidate failing
-                            // must never abort the rest of the sweep.
-                            await mediator.Send(new PublishSocialPublicationCommand(publication.Id), ct);
+                            // must never abort the rest of the sweep, and Facebook/Instagram/
+                            // Telegram jobs for the same property are fully independent of one
+                            // another's outcome.
+                            var result = await mediator.Send(new PublishSocialPublicationCommand(job.PublicationId), ct);
                             processed++;
+
+                            if (result.Status == SocialPublicationStatus.Failed)
+                                await RecordDeadLetterIfNeededAsync(deadLetters, uow, job.Platform, result, ct);
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "Failed to dispatch SocialPublication {PublicationId}.", publication.Id);
+                            _logger.LogError(ex, "Failed to dispatch SocialPublication {PublicationId}.", job.PublicationId);
                         }
                     }
 
@@ -120,5 +134,33 @@ public sealed class SocialPublicationDispatchHostedService : BackgroundService
         {
             await db.Database.CloseConnectionAsync();
         }
+    }
+
+    private async Task RecordDeadLetterIfNeededAsync(
+        ISocialPublicationDeadLetterRepository deadLetters,
+        IUnitOfWork uow,
+        SocialPlatform platform,
+        Application.SocialDistribution.DTOs.SocialPublicationDto publication,
+        CancellationToken ct)
+    {
+        if (await deadLetters.ExistsUnresolvedForPublicationAsync(publication.Id, ct))
+            return;
+
+        var deadLetter = SocialPublicationDeadLetter.Create(
+            publication.Id,
+            publication.SocialAccountId,
+            platform,
+            publication.ErrorCode ?? SocialPublicationErrorCode.NetworkError,
+            publication.ErrorMessage ?? "فشل غير معروف.",
+            publication.RetryCount,
+            publication.FailedAt ?? DateTime.UtcNow);
+
+        await deadLetters.AddAsync(deadLetter, ct);
+        await uow.SaveChangesAsync(ct);
+
+        _logger.LogWarning(
+            "Social publication {PublicationId} moved to dead letter after exhausting its retry budget (ErrorCode={ErrorCode}).",
+            publication.Id,
+            deadLetter.LastErrorCode);
     }
 }

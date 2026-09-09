@@ -33,7 +33,7 @@ public static class DependencyInjection
         services.AddUserContextInfrastructure();
         services.AddMediaInfrastructure(configuration, environment);
         services.AddCacheInfrastructure(configuration, environment);
-        services.AddSocialDistributionInfrastructure();
+        services.AddSocialDistributionInfrastructure(configuration);
         services.AddOperationalHealthChecks();
 
         return services;

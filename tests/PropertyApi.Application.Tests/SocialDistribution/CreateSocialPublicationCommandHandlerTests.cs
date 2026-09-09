@@ -3,6 +3,7 @@ using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Properties.DTOs;
+using PropertyApi.Application.SocialDistribution.AiContent;
 using PropertyApi.Application.SocialDistribution.Commands.CreateSocialPublication;
 using PropertyApi.Application.SocialDistribution.DTOs;
 using PropertyApi.Application.SocialDistribution.Interfaces;
@@ -31,10 +32,11 @@ public sealed class CreateSocialPublicationCommandHandlerTests
         public Mock<ISocialPublicationRepository> Publications { get; } = new();
         public Mock<ISocialPublicationStatusHistoryRepository> History { get; } = new();
         public Mock<ISocialDistributionTargetUrlBuilder> UrlBuilder { get; } = new();
+        public ISocialContentGenerator ContentGenerator { get; } = new TemplateSocialContentGenerator();
         public Mock<IUnitOfWork> UnitOfWork { get; } = new();
 
         public CreateSocialPublicationCommandHandler BuildHandler() => new(
-            Properties.Object, Accounts.Object, Channels.Object, Publications.Object, History.Object, UrlBuilder.Object, UnitOfWork.Object);
+            Properties.Object, Accounts.Object, Channels.Object, Publications.Object, History.Object, UrlBuilder.Object, ContentGenerator, UnitOfWork.Object);
     }
 
     private static SocialAccount MakeActiveAccount(Guid channelId, SocialPlatform platform = SocialPlatform.Facebook)

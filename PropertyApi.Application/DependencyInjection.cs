@@ -66,6 +66,12 @@ public static class DependencyInjection
         // scanning (mirrors IPropertyOwnershipService above).
         services.AddScoped<IDistributionEngine, DistributionEngine>();
 
+        // AI Social Content (Phase 8) — TemplateSocialContentGenerator is deterministic/pure
+        // (no I/O), so a Singleton is safe and avoids a per-request allocation; see
+        // ISocialContentGenerator's docs for how a future real AI-backed implementation replaces
+        // this registration alone, with no other code changed.
+        services.AddSingleton<SocialDistribution.AiContent.ISocialContentGenerator, SocialDistribution.AiContent.TemplateSocialContentGenerator>();
+
         // Password security service.
         // Validates password complexity, rejects common patterns locally, and screens
         // against Have I Been Pwned.
