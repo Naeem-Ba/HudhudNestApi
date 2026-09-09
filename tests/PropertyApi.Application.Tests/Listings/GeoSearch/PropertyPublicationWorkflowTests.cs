@@ -1,7 +1,9 @@
+using MediatR;
 using Moq;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Commands.PublishProperty;
+using PropertyApi.Application.Listings.Events;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Listings.Queries.GetPropertyForManagement;
 using PropertyApi.Application.Listings.Queries.GetMyProperties;
@@ -89,7 +91,8 @@ public sealed class PropertyPublicationWorkflowTests
         unitOfWork
             .Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
-        var handler = new PublishPropertyCommandHandler(repository.Object, unitOfWork.Object);
+        var publisher = new Mock<IPublisher>();
+        var handler = new PublishPropertyCommandHandler(repository.Object, unitOfWork.Object, publisher.Object);
 
         await handler.Handle(
             new PublishPropertyCommand(property.Id, property.OwnerId, IsAdmin: false),
@@ -100,6 +103,33 @@ public sealed class PropertyPublicationWorkflowTests
         Assert.True(
             property.ExpiresAt > DateTime.UtcNow.Add(ListingLifecyclePolicy.PublicationPeriod).AddMinutes(-10));
         unitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+
+        // Phase 4: publishing a property must raise PropertyPublishedEvent so SocialDistribution
+        // can react — Listings itself never references SocialDistribution, only MediatR.
+        publisher.Verify(x => x.Publish(
+            It.Is<PropertyPublishedEvent>(e => e.PropertyId == property.Id && e.PublishedByUserId == property.OwnerId),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task PublishingAlreadyPublishedProperty_DoesNotRaiseEventAgain()
+    {
+        var property = CreateProperty();
+        property.Publish(); // already published
+        var repository = RepositoryReturning(property);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var publisher = new Mock<IPublisher>();
+        var handler = new PublishPropertyCommandHandler(repository.Object, unitOfWork.Object, publisher.Object);
+
+        await handler.Handle(
+            new PublishPropertyCommand(property.Id, property.OwnerId, IsAdmin: false),
+            CancellationToken.None);
+
+        // The handler's own early-return guard ("already published") means Publish() is never
+        // called a second time and the event never fires again — this is the natural
+        // idempotency PropertyPublishedDistributionHandler's remarks rely on.
+        publisher.Verify(x => x.Publish(It.IsAny<PropertyPublishedEvent>(), It.IsAny<CancellationToken>()), Times.Never);
+        unitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -109,7 +139,8 @@ public sealed class PropertyPublicationWorkflowTests
         var repository = RepositoryReturning(property);
         var handler = new PublishPropertyCommandHandler(
             repository.Object,
-            Mock.Of<IUnitOfWork>());
+            Mock.Of<IUnitOfWork>(),
+            Mock.Of<IPublisher>());
 
         var exception = await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(
             new PublishPropertyCommand(property.Id, property.OwnerId, IsAdmin: false),
@@ -132,7 +163,8 @@ public sealed class PropertyPublicationWorkflowTests
         var repository = RepositoryReturning(property);
         var handler = new PublishPropertyCommandHandler(
             repository.Object,
-            Mock.Of<IUnitOfWork>());
+            Mock.Of<IUnitOfWork>(),
+            Mock.Of<IPublisher>());
 
         await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(
             new PublishPropertyCommand(property.Id, Guid.NewGuid(), IsAdmin: false),

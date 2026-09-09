@@ -13,6 +13,7 @@ using PropertyApi.Application.Auth.Policies;
 using PropertyApi.Application.Auth.Services;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Listings.Services;
+using PropertyApi.Application.SocialDistribution.Services;
 
 namespace PropertyApi.Application;
 
@@ -59,6 +60,11 @@ public static class DependencyInjection
         services.AddScoped<IAdminSubscriptionService, AdminSubscriptionService>();
         services.AddScoped<IAdminListingService, AdminListingService>();
         services.AddScoped<IPropertyOwnershipService, PropertyOwnershipService>();
+
+        // Provinces & Distribution Rules (Phase 4) — a plain orchestration service, not a
+        // MediatR handler, so it needs an explicit registration here rather than assembly
+        // scanning (mirrors IPropertyOwnershipService above).
+        services.AddScoped<IDistributionEngine, DistributionEngine>();
 
         // Password security service.
         // Validates password complexity, rejects common patterns locally, and screens

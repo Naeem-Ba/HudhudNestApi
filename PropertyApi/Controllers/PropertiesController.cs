@@ -10,6 +10,8 @@ using PropertyApi.Application.Listings.Commands.ConfirmPropertyAvailability;
 using PropertyApi.Application.Listings.Commands.CreateProperty;
 using PropertyApi.Application.Listings.Commands.RequestFeaturedListing;
 using PropertyApi.Application.Listings.Commands.RequestListingExtension;
+using PropertyApi.Application.Listings.Commands.TrackPropertyShareEvent;
+using PropertyApi.Application.Listings.Commands.TrackPropertyAttributionEvent;
 using PropertyApi.Application.Listings.Queries.CheckPotentialDuplicateProperty;
 using PropertyApi.Application.Listings.Commands.DeleteProperty;
 using PropertyApi.Application.Listings.Commands.UpdateProperty;
@@ -241,6 +243,83 @@ public sealed class PropertiesController : ControllerBase
             ct);
 
         return NoContent();
+    }
+
+    // ── POST /api/properties/{id}/share-events ───────────────────
+    // Social Sharing & Distribution — records that a visitor successfully shared (or copied
+    // the link to) this listing. Public: most sharers are never logged in, so this cannot be
+    // [Authorize]d — UserId is attached only when a valid access token happens to be present.
+    // {id} always comes from the route (never the body), and the handler independently
+    // re-checks the listing is still published/unexpired before writing anything — the fact
+    // that a share button was rendered client-side five minutes ago proves nothing by itself.
+    [HttpPost("{id:guid}/share-events")]
+    [AllowAnonymous]
+    [EnableRateLimiting("property-share-events")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> TrackShareEvent(
+        Guid id,
+        [FromBody] PropertyShareEventSubmitDto dto,
+        CancellationToken ct)
+    {
+        if (dto is null)
+            return BadRequest(new { message = "Request body is required." });
+
+        // [Required] never fires for a non-nullable enum — see the identical guard in
+        // MarketingEventsController.Track for why this explicit check is still needed.
+        if (!Enum.IsDefined(dto.Platform))
+            return BadRequest(new { message = "Platform is required and must be a known share platform." });
+
+        var shareEventId = await _mediator.Send(
+            new TrackPropertyShareEventCommand(
+                id,
+                dto.Platform,
+                GetCurrentUserId(),
+                dto.UtmSource,
+                dto.UtmMedium,
+                dto.UtmCampaign,
+                dto.UtmContent),
+            ct);
+
+        return Ok(new { success = true, id = shareEventId });
+    }
+
+    // UTM / Attribution (Phase 2) — records what happened *after* a visitor opened a
+    // (possibly attributed) property link: a page view, or a contact/lead action. Same public/
+    // rate-limited/re-validated shape as TrackShareEvent above; kept as its own endpoint/table
+    // rather than widening share-events, since a view or a contact click is not a share.
+    [HttpPost("{id:guid}/attribution-events")]
+    [AllowAnonymous]
+    [EnableRateLimiting("property-attribution-events")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> TrackAttributionEvent(
+        Guid id,
+        [FromBody] PropertyAttributionEventSubmitDto dto,
+        CancellationToken ct)
+    {
+        if (dto is null)
+            return BadRequest(new { message = "Request body is required." });
+
+        if (!Enum.IsDefined(dto.EventType))
+            return BadRequest(new { message = "EventType is required and must be a known attribution event type." });
+
+        var attributionEventId = await _mediator.Send(
+            new TrackPropertyAttributionEventCommand(
+                id,
+                dto.EventType,
+                GetCurrentUserId(),
+                dto.UtmSource,
+                dto.UtmMedium,
+                dto.UtmCampaign,
+                dto.UtmContent),
+            ct);
+
+        return Ok(new { success = true, id = attributionEventId });
     }
 
     // ── PATCH /api/properties/{id}/confirm-availability ─────────

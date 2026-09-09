@@ -150,6 +150,53 @@ public static class RateLimitingRegistration
                         QueueLimit = 0
                     }));
 
+            // Social Sharing & Distribution — POST /properties/{id}/share-events. Anonymous
+            // (most sharers aren't logged in) and only ever fires on an already-successful
+            // share/copy-link, so real traffic per visitor is low; the limit exists purely to
+            // bound abuse, not to constrain a legitimate user bouncing between platforms.
+            options.AddPolicy("property-share-events", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 20,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
+            // UTM / Attribution (Phase 2) — POST /properties/{id}/attribution-events. Anonymous,
+            // and fires more often per visitor than a share event (one per page view, plus one
+            // per contact/lead action), so it gets a higher cadence than "property-share-events"
+            // — same order of magnitude as "marketing-events", the closest existing equivalent
+            // (an anonymous, high-frequency, page-driven funnel-tracking endpoint).
+            options.AddPolicy("property-attribution-events", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 40,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
+            // Social Distribution (Phase 3) — every write endpoint under
+            // /api/social-distribution/*. Authenticated Admin-only traffic (unlike the two
+            // anonymous policies above), so this exists purely as defense-in-depth against a
+            // compromised/scripted admin session hammering the publish/queue/retry endpoints,
+            // not against anonymous abuse.
+            options.AddPolicy("social-distribution-write", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 30,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
             options.AddPolicy("geo-search", httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
                     partitionKey: GetClientRateLimitPartitionKey(httpContext),

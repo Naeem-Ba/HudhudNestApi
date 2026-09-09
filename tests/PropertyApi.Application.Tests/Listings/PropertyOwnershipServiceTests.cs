@@ -92,6 +92,9 @@ public sealed class PropertyOwnershipServiceTests
         public Task<bool> ExistsAsync(Guid id, CancellationToken ct = default)
             => Task.FromResult(id == _property.Id);
 
+        public Task<bool> IsPubliclyVisibleAsync(Guid id, CancellationToken ct = default)
+            => Task.FromResult(id == _property.Id);
+
         public Task<(int SoldCount, int RentedCount)> GetDealCountsByOwnerAsync(
             Guid ownerId,
             CancellationToken ct = default)

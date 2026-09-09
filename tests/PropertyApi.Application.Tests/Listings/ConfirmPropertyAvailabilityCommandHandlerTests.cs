@@ -101,6 +101,9 @@ public sealed class ConfirmPropertyAvailabilityCommandHandlerTests
         public Task<bool> ExistsAsync(Guid id, CancellationToken ct = default)
             => throw new NotImplementedException();
 
+        public Task<bool> IsPubliclyVisibleAsync(Guid id, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
         public Task<(int SoldCount, int RentedCount)> GetDealCountsByOwnerAsync(
             Guid ownerId,
             CancellationToken ct = default)

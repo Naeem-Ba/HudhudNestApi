@@ -32,4 +32,6 @@ public static class BackgroundJobLockKeys
     public const long AuditLogRetention = 20260905_1005;
 
     public const long AccountDeletionSweep = 20260907_1006;
+
+    public const long SocialPublicationDispatch = 20260908_1007;
 }
