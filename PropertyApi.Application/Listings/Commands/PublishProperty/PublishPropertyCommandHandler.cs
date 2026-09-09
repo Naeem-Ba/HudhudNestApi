@@ -2,6 +2,7 @@ using MediatR;
 using FluentValidation.Results;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Listings.Events;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Domain.Listings;
 
@@ -12,13 +13,16 @@ public sealed class PublishPropertyCommandHandler
 {
     private readonly IPropertyRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IPublisher _publisher;
 
     public PublishPropertyCommandHandler(
         IPropertyRepository repository,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IPublisher publisher)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
+        _publisher = publisher;
     }
 
     public async Task Handle(
@@ -56,5 +60,15 @@ public sealed class PublishPropertyCommandHandler
 
         _repository.Update(property);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // Fire-and-notify: Listings has no idea SocialDistribution (or anyone else) is
+        // listening, and never will — see PropertyPublishedEvent's remarks. Any handler-side
+        // failure (e.g. the automatic distribution engine erroring out) is swallowed by that
+        // handler itself and must never surface here — publishing a property always succeeds
+        // once the two lines above have committed, regardless of what downstream listeners do
+        // with the news (spec §9: "فشل توزيع المنشورات لا يجب أن يجعل نشر العقار نفسه يفشل").
+        await _publisher.Publish(
+            new PropertyPublishedEvent(property.Id, now, request.IsAdmin ? null : request.RequestingUserId),
+            cancellationToken);
     }
 }

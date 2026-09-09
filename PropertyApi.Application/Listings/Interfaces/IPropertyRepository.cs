@@ -23,6 +23,16 @@ public interface IPropertyRepository
     Task<bool> ExistsAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>
+    /// True only for a listing anonymous visitors can actually see today — published, not
+    /// expired (mirrors <see cref="GetPublishedByIdWithDetailsAsync"/>'s predicate exactly,
+    /// deliberately kept separate rather than reusing that method so a simple visibility check
+    /// — e.g. before recording a Social Sharing share-event — doesn't pay for the Owner/Images/
+    /// Amenities Includes it doesn't need). Soft-deleted rows never match — the global query
+    /// filter on Property already excludes them.
+    /// </summary>
+    Task<bool> IsPubliclyVisibleAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>
     /// Counts how many of this owner's properties are currently marked Sold vs.
     /// Rented, across ALL of their listings (published or not — a listing is
     /// usually unpublished once a deal closes, but the deal still counts).

@@ -58,6 +58,19 @@ public sealed class PublicEndpointPolicyTests
             "PropertiesController.SearchNearby",
             "PropertiesController.GetById",
 
+            // Social Sharing & Distribution: recording a successful share/copy-link event.
+            // Most visitors sharing a listing are not logged in, so this cannot require
+            // authentication — abuse is bounded by "property-share-events" rate limiting, and
+            // the handler independently re-checks the listing is still public before writing
+            // anything (see TrackPropertyShareEventCommandHandler).
+            "PropertiesController.TrackShareEvent",
+
+            // UTM / Attribution (Phase 2): recording a property view or a contact/lead action
+            // that followed a (possibly attributed) link — same rationale as TrackShareEvent
+            // above; bounded by "property-attribution-events" rate limiting, and the handler
+            // independently re-checks the listing is still public before writing anything.
+            "PropertiesController.TrackAttributionEvent",
+
             // Short-Stay Accommodation: the search/detail pages a guest browses before
             // booking, and a unit's public availability calendar — all anonymous, read-only,
             // and rate-limited under "shortstay-search".

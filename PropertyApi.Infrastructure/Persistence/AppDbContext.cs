@@ -24,6 +24,7 @@ using PropertyApi.Infrastructure.Security.DataProtection;
 using PropertyApi.Domain.ShortStay.Entities;
 using PropertyApi.Domain.Investments.Entities;
 using PropertyApi.Domain.Marketing.Entities;
+using PropertyApi.Domain.SocialDistribution.Entities;
 
 
 
@@ -71,6 +72,8 @@ public sealed class AppDbContext
     public DbSet<Offer> Offers => Set<Offer>();
     public DbSet<SurveyResponse> SurveyResponses => Set<SurveyResponse>();
     public DbSet<MarketingEvent> MarketingEvents => Set<MarketingEvent>();
+    public DbSet<PropertyShareEvent> PropertyShareEvents => Set<PropertyShareEvent>();
+    public DbSet<PropertyAttributionEvent> PropertyAttributionEvents => Set<PropertyAttributionEvent>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<VisitRequest> VisitRequests => Set<VisitRequest>();
@@ -95,6 +98,17 @@ public sealed class AppDbContext
     public DbSet<ServiceRequestStatusHistory> ServiceRequestStatusHistories => Set<ServiceRequestStatusHistory>();
     public DbSet<ServiceRequestDocument> ServiceRequestDocuments => Set<ServiceRequestDocument>();
     public DbSet<ServiceReview> ServiceReviews => Set<ServiceReview>();
+
+    // Social Distribution Domain (Phase 3)
+    public DbSet<SocialChannel> SocialChannels => Set<SocialChannel>();
+    public DbSet<SocialAccount> SocialAccounts => Set<SocialAccount>();
+    public DbSet<SocialPublication> SocialPublications => Set<SocialPublication>();
+    public DbSet<SocialPostContent> SocialPostContents => Set<SocialPostContent>();
+    public DbSet<SocialPublicationStatusHistory> SocialPublicationStatusHistories => Set<SocialPublicationStatusHistory>();
+
+    // Provinces & Distribution Rules (Phase 4)
+    public DbSet<DistributionRule> DistributionRules => Set<DistributionRule>();
+    public DbSet<DistributionRun> DistributionRuns => Set<DistributionRun>();
 
     // Short-Stay Accommodation subsystem
     public DbSet<AccommodationType> AccommodationTypes => Set<AccommodationType>();
@@ -138,6 +152,7 @@ public sealed class AppDbContext
 
         ConfigureEncryptedUserFields(builder);
         ConfigureEncryptedUserAccountFields(builder);
+        ConfigureEncryptedSocialAccountFields(builder);
 
         // -- Global soft-delete filter ---------------------------
         // Automatically excludes IsDeleted=true from ALL queries.
@@ -151,6 +166,8 @@ public sealed class AppDbContext
         builder.Entity<Offer>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<SurveyResponse>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<MarketingEvent>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<PropertyShareEvent>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<PropertyAttributionEvent>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ApplicationUser>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<Notification>().HasQueryFilter(n => !n.IsDeleted);
         builder.Entity<VisitRequest>().HasQueryFilter(v => !v.IsDeleted);
@@ -173,6 +190,15 @@ public sealed class AppDbContext
         builder.Entity<ServiceRequestStatusHistory>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ServiceRequestDocument>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ServiceReview>().HasQueryFilter(e => !e.IsDeleted);
+
+        // Social Distribution Domain (Phase 3)
+        builder.Entity<SocialChannel>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<SocialAccount>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<SocialPublication>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<SocialPostContent>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<SocialPublicationStatusHistory>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<DistributionRule>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<DistributionRun>().HasQueryFilter(e => !e.IsDeleted);
     }
 
 
@@ -228,6 +254,23 @@ public sealed class AppDbContext
         account.Property(u => u.ProfileImagePublicId)
             .HasMaxLength(300);
     }
+
+    /// <summary>
+    /// SocialAccount.CredentialReference is encrypted at rest even though it is only ever meant
+    /// to hold an opaque secret-manager reference, never a raw token (see SocialAccount's
+    /// remarks) — defense in depth for the day an operator pastes something more sensitive by
+    /// mistake. Same converter/pattern as WhatsAppNumber/TaxNumber above.
+    /// </summary>
+    private void ConfigureEncryptedSocialAccountFields(ModelBuilder builder)
+    {
+        builder.Entity<PropertyApi.Domain.SocialDistribution.Entities.SocialAccount>()
+            .Property(a => a.CredentialReference)
+            .HasMaxLength(1024)
+            .HasConversion(new DataProtectionStringConverter(
+                _dataProtectionProvider,
+                SensitiveDataProtectionPurposes.SocialAccountCredentialReference));
+    }
+
     // -- Auto-stamp UpdatedAt on every save ----------------------
     public override async Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default)

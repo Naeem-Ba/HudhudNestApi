@@ -1383,6 +1383,68 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.ToTable("PropertyAmenities", (string)null);
                 });
 
+            modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.PropertyAttributionEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("PropertyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UtmCampaign")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("UtmContent")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("UtmMedium")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("UtmSource")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("EventType");
+
+                    b.HasIndex("PropertyId");
+
+                    b.HasIndex("UtmCampaign");
+
+                    b.HasIndex("UtmSource");
+
+                    b.HasIndex("PropertyId", "EventType");
+
+                    b.ToTable("PropertyAttributionEvents", (string)null);
+                });
+
             modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.PropertyImage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1497,6 +1559,66 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.HasIndex("PropertyId", "ChangedAt");
 
                     b.ToTable("PropertyPriceHistories", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.PropertyShareEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("PropertyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UtmCampaign")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("UtmContent")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("UtmMedium")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("UtmSource")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("PropertyId");
+
+                    b.HasIndex("UtmCampaign");
+
+                    b.HasIndex("UtmSource");
+
+                    b.HasIndex("PropertyId", "Platform");
+
+                    b.ToTable("PropertyShareEvents", (string)null);
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.Lookups.Entities.Currency", b =>
@@ -3570,6 +3692,543 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.ToTable("UnitBookingRanges", (string)null);
                 });
 
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.DistributionRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("EndAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PropertyTypeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ProvinceId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SocialAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("StartAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("TransactionType")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Priority");
+
+                    b.HasIndex("PropertyTypeId");
+
+                    b.HasIndex("ProvinceId");
+
+                    b.HasIndex("SocialAccountId");
+
+                    b.HasIndex("TransactionType");
+
+                    b.HasIndex("IsActive", "IsArchived");
+
+                    b.ToTable("DistributionRules", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.DistributionRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MatchedRuleCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PropertyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("PublicationsCreatedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ResultReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("SkippedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("TriggerType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("PropertyId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TriggerType");
+
+                    b.ToTable("DistributionRuns", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccountType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime?>("ConnectedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CredentialReference")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DisconnectedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("ExternalAccountId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int?>("GovernorateId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("SocialChannelId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GovernorateId");
+
+                    b.HasIndex("SocialChannelId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("Platform", "ExternalAccountId")
+                        .IsUnique();
+
+                    b.ToTable("SocialAccounts", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialChannel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConfigurationVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Platform")
+                        .IsUnique();
+
+                    b.ToTable("SocialChannels", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialPostContent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
+
+                    b.Property<int>("ContentVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Hashtags")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ImageUrl")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(5)
+                        .HasColumnType("character varying(5)");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("PublicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TargetUrl")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicationId")
+                        .IsUnique();
+
+                    b.ToTable("SocialPostContents", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialPublication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DistributionRuleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DistributionRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ExternalPostId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ExternalPostUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("FailedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastRetryAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("MaxRetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("NextRetryAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("PropertyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ScheduledAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("SocialAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UtmCampaign")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("UtmContent")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("UtmMedium")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("UtmSource")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("DistributionRuleId");
+
+                    b.HasIndex("DistributionRunId");
+
+                    b.HasIndex("NextRetryAt");
+
+                    b.HasIndex("PropertyId");
+
+                    b.HasIndex("ScheduledAt");
+
+                    b.HasIndex("SocialAccountId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UtmCampaign");
+
+                    b.HasIndex("UtmSource");
+
+                    b.HasIndex("PropertyId", "SocialAccountId")
+                        .IsUnique()
+                        .HasFilter("\"DistributionRuleId\" IS NOT NULL AND \"Status\" <> 'Cancelled'");
+
+                    b.ToTable("SocialPublications", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialPublicationStatusHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ChangedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("SocialPublicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("SocialPublicationId");
+
+                    b.ToTable("SocialPublicationStatusHistories", (string)null);
+                });
+
             modelBuilder.Entity("PropertyApi.Domain.Transactions.Entities.Transaction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4339,6 +4998,15 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Navigation("Property");
                 });
 
+            modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.PropertyAttributionEvent", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Listings.Entities.Property", null)
+                        .WithMany()
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.PropertyImage", b =>
                 {
                     b.HasOne("PropertyApi.Domain.Listings.Entities.Property", "Property")
@@ -4359,6 +5027,15 @@ namespace PropertyApi.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Property");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.Listings.Entities.PropertyShareEvent", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Listings.Entities.Property", null)
+                        .WithMany()
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.Lookups.Entities.District", b =>
@@ -4789,6 +5466,91 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Navigation("Unit");
                 });
 
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.DistributionRule", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Lookups.Entities.PropertyType", null)
+                        .WithMany()
+                        .HasForeignKey("PropertyTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PropertyApi.Domain.Lookups.Entities.Governorate", null)
+                        .WithMany()
+                        .HasForeignKey("ProvinceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PropertyApi.Domain.SocialDistribution.Entities.SocialAccount", null)
+                        .WithMany()
+                        .HasForeignKey("SocialAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.DistributionRun", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Listings.Entities.Property", null)
+                        .WithMany()
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialAccount", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Lookups.Entities.Governorate", null)
+                        .WithMany()
+                        .HasForeignKey("GovernorateId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PropertyApi.Domain.SocialDistribution.Entities.SocialChannel", null)
+                        .WithMany()
+                        .HasForeignKey("SocialChannelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialPostContent", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.SocialDistribution.Entities.SocialPublication", null)
+                        .WithOne("Content")
+                        .HasForeignKey("PropertyApi.Domain.SocialDistribution.Entities.SocialPostContent", "PublicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialPublication", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.SocialDistribution.Entities.DistributionRule", null)
+                        .WithMany()
+                        .HasForeignKey("DistributionRuleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PropertyApi.Domain.SocialDistribution.Entities.DistributionRun", null)
+                        .WithMany()
+                        .HasForeignKey("DistributionRunId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PropertyApi.Domain.Listings.Entities.Property", null)
+                        .WithMany()
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PropertyApi.Domain.SocialDistribution.Entities.SocialAccount", null)
+                        .WithMany()
+                        .HasForeignKey("SocialAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialPublicationStatusHistory", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.SocialDistribution.Entities.SocialPublication", null)
+                        .WithMany()
+                        .HasForeignKey("SocialPublicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PropertyApi.Domain.Transactions.Entities.Transaction", b =>
                 {
                     b.HasOne("PropertyApi.Domain.Bookings.Entities.VisitRequest", null)
@@ -4925,6 +5687,11 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Navigation("Photos");
 
                     b.Navigation("RoomTypes");
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialPublication", b =>
+                {
+                    b.Navigation("Content");
                 });
 #pragma warning restore 612, 618
         }

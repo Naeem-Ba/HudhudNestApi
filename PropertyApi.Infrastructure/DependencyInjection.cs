@@ -12,6 +12,7 @@ using PropertyApi.Infrastructure.Media;
 using PropertyApi.Infrastructure.Persistence;
 using PropertyApi.Infrastructure.Repositories;
 using PropertyApi.Infrastructure.Services;
+using PropertyApi.Infrastructure.SocialDistribution;
 
 namespace PropertyApi.Infrastructure;
 
@@ -32,6 +33,7 @@ public static class DependencyInjection
         services.AddUserContextInfrastructure();
         services.AddMediaInfrastructure(configuration, environment);
         services.AddCacheInfrastructure(configuration, environment);
+        services.AddSocialDistributionInfrastructure();
         services.AddOperationalHealthChecks();
 
         return services;

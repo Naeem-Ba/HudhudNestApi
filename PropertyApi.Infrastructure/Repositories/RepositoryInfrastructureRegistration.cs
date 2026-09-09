@@ -70,6 +70,8 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IOfferRepository, OfferRepository>();
         services.AddScoped<ISurveyResponseRepository, SurveyResponseRepository>();
         services.AddScoped<IMarketingEventRepository, MarketingEventRepository>();
+        services.AddScoped<IPropertyShareEventRepository, PropertyShareEventRepository>();
+        services.AddScoped<IPropertyAttributionEventRepository, PropertyAttributionEventRepository>();
         services.AddScoped<IUserDirectoryReadService, UserDirectoryReadService>();
         services.AddScoped<IUserAccountRepository, UserAccountRepository>();
         services.AddScoped<IAccountDataExportRepository, PropertyApi.Infrastructure.Users.AccountDataExportRepository>();

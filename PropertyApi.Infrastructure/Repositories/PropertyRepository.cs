@@ -110,6 +110,20 @@ public sealed class PropertyRepository : IPropertyRepository
         return await _db.Properties.AnyAsync(p => p.Id == id, ct);
     }
 
+    public async Task<bool> IsPubliclyVisibleAsync(Guid id, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+
+        return await _db.Properties
+            .AsNoTracking()
+            .AnyAsync(
+                property =>
+                    property.Id == id &&
+                    property.IsPublished &&
+                    (property.ExpiresAt == null || property.ExpiresAt > now),
+                ct);
+    }
+
     public async Task<(int SoldCount, int RentedCount)> GetDealCountsByOwnerAsync(
         Guid ownerId,
         CancellationToken ct = default)
