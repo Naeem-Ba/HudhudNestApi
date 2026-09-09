@@ -87,4 +87,100 @@ public sealed class SocialPostContentTests
         Assert.Equal(2, content.ContentVersion);
         Assert.Equal("عنوان جديد", content.Title);
     }
+
+    [Fact]
+    public void AttachGeneratedAsset_ValidInput_UpdatesImageUrlAndAssetId_WithoutBumpingContentVersion()
+    {
+        var content = MakeContent();
+        var assetId = Guid.NewGuid();
+
+        content.AttachGeneratedAsset(assetId, "https://cdn.example.com/generated-asset.svg");
+
+        Assert.Equal(assetId, content.SocialMediaAssetId);
+        Assert.Equal("https://cdn.example.com/generated-asset.svg", content.ImageUrl);
+        Assert.Equal(1, content.ContentVersion); // system attaching an asset is not an editorial revision
+    }
+
+    [Fact]
+    public void AttachGeneratedAsset_EmptyAssetId_Throws()
+    {
+        var content = MakeContent();
+        Assert.Throws<DomainException>(() => content.AttachGeneratedAsset(Guid.Empty, "https://cdn.example.com/a.svg"));
+    }
+
+    [Fact]
+    public void AttachGeneratedAsset_InvalidUrl_Throws()
+    {
+        var content = MakeContent();
+        Assert.Throws<DomainException>(() => content.AttachGeneratedAsset(Guid.NewGuid(), "/internal/route"));
+    }
+
+    // ── Human Review workflow (Phase 8) ────────────────────────────────────────
+
+    [Fact]
+    public void Create_DefaultsToApprovedReviewStatus()
+    {
+        var content = MakeContent();
+        Assert.Equal(ContentReviewStatus.Approved, content.ReviewStatus);
+    }
+
+    [Fact]
+    public void RequireReview_SetsPendingReview_AndClearsPriorReviewer()
+    {
+        var content = MakeContent();
+        content.Approve(Guid.NewGuid(), DateTime.UtcNow);
+
+        content.RequireReview("محتوى حساس.");
+
+        Assert.Equal(ContentReviewStatus.PendingReview, content.ReviewStatus);
+        Assert.Null(content.ReviewedByUserId);
+        Assert.Null(content.ReviewedAt);
+    }
+
+    [Fact]
+    public void Approve_FromPendingReview_SetsApprovedWithReviewer()
+    {
+        var content = MakeContent();
+        content.RequireReview("test");
+        var reviewer = Guid.NewGuid();
+
+        content.Approve(reviewer, DateTime.UtcNow, "يبدو جيداً.");
+
+        Assert.Equal(ContentReviewStatus.Approved, content.ReviewStatus);
+        Assert.Equal(reviewer, content.ReviewedByUserId);
+    }
+
+    [Fact]
+    public void Reject_WithoutNote_Throws()
+    {
+        var content = MakeContent();
+        content.RequireReview("test");
+        Assert.Throws<DomainException>(() => content.Reject(Guid.NewGuid(), "  ", DateTime.UtcNow));
+    }
+
+    [Fact]
+    public void Reject_WithNote_SetsRejectedWithReviewer()
+    {
+        var content = MakeContent();
+        content.RequireReview("test");
+        var reviewer = Guid.NewGuid();
+
+        content.Reject(reviewer, "يتعارض مع بيانات العقار.", DateTime.UtcNow);
+
+        Assert.Equal(ContentReviewStatus.Rejected, content.ReviewStatus);
+        Assert.Equal(reviewer, content.ReviewedByUserId);
+        Assert.Equal("يتعارض مع بيانات العقار.", content.ReviewNote);
+    }
+
+    [Fact]
+    public void Revise_AfterRejection_ReturnsToPendingReview_NeverSilentlyApproved()
+    {
+        var content = MakeContent();
+        content.RequireReview("test");
+        content.Reject(Guid.NewGuid(), "خطأ", DateTime.UtcNow);
+
+        content.Revise("عنوان معدّل", "نص معدّل بعد الرفض", "https://cdn.example.com/new.jpg", null);
+
+        Assert.Equal(ContentReviewStatus.PendingReview, content.ReviewStatus);
+    }
 }

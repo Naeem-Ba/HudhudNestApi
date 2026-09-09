@@ -37,7 +37,9 @@ public static class SocialDistributionMapper
         content.TargetUrl,
         content.HashtagList,
         content.Language,
-        content.ContentVersion);
+        content.ContentVersion,
+        content.ReviewStatus,
+        content.ReviewNote);
 
     public static SocialPublicationDto ToDto(SocialPublication publication) => new(
         publication.Id,
@@ -66,6 +68,19 @@ public static class SocialDistributionMapper
         publication.UpdatedAt,
         publication.DistributionRuleId,
         publication.DistributionRunId);
+
+    public static SocialPublicationDeadLetterDto ToDto(SocialPublicationDeadLetter deadLetter) => new(
+        deadLetter.Id,
+        deadLetter.PublicationId,
+        deadLetter.SocialAccountId,
+        deadLetter.Platform,
+        deadLetter.LastErrorCode,
+        deadLetter.LastErrorMessage,
+        deadLetter.Attempts,
+        deadLetter.FailedAt,
+        deadLetter.ResolvedAt,
+        deadLetter.ResolvedByUserId,
+        deadLetter.ResolutionNote);
 
     public static SocialPublicationStatusHistoryDto ToDto(SocialPublicationStatusHistory history) => new(
         history.Id,

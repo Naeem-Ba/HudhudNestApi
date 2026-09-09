@@ -13,6 +13,7 @@ using PropertyApi.Application.Listings.Commands.RequestListingExtension;
 using PropertyApi.Application.Listings.Commands.TrackPropertyShareEvent;
 using PropertyApi.Application.Listings.Commands.TrackPropertyAttributionEvent;
 using PropertyApi.Application.Listings.Queries.CheckPotentialDuplicateProperty;
+using PropertyApi.Application.Listings.Queries.GetSocialPerformance;
 using PropertyApi.Application.Listings.Commands.DeleteProperty;
 using PropertyApi.Application.Listings.Commands.UpdateProperty;
 using PropertyApi.Application.Listings.Commands.PublishProperty;
@@ -320,6 +321,20 @@ public sealed class PropertiesController : ControllerBase
             ct);
 
         return Ok(new { success = true, id = attributionEventId });
+    }
+
+    // ── GET /api/properties/social-performance ───────────────────
+    // Phase 14 spec §10 "Social Performance" dashboard — real Share/Attribution event
+    // aggregates, admin-only (never exposed anonymously: even aggregate counts are reporting
+    // data, not public listing content).
+    [HttpGet("social-performance")]
+    [Authorize(Roles = RoleNames.Admin)]
+    [ProducesResponseType(typeof(SocialPerformanceDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetSocialPerformance(
+        [FromQuery] Guid? propertyId, [FromQuery] DateTime? fromUtc, [FromQuery] DateTime? toUtc, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new GetSocialPerformanceQuery(propertyId, fromUtc, toUtc), ct);
+        return Ok(result);
     }
 
     // ── PATCH /api/properties/{id}/confirm-availability ─────────

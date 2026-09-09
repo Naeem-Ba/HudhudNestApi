@@ -22,6 +22,7 @@ public sealed class QueueSocialPublicationCommandHandler
     private readonly ISocialPublicationStatusHistoryRepository _history;
     private readonly ISocialAccountRepository _accounts;
     private readonly IPropertyRepository _properties;
+    private readonly ISocialPublicationJobQueue _jobQueue;
     private readonly IUnitOfWork _uow;
 
     public QueueSocialPublicationCommandHandler(
@@ -29,12 +30,14 @@ public sealed class QueueSocialPublicationCommandHandler
         ISocialPublicationStatusHistoryRepository history,
         ISocialAccountRepository accounts,
         IPropertyRepository properties,
+        ISocialPublicationJobQueue jobQueue,
         IUnitOfWork uow)
     {
         _publications = publications;
         _history = history;
         _accounts = accounts;
         _properties = properties;
+        _jobQueue = jobQueue;
         _uow = uow;
     }
 
@@ -63,6 +66,11 @@ public sealed class QueueSocialPublicationCommandHandler
             ct);
 
         await _uow.SaveChangesAsync(ct);
+
+        // Phase 6: signal the Queue Port now that the row is durably Queued/Retrying in the DB —
+        // see ISocialPublicationJobQueue's remarks for why this is a logging no-op today and how
+        // that changes for a real external queue adapter.
+        await _jobQueue.EnqueueAsync(publication.Id, ct);
 
         return SocialDistributionMapper.ToDto(publication);
     }

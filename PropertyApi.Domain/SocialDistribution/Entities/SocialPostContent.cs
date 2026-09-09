@@ -51,6 +51,24 @@ public sealed class SocialPostContent : BaseEntity
         ? Array.Empty<string>()
         : Hashtags.Split(',');
 
+    /// <summary>
+    /// The <c>SocialMediaAsset</c> (Phase 7) currently backing <see cref="ImageUrl"/>, if any —
+    /// null for content still using a plain property photo (manual publications, or before the
+    /// worker has generated a branded asset for an automatic one). FK-only, no navigation
+    /// property, same pattern as every other cross-aggregate reference in this bounded context.
+    /// </summary>
+    public Guid? SocialMediaAssetId { get; private set; }
+
+    /// <summary>Human-review workflow (Phase 8 spec §3). Defaults to <see cref="ContentReviewStatus.Approved"/> — see enum docs.</summary>
+    public ContentReviewStatus ReviewStatus { get; private set; } = ContentReviewStatus.Approved;
+
+    public Guid? ReviewedByUserId { get; private set; }
+
+    public DateTime? ReviewedAt { get; private set; }
+
+    /// <summary>Reviewer's note — required on <see cref="Reject"/>, e.g. "يتعارض مع بيانات العقار".</summary>
+    public string? ReviewNote { get; private set; }
+
     public static SocialPostContent Create(
         Guid publicationId,
         SocialPlatform platform,
@@ -104,6 +122,61 @@ public sealed class SocialPostContent : BaseEntity
     }
 
     /// <summary>
+    /// Attaches a freshly-generated (or reused) <c>SocialMediaAsset</c> as this content's image —
+    /// called only by <c>PublishSocialPublicationCommandHandler</c>, right before publishing, for
+    /// automatically-distributed content (spec Phase 7 §23: "يتم ربط Asset بـSocialPostContent").
+    /// Distinct from <see cref="Revise"/>: this does not bump <see cref="ContentVersion"/> — it is
+    /// the system attaching what the content SHOULD display, not an editorial revision, and must
+    /// not be confused with an admin manually re-writing the caption.
+    /// </summary>
+    public void AttachGeneratedAsset(Guid assetId, string generatedImageUrl)
+    {
+        if (assetId == Guid.Empty)
+            throw new DomainException("معرّف الصورة المولّدة مطلوب.");
+
+        if (!SocialContentPolicy.IsValidPublicUrl(generatedImageUrl))
+            throw new DomainException("رابط الصورة المولّدة يجب أن يكون رابطاً عاماً صالحاً (http/https).");
+
+        SocialMediaAssetId = assetId;
+        ImageUrl = generatedImageUrl.Trim();
+    }
+
+    /// <summary>
+    /// Puts this content into <see cref="ContentReviewStatus.PendingReview"/> (Phase 8 spec §3) —
+    /// called by a (future) content generator that flags its own output as unsafe to auto-queue
+    /// (e.g. an AI generator uncertain about a claim). <see cref="Entities.SocialPublication.Queue"/>
+    /// refuses to queue content in this state.
+    /// </summary>
+    public void RequireReview(string reason)
+    {
+        ReviewStatus = ContentReviewStatus.PendingReview;
+        ReviewNote = string.IsNullOrWhiteSpace(reason) ? null : SocialContentPolicy.SanitizePlainText(reason);
+        ReviewedByUserId = null;
+        ReviewedAt = null;
+    }
+
+    /// <summary>PendingReview|Rejected → Approved. An admin/editor confirms the content is safe to queue.</summary>
+    public void Approve(Guid reviewedByUserId, DateTime utcNow, string? note = null)
+    {
+        ReviewStatus = ContentReviewStatus.Approved;
+        ReviewedByUserId = reviewedByUserId;
+        ReviewedAt = utcNow;
+        ReviewNote = string.IsNullOrWhiteSpace(note) ? null : SocialContentPolicy.SanitizePlainText(note);
+    }
+
+    /// <summary>PendingReview → Rejected. Rejected content can never be queued until a subsequent <see cref="Revise"/> + <see cref="Approve"/>.</summary>
+    public void Reject(Guid reviewedByUserId, string note, DateTime utcNow)
+    {
+        if (string.IsNullOrWhiteSpace(note))
+            throw new DomainException("سبب رفض المحتوى مطلوب.");
+
+        ReviewStatus = ContentReviewStatus.Rejected;
+        ReviewedByUserId = reviewedByUserId;
+        ReviewedAt = utcNow;
+        ReviewNote = SocialContentPolicy.SanitizePlainText(note);
+    }
+
+    /// <summary>
     /// Content can only be revised while its publication is still a Draft — the caller (the
     /// command handler, which already holds the parent SocialPublication) is responsible for
     /// that check; this entity has no reference back to its publication's status by design
@@ -128,5 +201,11 @@ public sealed class SocialPostContent : BaseEntity
         ImageUrl = imageUrl.Trim();
         Hashtags = string.Join(',', SocialContentPolicy.NormalizeHashtags(hashtags, Platform));
         ContentVersion += 1;
+
+        // A previously-rejected caption that gets edited must be re-reviewed, never silently
+        // re-admitted through the back door of an edit (spec §3: rejected content stays blocked
+        // from Queue until a human looks at it again).
+        if (ReviewStatus == ContentReviewStatus.Rejected)
+            RequireReview("تمت مراجعة النص بعد رفضه السابق ويلزم اعتماده من جديد.");
     }
 }

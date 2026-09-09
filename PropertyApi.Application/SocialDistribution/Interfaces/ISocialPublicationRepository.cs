@@ -29,5 +29,16 @@ public interface ISocialPublicationRepository
     /// </summary>
     Task<bool> ExistsActiveForPropertyAndAccountAsync(Guid propertyId, Guid socialAccountId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Every currently-live (Published) publication for a property — the set
+    /// <c>PropertyStatusChangedDistributionHandler</c> (Phase 11) evaluates a lifecycle action
+    /// against. Deliberately Published-only: a Draft/Queued/Retrying/Failed/Cancelled publication
+    /// was never actually posted, so there is nothing external to update/comment-on/delete.
+    /// </summary>
+    Task<IReadOnlyList<SocialPublication>> GetActiveForPropertyAsync(Guid propertyId, CancellationToken ct = default);
+
+    /// <summary>Phase 10 spec §6 dashboard tiles — a handful of real aggregate counts/rates, computed by the database, never estimated.</summary>
+    Task<SocialDashboardSummaryDto> GetDashboardSummaryAsync(DateTime utcNow, CancellationToken ct = default);
+
     void Update(SocialPublication publication);
 }

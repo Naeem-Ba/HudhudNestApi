@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Listings.Events;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Domain.Listings.Entities;
@@ -26,6 +27,7 @@ public sealed class UpdatePropertyCommandHandler
     private readonly IUnitOfWork _uow;
     private readonly INotificationService _notifications;
     private readonly ILocationSuggestionService _locationSuggestions;
+    private readonly IPublisher _publisher;
     private readonly ILogger<UpdatePropertyCommandHandler> _logger;
 
     public UpdatePropertyCommandHandler(
@@ -35,6 +37,7 @@ public sealed class UpdatePropertyCommandHandler
         IUnitOfWork uow,
         INotificationService notifications,
         ILocationSuggestionService locationSuggestions,
+        IPublisher publisher,
         ILogger<UpdatePropertyCommandHandler> logger)
     {
         _repo = repo;
@@ -43,6 +46,7 @@ public sealed class UpdatePropertyCommandHandler
         _uow = uow;
         _notifications = notifications;
         _locationSuggestions = locationSuggestions;
+        _publisher = publisher;
         _logger = logger;
     }
 
@@ -129,6 +133,18 @@ public sealed class UpdatePropertyCommandHandler
 
         _repo.Update(property);
         await _uow.SaveChangesAsync(cancellationToken);
+
+        // Phase 11: tell SocialDistribution a status transition actually happened, so it can
+        // decide whether any live publication needs updating/archiving. Published AFTER the
+        // property row is durably saved, and the subscribing handler (like
+        // PropertyPublishedDistributionHandler before it) swallows its own exceptions — a broken
+        // rule/publisher must never fail this property update (spec §7).
+        if (!Equals(property.Status, oldStatus))
+        {
+            await _publisher.Publish(
+                new PropertyStatusChangedEvent(property.Id, oldStatus, property.Status, DateTime.UtcNow),
+                cancellationToken);
+        }
 
         try
         {

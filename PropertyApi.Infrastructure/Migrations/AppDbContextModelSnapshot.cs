@@ -3974,6 +3974,101 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.ToTable("SocialChannels", (string)null);
                 });
 
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialMediaAsset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AssetType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Checksum")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<long>("FileSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("FileUrl")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("MimeType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("PropertyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PublicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("TemplateId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("TemplateVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Checksum");
+
+                    b.HasIndex("PropertyId");
+
+                    b.HasIndex("PublicationId");
+
+                    b.HasIndex("TemplateId");
+
+                    b.HasIndex("PropertyId", "Platform", "AssetType", "TemplateId", "TemplateVersion", "Checksum");
+
+                    b.ToTable("SocialMediaAssets", (string)null);
+                });
+
             modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialPostContent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4020,6 +4115,24 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Property<Guid>("PublicationId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ReviewStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SocialMediaAssetId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("TargetUrl")
                         .IsRequired()
                         .HasMaxLength(2000)
@@ -4037,6 +4150,8 @@ namespace PropertyApi.Infrastructure.Migrations
 
                     b.HasIndex("PublicationId")
                         .IsUnique();
+
+                    b.HasIndex("SocialMediaAssetId");
 
                     b.ToTable("SocialPostContents", (string)null);
                 });
@@ -4181,6 +4296,72 @@ namespace PropertyApi.Infrastructure.Migrations
                         .HasFilter("\"DistributionRuleId\" IS NOT NULL AND \"Status\" <> 'Cancelled'");
 
                     b.ToTable("SocialPublications", (string)null);
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialPublicationDeadLetter", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("FailedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LastErrorCode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("LastErrorMessage")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("PublicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("ResolvedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SocialAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FailedAt");
+
+                    b.HasIndex("PublicationId");
+
+                    b.HasIndex("ResolvedAt");
+
+                    b.ToTable("SocialPublicationDeadLetters", (string)null);
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialPublicationStatusHistory", b =>
@@ -5508,6 +5689,20 @@ namespace PropertyApi.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialMediaAsset", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.Listings.Entities.Property", null)
+                        .WithMany()
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PropertyApi.Domain.SocialDistribution.Entities.SocialPublication", null)
+                        .WithMany()
+                        .HasForeignKey("PublicationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialPostContent", b =>
                 {
                     b.HasOne("PropertyApi.Domain.SocialDistribution.Entities.SocialPublication", null)
@@ -5515,6 +5710,11 @@ namespace PropertyApi.Infrastructure.Migrations
                         .HasForeignKey("PropertyApi.Domain.SocialDistribution.Entities.SocialPostContent", "PublicationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("PropertyApi.Domain.SocialDistribution.Entities.SocialMediaAsset", null)
+                        .WithMany()
+                        .HasForeignKey("SocialMediaAssetId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialPublication", b =>
@@ -5538,6 +5738,15 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.HasOne("PropertyApi.Domain.SocialDistribution.Entities.SocialAccount", null)
                         .WithMany()
                         .HasForeignKey("SocialAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropertyApi.Domain.SocialDistribution.Entities.SocialPublicationDeadLetter", b =>
+                {
+                    b.HasOne("PropertyApi.Domain.SocialDistribution.Entities.SocialPublication", null)
+                        .WithMany()
+                        .HasForeignKey("PublicationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

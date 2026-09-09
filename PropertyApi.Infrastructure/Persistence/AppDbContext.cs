@@ -110,6 +110,10 @@ public sealed class AppDbContext
     public DbSet<DistributionRule> DistributionRules => Set<DistributionRule>();
     public DbSet<DistributionRun> DistributionRuns => Set<DistributionRun>();
 
+    // Queue + Background Workers (Phase 6) / Social Media Asset Generation (Phase 7)
+    public DbSet<SocialPublicationDeadLetter> SocialPublicationDeadLetters => Set<SocialPublicationDeadLetter>();
+    public DbSet<SocialMediaAsset> SocialMediaAssets => Set<SocialMediaAsset>();
+
     // Short-Stay Accommodation subsystem
     public DbSet<AccommodationType> AccommodationTypes => Set<AccommodationType>();
     public DbSet<ShortStayListing> ShortStayListings => Set<ShortStayListing>();
@@ -199,6 +203,8 @@ public sealed class AppDbContext
         builder.Entity<SocialPublicationStatusHistory>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<DistributionRule>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<DistributionRun>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<SocialPublicationDeadLetter>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<SocialMediaAsset>().HasQueryFilter(e => !e.IsDeleted);
     }
 
 

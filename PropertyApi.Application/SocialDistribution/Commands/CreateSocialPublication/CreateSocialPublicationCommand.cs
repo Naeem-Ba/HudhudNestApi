@@ -25,4 +25,6 @@ public sealed record CreateSocialPublicationCommand(
     IReadOnlyList<string>? Hashtags,
     string Language = "ar",
     Guid? DistributionRuleId = null,
-    Guid? DistributionRunId = null) : IRequest<SocialPublicationDto>;
+    Guid? DistributionRunId = null,
+    /// <summary>Phase 13: true for a deliberate repost/promotion — see <c>SocialPublication.Create</c>'s <c>isPromotionalRepost</c> parameter. False for every pre-existing caller.</summary>
+    bool IsPromotionalRepost = false) : IRequest<SocialPublicationDto>;

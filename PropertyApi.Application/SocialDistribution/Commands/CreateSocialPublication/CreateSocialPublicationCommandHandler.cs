@@ -1,8 +1,10 @@
 using System.Globalization;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
+using PropertyApi.Application.SocialDistribution.AiContent;
 using PropertyApi.Application.SocialDistribution.DTOs;
 using PropertyApi.Application.SocialDistribution.Interfaces;
 using PropertyApi.Application.SocialDistribution.Mapping;
@@ -26,7 +28,9 @@ public sealed class CreateSocialPublicationCommandHandler
     private readonly ISocialPublicationRepository _publications;
     private readonly ISocialPublicationStatusHistoryRepository _history;
     private readonly ISocialDistributionTargetUrlBuilder _urlBuilder;
+    private readonly ISocialContentGenerator _contentGenerator;
     private readonly IUnitOfWork _uow;
+    private readonly ILogger<CreateSocialPublicationCommandHandler>? _logger;
 
     public CreateSocialPublicationCommandHandler(
         IPropertyRepository properties,
@@ -35,7 +39,9 @@ public sealed class CreateSocialPublicationCommandHandler
         ISocialPublicationRepository publications,
         ISocialPublicationStatusHistoryRepository history,
         ISocialDistributionTargetUrlBuilder urlBuilder,
-        IUnitOfWork uow)
+        ISocialContentGenerator contentGenerator,
+        IUnitOfWork uow,
+        ILogger<CreateSocialPublicationCommandHandler>? logger = null)
     {
         _properties = properties;
         _accounts = accounts;
@@ -43,7 +49,9 @@ public sealed class CreateSocialPublicationCommandHandler
         _publications = publications;
         _history = history;
         _urlBuilder = urlBuilder;
+        _contentGenerator = contentGenerator;
         _uow = uow;
+        _logger = logger;
     }
 
     public async Task<SocialPublicationDto> Handle(CreateSocialPublicationCommand request, CancellationToken ct)
@@ -76,7 +84,8 @@ public sealed class CreateSocialPublicationCommandHandler
             request.CreatedByUserId,
             account.Platform,
             distributionRuleId: request.DistributionRuleId,
-            distributionRunId: request.DistributionRunId);
+            distributionRunId: request.DistributionRunId,
+            isPromotionalRepost: request.IsPromotionalRepost);
 
         var targetUrl = _urlBuilder.BuildAttributedTargetUrl(
             property.Id,
@@ -89,7 +98,24 @@ public sealed class CreateSocialPublicationCommandHandler
             ?? throw new ConflictException("لا يمكن إنشاء منشور توزيع لعقار بلا صورة متاحة (لا يوجد رابط صورة بديل مُهيأ حالياً).");
 
         var title = string.IsNullOrWhiteSpace(request.Title) ? property.Title : request.Title!;
-        var body = string.IsNullOrWhiteSpace(request.Body) ? BuildDefaultBody(property) : request.Body!;
+
+        string body;
+        IEnumerable<string>? hashtags = request.Hashtags;
+
+        if (string.IsNullOrWhiteSpace(request.Body))
+        {
+            // Phase 8 spec §3: an explicit Title/Body always wins (manual editorial control) —
+            // the generator only ever fills in what the caller left blank, exactly like
+            // BuildDefaultBody did before this phase.
+            var (generatedBody, generatedHashtags) = await TryGenerateBodyAsync(
+                property, account.Platform, targetUrl, request.Language, ct);
+            body = generatedBody;
+            hashtags ??= generatedHashtags;
+        }
+        else
+        {
+            body = request.Body!;
+        }
 
         var content = SocialPostContent.Create(
             publication.Id,
@@ -98,7 +124,7 @@ public sealed class CreateSocialPublicationCommandHandler
             body,
             imageUrl,
             targetUrl,
-            request.Hashtags,
+            hashtags,
             request.Language);
 
         publication.AttachContent(content);
@@ -119,6 +145,68 @@ public sealed class CreateSocialPublicationCommandHandler
 
         return SocialDistributionMapper.ToDto(publication);
     }
+
+    /// <summary>
+    /// Phase 8 pipeline: build <see cref="PropertySocialFacts"/> strictly from Domain/DTO data →
+    /// call <see cref="ISocialContentGenerator"/> → run <see cref="SocialContentFactValidator"/>
+    /// on the result → use it only if valid, otherwise fall back to the pre-existing minimal
+    /// fact-line template (spec §3: "AI Output → Fact Validator → Valid → Continue / Invalid →
+    /// Reject / Regenerate / Fallback Template"). Never throws — a generator failure/timeout or a
+    /// failed validation must never block creating the publication itself, only degrade its copy.
+    /// </summary>
+    private async Task<(string Body, IReadOnlyList<string> Hashtags)> TryGenerateBodyAsync(
+        Property property, Domain.SocialDistribution.Enums.SocialPlatform platform, string targetUrl, string language, CancellationToken ct)
+    {
+        var fallback = BuildDefaultBody(property);
+
+        try
+        {
+            var facts = BuildFacts(property, targetUrl);
+            var request = new GenerateSocialContentRequest(facts, platform, language);
+            var generated = await _contentGenerator.GenerateAsync(request, ct);
+
+            var validation = SocialContentFactValidator.Validate(generated, facts);
+            if (!validation.IsValid)
+            {
+                _logger?.LogWarning(
+                    "تم رفض محتوى مولّد للعقار {PropertyId} بسبب: {Errors}. سيتم استخدام القالب الاحتياطي.",
+                    property.Id, string.Join("; ", validation.Errors));
+                return (fallback, Array.Empty<string>());
+            }
+
+            return (generated.Body, generated.Hashtags);
+        }
+        catch (Exception ex)
+        {
+            // A generator failure/timeout must never block property distribution (spec §3:
+            // "تعامل مع فشل AI باستخدام Template-based Fallback").
+            _logger?.LogWarning(ex, "فشل توليد محتوى اجتماعي للعقار {PropertyId}. سيتم استخدام القالب الاحتياطي.", property.Id);
+            return (fallback, Array.Empty<string>());
+        }
+    }
+
+    /// <summary>
+    /// The only place Property fields are copied into <see cref="PropertySocialFacts"/> — never
+    /// widen this beyond what a generator is allowed to see/use (spec §3). NOTE: PropertyType/
+    /// Governorate navigation properties are not <c>.Include()</c>d by
+    /// <see cref="IPropertyRepository.GetPublishedByIdWithDetailsAsync"/>, so PropertyType/Province
+    /// stay null here — the same documented limitation as Phase 7's asset generator.
+    /// </summary>
+    private static PropertySocialFacts BuildFacts(Property property, string canonicalUrl) => new(
+        PropertyId: property.Id,
+        Title: property.Title,
+        PropertyType: property.PropertyType?.NameAr,
+        TransactionType: property.ListingType.ToString(),
+        Province: property.Governorate?.NameAr ?? property.Region,
+        City: property.City,
+        Address: null,
+        Price: property.PurchasePrice ?? property.ColdRent ?? property.WarmRent,
+        Currency: property.CurrencyCode,
+        Area: property.Area,
+        Rooms: property.Rooms,
+        Bathrooms: null,
+        Status: property.Status.ToString(),
+        CanonicalUrl: canonicalUrl);
 
     /// <summary>An explicit ImageUrl wins; otherwise the property's main image, then its first image.</summary>
     private static string? ResolveImageUrl(string? explicitImageUrl, Property property)

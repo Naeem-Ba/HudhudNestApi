@@ -4,7 +4,9 @@ using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.SocialDistribution.Commands.PublishSocialPublication;
+using PropertyApi.Application.SocialDistribution.DTOs;
 using PropertyApi.Application.SocialDistribution.Interfaces;
+using PropertyApi.Application.SocialDistribution.Services;
 using PropertyApi.Domain.Common.Exceptions;
 using PropertyApi.Domain.SocialDistribution.Entities;
 using PropertyApi.Domain.SocialDistribution.Enums;
@@ -20,35 +22,64 @@ public sealed class PublishSocialPublicationCommandHandlerTests
         public Mock<ISocialPublicationStatusHistoryRepository> History { get; } = new();
         public Mock<ISocialAccountRepository> Accounts { get; } = new();
         public Mock<IPropertyRepository> Properties { get; } = new();
+        public Mock<ISocialPublisherRegistry> Registry { get; } = new();
+        public Mock<ISocialMediaAssetGenerator> AssetGenerator { get; } = new();
         public Mock<IUnitOfWork> UnitOfWork { get; } = new();
-        public List<ISocialPublisher> Publishers { get; } = new();
 
         public PublishSocialPublicationCommandHandler BuildHandler() => new(
-            Publications.Object, History.Object, Accounts.Object, Properties.Object, Publishers, UnitOfWork.Object, NullLogger<PublishSocialPublicationCommandHandler>.Instance);
+            Publications.Object, History.Object, Accounts.Object, Properties.Object,
+            Registry.Object, AssetGenerator.Object, UnitOfWork.Object,
+            NullLogger<PublishSocialPublicationCommandHandler>.Instance);
+
+        public void RegisterPublisher(ISocialPublisher publisher) =>
+            Registry.Setup(x => x.TryGetPublisher(publisher.Platform)).Returns(publisher);
     }
 
     private sealed class FakePublisher : ISocialPublisher
     {
         public SocialPlatform Platform { get; }
         private readonly Func<SocialPublishRequest, SocialPublishResult> _respond;
+        private readonly Func<SocialPublishRequest, SocialContentValidationResult>? _validate;
 
-        public FakePublisher(SocialPlatform platform, Func<SocialPublishRequest, SocialPublishResult> respond)
+        public FakePublisher(
+            SocialPlatform platform,
+            Func<SocialPublishRequest, SocialPublishResult> respond,
+            Func<SocialPublishRequest, SocialContentValidationResult>? validate = null)
         {
             Platform = platform;
             _respond = respond;
+            _validate = validate;
         }
+
+        public SocialPublisherCapabilities GetCapabilities() => new(
+            SupportsText: true, SupportsImages: true, SupportsVideo: false, SupportsStories: false,
+            SupportsHashtags: true, SupportsScheduling: false, SupportsUpdate: false, SupportsDelete: false);
+
+        public SocialContentValidationResult ValidateContent(SocialPublishRequest request) =>
+            _validate?.Invoke(request) ?? SocialContentValidationResult.Valid;
 
         public Task<SocialPublishResult> PublishAsync(SocialPublishRequest request, CancellationToken ct = default) =>
             Task.FromResult(_respond(request));
+
+        public Task<SocialPublishResult> UpdateAsync(SocialPublishRequest request, string externalPostId, CancellationToken ct = default) =>
+            Task.FromResult(SocialPublishResult.Failure(SocialPublicationErrorCode.PlatformNotConfigured, "not used in these tests"));
+
+        public Task<SocialPublishResult> CommentAsync(string externalPostId, string commentBody, CancellationToken ct = default) =>
+            Task.FromResult(SocialPublishResult.Failure(SocialPublicationErrorCode.PlatformNotConfigured, "not used in these tests"));
+
+        public Task<SocialPublishResult> DeleteAsync(string externalPostId, CancellationToken ct = default) =>
+            Task.FromResult(SocialPublishResult.Failure(SocialPublicationErrorCode.PlatformNotConfigured, "not used in these tests"));
     }
 
-    private static (SocialPublication publication, SocialAccount account) MakeQueuedPublication(SocialPlatform platform = SocialPlatform.Facebook)
+    private static (SocialPublication publication, SocialAccount account) MakeQueuedPublication(
+        SocialPlatform platform = SocialPlatform.Facebook, Guid? distributionRuleId = null)
     {
         var channelId = Guid.NewGuid();
         var account = SocialAccount.Create(channelId, platform, "Page", "ext-1", SocialAccountType.Page);
         account.Connect(null);
 
-        var publication = SocialPublication.Create(Guid.NewGuid(), account.Id, Guid.NewGuid(), platform);
+        var publication = SocialPublication.Create(
+            Guid.NewGuid(), account.Id, Guid.NewGuid(), platform, distributionRuleId: distributionRuleId, distributionRunId: distributionRuleId is null ? null : Guid.NewGuid());
         var content = SocialPostContent.Create(
             publication.Id, platform, "عنوان", "نص", "https://cdn.example.com/img.jpg",
             "https://realestateworld.world/properties/p1", null, "ar");
@@ -67,13 +98,14 @@ public sealed class PublishSocialPublicationCommandHandlerTests
         fixture.Publications.Setup(x => x.GetByIdAsync(publication.Id, It.IsAny<CancellationToken>())).ReturnsAsync(publication);
         fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
         fixture.Properties.Setup(x => x.IsPubliclyVisibleAsync(publication.PropertyId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
-        fixture.Publishers.Add(new FakePublisher(SocialPlatform.Facebook, _ => SocialPublishResult.Success("ext-post-1", "https://facebook.com/1")));
+        fixture.RegisterPublisher(new FakePublisher(SocialPlatform.Facebook, _ => SocialPublishResult.Success("ext-post-1", "https://facebook.com/1")));
 
         var result = await fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
 
         Assert.Equal(SocialPublicationStatus.Published, result.Status);
         Assert.Equal("ext-post-1", result.ExternalPostId);
         fixture.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        fixture.AssetGenerator.Verify(x => x.GenerateAsync(It.IsAny<GenerateSocialAssetRequest>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -85,7 +117,7 @@ public sealed class PublishSocialPublicationCommandHandlerTests
         fixture.Publications.Setup(x => x.GetByIdAsync(publication.Id, It.IsAny<CancellationToken>())).ReturnsAsync(publication);
         fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
         fixture.Properties.Setup(x => x.IsPubliclyVisibleAsync(publication.PropertyId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
-        fixture.Publishers.Add(new FakePublisher(
+        fixture.RegisterPublisher(new FakePublisher(
             SocialPlatform.Facebook, _ => SocialPublishResult.Failure(SocialPublicationErrorCode.RateLimited, "rate limited")));
 
         var result = await fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
@@ -103,7 +135,7 @@ public sealed class PublishSocialPublicationCommandHandlerTests
         fixture.Publications.Setup(x => x.GetByIdAsync(publication.Id, It.IsAny<CancellationToken>())).ReturnsAsync(publication);
         fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
         fixture.Properties.Setup(x => x.IsPubliclyVisibleAsync(publication.PropertyId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
-        fixture.Publishers.Add(new FakePublisher(
+        fixture.RegisterPublisher(new FakePublisher(
             SocialPlatform.Facebook, _ => SocialPublishResult.Failure(SocialPublicationErrorCode.PermissionDenied, "no permission")));
 
         var result = await fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
@@ -117,7 +149,7 @@ public sealed class PublishSocialPublicationCommandHandlerTests
     {
         var fixture = new Fixture();
         var (publication, account) = MakeQueuedPublication();
-        // fixture.Publishers left empty on purpose.
+        // No publisher registered for Facebook on purpose — Registry.TryGetPublisher returns null by default.
 
         fixture.Publications.Setup(x => x.GetByIdAsync(publication.Id, It.IsAny<CancellationToken>())).ReturnsAsync(publication);
         fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
@@ -139,7 +171,7 @@ public sealed class PublishSocialPublicationCommandHandlerTests
         fixture.Publications.Setup(x => x.GetByIdAsync(publication.Id, It.IsAny<CancellationToken>())).ReturnsAsync(publication);
         fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
         fixture.Properties.Setup(x => x.IsPubliclyVisibleAsync(publication.PropertyId, It.IsAny<CancellationToken>())).ReturnsAsync(false);
-        fixture.Publishers.Add(new FakePublisher(SocialPlatform.Facebook, _ =>
+        fixture.RegisterPublisher(new FakePublisher(SocialPlatform.Facebook, _ =>
         {
             publisherCalled = true;
             return SocialPublishResult.Success("should-not-happen");
@@ -179,7 +211,7 @@ public sealed class PublishSocialPublicationCommandHandlerTests
 
         var publisherCalled = false;
         fixture.Publications.Setup(x => x.GetByIdAsync(publication.Id, It.IsAny<CancellationToken>())).ReturnsAsync(publication);
-        fixture.Publishers.Add(new FakePublisher(SocialPlatform.Facebook, _ => { publisherCalled = true; return SocialPublishResult.Success("x"); }));
+        fixture.RegisterPublisher(new FakePublisher(SocialPlatform.Facebook, _ => { publisherCalled = true; return SocialPublishResult.Success("x"); }));
 
         await Assert.ThrowsAsync<InvalidStateTransitionException>(() =>
             fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None));
@@ -207,7 +239,7 @@ public sealed class PublishSocialPublicationCommandHandlerTests
         fixture.Publications.Setup(x => x.GetByIdAsync(publication.Id, It.IsAny<CancellationToken>())).ReturnsAsync(publication);
         fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
         fixture.Properties.Setup(x => x.IsPubliclyVisibleAsync(publication.PropertyId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
-        fixture.Publishers.Add(new FakePublisher(SocialPlatform.Facebook, _ => throw new InvalidOperationException("boom")));
+        fixture.RegisterPublisher(new FakePublisher(SocialPlatform.Facebook, _ => throw new InvalidOperationException("boom")));
 
         var result = await fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
 
@@ -215,5 +247,95 @@ public sealed class PublishSocialPublicationCommandHandlerTests
         // the publication on the first attempt.
         Assert.Equal(SocialPublicationStatus.Retrying, result.Status);
         Assert.DoesNotContain("boom", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task Handle_InvalidContentPerPublisherValidation_MarksFailed_InvalidContent_WithoutCallingPublishAsync()
+    {
+        var fixture = new Fixture();
+        var (publication, account) = MakeQueuedPublication();
+        var publishCalled = false;
+
+        fixture.Publications.Setup(x => x.GetByIdAsync(publication.Id, It.IsAny<CancellationToken>())).ReturnsAsync(publication);
+        fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+        fixture.Properties.Setup(x => x.IsPubliclyVisibleAsync(publication.PropertyId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        fixture.RegisterPublisher(new FakePublisher(
+            SocialPlatform.Facebook,
+            respond: _ => { publishCalled = true; return SocialPublishResult.Success("x"); },
+            validate: _ => SocialContentValidationResult.Invalid("النص يتجاوز الحد المسموح.")));
+
+        var result = await fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
+
+        Assert.Equal(SocialPublicationStatus.Failed, result.Status);
+        Assert.Equal(SocialPublicationErrorCode.InvalidContent, result.ErrorCode);
+        Assert.False(publishCalled);
+    }
+
+    [Fact]
+    public async Task Handle_RuleEngineCreatedPublication_GeneratesAndAttachesAsset_BeforePublishing()
+    {
+        var fixture = new Fixture();
+        var (publication, account) = MakeQueuedPublication(distributionRuleId: Guid.NewGuid());
+        var generatedAssetId = Guid.NewGuid();
+
+        fixture.Publications.Setup(x => x.GetByIdAsync(publication.Id, It.IsAny<CancellationToken>())).ReturnsAsync(publication);
+        fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+        fixture.Properties.Setup(x => x.IsPubliclyVisibleAsync(publication.PropertyId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        fixture.AssetGenerator
+            .Setup(x => x.GenerateAsync(It.IsAny<GenerateSocialAssetRequest>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GeneratedSocialAssetResult(
+                generatedAssetId, SocialPlatform.Facebook, SocialAssetType.FeedImage,
+                "https://cdn.example.com/generated.svg", 1200, 630, "image/svg+xml", 2048, "abc123", "default", 1, Reused: false));
+
+        SocialPublishRequest? capturedRequest = null;
+        fixture.RegisterPublisher(new FakePublisher(SocialPlatform.Facebook, req =>
+        {
+            capturedRequest = req;
+            return SocialPublishResult.Success("ext-1");
+        }));
+
+        var result = await fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
+
+        Assert.Equal(SocialPublicationStatus.Published, result.Status);
+        Assert.NotNull(capturedRequest);
+        Assert.Equal("https://cdn.example.com/generated.svg", capturedRequest!.ImageUrl);
+        fixture.AssetGenerator.Verify(x => x.GenerateAsync(It.IsAny<GenerateSocialAssetRequest>(), false, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_AssetGenerationFailsRetryable_MovesToRetrying_WithoutCallingPublisher()
+    {
+        var fixture = new Fixture();
+        var (publication, account) = MakeQueuedPublication(distributionRuleId: Guid.NewGuid());
+        var publisherCalled = false;
+
+        fixture.Publications.Setup(x => x.GetByIdAsync(publication.Id, It.IsAny<CancellationToken>())).ReturnsAsync(publication);
+        fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+        fixture.Properties.Setup(x => x.IsPubliclyVisibleAsync(publication.PropertyId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        fixture.AssetGenerator
+            .Setup(x => x.GenerateAsync(It.IsAny<GenerateSocialAssetRequest>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new SocialAssetGenerationException("تعذّر الرفع.", retryable: true));
+        fixture.RegisterPublisher(new FakePublisher(SocialPlatform.Facebook, _ => { publisherCalled = true; return SocialPublishResult.Success("x"); }));
+
+        var result = await fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
+
+        Assert.Equal(SocialPublicationStatus.Retrying, result.Status);
+        Assert.False(publisherCalled);
+    }
+
+    [Fact]
+    public async Task Handle_ManuallyCreatedPublication_NeverTriggersAssetGeneration()
+    {
+        var fixture = new Fixture();
+        var (publication, account) = MakeQueuedPublication(distributionRuleId: null);
+
+        fixture.Publications.Setup(x => x.GetByIdAsync(publication.Id, It.IsAny<CancellationToken>())).ReturnsAsync(publication);
+        fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+        fixture.Properties.Setup(x => x.IsPubliclyVisibleAsync(publication.PropertyId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        fixture.RegisterPublisher(new FakePublisher(SocialPlatform.Facebook, _ => SocialPublishResult.Success("ext-1")));
+
+        await fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
+
+        fixture.AssetGenerator.Verify(x => x.GenerateAsync(It.IsAny<GenerateSocialAssetRequest>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }
