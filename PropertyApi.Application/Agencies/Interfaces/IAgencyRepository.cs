@@ -56,4 +56,24 @@ public interface IAgencyRepository
     /// else would let deleting an organisation destroy individuals' listings.
     /// </summary>
     Task<int> ClearAgencyAttributionAsync(Guid agencyId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Active agencies matching exactly ONE location scope, excluding ids already selected.
+    ///
+    /// Added for Valuation Stage 4 (Office Matching)'s progressive geographic expansion:
+    /// the caller runs this once per level — Neighborhood, then District, then Governorate,
+    /// then a set of neighboring Governorates — passing only that level's parameter and
+    /// leaving the others null, so each call is a single, narrow, database-side query
+    /// instead of loading every agency into memory and filtering in-process. Pass exactly
+    /// one of <paramref name="neighborhoodId"/>/<paramref name="districtId"/>/
+    /// <paramref name="governorateIds"/> per call; mixing them is not supported by this
+    /// method (there was no existing agency-search method or Specification to reuse for
+    /// this — see OfficeMatchingService's own inspection notes).
+    /// </summary>
+    Task<IReadOnlyList<Agency>> FindActiveByLocationAsync(
+        int? neighborhoodId,
+        int? districtId,
+        IReadOnlyCollection<int>? governorateIds,
+        IReadOnlyCollection<Guid> excludeAgencyIds,
+        CancellationToken ct = default);
 }
