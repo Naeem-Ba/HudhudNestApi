@@ -128,6 +128,17 @@ public sealed class ConfirmPropertyAvailabilityCommandHandlerTests
             CancellationToken ct = default)
             => throw new NotImplementedException();
 
+        public Task<IReadOnlyList<decimal>> GetComparableListingPricesAsync(
+            int? propertyTypeId,
+            ListingType listingType,
+            decimal? area,
+            decimal areaTolerancePercent,
+            int governorateId,
+            int? districtId,
+            int? neighborhoodId,
+            CancellationToken ct = default)
+            => throw new NotImplementedException();
+
         public void Update(Property property)
         {
         }

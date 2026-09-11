@@ -85,6 +85,43 @@ public interface IPropertyRepository
         decimal maxTolerancePercent,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Valuation Fast Path (Phase 3): resolved comparable-listing prices for a
+    /// ValuationInquiry's Fast Path lookup — same shape as
+    /// <see cref="FindPotentialDuplicatesAsync"/> but purpose-built for this caller instead of
+    /// repurposed from it, for three reasons that matter here specifically: (1) it needs the
+    /// full Governorate→District→Neighborhood fallback, not a single neighborhoodId; (2) it
+    /// must return every match with no <c>.Take()</c> cap — the Fast Path's exact count decides
+    /// Preliminary-vs-office-handoff, and Min/Max/Average/Median must reflect ALL comparables,
+    /// not a sample; (3) it needs the fuller "not expired" eligibility Property search already
+    /// uses (PropertyRepository.ApplyFilter), not just IsPublished.
+    ///
+    /// Returns only the one price relevant to <paramref name="listingType"/> per matching
+    /// property (ForSale → PurchasePrice; otherwise → ColdRent ?? WarmRent — same mapping
+    /// CheckPotentialDuplicatePropertyQueryHandler.GetComparablePrice already applies), and
+    /// resolved entirely server-side. A property with no usable price for that type, or whose
+    /// resolved price is not strictly positive, is silently excluded rather than returned as
+    /// null/zero/negative — the caller's statistics never need to guard against an invalid
+    /// value entering them.
+    ///
+    /// Location matching is hierarchical and mutually exclusive — governorateId is always
+    /// applied (defence against a Property row whose location columns don't actually agree
+    /// with each other, since nothing currently enforces that), and additionally: neighborhoodId
+    /// when given, else districtId when given, else governorate-only. Never both
+    /// district and neighborhood at once, and never a silent fallback from neighborhood to
+    /// district — the caller (GetComparableListingsQueryHandler) decides which one tier
+    /// applies from the inquiry's own data before calling this.
+    /// </summary>
+    Task<IReadOnlyList<decimal>> GetComparableListingPricesAsync(
+        int? propertyTypeId,
+        ListingType listingType,
+        decimal? area,
+        decimal areaTolerancePercent,
+        int governorateId,
+        int? districtId,
+        int? neighborhoodId,
+        CancellationToken ct = default);
+
     // Update — repository just tracks, UnitOfWork saves
     void Update(Property property);
 
