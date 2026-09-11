@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.ShortStay.Commands.AddAccommodationUnit;
 using PropertyApi.Application.ShortStay.Commands.AddRoomType;
 using PropertyApi.Application.ShortStay.Commands.CreateShortStayListing;
+using PropertyApi.Application.ShortStay.Commands.DeleteShortStayListing;
 using PropertyApi.Application.ShortStay.Commands.PublishShortStayListing;
 using PropertyApi.Application.ShortStay.Commands.SetMinimumStayRules;
 using PropertyApi.Application.ShortStay.Commands.SetPricingRules;
@@ -113,6 +114,19 @@ public sealed class ShortStayListingsController : ControllerBase
         return Ok(result);
     }
 
+    [HttpDelete("{id:guid}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        var success = await _mediator.Send(
+            new DeleteShortStayListingCommand(id, GetUserId(), GetClientIp()), ct);
+
+        return success ? NoContent() : NotFound();
+    }
+
     [HttpPut("{id:guid}/publish")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -178,6 +192,8 @@ public sealed class ShortStayListingsController : ControllerBase
 
     private Guid GetUserId() => TryGetUserId()
         ?? throw new UnauthorizedAccessException("Missing or invalid authenticated user id claim.");
+
+    private string? GetClientIp() => HttpContext.Connection.RemoteIpAddress?.ToString();
 }
 
 public sealed record CreateShortStayListingRequest(

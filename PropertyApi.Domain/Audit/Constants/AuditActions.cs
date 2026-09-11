@@ -6,6 +6,7 @@ public static class AuditActions
     public const string ChangePassword = "ChangePassword";
     public const string RoleChanged = "RoleChanged";
     public const string DeleteProperty = "DeleteProperty";
+    public const string DeleteShortStayListing = "DeleteShortStayListing";
     public const string RefreshTokenReuseDetected = "RefreshTokenReuseDetected";
     public const string PhoneRegistrationOtpRequested = "PhoneRegistrationOtpRequested";
     public const string PhoneRegistrationCompleted = "PhoneRegistrationCompleted";

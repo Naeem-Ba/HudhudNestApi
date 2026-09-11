@@ -224,4 +224,16 @@ public sealed class ShortStayListing : AuditableEntity
     }
 
     public void Unpublish() => IsPublished = false;
+
+    /// <summary>Soft delete — mirrors Property.MarkAsDeleted exactly. The repository's
+    /// Remove() call afterward is intercepted by AppDbContext.SaveChangesAsync and converted
+    /// to a plain update (IsDeleted/DeletedAt only); DeletedByUserId is not touched by that
+    /// generic interceptor, so it must be set here.</summary>
+    public void MarkAsDeleted(Guid deletedByUserId)
+    {
+        IsDeleted = true;
+        DeletedAt = DateTime.UtcNow;
+        DeletedByUserId = deletedByUserId;
+        UpdatedAt = DateTime.UtcNow;
+    }
 }

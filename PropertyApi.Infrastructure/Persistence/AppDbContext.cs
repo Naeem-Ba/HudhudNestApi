@@ -179,6 +179,11 @@ public sealed class AppDbContext
         builder.Entity<UserRating>().HasQueryFilter(r => !r.IsDeleted);
         builder.Entity<Transaction>().HasQueryFilter(e => !e.IsDeleted);
 
+        // Short-Stay Accommodation: added alongside the plan-quota fix (a deleted listing
+        // must stop being reachable/countable the same way a deleted Property already is —
+        // see IActiveListingCounter).
+        builder.Entity<ShortStayListing>().HasQueryFilter(e => !e.IsDeleted);
+
         builder.Entity<Favorite>().HasQueryFilter(favorite => !favorite.Property.IsDeleted);
 
         builder.Entity<PropertyAmenity>().HasQueryFilter(propertyAmenity => !propertyAmenity.Property.IsDeleted && !propertyAmenity.Amenity.IsDeleted);
