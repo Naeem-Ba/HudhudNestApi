@@ -74,6 +74,33 @@ public sealed class AgencyConfiguration : IEntityTypeConfiguration<Agency>
         builder.HasIndex(a => new { a.CountryCode, a.City })
             .HasDatabaseName("IX_Agencies_CountryCode_City");
 
+        // ── الموقع الجغرافي المنظَّم ──────────────────────────────────────
+        // نفس العلاقات ونفس DeleteBehavior.Restrict المستخدمَين في
+        // PropertyConfiguration لـ Governorate/District/Neighborhood — لا يمكن
+        // حذف محافظة/منطقة/حي طالما مكتب عقاري يشير إليها. Restrict لا SetNull:
+        // هذه الجداول المرجعية (seed ثابت) لا تُحذف في التشغيل العادي أصلًا.
+        builder.HasOne(a => a.Governorate)
+            .WithMany()
+            .HasForeignKey(a => a.GovernorateId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(a => a.District)
+            .WithMany()
+            .HasForeignKey(a => a.DistrictId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(a => a.Neighborhood)
+            .WithMany()
+            .HasForeignKey(a => a.NeighborhoodId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // فهارس على الأعمدة الجديدة — نفس نمط PropertyConfiguration
+        // (IX_Properties_GovernorateId وما شابه)، مفيدة لاحقًا لأي مطابقة
+        // جغرافية بين المكاتب والإعلانات.
+        builder.HasIndex(a => a.GovernorateId);
+        builder.HasIndex(a => a.DistrictId);
+        builder.HasIndex(a => a.NeighborhoodId);
+
         // Same soft-delete convention every other entity here follows, so a deleted agency
         // disappears from every read path without each query having to remember.
         builder.HasQueryFilter(a => !a.IsDeleted);

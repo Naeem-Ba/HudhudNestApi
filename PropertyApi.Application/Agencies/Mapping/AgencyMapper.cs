@@ -31,7 +31,10 @@ public static class AgencyMapper
             CreatedAt: agency.CreatedAt,
             Members: members
                 .Select(member => ToMemberDto(member, agency.OwnerUserId))
-                .ToList());
+                .ToList(),
+            GovernorateId: agency.GovernorateId,
+            DistrictId: agency.DistrictId,
+            NeighborhoodId: agency.NeighborhoodId);
 
     public static AgencyMemberDto ToMemberDto(UserAccount member, Guid ownerUserId)
         => new(

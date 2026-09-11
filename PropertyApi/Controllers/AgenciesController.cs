@@ -103,7 +103,10 @@ public sealed class AgenciesController : ControllerBase
                 City: request.City,
                 LicenseNumber: request.LicenseNumber,
                 RequestingUserId: userId.Value,
-                IpAddress: GetClientIp()),
+                IpAddress: GetClientIp(),
+                GovernorateId: request.GovernorateId,
+                DistrictId: request.DistrictId,
+                NeighborhoodId: request.NeighborhoodId),
             ct);
 
         return CreatedAtAction(nameof(GetBySlug), new { slug = agency.Slug }, agency);
@@ -133,7 +136,10 @@ public sealed class AgenciesController : ControllerBase
                 ContactEmail: request.ContactEmail,
                 ContactPhone: request.ContactPhone,
                 City: request.City,
-                RequestingUserId: userId.Value),
+                RequestingUserId: userId.Value,
+                GovernorateId: request.GovernorateId,
+                DistrictId: request.DistrictId,
+                NeighborhoodId: request.NeighborhoodId),
             ct);
 
         return Ok(agency);
@@ -378,7 +384,14 @@ public sealed record CreateAgencyRequest(
     string? ContactEmail,
     string? ContactPhone,
     string? City,
-    string? LicenseNumber);
+    string? LicenseNumber,
+
+    // الموقع الجغرافي المنظَّم — اختياري بالكامل، حفاظًا على مسار الإنشاء القديم أثناء
+    // فترة التوافق (انظر CreateAgencyCommand). لا علاقة له بـ City النصي أعلاه، الذي
+    // يبقى كما هو.
+    int? GovernorateId = null,
+    int? DistrictId = null,
+    int? NeighborhoodId = null);
 
 /// <summary>Request body for POST .../invitations — who the owner wants to invite.</summary>
 public sealed record CreateAgencyInvitationRequest(Guid UserId);
@@ -403,4 +416,11 @@ public sealed record UpdateAgencyRequest(
     string? Description,
     string? ContactEmail,
     string? ContactPhone,
-    string? City);
+    string? City,
+
+    // الموقع الجغرافي المنظَّم. نفس دلالة UpdateAgencyCommand: استبدال كامل، فما يُرسل
+    // هنا — بما فيه null — يحل محل القيمة الحالية دومًا. أرسل الموقع الحالي كاملاً حتى
+    // عند تعديل حقل آخر فقط، وإلا سيُمسح.
+    int? GovernorateId = null,
+    int? DistrictId = null,
+    int? NeighborhoodId = null);

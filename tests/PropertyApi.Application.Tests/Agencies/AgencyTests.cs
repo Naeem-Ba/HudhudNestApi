@@ -439,6 +439,162 @@ public sealed class AgencyTests
         Assert.Equal("مكتب الشام الجديد", dto.Name);
     }
 
+    // ── المرحلة 1: الفجوة الجغرافية على Agency ────────────────────
+
+    [Fact]
+    public async Task CreateAgency_WithGovernorateOnly_Succeeds()
+    {
+        // Test 1 — Governorate only.
+        var account = BuildAccount();
+        var repo = BuildRepository(account);
+        var handler = CreateHandler(repo, BuildIdentity());
+
+        var result = await handler.Handle(
+            BuildCreateCommand(account.Id, "Sham Realty") with { GovernorateId = 1 },
+            CancellationToken.None);
+
+        Assert.Equal(1, result.GovernorateId);
+        Assert.Null(result.DistrictId);
+        Assert.Null(result.NeighborhoodId);
+    }
+
+    [Fact]
+    public async Task CreateAgency_WithFullLocation_Succeeds()
+    {
+        // Test 2 — Full location.
+        var account = BuildAccount();
+        var repo = BuildRepository(account);
+        var handler = CreateHandler(repo, BuildIdentity());
+
+        var result = await handler.Handle(
+            BuildCreateCommand(account.Id, "Sham Realty") with
+            {
+                GovernorateId = 1,
+                DistrictId = 10,
+                NeighborhoodId = 100
+            },
+            CancellationToken.None);
+
+        Assert.Equal(1, result.GovernorateId);
+        Assert.Equal(10, result.DistrictId);
+        Assert.Equal(100, result.NeighborhoodId);
+    }
+
+    [Fact]
+    public async Task CreateAgency_WithNoLocation_Succeeds_AndIsUnclassified()
+    {
+        // البند 14 — مكتب بلا موقع يبقى "غير مصنَّف" لا خطأ.
+        var account = BuildAccount();
+        var repo = BuildRepository(account);
+        var handler = CreateHandler(repo, BuildIdentity());
+
+        var result = await handler.Handle(
+            BuildCreateCommand(account.Id, "Sham Realty"),
+            CancellationToken.None);
+
+        Assert.Null(result.GovernorateId);
+        Assert.Null(result.DistrictId);
+        Assert.Null(result.NeighborhoodId);
+    }
+
+    [Fact]
+    public async Task OldAgencyWithNoLocation_ReadsAndUpdatesOtherFields_WithoutError()
+    {
+        // Test 3 — Old Agency (null/null/null) must read fine and stay editable.
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId); // لم يُستدعَ أي شيء يخص الموقع — يبقى null/null/null
+        var owner = BuildAccount(ownerId);
+
+        var repo = BuildRepository(owner, agency);
+        var handler = UpdateHandler(repo);
+
+        var dto = await handler.Handle(
+            new UpdateAgencyCommand(
+                AgencyId: agency.Id,
+                Name: "مكتب الشام — اسم محدَّث",
+                Description: agency.Description,
+                ContactEmail: agency.ContactEmail,
+                ContactPhone: agency.ContactPhone,
+                City: agency.City,
+                RequestingUserId: ownerId,
+                GovernorateId: null,
+                DistrictId: null,
+                NeighborhoodId: null),
+            CancellationToken.None);
+
+        Assert.Equal("مكتب الشام — اسم محدَّث", dto.Name);
+        Assert.Null(dto.GovernorateId);
+        Assert.Null(dto.DistrictId);
+        Assert.Null(dto.NeighborhoodId);
+    }
+
+    [Fact]
+    public async Task UpdateAgency_FromUnclassified_ToFullLocation_Succeeds()
+    {
+        // Test 6 — Update: مكتب قديم بلا موقع، ثم تحديث إلى محافظة/منطقة/حي كامل.
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        var owner = BuildAccount(ownerId);
+
+        var repo = BuildRepository(owner, agency);
+        var handler = UpdateHandler(repo);
+
+        var dto = await handler.Handle(
+            new UpdateAgencyCommand(
+                AgencyId: agency.Id,
+                Name: agency.Name,
+                Description: null,
+                ContactEmail: null,
+                ContactPhone: null,
+                City: null,
+                RequestingUserId: ownerId,
+                GovernorateId: 1,
+                DistrictId: 10,
+                NeighborhoodId: 100),
+            CancellationToken.None);
+
+        Assert.Equal(1, agency.GovernorateId);
+        Assert.Equal(10, agency.DistrictId);
+        Assert.Equal(100, agency.NeighborhoodId);
+        Assert.Equal(1, dto.GovernorateId);
+        Assert.Equal(10, dto.DistrictId);
+        Assert.Equal(100, dto.NeighborhoodId);
+    }
+
+    [Fact]
+    public async Task UpdateAgency_CanRemoveDistrictAndNeighborhood_KeepingGovernorate()
+    {
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        agency.GovernorateId = 1;
+        agency.DistrictId = 10;
+        agency.NeighborhoodId = 100;
+        var owner = BuildAccount(ownerId);
+
+        var repo = BuildRepository(owner, agency);
+        var handler = UpdateHandler(repo);
+
+        var dto = await handler.Handle(
+            new UpdateAgencyCommand(
+                AgencyId: agency.Id,
+                Name: agency.Name,
+                Description: null,
+                ContactEmail: null,
+                ContactPhone: null,
+                City: null,
+                RequestingUserId: ownerId,
+                GovernorateId: 1,
+                DistrictId: null,
+                NeighborhoodId: null),
+            CancellationToken.None);
+
+        Assert.Equal(1, agency.GovernorateId);
+        Assert.Null(agency.DistrictId);
+        Assert.Null(agency.NeighborhoodId);
+        Assert.Null(dto.DistrictId);
+        Assert.Null(dto.NeighborhoodId);
+    }
+
     [Fact]
     public async Task UpdateAgency_ByNonOwner_IsRejected()
     {
