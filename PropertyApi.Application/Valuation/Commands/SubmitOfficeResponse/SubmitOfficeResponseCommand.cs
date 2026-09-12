@@ -4,10 +4,12 @@ using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Agencies.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Application.Valuation.DTOs;
 using PropertyApi.Application.Valuation.Interfaces;
 using PropertyApi.Domain.Common.Exceptions;
 using PropertyApi.Domain.Valuation.Entities;
+using PropertyApi.Domain.Valuation.Enums;
 
 namespace PropertyApi.Application.Valuation.Commands.SubmitOfficeResponse;
 
@@ -46,7 +48,9 @@ public sealed class SubmitOfficeResponseCommandHandler
     private readonly IValuationOfficeResponseRepository _responses;
     private readonly IValuationInquiryRepository _inquiries;
     private readonly IAgencyRepository _agencies;
+    private readonly INotificationService _notifications;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly TimeProvider _clock;
     private readonly ILogger<SubmitOfficeResponseCommandHandler> _logger;
 
     public SubmitOfficeResponseCommandHandler(
@@ -54,14 +58,18 @@ public sealed class SubmitOfficeResponseCommandHandler
         IValuationOfficeResponseRepository responses,
         IValuationInquiryRepository inquiries,
         IAgencyRepository agencies,
+        INotificationService notifications,
         IUnitOfWork unitOfWork,
+        TimeProvider clock,
         ILogger<SubmitOfficeResponseCommandHandler> logger)
     {
         _invitations = invitations;
         _responses = responses;
         _inquiries = inquiries;
         _agencies = agencies;
+        _notifications = notifications;
         _unitOfWork = unitOfWork;
+        _clock = clock;
         _logger = logger;
     }
 
@@ -85,7 +93,12 @@ public sealed class SubmitOfficeResponseCommandHandler
         var inquiry = await _inquiries.GetByIdAsync(invitation.InquiryId, ct)
             ?? throw new NotFoundException("طلب التقييم غير موجود.");
 
-        var now = DateTime.UtcNow;
+        // Remediation L1 — TimeProvider, not DateTime.UtcNow directly, for the same reason
+        // ValuationInquiryExpiryHostedService already uses it: lets a test control "now" via
+        // dependency injection instead of only via pre-constructed domain state, and keeps
+        // this request-path handler on the same time-abstraction convention as the sweep it
+        // races against.
+        var now = _clock.GetUtcNow().UtcDateTime;
 
         // Backend-enforced expiry, independent of ValuationInquiryExpiryHostedService — that
         // sweep only ticks every 15 minutes, so Status can briefly still read Sent after the
@@ -119,13 +132,90 @@ public sealed class SubmitOfficeResponseCommandHandler
 
         _invitations.Update(invitation);
         await _responses.AddAsync(response, ct);
+
+        // Step 1 (required): the invitation's Sent->Responded transition and the new response
+        // row. ValuationOfficeInvitation now carries an xmin concurrency token (Remediation
+        // H1): if ValuationInquiryExpiryHostedService's sweep concurrently expired THIS
+        // invitation between this request's read and this save, Postgres reports 0 rows
+        // matched and EF Core throws DbUpdateConcurrencyException — ExceptionHandlingMiddleware
+        // already maps that to 409 (RELEASE-BLOCKERS-AR.md B-9's existing, unmodified
+        // behavior), so a genuine "expiry won the race" is a clean, deterministic rejection
+        // with zero rows written — never a persisted-but-invisible response. This call must be
+        // allowed to throw and fail the whole request: it is the one thing here that is not
+        // optional.
         await _unitOfWork.SaveChangesAsync(ct);
 
+        // Step 2 (best-effort, Remediation H2): only after the response above is durably
+        // committed, separately check whether this was the last outstanding invitation for the
+        // inquiry — "nothing left outstanding", not an invented "3 responses" constant, so it
+        // completes correctly whether OfficeMatchingService sent 1, 2, 3, or more invitations.
+        // Deliberately its own SaveChangesAsync, not batched with Step 1: two offices
+        // responding to two DIFFERENT invitations of the SAME inquiry at nearly the same
+        // instant would otherwise let whichever loses the shared ValuationInquiry row's xmin
+        // race take the winner's own already-valid response down with it. TrySaveChangesAsync
+        // (Remediation H1) turns "someone else already resolved this inquiry" (a concurrent
+        // sibling response, or the SLA sweep) into a plain `false` instead of an exception —
+        // this office's response from Step 1 is unaffected either way.
+        var willComplete = false;
+        var siblings = await _invitations.GetByInquiryIdAsync(invitation.InquiryId, ct);
+        if (siblings.All(i => i.Status != ValuationOfficeInvitationStatus.Sent))
+        {
+            try
+            {
+                // MarkCompleted's own Domain guard (MatchedFromListings or
+                // AwaitingOfficeResponses only) is the sole source of truth here — not
+                // duplicated or second-guessed by this handler.
+                inquiry.MarkCompleted(now);
+                _inquiries.Update(inquiry);
+                willComplete = await _unitOfWork.TrySaveChangesAsync(ct);
+            }
+            catch (DomainException)
+            {
+                // inquiry was already Completed/Expired by the time this handler read it —
+                // this office's response (Step 1) is already safely persisted regardless.
+            }
+        }
+
         _logger.LogInformation(
-            "Valuation office response submitted. InvitationId={InvitationId}, AgencyId={AgencyId}, InquiryId={InquiryId}",
+            "Valuation office response submitted. InvitationId={InvitationId}, AgencyId={AgencyId}, InquiryId={InquiryId}, InquiryCompleted={InquiryCompleted}",
             invitation.Id,
             invitation.AgencyId,
-            invitation.InquiryId);
+            invitation.InquiryId,
+            willComplete);
+
+        if (willComplete && inquiry.RequesterId is { } requesterId)
+        {
+            // Same "guest inquiry has no account to notify" rule ValuationSlaEnforcementService
+            // already applies to the Expired notification — never raised for an anonymous
+            // inquiry. Sent only after the domain transition is durably committed above, same
+            // "mutate+save first, notify after" ordering this module already uses throughout.
+            try
+            {
+                await _notifications.NotifyValuationResultReadyAsync(requesterId, inquiry.Id, ct);
+
+                // Remediation M3 — stamped only on confirmed success, mirroring
+                // ValuationSlaEnforcementService's own ExpiryNotifiedAt pattern. Best-effort:
+                // if THIS save itself loses a concurrency race or fails, the inquiry is picked
+                // up by ValuationSlaEnforcementService's retry phase next sweep tick and simply
+                // re-notified — a redundant notification here is a rare, acceptable edge case,
+                // never a silent loss.
+                inquiry.MarkResultReadyNotified(now);
+                _inquiries.Update(inquiry);
+                await _unitOfWork.TrySaveChangesAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                // A failed notification here must not fail (or appear to fail) a response that
+                // was already successfully recorded above. The durable-retry mechanism for
+                // this notification type lives in ValuationSlaEnforcementService
+                // (GetCompletedAwaitingResultNotificationAsync), which will pick this inquiry
+                // up on its next sweep tick since ResultReadyNotifiedAt was never stamped.
+                _logger.LogError(
+                    ex,
+                    "Failed to send valuation-result-ready notification synchronously; it will be retried by the SLA sweep. InquiryId={InquiryId}",
+                    inquiry.Id);
+            }
+        }
 
         return new ValuationOfficeResponseDto(
             response.Id, invitation.Id, response.EstimatedPrice, response.Notes, response.SubmittedAt);

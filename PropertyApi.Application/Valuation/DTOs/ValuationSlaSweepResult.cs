@@ -11,4 +11,11 @@ public sealed class ValuationSlaSweepResult
     public int InquiriesExpired { get; init; }
 
     public int InvitationsExpired { get; init; }
+
+    /// <summary>Remediation M4 — CreatedAt+18h reminders successfully delivered this sweep.</summary>
+    public int RemindersSent { get; init; }
+
+    /// <summary>Remediation M3 — previously-failed notifications (of any of the Valuation
+    /// module's notification types) successfully delivered on retry this sweep.</summary>
+    public int NotificationsRetried { get; init; }
 }

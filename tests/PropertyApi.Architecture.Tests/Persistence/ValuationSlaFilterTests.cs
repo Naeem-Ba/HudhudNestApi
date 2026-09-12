@@ -130,10 +130,126 @@ public sealed class ValuationSlaFilterTests
         Assert.Empty(results);
     }
 
+    // ── ValuationInquiryRepository.ApplyDueForReminderFilter (Remediation M4) ──
+
+    [Fact]
+    public void DueForReminder_Before18Hours_IsExcluded()
+    {
+        // Test A — 17h old: not due yet.
+        var inquiry = BuildInquiryAge(hoursOld: 17, ValuationInquiryStatus.AwaitingOfficeResponses);
+
+        Assert.Empty(FilterDueReminders([inquiry]));
+    }
+
+    [Fact]
+    public void DueForReminder_AtExactly18Hours_IsIncluded()
+    {
+        // Test B — >=, not >, same boundary convention as DueForExpiry_ExpiresAtExactlyNow_IsIncluded.
+        var inquiry = BuildInquiryAge(hoursOld: 18, ValuationInquiryStatus.AwaitingOfficeResponses);
+
+        Assert.Equal([inquiry], FilterDueReminders([inquiry]));
+    }
+
+    [Fact]
+    public void DueForReminder_After18Hours_StillWithin24HourWindow_IsIncluded()
+    {
+        // Test C — 19h old: still due (has not been sent yet -- ReminderSentAt null -- and the
+        // 24h window has not closed).
+        var inquiry = BuildInquiryAge(hoursOld: 19, ValuationInquiryStatus.AwaitingOfficeResponses);
+
+        Assert.Equal([inquiry], FilterDueReminders([inquiry]));
+    }
+
+    [Theory]
+    [InlineData(ValuationInquiryStatus.Completed)]
+    [InlineData(ValuationInquiryStatus.Expired)]
+    public void DueForReminder_ExcludesTerminalStatus_EvenPast18Hours(ValuationInquiryStatus status)
+    {
+        // Test D (Completed) + the symmetric Expired case -- a reminder is meaningless once the
+        // inquiry already has its result or is already closed.
+        var inquiry = BuildInquiryAge(hoursOld: 20, status);
+
+        Assert.Empty(FilterDueReminders([inquiry]));
+    }
+
+    [Fact]
+    public void DueForReminder_ExcludesInquiry_PastItsOwn24HourExpiresAt()
+    {
+        // A reminder after the deadline already passed is not a reminder -- the expiry phase
+        // owns that case (even if, hypothetically, Expire() had not run yet in this exact
+        // instant of a real sweep).
+        var inquiry = BuildInquiryAge(hoursOld: 25, ValuationInquiryStatus.AwaitingOfficeResponses);
+
+        Assert.Empty(FilterDueReminders([inquiry]));
+    }
+
+    [Fact]
+    public void DueForReminder_ExcludesAnonymousInquiry_EvenPast18Hours()
+    {
+        // No RequesterId, no account to remind -- same "guest inquiry" exclusion the Expired
+        // notification already applies, enforced at the database-query level here rather than
+        // relying on every caller to re-check RequesterId.
+        var inquiry = ValuationInquiry.Create(
+            governorateId: 1, requestType: ListingType.ForSale, utcNow: Now.AddHours(-19), requesterId: null);
+        inquiry.MarkAwaitingOfficeResponses(Now.AddHours(-19));
+
+        Assert.Empty(FilterDueReminders([inquiry]));
+    }
+
+    [Fact]
+    public void DueForReminder_ExcludesInquiry_AlreadyReminded()
+    {
+        // Idempotency at the query level -- ReminderSentAt is only ever set on confirmed
+        // notification success (ValuationSlaEnforcementService.SendDueRemindersAsync), and once
+        // set, this same inquiry must never be returned again by this query, however many more
+        // sweep ticks run.
+        var inquiry = BuildInquiryAge(hoursOld: 19, ValuationInquiryStatus.AwaitingOfficeResponses);
+        inquiry.MarkReminderSent(Now);
+
+        Assert.Empty(FilterDueReminders([inquiry]));
+    }
+
     // ── Helpers ──────────────────────────────────────────────────
 
     private static List<ValuationInquiry> FilterDueInquiries(IEnumerable<ValuationInquiry> inquiries)
         => ValuationInquiryRepository.ApplyDueForExpiryFilter(inquiries.AsQueryable(), Now).ToList();
+
+    private static List<ValuationInquiry> FilterDueReminders(IEnumerable<ValuationInquiry> inquiries)
+        => ValuationInquiryRepository.ApplyDueForReminderFilter(inquiries.AsQueryable(), Now).ToList();
+
+    /// <summary>Builds an inquiry created exactly <paramref name="hoursOld"/> hours before
+    /// <see cref="Now"/>, with a real RequesterId (the reminder query excludes anonymous
+    /// inquiries), driven to <paramref name="status"/> via real state-machine transitions.</summary>
+    private static ValuationInquiry BuildInquiryAge(int hoursOld, ValuationInquiryStatus status)
+    {
+        var createdAt = Now.AddHours(-hoursOld);
+        var inquiry = ValuationInquiry.Create(
+            governorateId: 1,
+            requestType: ListingType.ForSale,
+            utcNow: createdAt,
+            requesterId: Guid.NewGuid());
+
+        switch (status)
+        {
+            case ValuationInquiryStatus.Pending:
+                break;
+            case ValuationInquiryStatus.MatchedFromListings:
+                inquiry.MarkMatchedFromListings(createdAt);
+                break;
+            case ValuationInquiryStatus.AwaitingOfficeResponses:
+                inquiry.MarkAwaitingOfficeResponses(createdAt);
+                break;
+            case ValuationInquiryStatus.Completed:
+                inquiry.MarkMatchedFromListings(createdAt);
+                inquiry.MarkCompleted(createdAt);
+                break;
+            case ValuationInquiryStatus.Expired:
+                inquiry.Expire(createdAt);
+                break;
+        }
+
+        return inquiry;
+    }
 
     private static List<ValuationOfficeInvitation> FilterStaleInvitations(
         IEnumerable<ValuationOfficeInvitation> invitations,

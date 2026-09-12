@@ -37,6 +37,39 @@ public sealed class ValuationInquiryRepository : IValuationInquiryRepository
             .Take(batchSize)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<ValuationInquiry>> GetDueForReminderAsync(
+        DateTime utcNow,
+        int batchSize,
+        CancellationToken ct = default)
+        => await ApplyDueForReminderFilter(_db.ValuationInquiries, utcNow)
+            .OrderBy(i => i.CreatedAt)
+            .Take(batchSize)
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<ValuationInquiry>> GetExpiredAwaitingNotificationAsync(
+        int batchSize,
+        CancellationToken ct = default)
+        => await _db.ValuationInquiries
+            .Where(i =>
+                i.Status == ValuationInquiryStatus.Expired
+                && i.ExpiryNotifiedAt == null
+                && i.RequesterId != null)
+            .OrderBy(i => i.ExpiresAt)
+            .Take(batchSize)
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<ValuationInquiry>> GetCompletedAwaitingResultNotificationAsync(
+        int batchSize,
+        CancellationToken ct = default)
+        => await _db.ValuationInquiries
+            .Where(i =>
+                i.Status == ValuationInquiryStatus.Completed
+                && i.ResultReadyNotifiedAt == null
+                && i.RequesterId != null)
+            .OrderBy(i => i.CreatedAt)
+            .Take(batchSize)
+            .ToListAsync(ct);
+
     public async Task<PagedResult<ValuationInquiry>> GetPagedAsync(
         ValuationInquiryStatus? status,
         int page,
@@ -86,4 +119,25 @@ public sealed class ValuationInquiryRepository : IValuationInquiryRepository
                 || i.Status == ValuationInquiryStatus.MatchedFromListings
                 || i.Status == ValuationInquiryStatus.AwaitingOfficeResponses)
             && i.ExpiresAt <= utcNow);
+
+    /// <summary>
+    /// Remediation M4 — the "closing soon" reminder rule behind
+    /// <see cref="GetDueForReminderAsync"/>, pulled out the same way ApplyDueForExpiryFilter
+    /// is, for the same in-memory-testable reason. Never overlaps with
+    /// ApplyDueForExpiryFilter's own non-terminal statuses AND ExpiresAt in the past — an
+    /// inquiry that has already crossed its 24h ExpiresAt is handled by the expiry phase, not
+    /// this one, even if a reminder was never sent for it (a "closing soon" reminder after the
+    /// deadline already passed is not a reminder, it is a stale message).
+    /// </summary>
+    public static IQueryable<ValuationInquiry> ApplyDueForReminderFilter(
+        IQueryable<ValuationInquiry> query,
+        DateTime utcNow)
+        => query.Where(i =>
+            (i.Status == ValuationInquiryStatus.Pending
+                || i.Status == ValuationInquiryStatus.MatchedFromListings
+                || i.Status == ValuationInquiryStatus.AwaitingOfficeResponses)
+            && i.ReminderSentAt == null
+            && i.RequesterId != null
+            && i.CreatedAt.Add(ValuationInquiry.ReminderWindow) <= utcNow
+            && i.ExpiresAt > utcNow);
 }

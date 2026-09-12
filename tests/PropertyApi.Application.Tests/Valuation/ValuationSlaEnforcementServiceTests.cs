@@ -38,7 +38,7 @@ public sealed class ValuationSlaEnforcementServiceTests
 
         SetupDueInquiries(inquiries, [inquiry]);
         SetupStaleInvitations(invitations, []);
-        unitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        unitOfWork.Setup(x => x.SaveChangesDroppingConcurrencyConflictsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<object>());
         notifications
             .Setup(x => x.NotifyValuationInquiryExpiredAsync(requesterId, inquiry.Id, false, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -48,7 +48,9 @@ public sealed class ValuationSlaEnforcementServiceTests
         Assert.Equal(1, result.InquiriesExpired);
         Assert.Equal(0, result.InvitationsExpired);
         Assert.Equal(ValuationInquiryStatus.Expired, inquiry.Status);
-        inquiries.Verify(x => x.Update(inquiry), Times.Once);
+        // Twice: once for Expire(), once more for MarkExpiryNotified (Remediation M3) after
+        // the notification below succeeds.
+        inquiries.Verify(x => x.Update(inquiry), Times.Exactly(2));
         notifications.Verify(
             x => x.NotifyValuationInquiryExpiredAsync(requesterId, inquiry.Id, false, It.IsAny<CancellationToken>()),
             Times.Once);
@@ -67,7 +69,7 @@ public sealed class ValuationSlaEnforcementServiceTests
 
         SetupDueInquiries(inquiries, [inquiry]);
         SetupStaleInvitations(invitations, []);
-        unitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        unitOfWork.Setup(x => x.SaveChangesDroppingConcurrencyConflictsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<object>());
         notifications
             .Setup(x => x.NotifyValuationInquiryExpiredAsync(requesterId, inquiry.Id, true, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -93,7 +95,7 @@ public sealed class ValuationSlaEnforcementServiceTests
 
         SetupDueInquiries(inquiries, [inquiry]);
         SetupStaleInvitations(invitations, []);
-        unitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        unitOfWork.Setup(x => x.SaveChangesDroppingConcurrencyConflictsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<object>());
 
         var result = await service.RunSweepAsync(Now, batchSize: 200);
 
@@ -113,9 +115,10 @@ public sealed class ValuationSlaEnforcementServiceTests
 
         Assert.Equal(0, result.InquiriesExpired);
         Assert.Equal(0, result.InvitationsExpired);
-        // Strict mock on unitOfWork with no SaveChangesAsync setup means this would already
-        // throw if called — the assertion below is redundant confirmation of that.
-        unitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        // Strict mock on unitOfWork with no SaveChangesDroppingConcurrencyConflictsAsync setup
+        // means this would already throw if called — the assertion below is redundant
+        // confirmation of that.
+        unitOfWork.Verify(x => x.SaveChangesDroppingConcurrencyConflictsAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -132,7 +135,7 @@ public sealed class ValuationSlaEnforcementServiceTests
         SetupDueInquiries(inquiries, []);
         SetupStaleInvitations(invitations, [invitation]);
         agencies.Setup(x => x.GetByIdAsync(agencyId, It.IsAny<CancellationToken>())).ReturnsAsync(agency);
-        unitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        unitOfWork.Setup(x => x.SaveChangesDroppingConcurrencyConflictsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<object>());
         notifications
             .Setup(x => x.NotifyValuationOfficeInvitationExpiredAsync(ownerUserId, invitation.Id, inquiryId, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -161,7 +164,7 @@ public sealed class ValuationSlaEnforcementServiceTests
         SetupDueInquiries(inquiries, []);
         SetupStaleInvitations(invitations, [invitation]);
         agencies.Setup(x => x.GetByIdAsync(invitation.AgencyId, It.IsAny<CancellationToken>())).ReturnsAsync((Agency?)null);
-        unitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        unitOfWork.Setup(x => x.SaveChangesDroppingConcurrencyConflictsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<object>());
 
         var result = await service.RunSweepAsync(Now, batchSize: 200);
 
@@ -181,7 +184,7 @@ public sealed class ValuationSlaEnforcementServiceTests
 
         SetupDueInquiries(inquiries, [failingInquiry, okInquiry]);
         SetupStaleInvitations(invitations, []);
-        unitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        unitOfWork.Setup(x => x.SaveChangesDroppingConcurrencyConflictsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<object>());
         notifications
             .Setup(x => x.NotifyValuationInquiryExpiredAsync(failingRequesterId, failingInquiry.Id, false, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("SignalR hub unreachable"));
@@ -222,6 +225,292 @@ public sealed class ValuationSlaEnforcementServiceTests
         Assert.Equal(0, result.InquiriesExpired);
     }
 
+    [Fact]
+    public async Task RunSweepAsync_OneInquiryLosesConcurrencyRaceDuringSave_OtherInquiryInSameBatchStillExpires_AndTheLoserIsNeverNotified()
+    {
+        // Remediation H1 — models SubmitOfficeResponseCommandHandler having just completed
+        // `racedInquiry` concurrently (winning its xmin race a moment before this sweep's own
+        // save). `okInquiry` has no such conflict and must still expire and notify normally —
+        // one lost race in a batch must not roll back or skip the rest of that same batch.
+        var racedRequesterId = Guid.NewGuid();
+        var okRequesterId = Guid.NewGuid();
+        var racedInquiry = BuildInquiry(racedRequesterId, ValuationInquiryStatus.Pending);
+        var okInquiry = BuildInquiry(okRequesterId, ValuationInquiryStatus.Pending);
+
+        var (service, inquiries, invitations, agencies, notifications, unitOfWork) = Build();
+
+        SetupDueInquiries(inquiries, [racedInquiry, okInquiry]);
+        SetupStaleInvitations(invitations, []);
+        unitOfWork
+            .Setup(x => x.SaveChangesDroppingConcurrencyConflictsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new object[] { racedInquiry });
+        notifications
+            .Setup(x => x.NotifyValuationInquiryExpiredAsync(okRequesterId, okInquiry.Id, false, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var result = await service.RunSweepAsync(Now, batchSize: 200);
+
+        // Only the survivor counts and gets notified. Strict mock on `notifications` has no
+        // setup for racedRequesterId -- reaching it would already throw, proving the sweep
+        // never notifies for a row it lost the race on (that row was already resolved by
+        // whoever won it, which is responsible for its own notification, if any).
+        Assert.Equal(1, result.InquiriesExpired);
+        notifications.Verify(
+            x => x.NotifyValuationInquiryExpiredAsync(okRequesterId, okInquiry.Id, false, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task RunSweepAsync_InvitationLosesConcurrencyRaceDuringSave_IsNeverNotified_AndDoesNotStopTheBatch()
+    {
+        // Same reasoning as the inquiry-side test above, for the invitation phase: a
+        // concurrent SubmitOfficeResponseCommandHandler request answered this exact invitation
+        // just before the sweep's own save.
+        var agencyId = Guid.NewGuid();
+        var ownerUserId = Guid.NewGuid();
+        var invitation = BuildInvitation(agencyId, Guid.NewGuid());
+        var agency = BuildAgency(agencyId, ownerUserId);
+
+        var (service, inquiries, invitations, agencies, notifications, unitOfWork) = Build();
+
+        SetupDueInquiries(inquiries, []);
+        SetupStaleInvitations(invitations, [invitation]);
+        unitOfWork
+            .Setup(x => x.SaveChangesDroppingConcurrencyConflictsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new object[] { invitation });
+
+        var result = await service.RunSweepAsync(Now, batchSize: 200);
+
+        Assert.Equal(0, result.InvitationsExpired);
+        // Strict mocks on `agencies`/`notifications` have no setup -- reaching either would
+        // already throw, proving a row that lost the concurrency race is never looked up or
+        // notified as if this sweep had actually expired it.
+    }
+
+    [Fact]
+    public async Task RunSweepAsync_BacklogLargerThanOneBatch_DrainsMultipleBatchesInOneCall()
+    {
+        // Remediation M2 — before this fix, one RunSweepAsync call ever fetched and processed
+        // exactly one batch, so draining a backlog bigger than `batchSize` required waiting for
+        // ValuationInquiryExpiryHostedService's own 15-minute timer to tick again per batch.
+        // With batchSize=2 and 5 due inquiries arriving as three successive fetches (2, 2, 1),
+        // a single RunSweepAsync call must now drain all three batches and report all 5 —
+        // proving the fetch/process/persist/next-batch loop actually loops, not merely that it
+        // still lets a caller request a smaller batchSize.
+        var inquiryA = BuildInquiry(Guid.NewGuid(), ValuationInquiryStatus.Pending);
+        var inquiryB = BuildInquiry(Guid.NewGuid(), ValuationInquiryStatus.Pending);
+        var inquiryC = BuildInquiry(Guid.NewGuid(), ValuationInquiryStatus.Pending);
+        var inquiryD = BuildInquiry(Guid.NewGuid(), ValuationInquiryStatus.Pending);
+        var inquiryE = BuildInquiry(Guid.NewGuid(), ValuationInquiryStatus.Pending);
+        var allInquiries = new[] { inquiryA, inquiryB, inquiryC, inquiryD, inquiryE };
+
+        var (service, inquiries, invitations, agencies, notifications, unitOfWork) = Build();
+
+        // Three fetches: 2, then 2, then 1 (shorter than batchSize=2, the loop's own signal the
+        // backlog is exhausted) — then SetupStaleInvitations always returns empty (unrelated
+        // phase, exercised by the other tests above).
+        inquiries
+            .SetupSequence(x => x.GetDueForExpiryAsync(Now, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { inquiryA, inquiryB })
+            .ReturnsAsync(new[] { inquiryC, inquiryD })
+            .ReturnsAsync(new[] { inquiryE });
+        SetupStaleInvitations(invitations, []);
+        unitOfWork
+            .Setup(x => x.SaveChangesDroppingConcurrencyConflictsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<object>());
+        foreach (var inquiry in allInquiries)
+        {
+            notifications
+                .Setup(x => x.NotifyValuationInquiryExpiredAsync(
+                    inquiry.RequesterId!.Value, inquiry.Id, false, It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+        }
+
+        var result = await service.RunSweepAsync(Now, batchSize: 2);
+
+        Assert.Equal(5, result.InquiriesExpired);
+        foreach (var inquiry in allInquiries)
+        {
+            Assert.Equal(ValuationInquiryStatus.Expired, inquiry.Status);
+        }
+        inquiries.Verify(
+            x => x.GetDueForExpiryAsync(Now, It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Exactly(3));
+        // At least 3 (one save per drained batch's Expire() transitions) -- each batch also
+        // triggers a second, separate save for the ExpiryNotifiedAt stamp once its
+        // notification succeeds (Remediation M3), so the exact total depends on both
+        // mechanisms rather than being a single meaningful number to pin here.
+        unitOfWork.Verify(
+            x => x.SaveChangesDroppingConcurrencyConflictsAsync(It.IsAny<CancellationToken>()),
+            Times.AtLeast(3));
+    }
+
+    [Fact]
+    public async Task RunSweepAsync_CalledTenTimesPastThe18HourMark_SendsExactlyOneReminder_NotTen()
+    {
+        // Remediation M4's own explicit idempotency requirement: ten sweep ticks after the 18h
+        // mark must produce ONE reminder, not ten. GetDueForReminderAsync here behaves like the
+        // real repository query would (filters live against the entity's OWN current
+        // ReminderSentAt, which SendDueRemindersAsync mutates in place on success) rather than
+        // returning a fixed canned list every call -- this is what actually proves the
+        // idempotency stamp is checked, not merely that a mock happens to be called once.
+        var requesterId = Guid.NewGuid();
+        var inquiry = BuildInquiry(requesterId, ValuationInquiryStatus.AwaitingOfficeResponses);
+
+        var (service, inquiries, invitations, agencies, notifications, unitOfWork) = Build();
+
+        SetupDueInquiries(inquiries, []);
+        SetupStaleInvitations(invitations, []);
+        inquiries
+            .Setup(x => x.GetDueForReminderAsync(Now, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => inquiry.ReminderSentAt is null
+                ? new[] { inquiry }
+                : Array.Empty<ValuationInquiry>());
+        unitOfWork
+            .Setup(x => x.SaveChangesDroppingConcurrencyConflictsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<object>());
+        notifications
+            .Setup(x => x.NotifyValuationInquiryReminderSoonAsync(requesterId, inquiry.Id, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        for (var tick = 0; tick < 10; tick++)
+        {
+            var result = await service.RunSweepAsync(Now, batchSize: 200);
+            Assert.Equal(tick == 0 ? 1 : 0, result.RemindersSent);
+        }
+
+        Assert.NotNull(inquiry.ReminderSentAt);
+        notifications.Verify(
+            x => x.NotifyValuationInquiryReminderSoonAsync(requesterId, inquiry.Id, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task RunSweepAsync_InquiryCompletedBefore18Hours_NeverReceivesAReminder()
+    {
+        // Test D from the remediation brief: a Completed inquiry must never get a reminder,
+        // regardless of how much time has passed since it was created.
+        var requesterId = Guid.NewGuid();
+        var inquiry = BuildInquiry(requesterId, ValuationInquiryStatus.MatchedFromListings);
+        inquiry.MarkCompleted(Now.AddHours(-20));
+
+        var (service, inquiries, invitations, agencies, notifications, unitOfWork) = Build();
+
+        SetupDueInquiries(inquiries, []);
+        SetupStaleInvitations(invitations, []);
+        // GetDueForReminderAsync's own repository-level filter (ApplyDueForReminderFilter,
+        // covered separately in ValuationSlaFilterTests) already excludes Completed rows --
+        // this Strict mock simply reflects that contract rather than re-deriving it.
+
+        var result = await service.RunSweepAsync(Now, batchSize: 200);
+
+        Assert.Equal(0, result.RemindersSent);
+        // Strict mock on `notifications` has no reminder setup -- reaching it would already throw.
+    }
+
+    // ── Remediation M3 — notification-retry phases ──────────────────
+
+    [Fact]
+    public async Task RunSweepAsync_PreviouslyFailedInquiryExpiryNotification_IsRetried_AndSucceeds()
+    {
+        var requesterId = Guid.NewGuid();
+        var inquiry = BuildInquiry(requesterId, ValuationInquiryStatus.Pending);
+        inquiry.Expire(Now.AddMinutes(-30)); // already expired by an earlier, failed sweep tick
+
+        var (service, inquiries, invitations, agencies, notifications, unitOfWork) = Build();
+
+        SetupDueInquiries(inquiries, []);
+        SetupStaleInvitations(invitations, []);
+        inquiries
+            .Setup(x => x.GetExpiredAwaitingNotificationAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { inquiry });
+        unitOfWork
+            .Setup(x => x.SaveChangesDroppingConcurrencyConflictsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<object>());
+        notifications
+            .Setup(x => x.NotifyValuationInquiryExpiredAsync(requesterId, inquiry.Id, false, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var result = await service.RunSweepAsync(Now, batchSize: 200);
+
+        Assert.Equal(1, result.NotificationsRetried);
+        Assert.NotNull(inquiry.ExpiryNotifiedAt);
+        notifications.Verify(
+            x => x.NotifyValuationInquiryExpiredAsync(requesterId, inquiry.Id, false, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task RunSweepAsync_PreviouslyFailedInvitationExpiryNotification_IsRetried_AndSucceeds()
+    {
+        var agencyId = Guid.NewGuid();
+        var ownerUserId = Guid.NewGuid();
+        var invitation = BuildInvitation(agencyId, Guid.NewGuid());
+        invitation.Expire(Now.AddMinutes(-30));
+        var agency = BuildAgency(agencyId, ownerUserId);
+
+        var (service, inquiries, invitations, agencies, notifications, unitOfWork) = Build();
+
+        SetupDueInquiries(inquiries, []);
+        SetupStaleInvitations(invitations, []);
+        invitations
+            .Setup(x => x.GetExpiredAwaitingNotificationAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { invitation });
+        agencies.Setup(x => x.GetByIdAsync(agencyId, It.IsAny<CancellationToken>())).ReturnsAsync(agency);
+        unitOfWork
+            .Setup(x => x.SaveChangesDroppingConcurrencyConflictsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<object>());
+        notifications
+            .Setup(x => x.NotifyValuationOfficeInvitationExpiredAsync(ownerUserId, invitation.Id, invitation.InquiryId, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var result = await service.RunSweepAsync(Now, batchSize: 200);
+
+        Assert.Equal(1, result.NotificationsRetried);
+        Assert.NotNull(invitation.ExpiryNotifiedAt);
+    }
+
+    [Fact]
+    public async Task RunSweepAsync_PreviouslyFailedResultReadyNotification_IsRetried_AndSucceeds()
+    {
+        var requesterId = Guid.NewGuid();
+        var inquiry = BuildInquiry(requesterId, ValuationInquiryStatus.MatchedFromListings);
+        inquiry.MarkCompleted(Now.AddMinutes(-30)); // completed by SubmitOfficeResponseCommandHandler, notify failed
+
+        var (service, inquiries, invitations, agencies, notifications, unitOfWork) = Build();
+
+        SetupDueInquiries(inquiries, []);
+        SetupStaleInvitations(invitations, []);
+        inquiries
+            .Setup(x => x.GetCompletedAwaitingResultNotificationAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { inquiry });
+        unitOfWork
+            .Setup(x => x.SaveChangesDroppingConcurrencyConflictsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<object>());
+        notifications
+            .Setup(x => x.NotifyValuationResultReadyAsync(requesterId, inquiry.Id, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var result = await service.RunSweepAsync(Now, batchSize: 200);
+
+        Assert.Equal(1, result.NotificationsRetried);
+        Assert.NotNull(inquiry.ResultReadyNotifiedAt);
+    }
+
+    [Fact]
+    public async Task RunSweepAsync_NoFailedNotificationsPending_RetriesNothing()
+    {
+        var (service, inquiries, invitations, agencies, notifications, unitOfWork) = Build();
+
+        SetupDueInquiries(inquiries, []);
+        SetupStaleInvitations(invitations, []);
+        // All three GetXAwaitingNotificationAsync calls use Build()'s own empty defaults.
+
+        var result = await service.RunSweepAsync(Now, batchSize: 200);
+
+        Assert.Equal(0, result.NotificationsRetried);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────
 
     private static (
@@ -240,6 +529,24 @@ public sealed class ValuationSlaEnforcementServiceTests
 
         inquiries.Setup(x => x.Update(It.IsAny<ValuationInquiry>()));
         invitations.Setup(x => x.Update(It.IsAny<ValuationOfficeInvitation>()));
+
+        // Remediation M3/M4 — every RunSweepAsync call now also runs the reminder phase and
+        // the three notification-retry phases unconditionally. Defaulted to "nothing pending"
+        // here so every EXISTING test above (which predates M3/M4 and is not testing them)
+        // does not need its own setup for these — tests that specifically exercise M3/M4
+        // override these with their own Setup/SetupSequence.
+        inquiries
+            .Setup(x => x.GetDueForReminderAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ValuationInquiry>());
+        inquiries
+            .Setup(x => x.GetExpiredAwaitingNotificationAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ValuationInquiry>());
+        inquiries
+            .Setup(x => x.GetCompletedAwaitingResultNotificationAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ValuationInquiry>());
+        invitations
+            .Setup(x => x.GetExpiredAwaitingNotificationAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ValuationOfficeInvitation>());
 
         var service = new ValuationSlaEnforcementService(
             inquiries.Object,

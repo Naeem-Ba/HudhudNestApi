@@ -61,6 +61,17 @@ public interface IValuationOfficeInvitationRepository
         CancellationToken ct = default);
 
     /// <summary>
+    /// Remediation M3 — Expired invitations whose ValuationOfficeInvitationExpired
+    /// notification has not yet been confirmed delivered
+    /// (<see cref="ValuationOfficeInvitation.ExpiryNotifiedAt"/> is null) — the retry queue for
+    /// a notification attempt that failed or was never attempted, same reasoning as
+    /// IValuationInquiryRepository.GetExpiredAwaitingNotificationAsync.
+    /// </summary>
+    Task<IReadOnlyList<ValuationOfficeInvitation>> GetExpiredAwaitingNotificationAsync(
+        int batchSize,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Stage 8 (Admin Dashboard) — per-agency invitation/response counts across every
     /// invitation ever sent, computed with a database-side GROUP BY (one row per agency that
     /// has received at least one invitation) rather than loading every invitation into memory

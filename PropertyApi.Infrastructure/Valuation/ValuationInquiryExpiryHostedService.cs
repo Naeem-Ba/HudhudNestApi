@@ -106,12 +106,16 @@ public sealed class ValuationInquiryExpiryHostedService : BackgroundService
 
                     var result = await slaEnforcement.RunSweepAsync(now, MaxItemsPerPhase, ct);
 
-                    if (result.InquiriesExpired + result.InvitationsExpired > 0)
+                    if (result.InquiriesExpired + result.InvitationsExpired + result.RemindersSent + result.NotificationsRetried > 0)
                     {
                         _logger.LogInformation(
-                            "Valuation inquiry expiry sweep complete. InquiriesExpired={InquiriesExpired}, InvitationsExpired={InvitationsExpired}.",
+                            "Valuation inquiry expiry sweep complete. InquiriesExpired={InquiriesExpired}, " +
+                            "InvitationsExpired={InvitationsExpired}, RemindersSent={RemindersSent}, " +
+                            "NotificationsRetried={NotificationsRetried}.",
                             result.InquiriesExpired,
-                            result.InvitationsExpired);
+                            result.InvitationsExpired,
+                            result.RemindersSent,
+                            result.NotificationsRetried);
                     }
                 },
                 ct);

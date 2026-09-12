@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PropertyApi.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using PropertyApi.Infrastructure.Persistence;
 namespace PropertyApi.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260912124525_AddValuationInquiryAndInvitationXminConcurrencyToken")]
+    partial class AddValuationInquiryAndInvitationXminConcurrencyToken
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4782,9 +4785,6 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("timestamp without time zone");
 
-                    b.Property<DateTime?>("ExpiryNotifiedAt")
-                        .HasColumnType("timestamp without time zone");
-
                     b.Property<int>("GovernorateId")
                         .HasColumnType("integer");
 
@@ -4797,17 +4797,11 @@ namespace PropertyApi.Infrastructure.Migrations
                     b.Property<int?>("PropertyTypeId")
                         .HasColumnType("integer");
 
-                    b.Property<DateTime?>("ReminderSentAt")
-                        .HasColumnType("timestamp without time zone");
-
                     b.Property<int>("RequestType")
                         .HasColumnType("integer");
 
                     b.Property<Guid?>("RequesterId")
                         .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("ResultReadyNotifiedAt")
-                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int?>("Rooms")
                         .HasColumnType("integer");
@@ -4834,9 +4828,6 @@ namespace PropertyApi.Infrastructure.Migrations
 
                     b.HasIndex("RequesterId");
 
-                    b.HasIndex("Status", "CreatedAt")
-                        .HasDatabaseName("IX_ValuationInquiries_Status_CreatedAt");
-
                     b.HasIndex("Status", "ExpiresAt")
                         .HasDatabaseName("IX_ValuationInquiries_Status_ExpiresAt");
 
@@ -4856,9 +4847,6 @@ namespace PropertyApi.Infrastructure.Migrations
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<DateTime?>("ExpiryNotifiedAt")
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<Guid>("InquiryId")

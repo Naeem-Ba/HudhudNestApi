@@ -22,6 +22,29 @@ public sealed class ValuationOfficeInvitationConfiguration : IEntityTypeConfigur
         builder.Property(i => i.MatchLevel).IsRequired();
         builder.Property(i => i.SentAt).IsRequired();
 
+        // Remediation M3 — nullable idempotency stamp, same shape as
+        // ValuationInquiry.ExpiryNotifiedAt/Property.ExpiryWarningSentAt.
+        builder.Property(i => i.ExpiryNotifiedAt);
+
+        // Optimistic concurrency (Valuation remediation H1 — same xmin/IsRowVersion mapping as
+        // PropertyConfiguration/TransactionConfiguration/UserAccountConfiguration). Maps the
+        // Postgres system column `xmin`, which every table already has — no new column, no
+        // data migration. This is the entity that actually races: SubmitOfficeResponseCommand-
+        // Handler (Sent -> Responded) and ValuationSlaEnforcementService's expiry sweep
+        // (Sent -> Expired) can both load the same Sent invitation and attempt to save at
+        // nearly the same instant near the 24h boundary. Without a concurrency token, EF Core
+        // issues an UPDATE with no WHERE-clause guard on Status, so whichever writer commits
+        // last silently wins — which is exactly how a real, persisted ValuationOfficeResponse
+        // row could end up attached to an invitation that reads Expired. With this mapping,
+        // the loser's SaveChangesAsync throws DbUpdateConcurrencyException instead — already
+        // translated to 409 by ExceptionHandlingMiddleware for the request path, and handled
+        // explicitly per-row (not batch-aborting) inside ValuationSlaEnforcementService for the
+        // sweep path (see that class).
+        builder.Property<uint>("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsRowVersion();
+
         builder.HasOne<Agency>()
             .WithMany()
             .HasForeignKey(i => i.AgencyId)

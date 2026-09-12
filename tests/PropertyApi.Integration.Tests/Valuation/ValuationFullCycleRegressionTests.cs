@@ -20,19 +20,18 @@ namespace PropertyApi.Integration.Tests.Valuation;
 /// Exercises every stage's real code through the real Program host, real Postgres, and real
 /// JwtBearer tokens (ValuationApiTestFactory, Stage 10's own fixture) — not a single mock.
 ///
-/// Two honest gaps against the spec's own diagram, found while building this test and NOT
-/// fixed here (a regression-testing stage does not get to redesign earlier stages' scope — see
-/// this module's own rule 9 and the "stop at conflict" protocol):
-///   1. No "Reminder" feature exists anywhere in this module. Every earlier stage's own text
-///      only ever specified 24h-expiry notifications (Stage 5) — a pre-expiry reminder was
-///      never a concrete deliverable of any stage, so this test does not exercise one.
-///   2. SubmitOfficeResponseCommandHandler never calls ValuationInquiry.MarkCompleted() — an
-///      Office Path inquiry stays AwaitingOfficeResponses even after every invited office has
-///      responded, and only ever reaches a terminal state via the 24h SLA sweep (which always
-///      lands on Expired, never Completed, for this path). This test pins that as the CURRENT,
-///      real behavior rather than the diagram's implied "Office Response -> Final Result"
-///      shortcut — see FullCycle_OfficePath_RespondedInvitation_LeavesInquiryAwaiting_NotCompleted
-///      below, and this module's own completion report for the recommended follow-up.
+/// Valuation remediation (H2/M4) — this class originally pinned two gaps found while building
+/// this test as CURRENT, unfixed behavior:
+///   1. No "Reminder" feature existed anywhere in this module.
+///   2. SubmitOfficeResponseCommandHandler never called ValuationInquiry.MarkCompleted(), so
+///      an Office Path inquiry stayed AwaitingOfficeResponses even after every invited office
+///      responded, reaching a terminal state only via the 24h SLA sweep (always Expired, never
+///      Completed).
+/// Both are now fixed (see SubmitOfficeResponseCommandHandler and
+/// ValuationSlaEnforcementService.SendDueRemindersAsync) — FullCycle_OfficePath_... below now
+/// exercises the corrected behavior end to end: the inquiry stays AwaitingOfficeResponses while
+/// ANY invited office has not yet answered (2 of 3, below), and reaches Completed the instant
+/// the LAST one does, without waiting for the 24h SLA sweep.
 /// </summary>
 [Trait("Feature", "Valuation")]
 [Trait("Category", "Regression")]
@@ -165,11 +164,50 @@ public sealed class ValuationFullCycleRegressionTests : IClassFixture<ValuationA
         Assert.Equal(0, office2Stats.TotalResponses);
         Assert.Equal(0m, office2Stats.ResponseRate);
 
-        // ── The documented gap: even with a response already in, the inquiry itself has not
-        // moved to Completed — see this class's own doc comment. Pinned here as current,
-        // real, tested behavior. ──
+        // ── Remediation H2 — with 2 of 3 invited offices still Sent, the inquiry correctly
+        // stays AwaitingOfficeResponses (completion is "nothing left outstanding", not merely
+        // "at least one response exists"). ──
+        var statusAfterOneOfThree = await GetStatusAsync(customerClient, inquiryId);
+        Assert.Equal("AwaitingOfficeResponses", statusAfterOneOfThree.Status);
+
+        // ── Offices 2 and 3 respond too — the last one to answer should complete the inquiry
+        // immediately, without waiting on the 24h SLA sweep. ──
+        var office2Invitation = Assert.Single(
+            await GetMineAsync(_factory.AuthedClient(office2Owner.AccessToken)), i => i.InquiryId == inquiryId);
+        var respond2 = await _factory.AuthedClient(office2Owner.AccessToken).PostAsJsonAsync(
+            $"/api/ValuationOfficeInvitations/{office2Invitation.InvitationId}/respond",
+            new { EstimatedPrice = 190_000m, Notes = (string?)null });
+        Assert.Equal(HttpStatusCode.OK, respond2.StatusCode);
+
+        var office3Invitation = Assert.Single(
+            await GetMineAsync(_factory.AuthedClient(office3Owner.AccessToken)), i => i.InquiryId == inquiryId);
+        var respond3 = await _factory.AuthedClient(office3Owner.AccessToken).PostAsJsonAsync(
+            $"/api/ValuationOfficeInvitations/{office3Invitation.InvitationId}/respond",
+            new { EstimatedPrice = 180_000m, Notes = (string?)null });
+        Assert.Equal(HttpStatusCode.OK, respond3.StatusCode);
+
         var finalStatus = await GetStatusAsync(customerClient, inquiryId);
-        Assert.Equal("AwaitingOfficeResponses", finalStatus.Status);
+        Assert.Equal("Completed", finalStatus.Status);
+        Assert.Equal(3, finalStatus.Estimates.Count);
+
+        // ── The customer receives exactly one ValuationResultReady notification for this
+        // inquiry — not zero (lost), not more than one (duplicated) despite three responses
+        // arriving in sequence. ──
+        await _factory.InScopeAsync(async services =>
+        {
+            var db = services.GetRequiredService<AppDbContext>();
+            var resultReadyCount = await db.Notifications.CountAsync(n =>
+                n.RecipientId == customer.Id &&
+                n.Type == NotificationType.ValuationResultReady &&
+                n.RelatedEntityId == inquiryId);
+            Assert.Equal(1, resultReadyCount);
+        });
+
+        // ── Admin's dashboard reflects the completed inquiry too. ──
+        var completedAdminInquiries = await adminClient.GetFromJsonAsync<AdminInquiriesPage>(
+            $"/api/admin/valuation-inquiries?status=Completed&pageSize=50");
+        Assert.NotNull(completedAdminInquiries);
+        Assert.Contains(completedAdminInquiries!.Data, i => i.Id == inquiryId);
     }
 
     [Fact(DisplayName =

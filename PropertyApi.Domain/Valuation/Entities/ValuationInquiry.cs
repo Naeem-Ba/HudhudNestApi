@@ -25,6 +25,15 @@ public sealed class ValuationInquiry : BaseEntity
     /// <summary>How long an inquiry stays actionable after creation.</summary>
     public static readonly TimeSpan DefaultExpiryWindow = TimeSpan.FromHours(24);
 
+    /// <summary>
+    /// Remediation M4 — how long after creation an unresolved inquiry gets a "closing soon"
+    /// reminder, i.e. CreatedAt + ReminderWindow. Deliberately expressed as an offset from
+    /// CreatedAt (not from ExpiresAt) so it stays correct even though ExpiresAt is itself just
+    /// CreatedAt + DefaultExpiryWindow — one fixed reference point, same as ExpiresAt's own
+    /// computation in <see cref="Create"/>.
+    /// </summary>
+    public static readonly TimeSpan ReminderWindow = TimeSpan.FromHours(18);
+
     private ValuationInquiry() { }
 
     /// <summary>
@@ -87,6 +96,35 @@ public sealed class ValuationInquiry : BaseEntity
     /// computed from its own CreatedAt/SentAt.
     /// </summary>
     public DateTime ExpiresAt { get; private set; }
+
+    /// <summary>
+    /// Remediation M3 — stamped only once <see cref="Notifications.Interfaces.INotificationService.NotifyValuationInquiryExpiredAsync"/>
+    /// actually succeeds for this inquiry (never just because <see cref="Expire"/> ran). Null
+    /// means "Expired, but the notification has not yet been confirmed delivered" — the signal
+    /// ValuationSlaEnforcementService's own retry pass uses to find and retry rows whose first
+    /// attempt failed, mirroring Property.ExpiryWarningSentAt's own "idempotency stamp, set on
+    /// success only" pattern. Same "guest inquiry has no account to notify" rule as
+    /// RequesterId's own nullability — an anonymous inquiry never needs this stamped at all.
+    /// </summary>
+    public DateTime? ExpiryNotifiedAt { get; private set; }
+
+    /// <summary>
+    /// Remediation M3/H2 — same idempotency-stamp pattern as <see cref="ExpiryNotifiedAt"/>,
+    /// for <see cref="Notifications.Interfaces.INotificationService.NotifyValuationResultReadyAsync"/>
+    /// once this inquiry reaches <see cref="ValuationInquiryStatus.Completed"/> via
+    /// SubmitOfficeResponseCommandHandler.
+    /// </summary>
+    public DateTime? ResultReadyNotifiedAt { get; private set; }
+
+    /// <summary>
+    /// Remediation M4 — stamped only once the CreatedAt+18h "closing soon" reminder has
+    /// actually been delivered successfully for this inquiry, so ten sweep ticks after the 18h
+    /// mark produce exactly one reminder, not ten — same "idempotency stamp, set on success
+    /// only" pattern as <see cref="ExpiryNotifiedAt"/>/<see cref="ResultReadyNotifiedAt"/>
+    /// above (and Property.ExpiryWarningSentAt), so a transient failure is retried on the next
+    /// sweep tick instead of the reminder being silently skipped forever.
+    /// </summary>
+    public DateTime? ReminderSentAt { get; private set; }
 
     public static ValuationInquiry Create(
         int governorateId,
@@ -210,5 +248,30 @@ public sealed class ValuationInquiry : BaseEntity
     {
         if (Status != expected)
             throw new DomainException($"لا يمكن {action} لطلب تقييم في الحالة '{Status}'.");
+    }
+
+    /// <summary>Remediation M3 — marks the ValuationInquiryExpired notification as
+    /// successfully delivered. No status guard, same as Property.MarkExpiryWarningSent — a
+    /// plain idempotency stamp, not a state transition.</summary>
+    public void MarkExpiryNotified(DateTime utcNow)
+    {
+        ExpiryNotifiedAt = utcNow;
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>Remediation M3 — marks the ValuationResultReady notification as successfully
+    /// delivered.</summary>
+    public void MarkResultReadyNotified(DateTime utcNow)
+    {
+        ResultReadyNotifiedAt = utcNow;
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>Remediation M4 — marks the CreatedAt+18h reminder as successfully
+    /// delivered.</summary>
+    public void MarkReminderSent(DateTime utcNow)
+    {
+        ReminderSentAt = utcNow;
+        UpdatedAt = utcNow;
     }
 }

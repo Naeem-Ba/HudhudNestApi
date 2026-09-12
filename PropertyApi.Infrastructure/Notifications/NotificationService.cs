@@ -386,6 +386,72 @@ public sealed class NotificationService : INotificationService
             inquiryId);
     }
 
+    public async Task NotifyValuationResultReadyAsync(
+        Guid recipientId,
+        Guid inquiryId,
+        CancellationToken ct = default)
+    {
+        if (recipientId == Guid.Empty)
+        {
+            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
+
+        if (inquiryId == Guid.Empty)
+        {
+            throw new ArgumentException("Inquiry id is required.", nameof(inquiryId));
+        }
+
+        var notification = new Notification
+        {
+            RecipientId = recipientId,
+            Type = NotificationType.ValuationResultReady,
+            Message = "اكتمل تقييم عقارك: ردّت جميع المكاتب المدعوة على طلبك. يمكنك الاطلاع على النتيجة الآن.",
+            RelatedEntityId = inquiryId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await PersistAndPushAsync(notification, ct);
+
+        _logger.LogInformation(
+            "Valuation result-ready notification created. RecipientId={RecipientId}, InquiryId={InquiryId}",
+            recipientId,
+            inquiryId);
+    }
+
+    public async Task NotifyValuationInquiryReminderSoonAsync(
+        Guid recipientId,
+        Guid inquiryId,
+        CancellationToken ct = default)
+    {
+        if (recipientId == Guid.Empty)
+        {
+            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
+
+        if (inquiryId == Guid.Empty)
+        {
+            throw new ArgumentException("Inquiry id is required.", nameof(inquiryId));
+        }
+
+        var notification = new Notification
+        {
+            RecipientId = recipientId,
+            Type = NotificationType.ValuationInquiryReminderSoon,
+            Message = "لم يكتمل تقييم عقارك بعد، وستنتهي المهلة المحددة (24 ساعة) خلال ساعات قليلة.",
+            RelatedEntityId = inquiryId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await PersistAndPushAsync(notification, ct);
+
+        _logger.LogInformation(
+            "Valuation inquiry reminder-soon notification created. RecipientId={RecipientId}, InquiryId={InquiryId}",
+            recipientId,
+            inquiryId);
+    }
+
     public async Task NotifyShortStayBookingUpdateAsync(
         Guid recipientId,
         Guid bookingId,

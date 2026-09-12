@@ -159,6 +159,28 @@ public interface INotificationService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Remediation H2 — tells the requester their valuation inquiry reached Completed because
+    /// every invited office has now responded, before the 24h SLA window closes. Never called
+    /// for an anonymous inquiry (RequesterId null). Called by SubmitOfficeResponseCommandHandler
+    /// and retried by ValuationSlaEnforcementService.
+    /// </summary>
+    Task NotifyValuationResultReadyAsync(
+        Guid recipientId,
+        Guid inquiryId,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Remediation M4 — warns the requester their valuation inquiry has been open for 18h
+    /// without a result, before the 24h SLA window closes. Never called for an anonymous
+    /// inquiry (RequesterId null). Called by ValuationInquiryExpiryHostedService via
+    /// ValuationSlaEnforcementService, at most once per inquiry.
+    /// </summary>
+    Task NotifyValuationInquiryReminderSoonAsync(
+        Guid recipientId,
+        Guid inquiryId,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Physically deletes one notification owned by the current user.
     /// Returns false if the notification does not exist or does not belong to the user.
     /// </summary>

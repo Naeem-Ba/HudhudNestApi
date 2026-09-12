@@ -40,6 +40,43 @@ public interface IValuationInquiryRepository
         CancellationToken ct = default);
 
     /// <summary>
+    /// Remediation M4 — non-terminal inquiries (Pending/MatchedFromListings/
+    /// AwaitingOfficeResponses) whose CreatedAt+<see cref="ValuationInquiry.ReminderWindow"/>
+    /// (18h) has passed and which have not yet had a reminder successfully delivered
+    /// (<see cref="ValuationInquiry.ReminderSentAt"/> is null). Same ordering/batching
+    /// reasoning as <see cref="GetDueForExpiryAsync"/>. Tracked — the caller stamps
+    /// ReminderSentAt on success and saves.
+    /// </summary>
+    Task<IReadOnlyList<ValuationInquiry>> GetDueForReminderAsync(
+        DateTime utcNow,
+        int batchSize,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Remediation M3 — Expired inquiries with a real requester whose
+    /// ValuationInquiryExpired notification has not yet been confirmed delivered
+    /// (<see cref="ValuationInquiry.ExpiryNotifiedAt"/> is null) — the retry queue for a
+    /// notification attempt that failed (or was never attempted, e.g. a first sweep tick that
+    /// crashed after Expire() committed but before the notification loop ran). Excludes
+    /// anonymous inquiries at the database level (RequesterId is null) rather than fetching
+    /// rows this phase can never act on.
+    /// </summary>
+    Task<IReadOnlyList<ValuationInquiry>> GetExpiredAwaitingNotificationAsync(
+        int batchSize,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Remediation M3/H2 — Completed inquiries with a real requester whose
+    /// ValuationResultReady notification has not yet been confirmed delivered
+    /// (<see cref="ValuationInquiry.ResultReadyNotifiedAt"/> is null) — the retry queue for
+    /// SubmitOfficeResponseCommandHandler's own best-effort, synchronous notification attempt
+    /// when it fails.
+    /// </summary>
+    Task<IReadOnlyList<ValuationInquiry>> GetCompletedAwaitingResultNotificationAsync(
+        int batchSize,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Stage 8 (Admin Dashboard) — every inquiry, optionally filtered by
     /// <see cref="ValuationInquiryStatus"/>, newest first. Database-side Where/OrderBy/
     /// Skip/Take (never "load everything then filter in memory" — this module's own rule 8)

@@ -116,4 +116,26 @@ public enum NotificationType
     /// Raised by ValuationInquiryExpiryHostedService via ValuationSlaEnforcementService.
     /// </summary>
     ValuationOfficeInvitationExpired = 36,
+
+    /// <summary>
+    /// Remediation H2 — a ValuationInquiry reached Completed because every invitation
+    /// OfficeMatchingService sent for it has now been answered (no more Sent invitations
+    /// remain), so the customer no longer has to wait out the full 24h SLA window to see a
+    /// result. Sent to the requester (RequesterId) — never raised for an anonymous inquiry,
+    /// same rule ValuationInquiryExpired already applies. Raised by
+    /// SubmitOfficeResponseCommandHandler when the last outstanding response arrives, and
+    /// retried by ValuationSlaEnforcementService (ResultReadyNotifiedAt) if that first attempt
+    /// fails.
+    /// </summary>
+    ValuationResultReady = 37,
+
+    /// <summary>
+    /// Remediation M4 — a ValuationInquiry has been open for 18h without reaching a terminal
+    /// state (Completed/Expired), warning the requester the 24h SLA window is closing soon.
+    /// Sent at most once per inquiry (ValuationInquiry.ReminderSentAt is the idempotency
+    /// stamp) — never raised for an anonymous inquiry, same rule as the other Valuation
+    /// notifications. Raised by ValuationInquiryExpiryHostedService via
+    /// ValuationSlaEnforcementService.
+    /// </summary>
+    ValuationInquiryReminderSoon = 38,
 }

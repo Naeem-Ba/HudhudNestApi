@@ -25,6 +25,27 @@ public sealed class ValuationInquiryConfiguration : IEntityTypeConfiguration<Val
         builder.Property(i => i.Status).IsRequired();
         builder.Property(i => i.ExpiresAt).IsRequired();
 
+        // Remediation M3/M4 — nullable idempotency stamps, same shape as
+        // Property.ExpiryWarningSentAt. No IsRequired()/default needed: null is the correct,
+        // meaningful "not yet" state for every existing and new row alike.
+        builder.Property(i => i.ExpiryNotifiedAt);
+        builder.Property(i => i.ResultReadyNotifiedAt);
+        builder.Property(i => i.ReminderSentAt);
+
+        // Optimistic concurrency (Valuation remediation H1 — same xmin/IsRowVersion mapping as
+        // PropertyConfiguration/TransactionConfiguration/UserAccountConfiguration). Maps the
+        // Postgres system column `xmin`, which every table already has — no new column, no
+        // data migration. Needed here specifically because SubmitOfficeResponseCommandHandler
+        // (H2) and ValuationSlaEnforcementService's expiry sweep can now both attempt to
+        // transition the SAME ValuationInquiry (Completed vs Expired) at the same instant;
+        // without this, whichever SaveChangesAsync commits last would silently overwrite the
+        // other's Status instead of the loser getting DbUpdateConcurrencyException (already
+        // mapped to 409 by ExceptionHandlingMiddleware — no new exception handling needed here).
+        builder.Property<uint>("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsRowVersion();
+
         // Nullable FK (guest inquiries have no RequesterId) — Restrict, matching every other
         // UserAccount-owning relationship in the schema (Agency.OwnerUserId, etc.).
         builder.HasOne<UserAccount>()
@@ -56,6 +77,15 @@ public sealed class ValuationInquiryConfiguration : IEntityTypeConfiguration<Val
         // ExpiresAt", read straight off this composite instead of a table scan.
         builder.HasIndex(i => new { i.Status, i.ExpiresAt })
             .HasDatabaseName("IX_ValuationInquiries_Status_ExpiresAt");
+
+        // Remediation M4 — ApplyDueForReminderFilter's own query shape: every currently
+        // non-terminal inquiry is a real candidate until its 18h reminder window passes (unlike
+        // the two notification-retry queries below, which only ever match the rare straggler
+        // once a notification actually fails — not worth a dedicated index for that low a
+        // selectivity gain). Sorted by CreatedAt, not ExpiresAt, hence a separate composite
+        // rather than reusing IX_ValuationInquiries_Status_ExpiresAt above.
+        builder.HasIndex(i => new { i.Status, i.CreatedAt })
+            .HasDatabaseName("IX_ValuationInquiries_Status_CreatedAt");
 
         builder.HasQueryFilter(i => !i.IsDeleted);
     }

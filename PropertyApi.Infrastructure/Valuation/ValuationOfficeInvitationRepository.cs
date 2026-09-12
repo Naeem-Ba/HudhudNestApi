@@ -54,6 +54,15 @@ public sealed class ValuationOfficeInvitationRepository : IValuationOfficeInvita
             .Take(batchSize)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<ValuationOfficeInvitation>> GetExpiredAwaitingNotificationAsync(
+        int batchSize,
+        CancellationToken ct = default)
+        => await _db.ValuationOfficeInvitations
+            .Where(i => i.Status == ValuationOfficeInvitationStatus.Expired && i.ExpiryNotifiedAt == null)
+            .OrderBy(i => i.SentAt)
+            .Take(batchSize)
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyList<ValuationOfficeInvitationCountsRow>> GetInvitationCountsByAgencyAsync(
         CancellationToken ct = default)
         // GROUP BY at the database — the result set is one row per agency (small), not one

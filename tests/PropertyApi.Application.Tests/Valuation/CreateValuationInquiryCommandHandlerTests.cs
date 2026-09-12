@@ -231,6 +231,7 @@ public sealed class CreateValuationInquiryCommandHandlerTests
             officeMatching.Object,
             mediator.Object,
             unitOfWork.Object,
+            TimeProvider.System,
             NullLogger<CreateValuationInquiryCommandHandler>.Instance);
 
         return (handler, inquiries, invitations, officeMatching, mediator, unitOfWork);

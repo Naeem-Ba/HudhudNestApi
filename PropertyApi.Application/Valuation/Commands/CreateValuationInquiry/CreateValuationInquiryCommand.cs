@@ -59,6 +59,7 @@ public sealed class CreateValuationInquiryCommandHandler
     private readonly IOfficeMatchingService _officeMatching;
     private readonly IMediator _mediator;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly TimeProvider _clock;
     private readonly ILogger<CreateValuationInquiryCommandHandler> _logger;
 
     public CreateValuationInquiryCommandHandler(
@@ -67,6 +68,7 @@ public sealed class CreateValuationInquiryCommandHandler
         IOfficeMatchingService officeMatching,
         IMediator mediator,
         IUnitOfWork unitOfWork,
+        TimeProvider clock,
         ILogger<CreateValuationInquiryCommandHandler> logger)
     {
         _inquiries = inquiries;
@@ -74,6 +76,7 @@ public sealed class CreateValuationInquiryCommandHandler
         _officeMatching = officeMatching;
         _mediator = mediator;
         _unitOfWork = unitOfWork;
+        _clock = clock;
         _logger = logger;
     }
 
@@ -81,7 +84,9 @@ public sealed class CreateValuationInquiryCommandHandler
         CreateValuationInquiryCommand request,
         CancellationToken ct)
     {
-        var now = DateTime.UtcNow;
+        // Remediation L1 — TimeProvider, not DateTime.UtcNow directly; see
+        // SubmitOfficeResponseCommandHandler's own comment on this same change for why.
+        var now = _clock.GetUtcNow().UtcDateTime;
 
         var inquiry = ValuationInquiry.Create(
             governorateId: request.GovernorateId,
