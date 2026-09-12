@@ -23,11 +23,24 @@ public sealed class ValuationOfficeInvitationRepository : IValuationOfficeInvita
     public void Update(ValuationOfficeInvitation invitation)
         => _db.ValuationOfficeInvitations.Update(invitation);
 
+    public async Task<ValuationOfficeInvitation?> GetByIdAsync(Guid id, CancellationToken ct = default)
+        => await _db.ValuationOfficeInvitations.FirstOrDefaultAsync(i => i.Id == id, ct);
+
     public async Task<IReadOnlyList<ValuationOfficeInvitation>> GetByInquiryIdAsync(
         Guid inquiryId,
         CancellationToken ct = default)
         => await _db.ValuationOfficeInvitations
             .Where(i => i.InquiryId == inquiryId)
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<ValuationOfficeInvitation>> GetByAgencyIdAsync(
+        Guid agencyId,
+        CancellationToken ct = default)
+        // AsNoTracking: Stage 6's dashboard is read-only — nothing here goes on to mutate and
+        // save these rows (unlike GetByIdAsync/GetStaleSentInvitationsAsync above).
+        => await _db.ValuationOfficeInvitations
+            .AsNoTracking()
+            .Where(i => i.AgencyId == agencyId)
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<ValuationOfficeInvitation>> GetStaleSentInvitationsAsync(

@@ -14,8 +14,25 @@ public interface IValuationOfficeInvitationRepository
 
     void Update(ValuationOfficeInvitation invitation);
 
+    /// <summary>
+    /// Tracked (the Stage 6 office-response handler goes straight on to call MarkResponded/
+    /// Expire and save) — same reasoning ValuationInquiryRepository.GetByIdAsync documents for
+    /// itself.
+    /// </summary>
+    Task<ValuationOfficeInvitation?> GetByIdAsync(Guid id, CancellationToken ct = default);
+
     Task<IReadOnlyList<ValuationOfficeInvitation>> GetByInquiryIdAsync(
         Guid inquiryId,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Stage 6's office dashboard: every invitation ever sent to this agency, regardless of
+    /// status — the office needs to see Responded/Expired rows too, not only the still-Sent
+    /// ones. Ordered by SentAt descending (newest first) by the caller, not here, since the
+    /// query handler is what decides presentation order.
+    /// </summary>
+    Task<IReadOnlyList<ValuationOfficeInvitation>> GetByAgencyIdAsync(
+        Guid agencyId,
         CancellationToken ct = default);
 
     /// <summary>
