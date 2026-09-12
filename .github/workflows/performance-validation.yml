@@ -50,9 +50,33 @@ jobs:
     #
     # Requires "Larger runners" to be provisioned for this repository/org
     # (Settings -> Actions -> Runners -> Larger runners; needs GitHub Team or
-    # Enterprise Cloud). Falls back to ubuntu-latest if unset via
-    # workflow_dispatch/workflow_call with an unrecognized profile.
-    runs-on: ${{ (inputs.profile == 'release' || inputs.profile == 'staging') && 'ubuntu-latest-4-cores' || 'ubuntu-latest' }}
+    # Enterprise Cloud -- NOT available at all for a personal-account repo,
+    # which is what this repo currently is). Falls back to ubuntu-latest if
+    # unset via workflow_dispatch/workflow_call with an unrecognized profile.
+    #
+    # BUG (found via Production Gate run #235 / CI run #427 investigation,
+    # 2026-09-12): this job unconditionally requested the `ubuntu-latest-4-cores`
+    # label for release/staging profiles even though this repo has never had
+    # Larger runners provisioned (confirmed: owner account type is "User", and
+    # Larger runners require an organization on GitHub Team/Enterprise Cloud --
+    # they cannot be provisioned for a personal account at any plan tier).
+    # GitHub queues a job requesting a runner label that will never exist
+    # indefinitely instead of failing it, and because production-gate.yml sets
+    # `concurrency: cancel-in-progress: false` per ref, every subsequent push
+    # to master queued behind the stuck run too -- e.g. run 34673319511 sat
+    # "queued" for 7h36m+ with every other job in it already completed, and
+    # the very next push's Production Gate run (235) never started at all.
+    # Gate the larger-runner request behind an explicit repository variable
+    # so the safe default (ubuntu-latest, which always schedules) is what
+    # runs until the repository owner actually provisions Larger runners and
+    # opts in.
+    runs-on: >-
+      ${{
+        (vars.PERFORMANCE_LARGER_RUNNERS_ENABLED == 'true' &&
+         (inputs.profile == 'release' || inputs.profile == 'staging'))
+        && 'ubuntu-latest-4-cores'
+        || 'ubuntu-latest'
+      }}
     timeout-minutes: 180
     env:
       PERF_ENVIRONMENT: CI
