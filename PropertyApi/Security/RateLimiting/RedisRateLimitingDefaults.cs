@@ -41,7 +41,10 @@ internal static class RedisRateLimitingDefaults
             ["account-delete"] = Policy(3, TimeSpan.FromHours(1)),
             // Finding F7: self-service data export — see RateLimitingRegistration's in-memory
             // fallback policy for the full rationale.
-            ["data-export"] = Policy(5, TimeSpan.FromHours(24))
+            ["data-export"] = Policy(5, TimeSpan.FromHours(24)),
+            // Valuation Stage 7 — see RateLimitingRegistration's in-memory fallback policy for
+            // the full rationale (same cadence as visits/service-requests).
+            ["valuation-inquiries"] = Policy(10, TimeSpan.FromHours(1))
         };
 
     private static RedisFixedWindowRateLimitPolicyOptions Policy(

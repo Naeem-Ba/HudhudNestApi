@@ -336,6 +336,22 @@ public static class RateLimitingRegistration
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                         QueueLimit = 0
                     }));
+
+            // Valuation Stage 7: submitting a valuation request is anonymous by design
+            // (ValuationInquiry.RequesterId is nullable for a guest visitor) and, unlike a
+            // plain read, creates rows and can trigger office-matching queries against
+            // agencies -- same cadence as "visits"/"service-requests", the closest existing
+            // equivalent (one user-initiated request-creation flow against a limited resource).
+            options.AddPolicy("valuation-inquiries", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 10,
+                        Window = TimeSpan.FromHours(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
         });
 
         return services;
