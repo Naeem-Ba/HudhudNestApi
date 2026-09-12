@@ -61,12 +61,18 @@ public static class DependencyInjection
         services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<IAdminSubscriptionService, AdminSubscriptionService>();
         services.AddScoped<IAdminListingService, AdminListingService>();
+        services.AddScoped<IAdminValuationInquiryService, AdminValuationInquiryService>();
         services.AddScoped<IPropertyOwnershipService, PropertyOwnershipService>();
 
         // Valuation Stage 4 (Office Matching) — a plain orchestration service, not a
         // MediatR handler, so it needs an explicit registration here rather than assembly
         // scanning (mirrors IPropertyOwnershipService above).
         services.AddScoped<IOfficeMatchingService, OfficeMatchingService>();
+
+        // Valuation Stage 5 (24h SLA enforcement) — same reasoning as IOfficeMatchingService
+        // above: a plain orchestration service invoked from ValuationInquiryExpiryHostedService's
+        // scoped work, not a MediatR handler.
+        services.AddScoped<IValuationSlaEnforcementService, ValuationSlaEnforcementService>();
 
         // Provinces & Distribution Rules (Phase 4) — a plain orchestration service, not a
         // MediatR handler, so it needs an explicit registration here rather than assembly

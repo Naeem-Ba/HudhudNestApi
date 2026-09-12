@@ -211,6 +211,8 @@ public sealed class CreateBookingCommandHandlerTests
     private sealed class NoOpUnitOfWork : IUnitOfWork
     {
         public Task<int> SaveChangesAsync(CancellationToken ct = default) => Task.FromResult(1);
+        public Task<bool> TrySaveChangesAsync(CancellationToken ct = default) => Task.FromResult(true);
+        public Task<IReadOnlyList<object>> SaveChangesDroppingConcurrencyConflictsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<object>>(Array.Empty<object>());
         public Task BeginTransactionAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task CommitTransactionAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task RollbackTransactionAsync(CancellationToken ct = default) => Task.CompletedTask;
@@ -229,6 +231,10 @@ public sealed class CreateBookingCommandHandlerTests
         public Task NotifyAgencyInvitationReceivedAsync(Guid recipientId, Guid invitationId, string agencyName, string inviterName, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifyAgencyInvitationRespondedAsync(Guid recipientId, Guid invitationId, string targetUserName, bool accepted, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifyShortStayBookingUpdateAsync(Guid recipientId, Guid bookingId, string listingTitle, NotificationType type, string detail, CancellationToken ct = default) => Task.CompletedTask;
+        public Task NotifyValuationInquiryExpiredAsync(Guid recipientId, Guid inquiryId, bool hadPreliminaryEstimate, CancellationToken ct = default) => Task.CompletedTask;
+        public Task NotifyValuationOfficeInvitationExpiredAsync(Guid recipientId, Guid invitationId, Guid inquiryId, CancellationToken ct = default) => Task.CompletedTask;
+        public Task NotifyValuationResultReadyAsync(Guid recipientId, Guid inquiryId, CancellationToken ct = default) => Task.CompletedTask;
+        public Task NotifyValuationInquiryReminderSoonAsync(Guid recipientId, Guid inquiryId, CancellationToken ct = default) => Task.CompletedTask;
         public Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(Guid userId, int page, int pageSize, CancellationToken ct = default) => throw new NotImplementedException();
         public Task MarkAsReadAsync(Guid notificationId, Guid userId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task MarkAllAsReadAsync(Guid userId, CancellationToken ct = default) => throw new NotImplementedException();

@@ -41,6 +41,15 @@ public sealed class ValuationOfficeInvitation : BaseEntity
     /// </summary>
     public DateTime? RespondedAt { get; private set; }
 
+    /// <summary>
+    /// Remediation M3 — stamped only once <see cref="Notifications.Interfaces.INotificationService.NotifyValuationOfficeInvitationExpiredAsync"/>
+    /// actually succeeds for this invitation. Null means "Expired, but the notification has
+    /// not yet been confirmed delivered" — the signal ValuationSlaEnforcementService's own
+    /// retry pass uses, same "idempotency stamp, set on success only" pattern as
+    /// ValuationInquiry.ExpiryNotifiedAt/Property.ExpiryWarningSentAt.
+    /// </summary>
+    public DateTime? ExpiryNotifiedAt { get; private set; }
+
     public static ValuationOfficeInvitation Create(
         Guid agencyId,
         Guid inquiryId,
@@ -103,5 +112,14 @@ public sealed class ValuationOfficeInvitation : BaseEntity
     {
         if (Status != expected)
             throw new DomainException($"لا يمكن {action} لدعوة مكتب في الحالة '{Status}'.");
+    }
+
+    /// <summary>Remediation M3 — marks the ValuationOfficeInvitationExpired notification as
+    /// successfully delivered. No status guard, same as Property.MarkExpiryWarningSent — a
+    /// plain idempotency stamp, not a state transition.</summary>
+    public void MarkExpiryNotified(DateTime utcNow)
+    {
+        ExpiryNotifiedAt = utcNow;
+        UpdatedAt = utcNow;
     }
 }

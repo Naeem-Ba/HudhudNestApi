@@ -40,6 +40,27 @@
       "p95Milliseconds": 750,
       "p99Milliseconds": 1500,
       "maximumErrorRate": 0.01
+    },
+    "valuationCreateInquiry": {
+      "p95Milliseconds": 900,
+      "p99Milliseconds": 1800,
+      "maximumErrorRate": 0.01,
+      "maximumDatabaseMilliseconds": 700,
+      "maximumQueryCount": 8
+    },
+    "valuationGetStatus": {
+      "p95Milliseconds": 500,
+      "p99Milliseconds": 1000,
+      "maximumErrorRate": 0.01,
+      "maximumDatabaseMilliseconds": 350,
+      "maximumQueryCount": 4
+    },
+    "valuationAdminStatistics": {
+      "p95Milliseconds": 800,
+      "p99Milliseconds": 1500,
+      "maximumErrorRate": 0.01,
+      "maximumDatabaseMilliseconds": 600,
+      "maximumQueryCount": 5
     }
   },
   "global": {

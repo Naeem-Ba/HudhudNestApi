@@ -47,6 +47,15 @@ public sealed class AgencyConfiguration : IEntityTypeConfiguration<Agency>
         builder.Property(a => a.LicenseNumber)
             .HasMaxLength(120);
 
+        // Stage 8 (Admin Dashboard) — manual-review flag. See Agency.FlagForManualReview's
+        // own doc comment for why this lives directly on Agency instead of a new table.
+        builder.Property(a => a.RequiresManualReview)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.Property(a => a.ManualReviewReason)
+            .HasMaxLength(2000);
+
         // Referential integrity for the owner, matching every other UserAccount-owning
         // relationship in the schema (AgencyInvitation.InviterUserId/TargetUserId, etc.).
         // Restrict: an owner must transfer ownership or deactivate the agency before their
@@ -100,6 +109,10 @@ public sealed class AgencyConfiguration : IEntityTypeConfiguration<Agency>
         builder.HasIndex(a => a.GovernorateId);
         builder.HasIndex(a => a.DistrictId);
         builder.HasIndex(a => a.NeighborhoodId);
+
+        // Lets the admin dashboard list flagged offices without a table scan.
+        builder.HasIndex(a => a.RequiresManualReview)
+            .HasDatabaseName("IX_Agencies_RequiresManualReview");
 
         // Same soft-delete convention every other entity here follows, so a deleted agency
         // disappears from every read path without each query having to remember.

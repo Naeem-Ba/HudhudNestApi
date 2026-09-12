@@ -34,4 +34,6 @@ public static class BackgroundJobLockKeys
     public const long AccountDeletionSweep = 20260907_1006;
 
     public const long SocialPublicationDispatch = 20260908_1007;
+
+    public const long ValuationInquiryExpiry = 20260912_1008;
 }

@@ -148,6 +148,21 @@ public sealed class PublicEndpointPolicyTests
             "ObservabilitySyntheticController.Execute",
             "ObservabilityAlertTestController.SetAlertTestState",
 
+            // Valuation Stage 7: a customer submitting/checking a valuation request is
+            // frequently anonymous by design (ValuationInquiry.RequesterId is nullable
+            // specifically for a guest visitor). GetStatus independently re-checks ownership
+            // whenever the inquiry actually belongs to an account
+            // (GetValuationInquiryStatusQueryHandler) — an anonymous inquiry's own
+            // hard-to-guess Guid id is its only access control, the same reliance this
+            // module's Fast Path already places on the id alone for correlation.
+            "ValuationInquiriesController.Create",
+            "ValuationInquiriesController.GetStatus",
+
+            // Stage 9: the customer's explicit "let this office contact me" action — anonymous
+            // for the same reason (a guest inquiry has no account to authenticate as); the
+            // handler independently re-checks inquiry ownership exactly like GetStatus does.
+            "ValuationInquiriesController.SubmitContactConsent",
+
             // Staging-only, and gated on their own checks rather than on a JWT.
             // BuildInfo moved here in RELEASE-BLOCKERS-AR.md B-8 — it used to answer anyone
             // with real infrastructure detail (migration state, PostGIS availability, Staging's

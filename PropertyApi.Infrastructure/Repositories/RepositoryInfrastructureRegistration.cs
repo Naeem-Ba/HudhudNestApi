@@ -20,6 +20,7 @@ using PropertyApi.Application.Users.Interfaces;
 using PropertyApi.Application.Users.Messaging.Interfaces;
 using PropertyApi.Application.ShortStay.Interfaces;
 using PropertyApi.Application.ShortStay.Services;
+using PropertyApi.Application.Valuation.Interfaces;
 using PropertyApi.Infrastructure.Admin;
 using PropertyApi.Infrastructure.Analytics;
 using PropertyApi.Infrastructure.Bookings;
@@ -30,6 +31,7 @@ using PropertyApi.Infrastructure.Reviews;
 using PropertyApi.Infrastructure.Search;
 using PropertyApi.Infrastructure.Services;
 using PropertyApi.Infrastructure.ShortStay;
+using PropertyApi.Infrastructure.Valuation;
 
 namespace PropertyApi.Infrastructure.Repositories;
 
@@ -111,6 +113,13 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IInvestmentUpdateRepository, InvestmentUpdateRepository>();
         services.AddScoped<IInvestmentWatchlistRepository, InvestmentWatchlistRepository>();
         services.AddScoped<IInvestmentInterestRepository, InvestmentInterestRepository>();
+
+        // Valuation module (Stage 5 — 24h SLA enforcement; Stage 6 — office dashboard/response)
+        services.AddScoped<IValuationInquiryRepository, ValuationInquiryRepository>();
+        services.AddScoped<IValuationOfficeInvitationRepository, ValuationOfficeInvitationRepository>();
+        services.AddScoped<IValuationOfficeResponseRepository, ValuationOfficeResponseRepository>();
+        services.AddScoped<IValuationContactConsentRepository, ValuationContactConsentRepository>();
+        services.AddHostedService<ValuationInquiryExpiryHostedService>();
 
         return services;
     }

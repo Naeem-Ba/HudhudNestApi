@@ -100,4 +100,42 @@ public enum NotificationType
 
     /// <summary>The requester declined the owner's alternate date/time. Sent to the property owner.</summary>
     VisitRescheduleDeclined = 34,
+
+    /// <summary>
+    /// Valuation Stage 5 (24h SLA): a ValuationInquiry passed its 24h ExpiresAt without
+    /// reaching Completed. Sent to the requester (RequesterId) — never raised for an
+    /// anonymous inquiry (RequesterId null), since there is no account to notify. Raised by
+    /// ValuationInquiryExpiryHostedService via ValuationSlaEnforcementService.
+    /// </summary>
+    ValuationInquiryExpired = 35,
+
+    /// <summary>
+    /// Valuation Stage 5 (24h SLA): a ValuationOfficeInvitation was still Sent (unanswered)
+    /// when its parent inquiry's SLA window closed. Sent to the invited agency's owner
+    /// (Agency.OwnerUserId), same resolution AgencyInvitation notifications already use.
+    /// Raised by ValuationInquiryExpiryHostedService via ValuationSlaEnforcementService.
+    /// </summary>
+    ValuationOfficeInvitationExpired = 36,
+
+    /// <summary>
+    /// Remediation H2 — a ValuationInquiry reached Completed because every invitation
+    /// OfficeMatchingService sent for it has now been answered (no more Sent invitations
+    /// remain), so the customer no longer has to wait out the full 24h SLA window to see a
+    /// result. Sent to the requester (RequesterId) — never raised for an anonymous inquiry,
+    /// same rule ValuationInquiryExpired already applies. Raised by
+    /// SubmitOfficeResponseCommandHandler when the last outstanding response arrives, and
+    /// retried by ValuationSlaEnforcementService (ResultReadyNotifiedAt) if that first attempt
+    /// fails.
+    /// </summary>
+    ValuationResultReady = 37,
+
+    /// <summary>
+    /// Remediation M4 — a ValuationInquiry has been open for 18h without reaching a terminal
+    /// state (Completed/Expired), warning the requester the 24h SLA window is closing soon.
+    /// Sent at most once per inquiry (ValuationInquiry.ReminderSentAt is the idempotency
+    /// stamp) — never raised for an anonymous inquiry, same rule as the other Valuation
+    /// notifications. Raised by ValuationInquiryExpiryHostedService via
+    /// ValuationSlaEnforcementService.
+    /// </summary>
+    ValuationInquiryReminderSoon = 38,
 }

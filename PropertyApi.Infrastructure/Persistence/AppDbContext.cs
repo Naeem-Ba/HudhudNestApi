@@ -25,6 +25,7 @@ using PropertyApi.Domain.ShortStay.Entities;
 using PropertyApi.Domain.Investments.Entities;
 using PropertyApi.Domain.Marketing.Entities;
 using PropertyApi.Domain.SocialDistribution.Entities;
+using PropertyApi.Domain.Valuation.Entities;
 
 
 
@@ -136,6 +137,12 @@ public sealed class AppDbContext
     public DbSet<InvestmentUpdate> InvestmentUpdates => Set<InvestmentUpdate>();
     public DbSet<InvestmentWatchlistItem> InvestmentWatchlistItems => Set<InvestmentWatchlistItem>();
     public DbSet<InvestmentInterest> InvestmentInterests => Set<InvestmentInterest>();
+
+    // Valuation module (Stage 2 domain, Stage 5+6 persistence, Stage 9 consent).
+    public DbSet<ValuationInquiry> ValuationInquiries => Set<ValuationInquiry>();
+    public DbSet<ValuationOfficeInvitation> ValuationOfficeInvitations => Set<ValuationOfficeInvitation>();
+    public DbSet<ValuationOfficeResponse> ValuationOfficeResponses => Set<ValuationOfficeResponse>();
+    public DbSet<ValuationContactConsent> ValuationContactConsents => Set<ValuationContactConsent>();
 
     // -- Model Configuration -------------------------------------
     protected override void OnModelCreating(ModelBuilder builder)

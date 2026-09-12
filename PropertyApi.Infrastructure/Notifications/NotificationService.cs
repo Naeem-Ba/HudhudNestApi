@@ -314,6 +314,144 @@ public sealed class NotificationService : INotificationService
             accepted);
     }
 
+    public async Task NotifyValuationInquiryExpiredAsync(
+        Guid recipientId,
+        Guid inquiryId,
+        bool hadPreliminaryEstimate,
+        CancellationToken ct = default)
+    {
+        if (recipientId == Guid.Empty)
+        {
+            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
+
+        if (inquiryId == Guid.Empty)
+        {
+            throw new ArgumentException("Inquiry id is required.", nameof(inquiryId));
+        }
+
+        var notification = new Notification
+        {
+            RecipientId = recipientId,
+            Type = NotificationType.ValuationInquiryExpired,
+            Message = hadPreliminaryEstimate
+                ? "انتهت مهلة 24 ساعة لطلب التقييم الخاص بك. كان لديك تقدير مبدئي مبني على إعلانات مشابهة، لكن لم يكتمل التقييم النهائي ضمن المهلة المحددة."
+                : "انتهت مهلة 24 ساعة لطلب التقييم الخاص بك دون التوصل إلى تقدير. يمكنك تقديم طلب تقييم جديد.",
+            RelatedEntityId = inquiryId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await PersistAndPushAsync(notification, ct);
+
+        _logger.LogInformation(
+            "Valuation inquiry expiry notification created. RecipientId={RecipientId}, InquiryId={InquiryId}, HadPreliminaryEstimate={HadPreliminaryEstimate}",
+            recipientId,
+            inquiryId,
+            hadPreliminaryEstimate);
+    }
+
+    public async Task NotifyValuationOfficeInvitationExpiredAsync(
+        Guid recipientId,
+        Guid invitationId,
+        Guid inquiryId,
+        CancellationToken ct = default)
+    {
+        if (recipientId == Guid.Empty)
+        {
+            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
+
+        if (invitationId == Guid.Empty)
+        {
+            throw new ArgumentException("Invitation id is required.", nameof(invitationId));
+        }
+
+        var notification = new Notification
+        {
+            RecipientId = recipientId,
+            Type = NotificationType.ValuationOfficeInvitationExpired,
+            Message = "انتهت صلاحية دعوة تقييم عقاري دون تقديم رد من مكتبك ضمن المهلة المحددة.",
+            RelatedEntityId = invitationId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await PersistAndPushAsync(notification, ct);
+
+        _logger.LogInformation(
+            "Valuation office invitation expiry notification created. RecipientId={RecipientId}, InvitationId={InvitationId}, InquiryId={InquiryId}",
+            recipientId,
+            invitationId,
+            inquiryId);
+    }
+
+    public async Task NotifyValuationResultReadyAsync(
+        Guid recipientId,
+        Guid inquiryId,
+        CancellationToken ct = default)
+    {
+        if (recipientId == Guid.Empty)
+        {
+            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
+
+        if (inquiryId == Guid.Empty)
+        {
+            throw new ArgumentException("Inquiry id is required.", nameof(inquiryId));
+        }
+
+        var notification = new Notification
+        {
+            RecipientId = recipientId,
+            Type = NotificationType.ValuationResultReady,
+            Message = "اكتمل تقييم عقارك: ردّت جميع المكاتب المدعوة على طلبك. يمكنك الاطلاع على النتيجة الآن.",
+            RelatedEntityId = inquiryId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await PersistAndPushAsync(notification, ct);
+
+        _logger.LogInformation(
+            "Valuation result-ready notification created. RecipientId={RecipientId}, InquiryId={InquiryId}",
+            recipientId,
+            inquiryId);
+    }
+
+    public async Task NotifyValuationInquiryReminderSoonAsync(
+        Guid recipientId,
+        Guid inquiryId,
+        CancellationToken ct = default)
+    {
+        if (recipientId == Guid.Empty)
+        {
+            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
+
+        if (inquiryId == Guid.Empty)
+        {
+            throw new ArgumentException("Inquiry id is required.", nameof(inquiryId));
+        }
+
+        var notification = new Notification
+        {
+            RecipientId = recipientId,
+            Type = NotificationType.ValuationInquiryReminderSoon,
+            Message = "لم يكتمل تقييم عقارك بعد، وستنتهي المهلة المحددة (24 ساعة) خلال ساعات قليلة.",
+            RelatedEntityId = inquiryId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await PersistAndPushAsync(notification, ct);
+
+        _logger.LogInformation(
+            "Valuation inquiry reminder-soon notification created. RecipientId={RecipientId}, InquiryId={InquiryId}",
+            recipientId,
+            inquiryId);
+    }
+
     public async Task NotifyShortStayBookingUpdateAsync(
         Guid recipientId,
         Guid bookingId,

@@ -60,6 +60,8 @@ public sealed class SavedSearchCommandHandlerTests
     private sealed class NoOpUnitOfWork : IUnitOfWork
     {
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => Task.FromResult(1);
+        public Task<bool> TrySaveChangesAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public Task<IReadOnlyList<object>> SaveChangesDroppingConcurrencyConflictsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<object>>(Array.Empty<object>());
         public Task BeginTransactionAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task CommitTransactionAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task RollbackTransactionAsync(CancellationToken ct = default) => Task.CompletedTask;
