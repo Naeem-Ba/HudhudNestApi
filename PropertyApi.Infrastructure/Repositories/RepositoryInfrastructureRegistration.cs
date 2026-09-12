@@ -44,6 +44,11 @@ internal static class RepositoryInfrastructureRegistration
         // capturing a scoped dependency is a DI captive-dependency bug).
         services.AddScoped<IListingQuotaPolicy, ListingQuotaPolicy>();
 
+        // Sums Property + ShortStayListing (the listing types that draw from the shared plan
+        // quota) — depends on IPropertyRepository/IShortStayListingRepository/IAgencyRepository
+        // below, so registered after them for readability (order does not affect DI resolution).
+        services.AddScoped<IActiveListingCounter, ActiveListingCounter>();
+
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IAdminUserQueryRepository, AdminUserQueryRepository>();

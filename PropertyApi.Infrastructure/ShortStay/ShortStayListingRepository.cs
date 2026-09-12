@@ -36,7 +36,25 @@ public sealed class ShortStayListingRepository : IShortStayListingRepository
     public async Task<bool> ExistsAsync(Guid id, CancellationToken ct = default)
         => await _db.ShortStayListings.AnyAsync(l => l.Id == id, ct);
 
+    public async Task<int> CountActiveByOwnerAsync(Guid ownerId, CancellationToken ct = default)
+        => await _db.ShortStayListings
+            .AsNoTracking()
+            .CountAsync(l => l.OwnerId == ownerId, ct);
+
+    public async Task<int> CountActiveByOwnerIdsAsync(
+        IReadOnlyCollection<Guid> ownerIds, CancellationToken ct = default)
+    {
+        if (ownerIds.Count == 0)
+            return 0;
+
+        return await _db.ShortStayListings
+            .AsNoTracking()
+            .CountAsync(l => ownerIds.Contains(l.OwnerId), ct);
+    }
+
     public void Update(ShortStayListing listing) => _db.ShortStayListings.Update(listing);
+
+    public void Remove(ShortStayListing listing) => _db.ShortStayListings.Remove(listing);
 
     /// <summary>
     /// Mirrors PropertyRepository.ApplyFilter's approach: a chain of conditional .Where clauses

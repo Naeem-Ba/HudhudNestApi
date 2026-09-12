@@ -758,7 +758,29 @@ public sealed class ListingLifecycleTests
             (unitOfWork ?? new Mock<IUnitOfWork>()).Object,
             Mock.Of<ILocationSuggestionService>(),
             quotaPolicy ?? new FakeListingQuotaPolicy(50),
+            new PropertyOnlyActiveListingCounter(repository.Object),
             NullLogger<CreatePropertyCommandHandler>.Instance);
+
+    /// <summary>
+    /// Test double for the production IActiveListingCounter (Infrastructure's
+    /// ActiveListingCounter, which also folds in Short-Stay listings — see that class's doc
+    /// comment). These handler-level tests only ever set up IPropertyRepository's own count
+    /// methods and have no interest in Short-Stay, so this simply forwards to the same
+    /// mocked repository every existing test already configures, instead of every call site
+    /// in this file needing its own IActiveListingCounter mock.
+    /// </summary>
+    private sealed class PropertyOnlyActiveListingCounter : IActiveListingCounter
+    {
+        private readonly IPropertyRepository _properties;
+
+        public PropertyOnlyActiveListingCounter(IPropertyRepository properties) => _properties = properties;
+
+        public Task<int> CountActiveListingsByOwnerAsync(Guid ownerId, CancellationToken ct = default)
+            => _properties.CountActiveListingsByOwnerAsync(ownerId, ct);
+
+        public Task<int> CountActiveListingsByAgencyAsync(Guid agencyId, CancellationToken ct = default)
+            => _properties.CountActiveListingsByAgencyAsync(agencyId, ct);
+    }
 
     /// <summary>
     /// Every owner in these tests has confirmed a way to reach them and picked a plan

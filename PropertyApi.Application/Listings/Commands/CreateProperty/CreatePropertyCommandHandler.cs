@@ -26,6 +26,7 @@ public sealed class CreatePropertyCommandHandler
     private readonly IUnitOfWork _uow;
     private readonly ILocationSuggestionService _locationSuggestions;
     private readonly IListingQuotaPolicy _quotaPolicy;
+    private readonly IActiveListingCounter _activeListingCounter;
     private readonly ILogger<CreatePropertyCommandHandler> _logger;
 
     public CreatePropertyCommandHandler(
@@ -35,6 +36,7 @@ public sealed class CreatePropertyCommandHandler
         IUnitOfWork uow,
         ILocationSuggestionService locationSuggestions,
         IListingQuotaPolicy quotaPolicy,
+        IActiveListingCounter activeListingCounter,
         ILogger<CreatePropertyCommandHandler> logger)
     {
         _repo = repo;
@@ -43,6 +45,7 @@ public sealed class CreatePropertyCommandHandler
         _uow = uow;
         _locationSuggestions = locationSuggestions;
         _quotaPolicy = quotaPolicy;
+        _activeListingCounter = activeListingCounter;
         _logger = logger;
     }
 
@@ -250,6 +253,12 @@ public sealed class CreatePropertyCommandHandler
     /// agency owner's, when <paramref name="ownerAccount"/> belongs to one — see
     /// IListingQuotaPolicy's doc comment), never from a constant here.
     ///
+    /// The count itself comes from <see cref="IActiveListingCounter"/> — a shared total
+    /// across every listing type that draws from this same quota (Property + ShortStayListing
+    /// today), not just this repository's own rows. Without this, a Property and a Short-Stay
+    /// listing would each be checked against a separate, smaller pool instead of the one the
+    /// owner's plan actually promises.
+    ///
     /// Consequence worth being explicit about: an existing owner (or agency) who already
     /// holds more than the limit — e.g. after a plan downgrade — keeps every listing they
     /// have; nothing is retroactively removed. They simply cannot create another until they
@@ -263,7 +272,7 @@ public sealed class CreatePropertyCommandHandler
 
         if (ownerAccount.AgencyId is { } agencyId)
         {
-            var agencyActiveListings = await _repo.CountActiveListingsByAgencyAsync(agencyId, ct);
+            var agencyActiveListings = await _activeListingCounter.CountActiveListingsByAgencyAsync(agencyId, ct);
 
             if (agencyActiveListings < limit)
                 return;
@@ -279,7 +288,7 @@ public sealed class CreatePropertyCommandHandler
                 "احذفوا إعلاناً قائماً أو رقّوا الخطة لإضافة إعلان جديد.");
         }
 
-        var activeListings = await _repo.CountActiveListingsByOwnerAsync(ownerAccount.Id, ct);
+        var activeListings = await _activeListingCounter.CountActiveListingsByOwnerAsync(ownerAccount.Id, ct);
 
         if (activeListings < limit)
             return;
