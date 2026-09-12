@@ -30,10 +30,10 @@ public sealed class SocialPublisherAdapterTests
         };
 
     [Fact]
-    public void PublishAsync_AlwaysReturnsPlatformNotConfigured_NeverFabricatesSuccess()
+    public async Task PublishAsync_AlwaysReturnsPlatformNotConfigured_NeverFabricatesSuccess()
     {
         var publisher = new FacebookPublisher(NullLogger<FacebookPublisher>.Instance);
-        var result = publisher.PublishAsync(MakeRequest(SocialPlatform.Facebook)).GetAwaiter().GetResult();
+        var result = await publisher.PublishAsync(MakeRequest(SocialPlatform.Facebook));
 
         Assert.False(result.IsSuccess);
         Assert.Equal(SocialPublicationErrorCode.PlatformNotConfigured, result.ErrorCode);
