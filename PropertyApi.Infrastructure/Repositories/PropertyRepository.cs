@@ -220,6 +220,113 @@ public sealed class PropertyRepository : IPropertyRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<decimal>> GetComparableListingPricesAsync(
+        int? propertyTypeId,
+        ListingType listingType,
+        decimal? area,
+        decimal areaTolerancePercent,
+        int governorateId,
+        int? districtId,
+        int? neighborhoodId,
+        CancellationToken ct = default)
+    {
+        var query = ApplyComparableListingsFilter(
+            _db.Properties.AsNoTracking(),
+            propertyTypeId,
+            listingType,
+            area,
+            areaTolerancePercent,
+            governorateId,
+            districtId,
+            neighborhoodId,
+            DateTime.UtcNow);
+
+        // Only the price field relevant to this listing type, resolved server-side — same
+        // mapping ResolveComparablePrice (below) expresses for in-memory use, kept as its own
+        // SQL-translatable expression here the same way Property.CurrentlyFeatured sits
+        // alongside Property.IsCurrentlyFeatured: two expressions of one rule, deliberately
+        // adjacent so drift between them is visible. ForRentAndSale prefers PurchasePrice (a
+        // listing offered both ways is still, at heart, being sold) and falls back to
+        // whichever rent field is set.
+        IQueryable<decimal?> prices = listingType switch
+        {
+            ListingType.ForSale => query.Select(p => p.PurchasePrice),
+            ListingType.ForRent => query.Select(p => p.ColdRent ?? p.WarmRent),
+            _ => query.Select(p => p.PurchasePrice ?? p.ColdRent ?? p.WarmRent)
+        };
+
+        return await prices
+            .Where(price => price != null && price > 0)
+            .Select(price => price!.Value)
+            .ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// The Valuation Fast Path's matching rules (Phase 3), extracted as a public/static
+    /// IQueryable-in-IQueryable-out method — same reasoning as ApplyFilter/ApplySort above:
+    /// it runs unchanged whether the source is EF Core's <c>_db.Properties</c> (real query,
+    /// translated to SQL) or an in-memory <c>List&lt;Property&gt;.AsQueryable()</c> (LINQ-to-
+    /// Objects), which is what lets the matching rules themselves be unit-tested with no
+    /// database — see GetComparableListingsMatchingTests.
+    ///
+    /// Eligibility mirrors ApplyFilter's own "published and not expired" — fuller than
+    /// FindPotentialDuplicatesAsync's IsPublished-only check, and what actually matches what
+    /// shows up in real search results. GovernorateId is always applied, even alongside a
+    /// more specific district/neighborhood match, as a defence against a Property row whose
+    /// location columns don't actually agree (nothing currently enforces that they do).
+    /// District/Neighborhood are mutually exclusive: Neighborhood only when given, District
+    /// only when Neighborhood is absent — never both, and never a silent fallback from
+    /// Neighborhood to District just because Neighborhood is set.
+    /// </summary>
+    public static IQueryable<Property> ApplyComparableListingsFilter(
+        IQueryable<Property> query,
+        int? propertyTypeId,
+        ListingType listingType,
+        decimal? area,
+        decimal areaTolerancePercent,
+        int governorateId,
+        int? districtId,
+        int? neighborhoodId,
+        DateTime nowUtc)
+    {
+        query = query.Where(p =>
+            p.ListingType == listingType &&
+            p.IsPublished &&
+            (p.ExpiresAt == null || p.ExpiresAt > nowUtc) &&
+            p.GovernorateId == governorateId);
+
+        if (propertyTypeId.HasValue)
+            query = query.Where(p => p.PropertyTypeId == propertyTypeId.Value);
+
+        if (neighborhoodId.HasValue)
+            query = query.Where(p => p.NeighborhoodId == neighborhoodId.Value);
+        else if (districtId.HasValue)
+            query = query.Where(p => p.DistrictId == districtId.Value);
+
+        if (area is { } a && a > 0)
+        {
+            var minArea = a * (1 - areaTolerancePercent / 100m);
+            var maxArea = a * (1 + areaTolerancePercent / 100m);
+            query = query.Where(p => p.Area != null && p.Area >= minArea && p.Area <= maxArea);
+        }
+
+        return query;
+    }
+
+    /// <summary>
+    /// In-memory twin of the price expression inside GetComparableListingPricesAsync — same
+    /// rule, expressed as a plain C# method instead of a SQL-translatable expression, so it
+    /// can run against ordinary in-memory Property objects in a unit test. Same mapping
+    /// CheckPotentialDuplicatePropertyQueryHandler.GetComparablePrice uses for ForSale/ForRent.
+    /// </summary>
+    public static decimal? ResolveComparablePrice(Property property, ListingType listingType) =>
+        listingType switch
+        {
+            ListingType.ForSale => property.PurchasePrice,
+            ListingType.ForRent => property.ColdRent ?? property.WarmRent,
+            _ => property.PurchasePrice ?? property.ColdRent ?? property.WarmRent
+        };
+
     public void Update(Property property)
     {
         _db.Properties.Update(property);

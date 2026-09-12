@@ -1,5 +1,6 @@
 using PropertyApi.Domain.Common.Entities;
 using PropertyApi.Domain.Common.Exceptions;
+using PropertyApi.Domain.Lookups.Entities;
 
 namespace PropertyApi.Domain.Agencies.Entities;
 
@@ -60,6 +61,28 @@ public sealed class Agency : AuditableEntity
 
     /// <summary>ISO 3166-1 alpha-2, matching Property.CountryCode.</summary>
     public string CountryCode { get; private set; } = "SY";
+
+    // ── الموقع الجغرافي المنظَّم (يغلق نفس الفجوة التي أُغلقت على Property) ──
+    //
+    // نفس نمط Property.GovernorateId/DistrictId/NeighborhoodId بالضبط: public
+    // setters، nullable بالكامل، وCity النصي القديم يبقى كما هو للتوافق مع كل
+    // مكتب موجود مسبقًا. الأولوية: GovernorateId شبه أساسي، DistrictId أدق،
+    // NeighborhoodId الأدق — لكن لا شيء منها إلزامي على مستوى الكيان أو قاعدة
+    // البيانات، فمكتب قديم بلا أي منها (null/null/null) يبقى "غير مصنَّف
+    // جغرافيًا" وقابلاً للقراءة والتعديل بشكل طبيعي (انظر AgencyConfiguration
+    // وCreateAgencyCommandValidator/UpdateAgencyCommandValidator لقواعد
+    // الاتساق الهرمي).
+    public int? GovernorateId { get; set; }
+    public int? DistrictId { get; set; }
+    public int? NeighborhoodId { get; set; }
+
+    // Navigation — أحادية الاتجاه فقط (لا ICollection<Agency> مقابلة على
+    // Governorate/District/Neighborhood)، لأن لا شيء غير Agency نفسها يحتاج
+    // اجتياز هذه العلاقة من الطرف الآخر بعد؛ نفس ما تفعله Property.AgencyId
+    // (HasOne<Agency>().WithMany() بلا navigation مقابل) في PropertyConfiguration.
+    public Governorate? Governorate { get; set; }
+    public District? District { get; set; }
+    public Neighborhood? Neighborhood { get; set; }
 
     /// <summary>
     /// Government/registry licence number as supplied by the agency.

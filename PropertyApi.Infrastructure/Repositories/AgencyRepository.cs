@@ -83,4 +83,50 @@ public sealed class AgencyRepository : IAgencyRepository
 
         return listings.Count;
     }
+
+    public async Task<IReadOnlyList<Agency>> FindActiveByLocationAsync(
+        int? neighborhoodId,
+        int? districtId,
+        IReadOnlyCollection<int>? governorateIds,
+        IReadOnlyCollection<Guid> excludeAgencyIds,
+        CancellationToken ct = default)
+        => await ApplyActiveLocationFilter(
+                _db.Agencies.AsNoTracking(),
+                neighborhoodId,
+                districtId,
+                governorateIds,
+                excludeAgencyIds)
+            .ToListAsync(ct);
+
+    /// <summary>
+    /// The actual DB-side matching rule behind <see cref="FindActiveByLocationAsync"/>,
+    /// pulled out as a public static IQueryable transform — same pattern as
+    /// PropertyRepository.ApplyFilter/ApplyComparableListingsFilter — so
+    /// PropertyApi.Architecture.Tests can exercise the real filtering logic over an
+    /// in-memory List&lt;Agency&gt;.AsQueryable() with no database involved.
+    /// </summary>
+    public static IQueryable<Agency> ApplyActiveLocationFilter(
+        IQueryable<Agency> query,
+        int? neighborhoodId,
+        int? districtId,
+        IReadOnlyCollection<int>? governorateIds,
+        IReadOnlyCollection<Guid> excludeAgencyIds)
+    {
+        query = query.Where(a => a.IsActive);
+
+        if (excludeAgencyIds.Count > 0)
+            query = query.Where(a => !excludeAgencyIds.Contains(a.Id));
+
+        if (neighborhoodId.HasValue)
+            return query.Where(a => a.NeighborhoodId == neighborhoodId.Value);
+
+        if (districtId.HasValue)
+            return query.Where(a => a.DistrictId == districtId.Value);
+
+        if (governorateIds is { Count: > 0 })
+            return query.Where(a => a.GovernorateId != null && governorateIds.Contains(a.GovernorateId.Value));
+
+        // No scope given at all — never return "every active agency" by accident.
+        return query.Where(_ => false);
+    }
 }

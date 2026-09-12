@@ -25,7 +25,16 @@ public sealed record AgencyDto(
     bool IsActive,
     int MemberCount,
     DateTime CreatedAt,
-    IReadOnlyList<AgencyMemberDto> Members);
+    IReadOnlyList<AgencyMemberDto> Members,
+
+    /// <summary>
+    /// المحافظة/المنطقة/الحي المنظَّمون — نفس حقول Property.GovernorateId/DistrictId/
+    /// NeighborhoodId. جميعها null لأي مكتب لم يُصنَّف جغرافيًا بعد (مكاتب قديمة أو مكتب
+    /// جديد لم يحدد موقعه) — "غير مصنَّف"، وليس خطأ.
+    /// </summary>
+    int? GovernorateId = null,
+    int? DistrictId = null,
+    int? NeighborhoodId = null);
 
 /// <summary>
 /// A member of an agency. Deliberately thin: name, avatar, and whether they own the

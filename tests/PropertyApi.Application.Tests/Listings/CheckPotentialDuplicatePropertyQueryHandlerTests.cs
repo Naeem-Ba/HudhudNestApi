@@ -160,6 +160,17 @@ public sealed class CheckPotentialDuplicatePropertyQueryHandlerTests
             CancellationToken ct = default)
             => Task.FromResult(_properties.Where(p => p.NeighborhoodId == neighborhoodId).ToList() as IReadOnlyList<Property>);
 
+        public Task<IReadOnlyList<decimal>> GetComparableListingPricesAsync(
+            int? propertyTypeId,
+            ListingType listingType,
+            decimal? area,
+            decimal areaTolerancePercent,
+            int governorateId,
+            int? districtId,
+            int? neighborhoodId,
+            CancellationToken ct = default)
+            => throw new NotImplementedException();
+
         public void Update(Property property) => throw new NotImplementedException();
 
         public void Remove(Property property) => throw new NotImplementedException();

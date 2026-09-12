@@ -15,4 +15,15 @@ public sealed record UpdateAgencyCommand(
     string? ContactEmail,
     string? ContactPhone,
     string? City,
-    Guid RequestingUserId) : IRequest<AgencyDto>;
+    Guid RequestingUserId,
+
+    /// <summary>
+    /// المحافظة الجديدة، أو null لإلغاء تصنيف المكتب جغرافيًا. مثل بقية حقول هذا الأمر
+    /// (Description/ContactEmail/...)، الاستبدال هنا كامل لا جزئي: القيمة المرسلة —
+    /// بما فيها null — تحل محل القيمة الحالية دائمًا، فعلى الواجهة إرسال الموقع الحالي
+    /// كاملاً حتى عند تعديل حقل آخر فقط. هذا ما يسمح فعليًا بإزالة District/Neighborhood
+    /// (البند 7) بإرسال null بدل تركه بلا تغيير.
+    /// </summary>
+    int? GovernorateId = null,
+    int? DistrictId = null,
+    int? NeighborhoodId = null) : IRequest<AgencyDto>;

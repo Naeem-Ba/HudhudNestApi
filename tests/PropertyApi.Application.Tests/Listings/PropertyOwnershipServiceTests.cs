@@ -119,6 +119,17 @@ public sealed class PropertyOwnershipServiceTests
             CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<Property>>(Array.Empty<Property>());
 
+        public Task<IReadOnlyList<decimal>> GetComparableListingPricesAsync(
+            int? propertyTypeId,
+            ListingType listingType,
+            decimal? area,
+            decimal areaTolerancePercent,
+            int governorateId,
+            int? districtId,
+            int? neighborhoodId,
+            CancellationToken ct = default)
+            => throw new NotImplementedException();
+
         public void Update(Property property)
         {
         }

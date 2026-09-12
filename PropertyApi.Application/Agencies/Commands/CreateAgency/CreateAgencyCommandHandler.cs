@@ -90,6 +90,15 @@ public sealed class CreateAgencyCommandHandler
             utcNow: now);
 
         agency.SetLicenseNumber(request.LicenseNumber, now);
+
+        // Structured location — public setters, exactly like Property.GovernorateId/
+        // DistrictId/NeighborhoodId. Hierarchy consistency (District belongs to the
+        // given Governorate, Neighborhood belongs to the given District) is enforced by
+        // CreateAgencyCommandValidator before the handler ever runs, so no re-check here.
+        agency.GovernorateId = request.GovernorateId;
+        agency.DistrictId = request.DistrictId;
+        agency.NeighborhoodId = request.NeighborhoodId;
+
         agency.CreatedByUserId = request.RequestingUserId;
 
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
