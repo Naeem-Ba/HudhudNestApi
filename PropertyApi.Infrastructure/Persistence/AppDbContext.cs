@@ -138,10 +138,11 @@ public sealed class AppDbContext
     public DbSet<InvestmentWatchlistItem> InvestmentWatchlistItems => Set<InvestmentWatchlistItem>();
     public DbSet<InvestmentInterest> InvestmentInterests => Set<InvestmentInterest>();
 
-    // Valuation module (Stage 2 domain, Stage 5+6 persistence).
+    // Valuation module (Stage 2 domain, Stage 5+6 persistence, Stage 9 consent).
     public DbSet<ValuationInquiry> ValuationInquiries => Set<ValuationInquiry>();
     public DbSet<ValuationOfficeInvitation> ValuationOfficeInvitations => Set<ValuationOfficeInvitation>();
     public DbSet<ValuationOfficeResponse> ValuationOfficeResponses => Set<ValuationOfficeResponse>();
+    public DbSet<ValuationContactConsent> ValuationContactConsents => Set<ValuationContactConsent>();
 
     // -- Model Configuration -------------------------------------
     protected override void OnModelCreating(ModelBuilder builder)

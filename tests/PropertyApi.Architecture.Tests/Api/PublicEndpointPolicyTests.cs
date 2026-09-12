@@ -158,6 +158,11 @@ public sealed class PublicEndpointPolicyTests
             "ValuationInquiriesController.Create",
             "ValuationInquiriesController.GetStatus",
 
+            // Stage 9: the customer's explicit "let this office contact me" action — anonymous
+            // for the same reason (a guest inquiry has no account to authenticate as); the
+            // handler independently re-checks inquiry ownership exactly like GetStatus does.
+            "ValuationInquiriesController.SubmitContactConsent",
+
             // Staging-only, and gated on their own checks rather than on a JWT.
             // BuildInfo moved here in RELEASE-BLOCKERS-AR.md B-8 — it used to answer anyone
             // with real infrastructure detail (migration state, PostGIS availability, Staging's

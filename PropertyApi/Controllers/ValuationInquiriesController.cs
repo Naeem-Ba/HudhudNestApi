@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.Valuation.Commands.CreateValuationInquiry;
+using PropertyApi.Application.Valuation.Commands.SubmitValuationContactConsent;
 using PropertyApi.Application.Valuation.DTOs;
 using PropertyApi.Application.Valuation.Queries.GetValuationInquiryStatus;
 using PropertyApi.Domain.Enums;
@@ -72,6 +73,36 @@ public sealed class ValuationInquiriesController : ControllerBase
         return Ok(result);
     }
 
+    // ── POST /api/ValuationInquiries/{inquiryId}/consent ──────────
+    // Stage 9 — the customer's explicit "let this office contact me" action. Anonymous for the
+    // same reason Create/GetStatus are (a guest inquiry has no account to authenticate as), and
+    // rate-limited under the same write-cadence policy as Create (this creates a row too, and
+    // is gated by the same per-caller resource, not a plain read like GetStatus).
+    [HttpPost("{inquiryId:guid}/consent")]
+    [AllowAnonymous]
+    [EnableRateLimiting("valuation-inquiries")]
+    [ProducesResponseType(typeof(ValuationContactConsentResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> SubmitContactConsent(
+        Guid inquiryId,
+        [FromBody] SubmitValuationContactConsentRequest request,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new SubmitValuationContactConsentCommand(
+                InquiryId: inquiryId,
+                InvitationId: request.InvitationId,
+                ActorUserId: GetCurrentUserId(),
+                ContactPhone: request.ContactPhone,
+                ContactEmail: request.ContactEmail),
+            ct);
+
+        return Ok(result);
+    }
+
     private Guid? GetCurrentUserId()
     {
         var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -89,3 +120,9 @@ public sealed record CreateValuationInquiryRequest(
     decimal? Area,
     int? Rooms,
     ListingType RequestType);
+
+/// <summary>Request body for POST /api/ValuationInquiries/{inquiryId}/consent.</summary>
+public sealed record SubmitValuationContactConsentRequest(
+    Guid InvitationId,
+    string? ContactPhone,
+    string? ContactEmail);

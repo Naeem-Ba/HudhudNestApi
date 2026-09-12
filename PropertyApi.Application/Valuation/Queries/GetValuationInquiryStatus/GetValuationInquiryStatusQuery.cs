@@ -1,4 +1,5 @@
 using MediatR;
+using PropertyApi.Application.Agencies.Interfaces;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Valuation.DTOs;
 using PropertyApi.Application.Valuation.Interfaces;
@@ -23,15 +24,21 @@ public sealed class GetValuationInquiryStatusQueryHandler
     private readonly IValuationInquiryRepository _inquiries;
     private readonly IValuationOfficeInvitationRepository _invitations;
     private readonly IValuationOfficeResponseRepository _responses;
+    private readonly IValuationContactConsentRepository _consents;
+    private readonly IAgencyRepository _agencies;
 
     public GetValuationInquiryStatusQueryHandler(
         IValuationInquiryRepository inquiries,
         IValuationOfficeInvitationRepository invitations,
-        IValuationOfficeResponseRepository responses)
+        IValuationOfficeResponseRepository responses,
+        IValuationContactConsentRepository consents,
+        IAgencyRepository agencies)
     {
         _inquiries = inquiries;
         _invitations = invitations;
         _responses = responses;
+        _consents = consents;
+        _agencies = agencies;
     }
 
     public async Task<ValuationInquiryStatusDto> Handle(
@@ -52,19 +59,47 @@ public sealed class GetValuationInquiryStatusQueryHandler
 
         var invitations = await _invitations.GetByInquiryIdAsync(inquiry.Id, ct);
 
+        var responded = invitations
+            .Where(i => i.Status == ValuationOfficeInvitationStatus.Responded)
+            .ToList();
+
+        if (responded.Count == 0)
+        {
+            return new ValuationInquiryStatusDto
+            {
+                InquiryId = inquiry.Id,
+                Status = inquiry.Status,
+                ExpiresAt = inquiry.ExpiresAt,
+                Estimates = [],
+            };
+        }
+
+        // Batch-resolve agency names in one round trip rather than one GetByIdAsync call per
+        // responded invitation — same reasoning AdminValuationInquiryService's own office
+        // statistics use IAgencyRepository.GetByIdsAsync for.
+        var agencyIds = responded.Select(i => i.AgencyId).Distinct().ToArray();
+        var agencyById = (await _agencies.GetByIdsAsync(agencyIds, ct)).ToDictionary(a => a.Id);
+
         var estimates = new List<ValuationEstimateDto>();
 
-        foreach (var invitation in invitations)
+        foreach (var invitation in responded)
         {
-            if (invitation.Status != ValuationOfficeInvitationStatus.Responded)
-                continue;
-
             var response = await _responses.GetByInvitationIdAsync(invitation.Id, ct);
             if (response is null)
                 continue;
 
+            var consent = await _consents.GetByInvitationIdAsync(invitation.Id, ct);
+            agencyById.TryGetValue(invitation.AgencyId, out var agency);
+
             estimates.Add(new ValuationEstimateDto(
-                response.EstimatedPrice, response.Notes, response.SubmittedAt, invitation.MatchLevel));
+                InvitationId: invitation.Id,
+                AgencyId: invitation.AgencyId,
+                AgencyName: agency?.Name ?? "(محذوف)",
+                EstimatedPrice: response.EstimatedPrice,
+                Notes: response.Notes,
+                SubmittedAt: response.SubmittedAt,
+                MatchLevel: invitation.MatchLevel,
+                ContactConsentGiven: consent is not null));
         }
 
         return new ValuationInquiryStatusDto

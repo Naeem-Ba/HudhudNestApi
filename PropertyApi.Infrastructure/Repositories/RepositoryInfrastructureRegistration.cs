@@ -118,6 +118,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IValuationInquiryRepository, ValuationInquiryRepository>();
         services.AddScoped<IValuationOfficeInvitationRepository, ValuationOfficeInvitationRepository>();
         services.AddScoped<IValuationOfficeResponseRepository, ValuationOfficeResponseRepository>();
+        services.AddScoped<IValuationContactConsentRepository, ValuationContactConsentRepository>();
         services.AddHostedService<ValuationInquiryExpiryHostedService>();
 
         return services;
