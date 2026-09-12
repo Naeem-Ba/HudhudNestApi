@@ -4,9 +4,11 @@ namespace PropertyApi.Architecture.Tests.BackgroundJobs;
 /// Guards the B-6/B-6b decision that <c>SecurityAlertBackgroundService</c> deliberately does
 /// not take a <c>BackgroundJobLock</c> advisory lock, unlike the other recurring hosted
 /// services (<c>ListingExpiryHostedService</c>, <c>SavedSearchMatchHostedService</c>,
-/// <c>PhoneVerificationHostedService</c>, <c>AuditLogRetentionHostedService</c>).
+/// <c>PhoneVerificationHostedService</c>, <c>AuditLogRetentionHostedService</c>,
+/// <c>AccountDeletionSweepHostedService</c>, <c>SocialPublicationDispatchHostedService</c>,
+/// <c>ValuationInquiryExpiryHostedService</c>).
 ///
-/// The reasoning (see <c>BackgroundJobLockKeys.cs</c>): the other six sweep rows that every
+/// The reasoning (see <c>BackgroundJobLockKeys.cs</c>): the other seven sweep rows that every
 /// deployed instance can see and mutate, so an unlocked sweep double-processes the same rows.
 /// <c>SecurityAlertBackgroundService</c> instead drains an in-process <c>Channel</c> fed only
 /// by requests that landed on that same instance -- there is no shared state across instances
@@ -28,12 +30,12 @@ public sealed class BackgroundJobLockExclusionTests
         Assert.Contains("SecurityAlertBackgroundService", source);
         Assert.Contains("Deliberately excluded", source);
 
-        // Exactly seven keys exist today (see the Theory test below for the locked services;
+        // Exactly eight keys exist today (see the Theory test below for the locked services;
         // OtpCleanup's key is not a BackgroundService of its own). If another recurring
         // hosted service is added, it must either get a key here (and a corresponding case in
         // AdvisoryLockConcurrencyTests) or be added to the excluded list with its own
         // reasoning -- not silently fall through either check.
-        Assert.Equal(7, System.Text.RegularExpressions.Regex.Matches(source, @"public const long \w+ =").Count);
+        Assert.Equal(8, System.Text.RegularExpressions.Regex.Matches(source, @"public const long \w+ =").Count);
     }
 
     [Fact(DisplayName = "SecurityAlertBackgroundService does not take a BackgroundJobLock")]
@@ -55,6 +57,7 @@ public sealed class BackgroundJobLockExclusionTests
     [InlineData("Audit", "AuditLogRetentionHostedService.cs")]
     [InlineData("Users", "AccountDeletionSweepHostedService.cs")]
     [InlineData("SocialDistribution", "SocialPublicationDispatchHostedService.cs")]
+    [InlineData("Valuation", "ValuationInquiryExpiryHostedService.cs")]
     public void HostedService_Should_Reference_BackgroundJobLock(string relativeDir, string fileName)
     {
         var source = ReadSource(

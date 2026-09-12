@@ -1,0 +1,14 @@
+namespace PropertyApi.Application.Valuation.DTOs;
+
+/// <summary>
+/// Summary of one <see cref="Interfaces.IValuationSlaEnforcementService.RunSweepAsync"/> pass —
+/// returned (rather than void) so ValuationInquiryExpiryHostedService can log a single-line
+/// summary the same way ListingExpiryHostedService/AccountDeletionSweepHostedService do, and so
+/// tests can assert on outcome counts directly instead of re-querying repositories afterward.
+/// </summary>
+public sealed class ValuationSlaSweepResult
+{
+    public int InquiriesExpired { get; init; }
+
+    public int InvitationsExpired { get; init; }
+}

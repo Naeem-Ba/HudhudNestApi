@@ -68,6 +68,11 @@ public static class DependencyInjection
         // scanning (mirrors IPropertyOwnershipService above).
         services.AddScoped<IOfficeMatchingService, OfficeMatchingService>();
 
+        // Valuation Stage 5 (24h SLA enforcement) — same reasoning as IOfficeMatchingService
+        // above: a plain orchestration service invoked from ValuationInquiryExpiryHostedService's
+        // scoped work, not a MediatR handler.
+        services.AddScoped<IValuationSlaEnforcementService, ValuationSlaEnforcementService>();
+
         // Provinces & Distribution Rules (Phase 4) — a plain orchestration service, not a
         // MediatR handler, so it needs an explicit registration here rather than assembly
         // scanning (mirrors IPropertyOwnershipService above).

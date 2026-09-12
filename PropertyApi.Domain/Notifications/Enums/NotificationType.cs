@@ -100,4 +100,20 @@ public enum NotificationType
 
     /// <summary>The requester declined the owner's alternate date/time. Sent to the property owner.</summary>
     VisitRescheduleDeclined = 34,
+
+    /// <summary>
+    /// Valuation Stage 5 (24h SLA): a ValuationInquiry passed its 24h ExpiresAt without
+    /// reaching Completed. Sent to the requester (RequesterId) — never raised for an
+    /// anonymous inquiry (RequesterId null), since there is no account to notify. Raised by
+    /// ValuationInquiryExpiryHostedService via ValuationSlaEnforcementService.
+    /// </summary>
+    ValuationInquiryExpired = 35,
+
+    /// <summary>
+    /// Valuation Stage 5 (24h SLA): a ValuationOfficeInvitation was still Sent (unanswered)
+    /// when its parent inquiry's SLA window closed. Sent to the invited agency's owner
+    /// (Agency.OwnerUserId), same resolution AgencyInvitation notifications already use.
+    /// Raised by ValuationInquiryExpiryHostedService via ValuationSlaEnforcementService.
+    /// </summary>
+    ValuationOfficeInvitationExpired = 36,
 }
