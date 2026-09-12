@@ -420,6 +420,7 @@ jobs:
           PropertyApi.Auth.Tests|this job
           PropertyApi.Integration.Tests|this job
           PropertyApi.Architecture.Tests|this job
+          PropertyApi.Infrastructure.Tests|this job
           PropertyApi.Observability.Tests|this job
           PropertyApi.Concurrency.Tests|performance-validation.yml
           PropertyApi.Performance.Tests|performance-validation.yml
@@ -507,6 +508,25 @@ jobs:
           --results-directory artifacts/test-results/architecture
           --logger "console;verbosity=minimal"
           --logger "trx;LogFileName=architecture-tests.trx"
+
+      # BUG (found via CI run #427/PR #134 investigation, 2026-09-12): this suite
+      # was added to tests/ (SocialPublisherAdapterTests etc.) but never wired
+      # into any workflow's `dotnet test` step, so "Every test project must have
+      # an owner" below always failed once it was reachable -- previously masked
+      # because "Verify formatting" failed first on every run. No DB/Redis
+      # dependency (pure unit tests over Domain/Application/Infrastructure with
+      # Moq), so it needs no service containers, same as Architecture tests.
+      - name: Run Infrastructure tests
+        run: >
+          dotnet test
+          tests/PropertyApi.Infrastructure.Tests/PropertyApi.Infrastructure.Tests.csproj
+          --configuration Release
+          --no-build
+          --no-restore
+          --collect:"XPlat Code Coverage"
+          --results-directory artifacts/test-results/infrastructure
+          --logger "console;verbosity=minimal"
+          --logger "trx;LogFileName=infrastructure-tests.trx"
 
       # observability-validation.yml also runs these, but it is path-filtered to
       # PropertyApi/Observability/** and observability/**. A change anywhere else

@@ -1,6 +1,21 @@
 FROM postgis/postgis:17-3.5
 
-RUN apt-get update \
+# BUG (found via Database Backup run #583 investigation, 2026-09-12): this
+# image's base OS is Debian 11 "bullseye", which is now "oldoldstable" --
+# its dedicated bullseye-security suite has stopped publishing a
+# freshly-dated Release file (confirmed: apt-get update failed with
+# "Release file for .../bullseye-security/InRelease is expired (invalid
+# since 4d...)", breaking every scheduled backup run since ~2026-09-08).
+# bullseye main and bullseye-updates are unaffected and still serve current,
+# validly-dated Release files -- only the now-decommissioned -security
+# suite is stale, so drop just that one apt source instead of disabling
+# Release-date validation (which would also mask a *real* future expiry on
+# a source we still rely on). None of the packages installed below are
+# security-suite-exclusive. Revisit this once postgis/postgis publishes a
+# 17-3.5 tag on a non-EOL Debian base.
+RUN find /etc/apt/sources.list /etc/apt/sources.list.d/ -type f 2>/dev/null \
+      -exec sed -i '/bullseye-security/d' {} + \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
         awscli \
         ca-certificates \

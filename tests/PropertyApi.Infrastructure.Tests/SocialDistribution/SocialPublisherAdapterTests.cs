@@ -16,24 +16,24 @@ public sealed class SocialPublisherAdapterTests
 {
     private static SocialPublishRequest MakeRequest(
         SocialPlatform platform, string? imageUrl = "https://cdn.example.com/img.jpg", string body = "نص قصير", IReadOnlyList<string>? hashtags = null) => new()
-    {
-        PublicationId = Guid.NewGuid(),
-        Platform = platform,
-        ExternalAccountId = "ext-1",
-        CredentialReference = null,
-        Title = "عنوان",
-        Body = body,
-        ImageUrl = imageUrl ?? string.Empty,
-        TargetUrl = "https://aqartech.example.com/properties/1",
-        Hashtags = hashtags ?? Array.Empty<string>(),
-        Language = "ar",
-    };
+        {
+            PublicationId = Guid.NewGuid(),
+            Platform = platform,
+            ExternalAccountId = "ext-1",
+            CredentialReference = null,
+            Title = "عنوان",
+            Body = body,
+            ImageUrl = imageUrl ?? string.Empty,
+            TargetUrl = "https://aqartech.example.com/properties/1",
+            Hashtags = hashtags ?? Array.Empty<string>(),
+            Language = "ar",
+        };
 
     [Fact]
-    public void PublishAsync_AlwaysReturnsPlatformNotConfigured_NeverFabricatesSuccess()
+    public async Task PublishAsync_AlwaysReturnsPlatformNotConfigured_NeverFabricatesSuccess()
     {
         var publisher = new FacebookPublisher(NullLogger<FacebookPublisher>.Instance);
-        var result = publisher.PublishAsync(MakeRequest(SocialPlatform.Facebook)).GetAwaiter().GetResult();
+        var result = await publisher.PublishAsync(MakeRequest(SocialPlatform.Facebook));
 
         Assert.False(result.IsSuccess);
         Assert.Equal(SocialPublicationErrorCode.PlatformNotConfigured, result.ErrorCode);
