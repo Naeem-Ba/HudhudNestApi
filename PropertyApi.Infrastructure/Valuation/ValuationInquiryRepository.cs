@@ -129,15 +129,29 @@ public sealed class ValuationInquiryRepository : IValuationInquiryRepository
     /// this one, even if a reminder was never sent for it (a "closing soon" reminder after the
     /// deadline already passed is not a reminder, it is a stale message).
     /// </summary>
+    /// <remarks>
+    /// The 18h cutoff is expressed as <c>i.CreatedAt &lt;= reminderCutoff</c> (with
+    /// <c>reminderCutoff = utcNow - ReminderWindow</c> computed once, outside the expression
+    /// tree) rather than <c>i.CreatedAt.Add(ReminderWindow) &lt;= utcNow</c>: the Npgsql EF Core
+    /// provider only translates the named <c>DateTime.AddXxx</c> overloads (AddDays, AddHours,
+    /// …), not the generic <c>Add(TimeSpan)</c> overload, so the latter fails at query time with
+    /// "The LINQ expression … could not be translated." Subtracting a constant TimeSpan from
+    /// utcNow first is exact (DateTime/TimeSpan arithmetic is tick-based, no rounding) and keeps
+    /// the comparison itself translatable, since both provider-side dispositions of `x + c &lt;=
+    /// y` and `x &lt;= y - c` are the same inequality.
+    /// </remarks>
     public static IQueryable<ValuationInquiry> ApplyDueForReminderFilter(
         IQueryable<ValuationInquiry> query,
         DateTime utcNow)
-        => query.Where(i =>
+    {
+        var reminderCutoff = utcNow - ValuationInquiry.ReminderWindow;
+        return query.Where(i =>
             (i.Status == ValuationInquiryStatus.Pending
                 || i.Status == ValuationInquiryStatus.MatchedFromListings
                 || i.Status == ValuationInquiryStatus.AwaitingOfficeResponses)
             && i.ReminderSentAt == null
             && i.RequesterId != null
-            && i.CreatedAt.Add(ValuationInquiry.ReminderWindow) <= utcNow
+            && i.CreatedAt <= reminderCutoff
             && i.ExpiresAt > utcNow);
+    }
 }

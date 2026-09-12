@@ -48,6 +48,14 @@ public sealed class ValuationContactConsentIntegrationTests
             db.Agencies.Add(agency);
             agencyId = agency.Id;
 
+            // Agency.OwnerUserId and UserAccount.AgencyId are two separate facts (see Agency's
+            // own doc comment, and ValuationApiTestFactory.SeedAgencyWithOwnerAsync's) --
+            // GetMyAgencyValuationInquiriesQueryHandler resolves "my agency" from the latter, so
+            // the owner's own UserAccount row must join the agency too, not just own it.
+            var ownerAccount = await db.UserAccounts.FirstAsync(a => a.Id == owner.IdentityId);
+            ownerAccount.JoinAgency(agencyId, now);
+            db.UserAccounts.Update(ownerAccount);
+
             var inquiry = ValuationInquiry.Create(governorate.Id, ListingType.ForSale, now);
             inquiryId = inquiry.Id;
             inquiry.MarkAwaitingOfficeResponses(now);
@@ -126,7 +134,16 @@ public sealed class ValuationContactConsentIntegrationTests
                 ContactPhone: "0000000000", ContactEmail: "different@example.test"));
         });
 
-        Assert.Equal(consentResult.ConsentedAt, secondSubmit.ConsentedAt);
+        // Not Assert.Equal: PostgreSQL "timestamp" columns are microsecond-precision while .NET
+        // DateTime is tick-precision (100ns), so a value that round-trips through Postgres loses
+        // its last decimal digit -- consentResult.ConsentedAt (the in-process value returned by
+        // the first call) and secondSubmit.ConsentedAt (read back from the row on the idempotent
+        // second call) can differ by a fraction of a microsecond despite being the same instant.
+        // What this test actually asserts -- the timestamp did not change -- only needs a
+        // tolerance far tighter than any real re-submission could produce.
+        Assert.True(
+            (consentResult.ConsentedAt - secondSubmit.ConsentedAt).Duration() < TimeSpan.FromMilliseconds(1),
+            $"Expected ConsentedAt to stay the same on a repeat submit, but it moved from {consentResult.ConsentedAt:O} to {secondSubmit.ConsentedAt:O}.");
 
         var consentRowCount = await factory.InScopeAsync(async services =>
         {
@@ -144,6 +161,7 @@ public sealed class ValuationContactConsentIntegrationTests
         await factory.PrepareDatabaseAsync();
 
         var now = DateTime.UtcNow;
+        var owner = await factory.SeedUserAsync($"office-{Guid.NewGuid():N}@example.test");
         Guid inquiryId = default, invitationId = default;
 
         await factory.InScopeAsync(async services =>
@@ -154,11 +172,17 @@ public sealed class ValuationContactConsentIntegrationTests
             db.Governorates.Add(governorate);
             await db.SaveChangesAsync();
 
+            // ValuationOfficeInvitations.AgencyId is a required FK to Agencies -- this scenario
+            // doesn't care which office was invited, only that no response exists yet, but the
+            // invitation still needs a real Agency row to point at.
+            var agency = Agency.Create("مكتب اختبار آخر", $"test-office-{Guid.NewGuid():N}", owner.IdentityId, "SY", now);
+            db.Agencies.Add(agency);
+
             var inquiry = ValuationInquiry.Create(governorate.Id, ListingType.ForRent, now);
             inquiryId = inquiry.Id;
             inquiry.MarkAwaitingOfficeResponses(now);
 
-            var invitation = ValuationOfficeInvitation.Create(Guid.NewGuid(), inquiry.Id, ValuationMatchLevel.District, now);
+            var invitation = ValuationOfficeInvitation.Create(agency.Id, inquiry.Id, ValuationMatchLevel.District, now);
             invitationId = invitation.Id; // still Sent -- no response yet
 
             db.ValuationInquiries.Add(inquiry);

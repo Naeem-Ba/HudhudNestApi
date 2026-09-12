@@ -127,6 +127,7 @@ public sealed class AdminValuationDashboardIntegrationTests
         await factory.PrepareDatabaseAsync();
 
         var owner = await factory.SeedUserAsync(UniqueEmail("slow-office"));
+        var admin = await factory.SeedUserAsync(UniqueEmail("admin"));
         var now = DateTime.UtcNow;
 
         Guid agencyId = default;
@@ -155,8 +156,11 @@ public sealed class AdminValuationDashboardIntegrationTests
         var flagResult = await factory.InScopeAsync(async services =>
         {
             var service = services.GetRequiredService<IAdminValuationInquiryService>();
+            // performedByUserId flows straight into AuditLogService.LogAsync, and
+            // AuditLogs.UserId is a required FK to UserAccounts -- it must be a real seeded
+            // user, not an arbitrary Guid.
             return await service.FlagOfficeForReviewAsync(
-                agencyId, "بطء متكرر في الرد", Guid.NewGuid(), "127.0.0.1", CancellationToken.None);
+                agencyId, "بطء متكرر في الرد", admin.IdentityId, "127.0.0.1", CancellationToken.None);
         });
 
         Assert.True(flagResult.Succeeded);
