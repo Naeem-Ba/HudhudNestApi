@@ -33,6 +33,19 @@ public sealed class AgencyRepository : IAgencyRepository
             .AsNoTracking()
             .FirstOrDefaultAsync(a => a.OwnerUserId == ownerUserId, ct);
 
+    public async Task<IReadOnlyList<Agency>> GetByIdsAsync(
+        IReadOnlyCollection<Guid> agencyIds,
+        CancellationToken ct = default)
+    {
+        if (agencyIds.Count == 0)
+            return [];
+
+        return await _db.Agencies
+            .AsNoTracking()
+            .Where(a => agencyIds.Contains(a.Id))
+            .ToListAsync(ct);
+    }
+
     public async Task AddAsync(Agency agency, CancellationToken ct = default)
         => await _db.Agencies.AddAsync(agency, ct);
 

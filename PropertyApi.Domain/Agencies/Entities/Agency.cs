@@ -108,6 +108,20 @@ public sealed class Agency : AuditableEntity
     /// </summary>
     public bool IsActive { get; private set; } = true;
 
+    // ── مراجعة إدارية (Stage 8 — Admin Dashboard) ──
+    //
+    // نفس نمط IsActive/Activate/Deactivate أعلاه بالضبط: علم منطقي بسيط +
+    // طابع زمني، بلا حالة وسيطة. لا يوجد نظام Flag/Moderation/Review عام في
+    // هذا المشروع (تم البحث في كامل الحل قبل إضافته) — فهذا أقرب نمط موجود
+    // فعليًا على هذا الكيان بالذات، وليس نظامًا منفصلًا جديدًا. تعليم المكتب
+    // لا يمنعه من العمل (لا علاقة له بـ IsActive) — إنه فقط علم مرئي للأدمن
+    // يشير إلى "هذا المكتب يحتاج مراجعة يدوية" (مثلاً بطء الاستجابة المتكرر).
+    public bool RequiresManualReview { get; private set; }
+
+    public string? ManualReviewReason { get; private set; }
+
+    public DateTime? ManualReviewFlaggedAt { get; private set; }
+
     public static Agency Create(
         string name,
         string slug,
@@ -200,6 +214,31 @@ public sealed class Agency : AuditableEntity
     public void Activate(DateTime utcNow)
     {
         IsActive = true;
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>
+    /// Marks the office for manual admin review (e.g. a slow/poor SLA-compliance pattern
+    /// surfaced by the Stage 8 dashboard). Purely a visibility flag — it does not deactivate
+    /// the agency or block it from receiving new invitations; an admin decides what to do
+    /// about a flagged office separately.
+    /// </summary>
+    public void FlagForManualReview(string reason, DateTime utcNow)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("سبب تعليم المكتب للمراجعة مطلوب.");
+
+        RequiresManualReview = true;
+        ManualReviewReason = reason.Trim();
+        ManualReviewFlaggedAt = utcNow;
+        UpdatedAt = utcNow;
+    }
+
+    public void ClearManualReviewFlag(DateTime utcNow)
+    {
+        RequiresManualReview = false;
+        ManualReviewReason = null;
+        ManualReviewFlaggedAt = null;
         UpdatedAt = utcNow;
     }
 

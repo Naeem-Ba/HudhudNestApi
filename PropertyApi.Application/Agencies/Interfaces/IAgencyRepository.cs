@@ -76,4 +76,14 @@ public interface IAgencyRepository
         IReadOnlyCollection<int>? governorateIds,
         IReadOnlyCollection<Guid> excludeAgencyIds,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Batch lookup by id — added for Stage 8's Admin Dashboard office-statistics list, which
+    /// already has a small set of distinct agency ids (from
+    /// IValuationOfficeInvitationRepository.GetInvitationCountsByAgencyAsync) and needs each
+    /// one's name/flag in a single round trip instead of one GetByIdAsync call per agency.
+    /// </summary>
+    Task<IReadOnlyList<Agency>> GetByIdsAsync(
+        IReadOnlyCollection<Guid> agencyIds,
+        CancellationToken ct = default);
 }

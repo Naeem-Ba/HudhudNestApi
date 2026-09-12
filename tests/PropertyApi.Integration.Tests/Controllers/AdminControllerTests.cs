@@ -387,13 +387,15 @@ public sealed class AdminControllerTests
         IAdminService? admin = null,
         IAdminSubscriptionService? subscriptions = null,
         IAdminListingService? listings = null,
+        IAdminValuationInquiryService? valuation = null,
         bool withActor = true,
         Guid? actorId = null)
     {
         var controller = new AdminController(
             admin ?? Mock.Of<IAdminService>(),
             subscriptions ?? Mock.Of<IAdminSubscriptionService>(),
-            listings ?? Mock.Of<IAdminListingService>());
+            listings ?? Mock.Of<IAdminListingService>(),
+            valuation ?? Mock.Of<IAdminValuationInquiryService>());
 
         var claims = new List<Claim>();
         if (withActor)

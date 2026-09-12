@@ -61,6 +61,7 @@ public static class DependencyInjection
         services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<IAdminSubscriptionService, AdminSubscriptionService>();
         services.AddScoped<IAdminListingService, AdminListingService>();
+        services.AddScoped<IAdminValuationInquiryService, AdminValuationInquiryService>();
         services.AddScoped<IPropertyOwnershipService, PropertyOwnershipService>();
 
         // Valuation Stage 4 (Office Matching) — a plain orchestration service, not a

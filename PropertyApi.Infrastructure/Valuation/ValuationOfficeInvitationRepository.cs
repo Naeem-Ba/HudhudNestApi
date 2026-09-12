@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PropertyApi.Application.Valuation.DTOs;
 using PropertyApi.Application.Valuation.Interfaces;
 using PropertyApi.Domain.Valuation.Entities;
 using PropertyApi.Domain.Valuation.Enums;
@@ -51,6 +52,20 @@ public sealed class ValuationOfficeInvitationRepository : IValuationOfficeInvita
         // SLA sweep goes straight on to call Expire() on every row this returns.
         => await ApplyStaleSentFilter(_db.ValuationOfficeInvitations, _db.ValuationInquiries, utcNow)
             .Take(batchSize)
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<ValuationOfficeInvitationCountsRow>> GetInvitationCountsByAgencyAsync(
+        CancellationToken ct = default)
+        // GROUP BY at the database — the result set is one row per agency (small), not one
+        // row per invitation (potentially large), so this scales independently of how many
+        // invitations have ever been sent.
+        => await _db.ValuationOfficeInvitations
+            .AsNoTracking()
+            .GroupBy(i => i.AgencyId)
+            .Select(g => new ValuationOfficeInvitationCountsRow(
+                g.Key,
+                g.Count(),
+                g.Count(i => i.Status == ValuationOfficeInvitationStatus.Responded)))
             .ToListAsync(ct);
 
     /// <summary>

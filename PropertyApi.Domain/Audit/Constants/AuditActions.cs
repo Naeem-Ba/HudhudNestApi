@@ -35,4 +35,8 @@ public static class AuditActions
     public const string ListingFeaturedByAdmin = "ListingFeaturedByAdmin";
     public const string ListingUnfeaturedByAdmin = "ListingUnfeaturedByAdmin";
     public const string ListingExtendedByAdmin = "ListingExtendedByAdmin";
+
+    // -- Admin dashboard: valuation module (Stage 8) -----------------------
+    public const string ValuationOfficeFlaggedForReviewByAdmin = "ValuationOfficeFlaggedForReviewByAdmin";
+    public const string ValuationOfficeReviewFlagClearedByAdmin = "ValuationOfficeReviewFlagClearedByAdmin";
 }

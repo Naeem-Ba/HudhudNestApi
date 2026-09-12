@@ -1,3 +1,4 @@
+using PropertyApi.Application.Valuation.DTOs;
 using PropertyApi.Domain.Valuation.Entities;
 using PropertyApi.Domain.Valuation.Enums;
 
@@ -57,5 +58,20 @@ public interface IValuationOfficeInvitationRepository
     Task<IReadOnlyList<ValuationOfficeInvitation>> GetStaleSentInvitationsAsync(
         DateTime utcNow,
         int batchSize,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Stage 8 (Admin Dashboard) — per-agency invitation/response counts across every
+    /// invitation ever sent, computed with a database-side GROUP BY (one row per agency that
+    /// has received at least one invitation) rather than loading every invitation into memory
+    /// and grouping in-process — this module's own rule 8. TotalResponses here is simply
+    /// "invitations whose Status is Responded"; whether those responses landed within the SLA
+    /// window is a separate figure (see
+    /// IValuationOfficeResponseRepository.GetWithinSlaResponseCountsByAgencyAsync) computed
+    /// independently rather than assumed equal, even though under this module's current rules
+    /// a response can never be recorded after its invitation's deadline has passed (see
+    /// AdminValuationInquiryService's own doc comment on why the two numbers coincide today).
+    /// </summary>
+    Task<IReadOnlyList<ValuationOfficeInvitationCountsRow>> GetInvitationCountsByAgencyAsync(
         CancellationToken ct = default);
 }

@@ -111,6 +111,60 @@ public sealed class AgencyTests
         Assert.Equal(newOwner, agency.OwnerUserId);
     }
 
+    // ── Domain: manual-review flag (Stage 8 — Admin Dashboard) ────
+
+    [Fact]
+    public void FlagForManualReview_SetsFlagReasonAndTimestamp()
+    {
+        var agency = BuildAgency(Guid.NewGuid());
+        var now = DateTime.UtcNow;
+
+        agency.FlagForManualReview("بطء متكرر في الرد على طلبات التقييم", now);
+
+        Assert.True(agency.RequiresManualReview);
+        Assert.Equal("بطء متكرر في الرد على طلبات التقييم", agency.ManualReviewReason);
+        Assert.Equal(now, agency.ManualReviewFlaggedAt);
+    }
+
+    [Fact]
+    public void FlagForManualReview_WithBlankReason_Throws()
+    {
+        var agency = BuildAgency(Guid.NewGuid());
+
+        Assert.Throws<DomainException>(
+            () => agency.FlagForManualReview("   ", DateTime.UtcNow));
+
+        // The domain guard rejecting a blank reason must not have partially applied the flag.
+        Assert.False(agency.RequiresManualReview);
+    }
+
+    [Fact]
+    public void ClearManualReviewFlag_ResetsEverything()
+    {
+        var agency = BuildAgency(Guid.NewGuid());
+        agency.FlagForManualReview("سبب", DateTime.UtcNow);
+
+        agency.ClearManualReviewFlag(DateTime.UtcNow);
+
+        Assert.False(agency.RequiresManualReview);
+        Assert.Null(agency.ManualReviewReason);
+        Assert.Null(agency.ManualReviewFlaggedAt);
+    }
+
+    /// <summary>
+    /// The flag is purely a review marker — it must never be conflated with IsActive
+    /// (Deactivate/Activate already govern whether the agency is publicly listed).
+    /// </summary>
+    [Fact]
+    public void FlagForManualReview_DoesNotDeactivateTheAgency()
+    {
+        var agency = BuildAgency(Guid.NewGuid());
+
+        agency.FlagForManualReview("سبب", DateTime.UtcNow);
+
+        Assert.True(agency.IsActive);
+    }
+
     [Fact]
     public void SetLogo_StoresUrlAndPublicId()
     {

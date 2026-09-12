@@ -15,15 +15,18 @@ public sealed class AdminController : ControllerBase
     private readonly IAdminService _admin;
     private readonly IAdminSubscriptionService _subscriptions;
     private readonly IAdminListingService _listings;
+    private readonly IAdminValuationInquiryService _valuation;
 
     public AdminController(
         IAdminService admin,
         IAdminSubscriptionService subscriptions,
-        IAdminListingService listings)
+        IAdminListingService listings,
+        IAdminValuationInquiryService valuation)
     {
         _admin = admin;
         _subscriptions = subscriptions;
         _listings = listings;
+        _valuation = valuation;
     }
 
     // GET /api/admin/users?page=1&pageSize=20&role=User&search=&planTier=&accountStatus=
@@ -317,6 +320,77 @@ public sealed class AdminController : ControllerBase
         return NoContent();
     }
 
+    // ── Stage 8 — Valuation module Admin Dashboard ──────────────────────
+
+    // GET /api/admin/valuation-inquiries?page=1&pageSize=20&status=
+    [HttpGet("valuation-inquiries")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetValuationInquiries(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? status = null,
+        CancellationToken ct = default)
+    {
+        var result = await _valuation.GetInquiriesAsync(page, pageSize, status, ct);
+
+        return Ok(new
+        {
+            total = result.TotalCount,
+            result.Page,
+            result.PageSize,
+            data = result.Items
+        });
+    }
+
+    // GET /api/admin/valuation-offices/statistics
+    [HttpGet("valuation-offices/statistics")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetValuationOfficeStatistics(CancellationToken ct)
+    {
+        var stats = await _valuation.GetOfficeStatisticsAsync(ct);
+        return Ok(stats);
+    }
+
+    // POST /api/admin/valuation-offices/{agencyId}/flag  { reason }
+    [HttpPost("valuation-offices/{agencyId:guid}/flag")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> FlagValuationOffice(
+        Guid agencyId,
+        [FromBody] FlagValuationOfficeRequest request,
+        CancellationToken ct)
+    {
+        var actorId = GetCurrentUserId();
+        if (actorId is null)
+            return Unauthorized();
+
+        var result = await _valuation.FlagOfficeForReviewAsync(
+            agencyId, request.Reason, actorId.Value, GetClientIp(), ct);
+
+        return ToActionResult(result);
+    }
+
+    // POST /api/admin/valuation-offices/{agencyId}/unflag
+    [HttpPost("valuation-offices/{agencyId:guid}/unflag")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UnflagValuationOffice(
+        Guid agencyId,
+        CancellationToken ct)
+    {
+        var actorId = GetCurrentUserId();
+        if (actorId is null)
+            return Unauthorized();
+
+        var result = await _valuation.ClearOfficeReviewFlagAsync(
+            agencyId, actorId.Value, GetClientIp(), ct);
+
+        return ToActionResult(result);
+    }
+
     private IActionResult ToActionResult(AdminOperationResult result)
     {
         if (result.Succeeded)
@@ -367,3 +441,5 @@ public sealed record FeatureListingRequest(int? Days, string? Reason);
 public sealed record UnfeatureListingRequest(string? Reason);
 
 public sealed record ExtendListingRequest(int Days, string? Reason);
+
+public sealed record FlagValuationOfficeRequest(string Reason);

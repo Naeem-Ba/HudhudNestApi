@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Application.Valuation.Interfaces;
 using PropertyApi.Domain.Valuation.Entities;
 using PropertyApi.Domain.Valuation.Enums;
@@ -35,6 +36,38 @@ public sealed class ValuationInquiryRepository : IValuationInquiryRepository
             .OrderBy(i => i.ExpiresAt)
             .Take(batchSize)
             .ToListAsync(ct);
+
+    public async Task<PagedResult<ValuationInquiry>> GetPagedAsync(
+        ValuationInquiryStatus? status,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        var query = _db.ValuationInquiries.AsNoTracking().AsQueryable();
+
+        if (status is { } s)
+        {
+            query = query.Where(i => i.Status == s);
+        }
+
+        // Database-side count + page, not "ToListAsync then .Count/.Skip/.Take" — the whole
+        // point of this method existing (see its own doc comment on the interface).
+        var totalCount = await query.CountAsync(ct);
+
+        var items = await query
+            .OrderByDescending(i => i.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return new PagedResult<ValuationInquiry>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
 
     /// <summary>
     /// The actual "never left indefinitely pending" rule behind

@@ -17,4 +17,18 @@ public interface IValuationOfficeResponseRepository
     /// query to show an office its own submitted estimate alongside the invitation row.
     /// </summary>
     Task<ValuationOfficeResponse?> GetByInvitationIdAsync(Guid invitationId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Stage 8 (Admin Dashboard) — per-agency count of responses submitted at or before their
+    /// invitation's applicable deadline (the parent ValuationInquiry's ExpiresAt — the same
+    /// unified 24h SLA clock SubmitOfficeResponseCommandHandler and
+    /// ValuationOfficeInvitation.IsExpired already use), keyed by agency. Computed by an
+    /// explicit database-side join/filter rather than assumed equal to the invitation's total
+    /// response count — see AdminValuationInquiryService's doc comment for why, under this
+    /// module's current write-path rules, every persisted response already satisfies this
+    /// filter (a late one is rejected before it can ever be saved), so the two numbers
+    /// coincide today without this method silently hard-coding that assumption.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, int>> GetWithinSlaResponseCountsByAgencyAsync(
+        CancellationToken ct = default);
 }

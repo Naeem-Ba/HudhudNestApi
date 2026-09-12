@@ -1,4 +1,6 @@
+using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Domain.Valuation.Entities;
+using PropertyApi.Domain.Valuation.Enums;
 
 namespace PropertyApi.Application.Valuation.Interfaces;
 
@@ -35,5 +37,18 @@ public interface IValuationInquiryRepository
     Task<IReadOnlyList<ValuationInquiry>> GetDueForExpiryAsync(
         DateTime utcNow,
         int batchSize,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Stage 8 (Admin Dashboard) — every inquiry, optionally filtered by
+    /// <see cref="ValuationInquiryStatus"/>, newest first. Database-side Where/OrderBy/
+    /// Skip/Take (never "load everything then filter in memory" — this module's own rule 8)
+    /// since this list is unbounded, unlike GetMyAgencyValuationInquiries which is naturally
+    /// capped to one agency's own invitations. AsNoTracking: admin read-only view.
+    /// </summary>
+    Task<PagedResult<ValuationInquiry>> GetPagedAsync(
+        ValuationInquiryStatus? status,
+        int page,
+        int pageSize,
         CancellationToken ct = default);
 }
