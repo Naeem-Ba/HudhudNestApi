@@ -64,11 +64,20 @@ while IFS=$'\t' read -r table expected; do
     "Row-count mismatch for ${table}: expected ${expected}, got ${actual}."
 done < <(jq -r '.tableRowCounts | to_entries[] | [.key, (.value|tostring)] | @tsv' "${MANIFEST_FILE}")
 
+# Scoped to the public schema, same as PRIMARY_KEY_COUNT/FOREIGN_KEY_COUNT/
+# UNIQUE_CONSTRAINT_COUNT/UNIQUE_INDEX_COUNT immediately below -- production
+# is Supabase-managed (see the PostGIS comment above), and Supabase's own
+# platform schemas (realtime, auth, storage, extensions, ...) are restored
+# right along with public but are never touched by this application's own
+# EF Core migrations. An index/constraint left unvalidated inside one of
+# those platform schemas (e.g. realtime.messages) is Supabase's own
+# internal state, not a PropertyApi backup/restore defect, and must not
+# fail a drill whose job is verifying PropertyApi's own schema.
 INVALID_INDEXES="$(psql -X -v ON_ERROR_STOP=1 -tAc \
-  "SELECT COUNT(*) FROM pg_index WHERE NOT indisvalid OR NOT indisready;")"
+  "SELECT COUNT(*) FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relnamespace = 'public'::regnamespace AND (NOT i.indisvalid OR NOT i.indisready);")"
 [ "${INVALID_INDEXES//[[:space:]]/}" = "0" ] || fail "Invalid or unready indexes found."
 UNVALIDATED_CONSTRAINTS="$(psql -X -v ON_ERROR_STOP=1 -tAc \
-  "SELECT COUNT(*) FROM pg_constraint WHERE contype IN ('c','f') AND NOT convalidated;")"
+  "SELECT COUNT(*) FROM pg_constraint WHERE contype IN ('c','f') AND NOT convalidated AND connamespace = 'public'::regnamespace;")"
 [ "${UNVALIDATED_CONSTRAINTS//[[:space:]]/}" = "0" ] || fail "Unvalidated constraints found."
 PRIMARY_KEY_COUNT="$(psql -X -v ON_ERROR_STOP=1 -tAc "SELECT COUNT(*) FROM pg_constraint WHERE contype='p' AND connamespace='public'::regnamespace;" | xargs)"
 FOREIGN_KEY_COUNT="$(psql -X -v ON_ERROR_STOP=1 -tAc "SELECT COUNT(*) FROM pg_constraint WHERE contype='f' AND connamespace='public'::regnamespace;" | xargs)"
