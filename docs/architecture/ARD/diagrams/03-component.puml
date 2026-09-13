@@ -7,7 +7,7 @@ skinparam componentStyle rectangle
 title مخطط المكوّنات (Component Diagram) — الطبقات المعمارية لمشروع PropertyApi
 
 package "PropertyApi (طبقة العرض / API Layer)" as ApiLayer {
-  [Controllers\n(30 وحدة تحكم: Auth, Agencies,\nProperties, Reviews, Visits,\nAdmin, ShortStay, Services ...)] as Controllers
+  [Controllers\n(41 وحدة تحكم: Auth, Agencies,\nProperties, Reviews, Visits,\nAdmin, ShortStay, Services,\nValuation, Investments,\nSocialDistribution ...)] as Controllers
   [Middleware\n(Exception, PhoneVerification,\nSecurity Headers, CSRF)] as Middleware
   [Security\n(JWT, CSRF, Rate Limiting,\nForwardedHeaders, Staging Guard)] as Security
   [Observability\n(OpenTelemetry bootstrap)] as ObsBootstrap
@@ -20,15 +20,17 @@ package "PropertyApi.Application (طبقة التطبيق)" as AppLayer {
   [FluentValidation Validators] as Validators
   [Application Interfaces\n(IMediaStorageService,\nINotificationService, ISmsService,\nIEmailSender ...)] as AppInterfaces
   [Auth Orchestration\n(SocialAuthenticationOrchestrator,\nPhoneVerificationPolicy ...)] as AuthOrch
+  [Valuation\n(CreateValuationInquiry, SubmitOfficeResponse,\nOfficeMatchingService,\nValuationSlaEnforcementService)] as ValuationApp
 }
 
 package "PropertyApi.Domain (طبقة النطاق)" as DomainLayer {
   [الكيانات (Entities)\nAgency, Property, VisitRequest,\nPropertyReview, ShortStayListing,\nServiceRequest, UserAccount ...] as Entities
   [قواعد العمل والقيم الثابتة\n(Domain Exceptions, Enums,\nValue Objects)] as DomainRules
+  [Valuation Entities\nValuationInquiry,\nValuationOfficeInvitation/Response,\nValuationContactConsent] as ValuationEntities
 }
 
 package "PropertyApi.Infrastructure (طبقة البنية التحتية)" as InfraLayer {
-  [Persistence\n(AppDbContext — EF Core / Npgsql,\nUnitOfWork, 37+ Migrations)] as Persistence
+  [Persistence\n(AppDbContext — EF Core / Npgsql,\nUnitOfWork, 57 Migrations)] as Persistence
   [Repositories] as Repos
   [Auth Infrastructure\n(Identity, JWT issuing,\nRefreshToken store, SMS, Apple/Google\ntoken verification)] as AuthInfra
   [Media\n(CloudinaryMediaStorageService,\nStagingSmokeMediaStorageService)] as Media
@@ -36,6 +38,7 @@ package "PropertyApi.Infrastructure (طبقة البنية التحتية)" as I
   [Caching\n(Redis distributed cache,\nOutput Cache, Security-stamp cache)] as Caching
   [Notifications\n(SignalR + persisted Notification)] as NotifInfra
   [Health & Performance\n(health checks, DB diagnostics)] as HealthInfra
+  [Valuation Infra\n(Repositories,\nValuationInquiryExpiryHostedService)] as ValuationInfra
 }
 
 database "PostgreSQL + PostGIS" as Db
@@ -57,6 +60,8 @@ CQRS --> AppInterfaces
 CQRS --> AuthOrch
 CQRS --> Entities : يستدعي سلوك النطاق
 AuthOrch --> Entities
+ValuationApp --> ValuationEntities
+ValuationApp --> AppInterfaces
 
 AppInterfaces <|.. AuthInfra
 AppInterfaces <|.. Media
@@ -69,6 +74,8 @@ Entities --> DomainRules
 Persistence --> Db
 Repos --> Persistence
 CQRS --> Repos
+ValuationInfra --> Persistence
+ValuationInfra --> ValuationEntities
 
 AuthInfra --> Db
 AuthInfra --> SmsExt

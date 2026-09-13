@@ -87,3 +87,6 @@ docker-compose.override.yml
 **/.prod-migration-keys-temp/
 /ProductionGateKit/
 /.production-gate-backup_*/
+
+# Claude Code local tooling state (worktrees, etc.) — never commit
+/.claude/
