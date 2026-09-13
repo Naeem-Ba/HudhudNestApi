@@ -1,0 +1,129 @@
+@startuml Sequence_Valuation
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+title مخطط تسلسلي — التقييم العقاري (Valuation) — أُضيف v1.1
+autonumber
+
+actor "عميل (مسجَّل أو ضيف)\n(Customer / Guest)" as Customer
+participant "ValuationInquiriesController" as InqCtrl
+participant "MediatR\n(IMediator)" as Mediator
+participant "CreateValuationInquiryCommandHandler" as CreateHandler
+participant "GetComparableListingsQueryHandler\n(Fast Path — Stage 3)" as FastPath
+participant "IOfficeMatchingService\n(Stage 4 — مطابقة جغرافية تدريجية)" as Matching
+database "PostgreSQL\n(ValuationInquiry, ValuationOfficeInvitation)" as Db
+
+actor "موظف مكتب عقاري\n(Agency Member)" as AgencyUser
+participant "ValuationOfficeInvitationsController" as OffCtrl
+participant "SubmitOfficeResponseCommandHandler" as RespHandler
+participant "INotificationService" as Notif
+
+participant "ValuationInquiryExpiryHostedService\n(خلفية — ADR-009)" as Hosted
+participant "ValuationSlaEnforcementService" as Sla
+
+== 1) تقديم الطلب: Fast Path ثم مطابقة المكاتب عند الحاجة ==
+Customer -> InqCtrl : POST /api/ValuationInquiries\n{Governorate, District?, Neighborhood?,\nPropertyType?, Area?, Rooms?, RequestType}\n(AllowAnonymous)
+activate InqCtrl
+InqCtrl -> Mediator : CreateValuationInquiryCommand\n(RequesterId من التوكن إن وُجد، وإلا null)
+activate Mediator
+Mediator -> CreateHandler : (بعد التحقق FluentValidation:\nGovernorateId > 0, RequestType صالح)
+activate CreateHandler
+CreateHandler -> CreateHandler : ValuationInquiry.Create(...)\n(تحقق قواعد النطاق: Neighborhood يتطلّب District)
+CreateHandler -> Db : inquiries.AddAsync(inquiry)
+CreateHandler -> Mediator : Send(GetComparableListingsQuery)\n(استدعاء متداخل متعمَّد — استثناء واحد\nمُبرَّر من قاعدة "لا معالج يستدعي معالجًا آخر")
+activate FastPath
+FastPath -> Db : بحث عن عقارات مشابهة\n(نفس النوع/الموقع، ضمن هامش مساحة)
+Db --> FastPath : قائمة العقارات المشابهة
+FastPath --> Mediator : ComparableListingsResult\n(HasComparableListings, RequiresOfficeValuation)
+deactivate FastPath
+Mediator --> CreateHandler : fastPath
+
+alt fastPath.HasComparableListings == true
+    CreateHandler -> CreateHandler : inquiry.MarkMatchedFromListings(now)
+end
+
+alt fastPath.RequiresOfficeValuation == false
+    note over CreateHandler
+      3+ عقارات مشابهة أجابت الطلب بالكامل —
+      لا حاجة لمطابقة مكاتب؛ الطلب يُغلَق هنا فورًا
+      (بدل الانتظار 24 ساعة ليُعتبَر منتهي الصلاحية خطأً).
+    end note
+    CreateHandler -> CreateHandler : inquiry.MarkCompleted(now)
+else fastPath.RequiresOfficeValuation == true
+    CreateHandler -> CreateHandler : inquiry.MarkAwaitingOfficeResponses(now)
+    CreateHandler -> Matching : MatchOfficesAsync(inquiry.Id,\nGovernorateId, DistrictId, NeighborhoodId, now)
+    activate Matching
+    Matching -> Db : بحث عن مكاتب عقارية\nحسب المستوى: الحي → الحيّ → المحافظة\n→ محافظة مجاورة (إن قلّ العدد عن 3)
+    Db --> Matching : المكاتب المُختارة + مستوى المطابقة لكل مكتب
+    Matching --> CreateHandler : OfficeMatchingResult\n(SelectedOffices, HasMinimumCoverage,\nMatchedNeighboringGovernorate)
+    deactivate Matching
+    CreateHandler -> Db : invitations.AddRangeAsync(\nدعوات ValuationOfficeInvitation لكل مكتب مُختار)
+end
+
+CreateHandler -> Db : unitOfWork.SaveChangesAsync()\n(الطلب + الدعوات في معاملة واحدة)
+CreateHandler --> Mediator : CreateValuationInquiryResultDto
+deactivate CreateHandler
+Mediator --> InqCtrl : result
+deactivate Mediator
+InqCtrl --> Customer : 201 Created\n{InquiryId, ExpiresAt (+24h), FastPath,\nRequiresOfficeValuation, OfficeMatchCount}
+deactivate InqCtrl
+
+== 2) موافقة صريحة على مشاركة بيانات التواصل (Stage 9) ==
+Customer -> InqCtrl : POST /api/ValuationInquiries/{id}/consent\n{InvitationId, ContactPhone?, ContactEmail?}
+InqCtrl -> Mediator : SubmitValuationContactConsentCommand
+Mediator --> Customer : 200 OK — بيانات التواصل تُشارَك\nمع المكتب المحدَّد فقط بعد هذه الموافقة الصريحة
+
+== 3) رد المكتب العقاري وإكمال الطلب ==
+AgencyUser -> OffCtrl : GET /api/ValuationOfficeInvitations/mine\n[Authorize]
+OffCtrl -> Mediator : GetMyAgencyValuationInquiriesQuery(userId)
+Mediator --> AgencyUser : قائمة الدعوات الموجَّهة لمكتب المستخدم
+
+AgencyUser -> OffCtrl : POST /api/ValuationOfficeInvitations/{invitationId}/respond\n{EstimatedPrice, Notes?}
+activate OffCtrl
+OffCtrl -> Mediator : SubmitOfficeResponseCommand\n(ActorUserId من التوكن، لا من الجسم)
+activate Mediator
+Mediator -> RespHandler : تمرير الطلب
+activate RespHandler
+RespHandler -> Db : تحقق أن AgencyId الخاص بالمستخدم\n= AgencyId الخاص بالدعوة (لا دور عام كافٍ)
+alt المستخدم ليس من المكتب المدعوّ
+    RespHandler --> Mediator : ForbiddenException → 403
+else رد مكرَّر لنفس الدعوة (قيد فريد على InvitationId)
+    RespHandler -> Db : SaveChangesAsync()
+    Db --> RespHandler : DbUpdateException\n(IX_ValuationOfficeResponses_InvitationId)
+    note right of RespHandler
+      Remediation M1: يُترجَم صراحة إلى
+      ConflictException (409) — لا 500 عام.
+    end note
+    RespHandler --> Mediator : ConflictException → 409
+else نجاح
+    RespHandler -> Db : حفظ ValuationOfficeResponse\n(xmin concurrency token — ADR-010)
+    RespHandler -> Db : فحص: هل كل دعوات هذا الطلب أُجيبت؟
+    alt كل الدعوات أُجيبت
+        RespHandler -> RespHandler : inquiry.MarkCompleted(now)
+        RespHandler -> Db : TrySaveChangesAsync()\n(best-effort — سباق مع ردٍّ آخر\nلا يُسقط ردّ هذا المكتب المحفوظ أصلًا)
+        RespHandler -> Notif : ValuationResultReady\n(مرة واحدة؛ يُعاد عبر الـ Sweep عند الفشل)
+    end
+    RespHandler --> Mediator : ValuationOfficeResponseDto
+    Mediator --> AgencyUser : 200 OK
+end
+deactivate RespHandler
+deactivate Mediator
+deactivate OffCtrl
+
+== 4) إنفاذ SLA الدوري (خلفية — ADR-009) ==
+loop كل دورة Sweep
+    Hosted -> Sla : RunSweepAsync()
+    activate Sla
+    Sla -> Db : تذكير 18h (ReminderWindow) لطلبات لم تُذكَّر بعد
+    Sla -> Db : انتهاء صلاحية 24h (DefaultExpiryWindow)\nللطلبات غير المكتملة
+    Sla -> Db : إعادة محاولة أي إشعار سابق لم يُؤكَّد إرساله\n(ExpiryNotifiedAt/ResultReadyNotifiedAt = null)
+    note right of Sla
+      حتى 25 دفعة لكل طور لكل تشغيل (MaxBatchesPerPhasePerTick)؛
+      SaveChangesDroppingConcurrencyConflictsAsync يتسامح
+      مع خسارة صفّ واحد سباقه دون التراجع عن الدفعة كاملة.
+    end note
+    Sla --> Hosted : ValuationSlaSweepResult
+    deactivate Sla
+end
+
+@enduml
