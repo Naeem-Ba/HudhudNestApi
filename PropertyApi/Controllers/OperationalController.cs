@@ -49,7 +49,19 @@ public sealed class OperationalController : ControllerBase
         return Ok(new
         {
             environment = _environment.EnvironmentName,
-            commitSha = _configuration["Deployment:CommitSha"] ?? "unknown",
+            // `Deployment:CommitSha` is a manually-set config value (see .env.example's
+            // "REPLACE_WITH_DEPLOYED_GIT_SHA" placeholder) -- nothing updates it per deploy,
+            // so on a real Render service it silently goes stale after the first release and
+            // never matches the commit actually running. Render injects the real deployed
+            // commit automatically as RENDER_GIT_COMMIT for every build (already used the
+            // same way in PropertyApiObservabilityExtensions.CreateResource), so prefer that
+            // live, always-accurate source first and fall back to the manually configured
+            // value only where RENDER_GIT_COMMIT doesn't exist (local/CI/docker-compose runs,
+            // which already set Deployment__CommitSha themselves -- see
+            // ci/docker-compose.production-gate.yml and performance/docker-compose.performance.yml).
+            commitSha = Environment.GetEnvironmentVariable("RENDER_GIT_COMMIT")
+                ?? _configuration["Deployment:CommitSha"]
+                ?? "unknown",
             version = _configuration["Deployment:Version"] ?? "unknown",
             startedAtUtc = StartedAtUtc,
             migration = new
