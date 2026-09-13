@@ -44,31 +44,38 @@ public sealed class GetSocialPerformanceQueryHandler : IRequestHandler<GetSocial
         var leadsTotal = await _attribution.CountAsync(request.PropertyId, PropertyAttributionEventType.VisitRequestCreated, request.FromUtc, request.ToUtc, ct);
         var leadsByPlatform = await _attribution.CountByUtmSourceAsync(request.PropertyId, PropertyAttributionEventType.VisitRequestCreated, request.FromUtc, request.ToUtc, ct);
 
+        // UtmSource is legitimately null (direct/organic traffic with no UTM — see
+        // UtmSourceCount), so the per-platform contact counts cannot live in a
+        // Dictionary<string, int> keyed by UtmSource: Dictionary<TKey, TValue> requires a
+        // non-null TKey, and coercing the null case into a sentinel string would either collide
+        // with a real UtmSource value or silently misreport direct traffic. A flat list summed
+        // per platform (matching how shares/visits/leads are already looked up below via
+        // FirstOrDefault) keeps null a first-class key with no such risk.
         var contactsTotal = 0;
-        var contactsByPlatform = new Dictionary<string?, int>();
+        var contactCounts = new List<UtmSourceCount>();
         foreach (var eventType in ContactEventTypes)
         {
             contactsTotal += await _attribution.CountAsync(request.PropertyId, eventType, request.FromUtc, request.ToUtc, ct);
-            foreach (var row in await _attribution.CountByUtmSourceAsync(request.PropertyId, eventType, request.FromUtc, request.ToUtc, ct))
-                contactsByPlatform[row.UtmSource] = contactsByPlatform.GetValueOrDefault(row.UtmSource) + row.Count;
+            contactCounts.AddRange(await _attribution.CountByUtmSourceAsync(request.PropertyId, eventType, request.FromUtc, request.ToUtc, ct));
         }
 
         var platforms = new HashSet<string?>();
         foreach (var row in sharesByPlatform) platforms.Add(row.UtmSource);
         foreach (var row in visitsByPlatform) platforms.Add(row.UtmSource);
         foreach (var row in leadsByPlatform) platforms.Add(row.UtmSource);
-        foreach (var key in contactsByPlatform.Keys) platforms.Add(key);
+        foreach (var row in contactCounts) platforms.Add(row.UtmSource);
 
         var byPlatform = platforms
             .Select(platform =>
             {
                 var visits = visitsByPlatform.FirstOrDefault(r => r.UtmSource == platform)?.Count ?? 0;
                 var leads = leadsByPlatform.FirstOrDefault(r => r.UtmSource == platform)?.Count ?? 0;
+                var contacts = contactCounts.Where(r => r.UtmSource == platform).Sum(r => r.Count);
                 return new SocialPerformanceByPlatformDto(
                     platform,
                     sharesByPlatform.FirstOrDefault(r => r.UtmSource == platform)?.Count ?? 0,
                     visits,
-                    contactsByPlatform.GetValueOrDefault(platform),
+                    contacts,
                     leads,
                     ConversionRate(leads, visits));
             })
