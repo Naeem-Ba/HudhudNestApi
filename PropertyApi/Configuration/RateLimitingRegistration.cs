@@ -14,22 +14,7 @@ public static class RateLimitingRegistration
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
             options.AddPolicy("send-otp", httpContext =>
-            {
-                if (IsExemptStagingSmokeTraffic(httpContext))
-                {
-                    return RateLimitPartition.GetNoLimiter(GetClientRateLimitPartitionKey(httpContext));
-                }
-
-                return RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
-                    factory: _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = 3,
-                        Window = TimeSpan.FromMinutes(15),
-                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                        QueueLimit = 0
-                    });
-            });
+                BuildOtpPolicyPartition(httpContext, permitLimit: 3, window: TimeSpan.FromMinutes(15)));
 
             // verify-otp's shared PermitLimit is a real, deliberate anti-brute-force control
             // for every ordinary caller. On Staging, ForwardedHeaders__Enabled=false collapses
@@ -42,22 +27,7 @@ public static class RateLimitingRegistration
             // see StagingTestSupportAuthorization) keeps the real limit intact for every actual
             // visitor -- in Staging and in Production, where this check is always false.
             options.AddPolicy("verify-otp", httpContext =>
-            {
-                if (IsExemptStagingSmokeTraffic(httpContext))
-                {
-                    return RateLimitPartition.GetNoLimiter(GetClientRateLimitPartitionKey(httpContext));
-                }
-
-                return RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
-                    factory: _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = 5,
-                        Window = TimeSpan.FromMinutes(15),
-                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                        QueueLimit = 0
-                    });
-            });
+                BuildOtpPolicyPartition(httpContext, permitLimit: 5, window: TimeSpan.FromMinutes(15)));
 
             options.AddPolicy("auth-password-reset", httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
@@ -380,6 +350,35 @@ public static class RateLimitingRegistration
         });
 
         return services;
+    }
+
+    // Extracted from the "send-otp"/"verify-otp" AddPolicy lambdas so a test can call it
+    // directly. Those lambdas capture nothing but static-method calls, so the C# compiler
+    // caches each as a single static delegate instance shared across every AddRateLimiter
+    // configure-call -- ASP.NET Core's own rate-limiter middleware also only invokes a
+    // policy's factory once per distinct partition key it has not seen before (caching the
+    // resulting RateLimiter afterward), not once per request. Coverage tooling attributes
+    // hits to a lambda's body only when the compiled delegate is actually invoked, so a policy
+    // exercised solely through end-to-end HTTP calls that all land on the same handful of
+    // partition keys can under-report -- calling this method directly from a unit test removes
+    // that dependency on the rate limiter's own invocation/caching timing entirely.
+    internal static RateLimitPartition<string> BuildOtpPolicyPartition(
+        HttpContext httpContext, int permitLimit, TimeSpan window)
+    {
+        if (IsExemptStagingSmokeTraffic(httpContext))
+        {
+            return RateLimitPartition.GetNoLimiter(GetClientRateLimitPartitionKey(httpContext));
+        }
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetClientRateLimitPartitionKey(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = window,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
     }
 
     private static bool IsExemptStagingSmokeTraffic(HttpContext httpContext)
