@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using PropertyApi.Application.Common.Security;
+using PropertyApi.Security.Staging;
 using StackExchange.Redis;
 
 namespace PropertyApi.Security.RateLimiting;
@@ -28,17 +29,23 @@ return current
     private readonly RequestDelegate _next;
     private readonly IServiceProvider _serviceProvider;
     private readonly IOptions<RedisRateLimitingOptions> _options;
+    private readonly IConfiguration _configuration;
+    private readonly IHostEnvironment _environment;
     private readonly ILogger<RedisRateLimitingMiddleware> _logger;
 
     public RedisRateLimitingMiddleware(
         RequestDelegate next,
         IServiceProvider serviceProvider,
         IOptions<RedisRateLimitingOptions> options,
+        IConfiguration configuration,
+        IHostEnvironment environment,
         ILogger<RedisRateLimitingMiddleware> logger)
     {
         _next = next;
         _serviceProvider = serviceProvider;
         _options = options;
+        _configuration = configuration;
+        _environment = environment;
         _logger = logger;
     }
 
@@ -53,6 +60,19 @@ return current
 
         var options = _options.Value;
         if (!options.Enabled)
+        {
+            await _next(context);
+            return;
+        }
+
+        // Mirrors RateLimitingRegistration's identically-named ASP.NET Core in-memory policies
+        // (see its "verify-otp" doc comment): this Redis-backed limiter enforces the exact same
+        // policy names independently, off the same [EnableRateLimiting] attribute metadata, so
+        // an environment running with both active (e.g. CI's ci.yml, which sets
+        // RedisRateLimiting__Enabled=true for the whole test process) gates a request through
+        // both -- exempting only one leaves the other still blocking the Staging smoke suite's
+        // required call pattern.
+        if (StagingTestSupportAuthorization.IsAuthorized(context.Request, _configuration, _environment))
         {
             await _next(context);
             return;
