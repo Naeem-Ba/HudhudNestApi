@@ -120,7 +120,18 @@ jobs:
           dotnet build tools/PropertyApi.DatabaseRecoveryVerifier/PropertyApi.DatabaseRecoveryVerifier.csproj --configuration Release --no-restore
 
       - name: Create fresh encrypted backup
-        if: ${{ inputs.fresh_backup != false }}
+        # BUG: a plain `schedule` trigger (this job's weekly cron) supplies no
+        # `inputs` at all, so `inputs.fresh_backup` is null there -- and GitHub
+        # Actions expression comparisons coerce both sides to numbers for a
+        # type-mismatched `==`/`!=` (null -> 0, false -> 0), so `null == false`
+        # evaluates true and `null != false` evaluates false. That silently
+        # skipped this step (meant to run by default -- see the `default: true`
+        # on the workflow_dispatch/workflow_call input above) and ran "Download
+        # latest encrypted backup" instead on every scheduled run, which then
+        # failed outright whenever no backup had ever been uploaded via that
+        # path. Checking github.event_name first avoids relying on `inputs` at
+        # all for the one trigger that never populates it.
+        if: ${{ github.event_name == 'schedule' || inputs.fresh_backup != false }}
         shell: bash
         env:
           DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL || secrets.DATABASE_URL }}
@@ -142,7 +153,11 @@ jobs:
           echo "BACKUP_ID=${BACKUP_ID}" >> "${GITHUB_ENV}"
 
       - name: Download latest encrypted backup
-        if: ${{ inputs.fresh_backup == false }}
+        # Mirrors the fix above: only take this branch for an explicit
+        # workflow_dispatch/workflow_call request with fresh_backup: false.
+        # A `schedule` run must never land here (see the comment on "Create
+        # fresh encrypted backup").
+        if: ${{ github.event_name != 'schedule' && inputs.fresh_backup == false }}
         shell: bash
         run: |
           set -euo pipefail
