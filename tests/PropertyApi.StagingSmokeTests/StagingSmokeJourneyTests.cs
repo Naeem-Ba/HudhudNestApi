@@ -82,6 +82,7 @@ public sealed class StagingSmokeJourneyTests
         private string _deployedCommitSha = string.Empty;
         private string _cleanupStatus = "skipped";
         private string? _cleanupMessage;
+        private string? _csrfToken;
 
         public SmokeRun()
         {
@@ -95,6 +96,20 @@ public sealed class StagingSmokeJourneyTests
 
         public async Task ExecuteAsync()
         {
+            // CookieCsrfProtectionMiddleware requires an X-XSRF-TOKEN header on every unsafe
+            // request once ANY request has carried the refresh_token cookie -- not just on
+            // /auth/refresh and /auth/logout, on any endpoint (see CookieCsrfOptions'
+            // AuthenticationCookieName doc comment). _client keeps cookies across requests
+            // (default HttpClientHandler), so as soon as Registration's/Login's response sets
+            // that cookie, every later unsafe call -- including the very next request in the
+            // *same* journey, e.g. Registration's own one-time-use OTP recheck -- needs this
+            // header or the antiforgery check 403s before the endpoint's own logic ever runs.
+            // Fetching the token once up front (matching the real frontend's CsrfInterceptor,
+            // added for RELEASE-BLOCKERS-AR.md B-20) is harmless for the handful of early
+            // calls made before any auth cookie exists: CookieCsrfProtectionMiddleware only
+            // validates it once hasAuthCookie is true.
+            await FetchCsrfTokenAsync();
+
             await Journey("Technical health", TechnicalHealthAsync);
             await Journey("Registration", RegisterUsersAsync);
             await Journey("OTP", VerifyOtpSecurityAsync);
@@ -599,6 +614,11 @@ public sealed class StagingSmokeJourneyTests
             return await SendAsync(method, path, content, token, stagingSecret);
         }
 
+        private static readonly HashSet<string> CsrfSafeMethods = new(StringComparer.OrdinalIgnoreCase)
+        {
+            HttpMethod.Get.Method, HttpMethod.Head.Method, HttpMethod.Options.Method, HttpMethod.Trace.Method
+        };
+
         private async Task<HttpResponseMessage> SendAsync(
             HttpMethod method, string path, HttpContent? content = null, string? token = null,
             string? stagingSecret = null)
@@ -608,7 +628,18 @@ public sealed class StagingSmokeJourneyTests
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             if (!string.IsNullOrWhiteSpace(stagingSecret))
                 request.Headers.TryAddWithoutValidation("X-Staging-Smoke-Secret", stagingSecret);
+            if (!string.IsNullOrWhiteSpace(_csrfToken) && !CsrfSafeMethods.Contains(method.Method))
+                request.Headers.TryAddWithoutValidation("X-XSRF-TOKEN", _csrfToken);
             return await _client.SendAsync(request);
+        }
+
+        private async Task FetchCsrfTokenAsync()
+        {
+            var response = await _client.GetAsync("/api/security/csrf-token");
+            Expect(response.StatusCode == HttpStatusCode.OK, "Could not obtain a CSRF token.");
+            using var body = await ReadJsonAsync(response);
+            _csrfToken = Text(body.RootElement, "csrfToken");
+            Expect(!string.IsNullOrWhiteSpace(_csrfToken), "CSRF token endpoint returned an empty token.");
         }
 
         private async Task ExpectStatusWithTransientRetry(string path, HttpStatusCode expected)
