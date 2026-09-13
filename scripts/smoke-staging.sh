@@ -4,6 +4,14 @@ umask 077
 
 artifacts_dir="${SMOKE_ARTIFACTS_DIR:-artifacts/staging-smoke}"
 mkdir -p "${artifacts_dir}"
+# Resolve to an absolute path before exporting it as SMOKE_ARTIFACTS_DIR below. The C# test
+# host (StagingSmokeJourneyTests) writes its reports to Path.Combine(that env var, ...) without
+# re-resolving it -- if it stays relative, it resolves against whatever working directory the
+# vstest test-host process itself runs from, which is not guaranteed to be this script's cwd
+# (the repo root in CI). That mismatch previously made every report check below fail with
+# "Mandatory smoke report ... is missing" even when the C# test wrote real, complete reports
+# -- just to a different absolute location than the one checked here.
+artifacts_dir="$(cd "${artifacts_dir}" && pwd)"
 temp_dir="$(mktemp -d)"
 failure_message="Staging smoke bootstrap failed."
 
