@@ -34,6 +34,7 @@ public sealed class TestApplication : WebApplicationFactory<Program>
     private readonly string? _previousForwardedHeadersKnownProxy;
     private readonly string? _previousForwardedHeadersKnownNetwork;
     private readonly string? _previousCorsAllowedOrigin;
+    private readonly Dictionary<string, string?> _previousStagingEnvironmentVariables = new();
 
     public TestApplication()
         : this("Testing", null)
@@ -80,12 +81,83 @@ public sealed class TestApplication : WebApplicationFactory<Program>
             // environment variables before the host starts.
             Environment.SetEnvironmentVariable("Cors__AllowedOrigins__0", "https://frontend.example");
         }
+
+        if (string.Equals(environmentName, "Staging", StringComparison.OrdinalIgnoreCase))
+        {
+            // StagingEnvironmentGuard.Validate runs immediately after CreateBuilder() in
+            // Program.cs, before WebApplicationFactory's ConfigureAppConfiguration (the
+            // in-memory _configuration collection below) is applied -- same timing gotcha as
+            // the ForwardedHeaders/Cors handling above for Production. Every key that guard
+            // requires must exist as a real environment variable before the host builds; once
+            // set, builder.Configuration's own AddEnvironmentVariables() source keeps exposing
+            // them for the rest of the app's lifetime too; nothing needs to also be duplicated
+            // into _configuration for CreateStaging callers.
+            var requiredStagingEnvironmentVariables = new Dictionary<string, string>
+            {
+                // StagingEnvironmentGuard.ValidateDatabase reads this too, at the same early
+                // point -- CreateDefaultConfiguration's in-memory override of the same key
+                // (used by the InMemory-database swap in ConfigureTestServices below) applies
+                // too late for the guard, exactly like every other key here. Must contain
+                // Staging__DatabaseNameMarker below ("test" is inside "propertyapi_test").
+                ["ConnectionStrings__DefaultConnection"] =
+                    "Host=localhost;Port=5432;Database=propertyapi_test;Username=postgres;Password=not-used;Trust Server Certificate=true",
+                // Same early-guard timing issue (StagingEnvironmentGuard.ValidateRedis) --
+                // this only needs to be a non-empty configured value for the guard, since
+                // CacheInfrastructureRegistration's AddStackExchangeRedisCache connects lazily
+                // rather than at DI-registration time, and nothing in these tests exercises a
+                // code path that actually touches the distributed cache.
+                ["ConnectionStrings__Redis"] = "localhost:6379",
+                // ForwardedHeadersRegistration.AddTrustedForwardedHeaders runs right after
+                // StagingEnvironmentGuard.Validate in Program.cs and requires this whenever
+                // IsStaging() -- same as the existing Production block below already handles.
+                ["ForwardedHeaders__ForwardLimit"] = "1",
+                ["ForwardedHeaders__KnownProxies__0"] = "203.0.113.1",
+                // CorsRegistration.AddPropertyApiCors also runs before ConfigureAppConfiguration
+                // and requires this outside Development -- same as the Production block below.
+                ["Cors__AllowedOrigins__0"] = "https://staging-frontend.example.test",
+                ["Deployment__CommitSha"] = "0000000000000000000000000000000000000000",
+                ["Deployment__Version"] = "test",
+                ["Deployment__PublicBaseUrl"] = "https://staging.example.test",
+                ["Deployment__ProductionBaseUrl"] = "https://production.example.test",
+                ["Staging__EnvironmentId"] = "staging-test",
+                ["Staging__DatabaseNameMarker"] = "test",
+                ["Staging__RedisIsolationMarker"] = "staging-test",
+                ["Staging__StorageIsolationMarker"] = "staging-test",
+                ["Staging__ExternalNotificationsDisabled"] = "true",
+                ["Staging__TestSupport__Enabled"] = "true",
+                ["Staging__TestSupport__FixedOtp"] = "123456",
+                ["Staging__TestSupport__PhonePrefix"] = "+15550100",
+                ["Staging__TestSupport__CleanupSecret"] = "staging-smoke-test-secret-at-least-32-characters"
+            };
+
+            foreach (var pair in requiredStagingEnvironmentVariables)
+            {
+                _previousStagingEnvironmentVariables[pair.Key] = Environment.GetEnvironmentVariable(pair.Key);
+                Environment.SetEnvironmentVariable(pair.Key, pair.Value);
+            }
+        }
     }
 
     public static TestApplication CreateProduction(
         IDictionary<string, string?>? configurationOverrides = null)
     {
         return new TestApplication("Production", configurationOverrides);
+    }
+
+    /// <summary>
+    /// A "Staging" environment host. StagingEnvironmentGuard.Validate runs unconditionally
+    /// right after WebApplication.CreateBuilder (Program.cs), so the constructor above sets
+    /// every key that guard requires as a real environment variable -- not just test setup
+    /// boilerplate, the host fails to start without them. "test" (the DatabaseNameMarker)
+    /// intentionally matches the "propertyapi_test" database name CreateDefaultConfiguration
+    /// already sets, and CookieCsrf is left at the Testing defaults (disabled) like the base
+    /// "Testing" host -- callers that need it layer CookieCsrf:Enabled=true through
+    /// configurationOverrides same as CreateTesting callers do.
+    /// </summary>
+    public static TestApplication CreateStaging(
+        IDictionary<string, string?>? configurationOverrides = null)
+    {
+        return new TestApplication("Staging", configurationOverrides);
     }
 
     /// <summary>
@@ -173,6 +245,11 @@ public sealed class TestApplication : WebApplicationFactory<Program>
             Environment.SetEnvironmentVariable("ForwardedHeaders__KnownProxies__0", _previousForwardedHeadersKnownProxy);
             Environment.SetEnvironmentVariable("ForwardedHeaders__KnownNetworks__0", _previousForwardedHeadersKnownNetwork);
             Environment.SetEnvironmentVariable("Cors__AllowedOrigins__0", _previousCorsAllowedOrigin);
+
+            foreach (var pair in _previousStagingEnvironmentVariables)
+            {
+                Environment.SetEnvironmentVariable(pair.Key, pair.Value);
+            }
         }
 
         base.Dispose(disposing);

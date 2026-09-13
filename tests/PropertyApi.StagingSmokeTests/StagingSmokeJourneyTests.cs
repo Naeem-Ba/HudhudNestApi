@@ -216,7 +216,8 @@ public sealed class StagingSmokeJourneyTests
 
             var duplicate = await SendJsonAsync(HttpMethod.Post,
                 "/api/auth/phone/registration/send-otp",
-                new { PhoneNumber = _config.OwnerPhone });
+                new { PhoneNumber = _config.OwnerPhone },
+                stagingSecret: _config.CleanupSecret);
             Expect(duplicate.StatusCode == HttpStatusCode.OK,
                 "Duplicate-registration privacy response must remain generic HTTP 200.");
             using var duplicateBody = await ReadJsonAsync(duplicate);
@@ -474,8 +475,16 @@ public sealed class StagingSmokeJourneyTests
 
         private async Task<Session> RegisterPhoneUserAsync(string phone, string roleMarker)
         {
+            // stagingSecret is passed on every OTP call here (not just Cleanup/build-info) so
+            // the server can recognize this as mandatory smoke-suite traffic and exempt it from
+            // verify-otp's/send-otp's shared per-IP rate limit -- see the doc comment on
+            // "verify-otp" in RateLimitingRegistration.AddPropertyApiRateLimiting for why an
+            // ordinary caller's limit alone can't accommodate this journey's required call
+            // pattern (wrong-code, correct-code, one-time-use recheck) run twice per journey
+            // (owner + visitor) while Staging collapses every caller to one shared IP bucket.
             var send = await SendJsonAsync(HttpMethod.Post,
-                "/api/auth/phone/registration/send-otp", new { PhoneNumber = phone });
+                "/api/auth/phone/registration/send-otp", new { PhoneNumber = phone },
+                stagingSecret: _config.CleanupSecret);
             Expect(send.StatusCode == HttpStatusCode.OK, "OTP request failed.");
             using var sendBody = await ReadJsonAsync(send);
             Expect(TryGuid(sendBody.RootElement, "ChallengeId", out var challengeId),
@@ -490,7 +499,8 @@ public sealed class StagingSmokeJourneyTests
                     Password = _config.Password,
                     FirstName = "E2E",
                     LastName = $"{_config.RunId}-{roleMarker}"
-                });
+                },
+                stagingSecret: _config.CleanupSecret);
             Expect(wrong.StatusCode == HttpStatusCode.BadRequest, "Incorrect OTP was accepted.");
 
             var verify = await SendJsonAsync(HttpMethod.Post,
@@ -502,7 +512,8 @@ public sealed class StagingSmokeJourneyTests
                     Password = _config.Password,
                     FirstName = "E2E",
                     LastName = $"{_config.RunId}-{roleMarker}"
-                });
+                },
+                stagingSecret: _config.CleanupSecret);
             Expect(verify.StatusCode == HttpStatusCode.OK, "Correct OTP did not register the user.");
             using var verifyBody = await ReadJsonAsync(verify);
             var session = SessionFrom(verify, verifyBody.RootElement);
@@ -524,7 +535,8 @@ public sealed class StagingSmokeJourneyTests
                     Password = _config.Password,
                     FirstName = "E2E",
                     LastName = $"{_config.RunId}-{roleMarker}"
-                });
+                },
+                stagingSecret: _config.CleanupSecret);
             Expect(reuse.StatusCode == HttpStatusCode.BadRequest, "Consumed OTP was reusable.");
             return session;
         }
