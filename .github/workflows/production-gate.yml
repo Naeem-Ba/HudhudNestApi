@@ -1069,6 +1069,10 @@ jobs:
           attempt=0
           while [ "${SECONDS}" -lt "${deadline}" ]; do
             attempt=$((attempt + 1))
+            deployed_sha=""
+            environment=""
+            migrations_complete=""
+            postgis_available=""
             body="$(mktemp)"
             status="$(curl --location --silent --show-error --max-time 15 \
               --header "X-Staging-Smoke-Secret: ${STAGING_SMOKE_CLEANUP_SECRET}" \
@@ -1090,12 +1094,22 @@ jobs:
                 break
               fi
             fi
+            # Surface *why* this attempt did not count as ready. Without this,
+            # a genuine timeout gives no signal to distinguish "Staging is
+            # still slowly deploying/migrating" from "Staging deployed a
+            # different commit than expected" (e.g. the Render service still
+            # tracking a stale branch) -- both looked identical before this
+            # change: 180 identical "Waiting..." lines and then a bare timeout.
+            if [ "${status}" != "200" ]; then
+              echo "Waiting for intended Staging release (attempt ${attempt}): build-info returned HTTP ${status}."
+            else
+              echo "Waiting for intended Staging release (attempt ${attempt}): commitSha=${deployed_sha:-<none>} (expected ${EXPECTED_COMMIT_SHA}), environment=${environment:-<none>}, migrationsComplete=${migrations_complete:-false}, postGisAvailable=${postgis_available:-false}."
+            fi
             rm -f "${body}"
-            echo "Waiting for intended Staging release (attempt ${attempt})."
             sleep 5
           done
           if [ "${release_ready}" != "true" ]; then
-            echo "::error::Staging did not activate the intended commit with complete migrations before timeout."
+            echo "::error::Staging did not activate the intended commit with complete migrations before timeout. Check the per-attempt diagnostics above -- a persistent commitSha mismatch usually means the Render service is tracking the wrong branch, not a slow deploy."
             exit 1
           fi
 
