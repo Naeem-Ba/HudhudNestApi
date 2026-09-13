@@ -14,17 +14,22 @@ public static class RateLimitingRegistration
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
             options.AddPolicy("send-otp", httpContext =>
-                IsExemptStagingSmokeTraffic(httpContext)
-                    ? RateLimitPartition.GetNoLimiter(GetClientRateLimitPartitionKey(httpContext))
-                    : RateLimitPartition.GetFixedWindowLimiter(
-                        partitionKey: GetClientRateLimitPartitionKey(httpContext),
-                        factory: _ => new FixedWindowRateLimiterOptions
-                        {
-                            PermitLimit = 3,
-                            Window = TimeSpan.FromMinutes(15),
-                            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                            QueueLimit = 0
-                        }));
+            {
+                if (IsExemptStagingSmokeTraffic(httpContext))
+                {
+                    return RateLimitPartition.GetNoLimiter(GetClientRateLimitPartitionKey(httpContext));
+                }
+
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 3,
+                        Window = TimeSpan.FromMinutes(15),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    });
+            });
 
             // verify-otp's shared PermitLimit is a real, deliberate anti-brute-force control
             // for every ordinary caller. On Staging, ForwardedHeaders__Enabled=false collapses
@@ -37,17 +42,22 @@ public static class RateLimitingRegistration
             // see StagingTestSupportAuthorization) keeps the real limit intact for every actual
             // visitor -- in Staging and in Production, where this check is always false.
             options.AddPolicy("verify-otp", httpContext =>
-                IsExemptStagingSmokeTraffic(httpContext)
-                    ? RateLimitPartition.GetNoLimiter(GetClientRateLimitPartitionKey(httpContext))
-                    : RateLimitPartition.GetFixedWindowLimiter(
-                        partitionKey: GetClientRateLimitPartitionKey(httpContext),
-                        factory: _ => new FixedWindowRateLimiterOptions
-                        {
-                            PermitLimit = 5,
-                            Window = TimeSpan.FromMinutes(15),
-                            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                            QueueLimit = 0
-                        }));
+            {
+                if (IsExemptStagingSmokeTraffic(httpContext))
+                {
+                    return RateLimitPartition.GetNoLimiter(GetClientRateLimitPartitionKey(httpContext));
+                }
+
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 5,
+                        Window = TimeSpan.FromMinutes(15),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    });
+            });
 
             options.AddPolicy("auth-password-reset", httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
