@@ -13,26 +13,26 @@
     <PackageVersion Include="Google.Apis.Auth" Version="1.76.0" />
     <PackageVersion Include="MediatR" Version="12.5.0" />
     <PackageVersion Include="MessagePack" Version="2.5.302" />
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.30" />
-    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="8.0.30" />
-    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.30" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.30" />
-    <PackageVersion Include="Microsoft.AspNetCore.OutputCaching.StackExchangeRedis" Version="8.0.30" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.30" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="8.0.30" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.31" />
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="8.0.31" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.31" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.31" />
+    <PackageVersion Include="Microsoft.AspNetCore.OutputCaching.StackExchangeRedis" Version="8.0.31" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.31" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="8.0.31" />
     <PackageVersion Include="Microsoft.Bcl.Memory" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="8.0.30" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.30" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.30" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.30" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="8.0.31" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.31" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.31" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.31" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="8.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.30" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.31" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.0.0" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="8.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="8.0.30" />
+    <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="8.0.31" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageVersion Include="Moq" Version="4.20.72" />
