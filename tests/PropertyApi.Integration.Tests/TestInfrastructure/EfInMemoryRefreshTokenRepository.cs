@@ -11,7 +11,7 @@ using PropertyApi.Infrastructure.Persistence;
 namespace PropertyApi.Integration.Tests.TestInfrastructure;
 
 internal sealed class EfInMemoryRefreshTokenRepository
-    : IRefreshTokenRepository, IRefreshTokenStore
+    : IRefreshTokenRepository
 {
     private readonly AppDbContext _db;
     private readonly JwtOptions _jwtOptions;
@@ -22,20 +22,6 @@ internal sealed class EfInMemoryRefreshTokenRepository
     {
         _db = db;
         _jwtOptions = jwtOptions.Value;
-    }
-
-    public async Task StoreAsync(
-        Guid userId,
-        string refreshToken,
-        string? createdByIp,
-        CancellationToken ct = default)
-    {
-        await AddCoreAsync(
-            userId,
-            refreshToken,
-            createdByIp,
-            setReplacementHash: false,
-            ct);
     }
 
     public async Task AddAsync(
