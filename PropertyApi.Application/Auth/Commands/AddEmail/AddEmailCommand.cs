@@ -117,27 +117,43 @@ public sealed class AddEmailCommandHandler
         }
 
         /*
-         * 5. Generate a confirmation token for the identity.
+         * 5. Generate a confirmation token and mail the link, letting no failure out.
+         *
+         * The email is already persisted on the account (step 4, committed). An
+         * unconfirmed address is simply unconfirmed -- it can be resent later via the
+         * dedicated resend endpoint. Rethrowing here would report a successful email
+         * change as a failure while the new (unconfirmed) address is already saved,
+         * which mirrors the same swallow-and-log policy RegisterCommandHandler and
+         * ResendConfirmationEmailCommandHandler already use for this exact tradeoff.
          */
-        var token =
-            await _identity
-                .GenerateEmailConfirmationTokenAsync(
-                    identity.IdentityId,
+        try
+        {
+            var token =
+                await _identity
+                    .GenerateEmailConfirmationTokenAsync(
+                        identity.IdentityId,
+                        ct);
+
+            await _emailService
+                .SendVerificationLinkAsync(
+                    email,
+                    token,
                     ct);
 
-        /*
-         * 6. Send the verification link.
-         */
-        await _emailService
-            .SendVerificationLinkAsync(
-                email,
-                token,
-                ct);
-
-        _logger.LogInformation(
-            "Email verification sent to {Email} for identity {IdentityId}.",
-            PiiMasking.MaskEmail(email),
-            identity.IdentityId);
+            _logger.LogInformation(
+                "Email verification sent to {Email} for identity {IdentityId}.",
+                PiiMasking.MaskEmail(email),
+                identity.IdentityId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Email {Email} was set for identity {IdentityId}, but the confirmation "
+                + "email could not be sent. The address stays unconfirmed until it is resent.",
+                PiiMasking.MaskEmail(email),
+                identity.IdentityId);
+        }
 
         return AddEmailResult.Ok();
     }

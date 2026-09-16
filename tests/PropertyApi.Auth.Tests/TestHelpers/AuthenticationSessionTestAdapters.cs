@@ -53,16 +53,3 @@ internal sealed class PhoneSessionIdentityAdapter : ILoginIdentityService
     public Task<DateTimeOffset?> GetLockoutEndAsync(Guid id, CancellationToken ct = default) =>
         throw new NotSupportedException();
 }
-
-internal sealed class RefreshTokenRepositoryAdapter : IRefreshTokenRepository
-{
-    private readonly IRefreshTokenStore _inner;
-    public RefreshTokenRepositoryAdapter(IRefreshTokenStore inner) => _inner = inner;
-    public Task AddAsync(Guid userId, string token, string? ip, CancellationToken ct = default) =>
-        _inner.StoreAsync(userId, token, ip, ct);
-    public Task<RefreshTokenRecord?> GetByRefreshTokenAsync(string token, CancellationToken ct = default) => throw new NotSupportedException();
-    public Task<bool> RevokeIfActiveAsync(Guid id, DateTime now, string? ip, string? replacement, CancellationToken ct = default) => throw new NotSupportedException();
-    public Task RevokeActiveTokensForUserAsync(Guid id, DateTime now, string? ip, CancellationToken ct = default) => throw new NotSupportedException();
-    public Task<bool> RevokeUserTokenAsync(Guid id, string token, DateTime now, string? ip, CancellationToken ct = default) => throw new NotSupportedException();
-    public Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken ct = default) => action(ct);
-}

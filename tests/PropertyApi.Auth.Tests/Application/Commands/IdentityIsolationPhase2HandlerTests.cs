@@ -267,6 +267,97 @@ public sealed class AddEmailCommandHandlerTests
             Times.Once);
     }
 
+    [Fact(
+        DisplayName =
+            "AddEmail still succeeds when the verification email fails to send")]
+    public async Task EmailSendFails_StillReturnsSuccess()
+    {
+        // Arrange
+        var userId =
+            Guid.NewGuid();
+
+        var currentIdentity =
+            CreateIdentitySnapshot(
+                identityId: userId,
+                email: null,
+                emailConfirmed: false);
+
+        var identity =
+            new Mock<IAddEmailIdentityService>();
+
+        identity
+            .Setup(
+                x => x.FindByIdAsync(
+                    userId,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                currentIdentity);
+
+        identity
+            .Setup(
+                x => x.FindByEmailAsync(
+                    "user@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                (IdentityAccountSnapshot?)null);
+
+        identity
+            .Setup(
+                x => x.SetEmailAsync(
+                    userId,
+                    "user@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                IdentityOperationResult.Success());
+
+        identity
+            .Setup(
+                x => x.GenerateEmailConfirmationTokenAsync(
+                    userId,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                "confirmation-token");
+
+        var emailService =
+            new Mock<IEmailVerificationService>();
+
+        emailService
+            .Setup(
+                x => x.SendVerificationLinkAsync(
+                    "user@example.com",
+                    "confirmation-token",
+                    It.IsAny<CancellationToken>()))
+            .ThrowsAsync(
+                new InvalidOperationException(
+                    "Resend API returned a non-success status."));
+
+        var handler =
+            new AddEmailCommandHandler(
+                identity.Object,
+                emailService.Object,
+                NullLogger<AddEmailCommandHandler>.Instance);
+
+        // Act
+        var result =
+            await handler.Handle(
+                new AddEmailCommand(
+                    userId,
+                    "user@example.com"),
+                CancellationToken.None);
+
+        // Assert: the email is already persisted on the account, so a mail-provider
+        // failure must not be reported back as a failed request -- it stays
+        // unconfirmed until resent, mirroring RegisterCommandHandler's policy.
+        Assert.True(result.Success);
+
+        identity.Verify(
+            x => x.SetEmailAsync(
+                userId,
+                "user@example.com",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
     private static IdentityAccountSnapshot
         CreateIdentitySnapshot(
             Guid identityId,
