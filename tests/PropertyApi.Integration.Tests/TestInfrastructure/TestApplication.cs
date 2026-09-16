@@ -218,11 +218,8 @@ public sealed class TestApplication : WebApplicationFactory<Program>
             services.AddSingleton<ISmsService, AlwaysSuccessfulSmsService>();
 
             services.RemoveAll<IRefreshTokenRepository>();
-            services.RemoveAll<IRefreshTokenStore>();
             services.AddScoped<EfInMemoryRefreshTokenRepository>();
             services.AddScoped<IRefreshTokenRepository>(sp =>
-                sp.GetRequiredService<EfInMemoryRefreshTokenRepository>());
-            services.AddScoped<IRefreshTokenStore>(sp =>
                 sp.GetRequiredService<EfInMemoryRefreshTokenRepository>());
         });
     }

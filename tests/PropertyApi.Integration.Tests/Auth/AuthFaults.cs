@@ -348,67 +348,6 @@ internal class RefreshTokenRepositoryFaultProxy
     }
 }
 
-internal class RefreshTokenStoreFaultProxy
-    : DispatchProxy
-{
-    public IRefreshTokenStore Inner { get; set; }
-        = default!;
-
-    public AuthFaultPlan Faults { get; set; }
-        = default!;
-
-    protected override object? Invoke(
-        MethodInfo? targetMethod,
-        object?[]? args)
-    {
-        if (targetMethod is null)
-        {
-            throw new InvalidOperationException(
-                "Refresh token store proxy received a null method.");
-        }
-
-        if (Faults.FailRefreshTokenAddAsync &&
-            targetMethod.Name.Equals(
-                "StoreAsync",
-                StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                "Injected refresh-token store persistence failure.");
-        }
-
-        try
-        {
-            return targetMethod.Invoke(
-                Inner,
-                args);
-        }
-        catch (TargetInvocationException ex)
-            when (ex.InnerException is not null)
-        {
-            throw ex.InnerException;
-        }
-    }
-
-    public static IRefreshTokenStore Create(
-        IRefreshTokenStore inner,
-        AuthFaultPlan faults)
-    {
-        var proxy =
-            DispatchProxy.Create<
-                IRefreshTokenStore,
-                RefreshTokenStoreFaultProxy>();
-
-        var typed =
-            (RefreshTokenStoreFaultProxy)
-            (object)proxy;
-
-        typed.Inner = inner;
-        typed.Faults = faults;
-
-        return proxy;
-    }
-}
-
 internal static class AuthFaultServiceCollectionExtensions
 {
     public static void DecorateAuthServices(
@@ -420,10 +359,6 @@ internal static class AuthFaultServiceCollectionExtensions
             faults);
 
         DecorateRefreshTokenRepository(
-            services,
-            faults);
-
-        DecorateRefreshTokenStore(
             services,
             faults);
     }
@@ -481,36 +416,6 @@ internal static class AuthFaultServiceCollectionExtensions
                     RefreshTokenRepositoryFaultProxy.Create(
                         ResolveOriginal<
                             IRefreshTokenRepository>(
-                            serviceProvider,
-                            descriptor),
-                        faults),
-
-                descriptor.Lifetime));
-    }
-
-    private static void DecorateRefreshTokenStore(
-        IServiceCollection services,
-        AuthFaultPlan faults)
-    {
-        var descriptor =
-            services.LastOrDefault(
-                service =>
-                    service.ServiceType ==
-                    typeof(IRefreshTokenStore))
-            ?? throw new InvalidOperationException(
-                "IRefreshTokenStore is not registered.");
-
-        services.Remove(
-            descriptor);
-
-        services.Add(
-            ServiceDescriptor.Describe(
-                typeof(IRefreshTokenStore),
-
-                serviceProvider =>
-                    RefreshTokenStoreFaultProxy.Create(
-                        ResolveOriginal<
-                            IRefreshTokenStore>(
                             serviceProvider,
                             descriptor),
                         faults),

@@ -4,14 +4,12 @@ namespace PropertyApi.Infrastructure.Identity.Entities;
 
 /// <summary>
 /// JWT refresh token with full security audit trail.
-/// ?? SECURITY: Consider storing only a SHA-256 hash of the token,
-///    not the plain token, to prevent DB breach exposure.
 /// </summary>
 public class RefreshToken
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
-    /// <summary>The token value (or its hash — see security note above).</summary>
+    /// <summary>SHA-256 hash of the token value (never the plain token — see RefreshTokenRepository.HashToken).</summary>
     public string TokenHash { get; set; } = string.Empty;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
