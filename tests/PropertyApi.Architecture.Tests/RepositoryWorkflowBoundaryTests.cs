@@ -12,7 +12,6 @@ public sealed class RepositoryWorkflowBoundaryTests
     [
         "IIdentityCapabilityAdapter",
         "ITokenService",
-        "IRefreshTokenStore",
         "IOtpService",
         "IApplicationEmailSender",
         "IEmailVerificationService",

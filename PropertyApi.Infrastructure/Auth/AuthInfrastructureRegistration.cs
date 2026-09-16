@@ -90,7 +90,6 @@ internal static class AuthInfrastructureRegistration
         IConfiguration configuration)
     {
         services.AddScoped<ITokenService, TokenService>();
-        services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
 
         services.AddSingleton<
             IPhoneNumberLookupHasher,
