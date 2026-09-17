@@ -22,10 +22,20 @@ public sealed class PropertyFilterDtoValidator
         RuleFor(filter => filter.PageSize)
             .InclusiveBetween(1, 100);
 
+        RuleFor(filter => filter.SearchTerm)
+            .MaximumLength(200)
+            .When(filter =>
+                !string.IsNullOrWhiteSpace(filter.SearchTerm));
+
         RuleFor(filter => filter.CountryCode)
             .Length(2)
             .When(filter =>
                 !string.IsNullOrWhiteSpace(filter.CountryCode));
+
+        RuleFor(filter => filter.CurrencyCode)
+            .Length(3)
+            .When(filter =>
+                !string.IsNullOrWhiteSpace(filter.CurrencyCode));
 
         RuleFor(filter => filter.MinPrice)
             .GreaterThanOrEqualTo(0)
