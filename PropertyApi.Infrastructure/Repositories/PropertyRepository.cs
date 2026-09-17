@@ -348,14 +348,25 @@ public sealed class PropertyRepository : IPropertyRepository
     /// </summary>
     public static IQueryable<Property> ApplyFilter(IQueryable<Property> query, PropertyFilterDto filter)
     {
+        if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
+        {
+            var term = filter.SearchTerm.Trim();
+            query = query.Where(p =>
+                EF.Functions.ILike(p.Title, $"%{term}%") ||
+                EF.Functions.ILike(p.Description, $"%{term}%"));
+        }
+
         if (!string.IsNullOrWhiteSpace(filter.CountryCode))
             query = query.Where(p => p.CountryCode == filter.CountryCode.ToUpperInvariant());
 
         if (!string.IsNullOrWhiteSpace(filter.City))
-            query = query.Where(p => EF.Functions.ILike(p.City, $"%{filter.City}%"));
+            query = query.Where(p => EF.Functions.ILike(p.City, $"%{filter.City.Trim()}%"));
 
         if (!string.IsNullOrWhiteSpace(filter.Region))
-            query = query.Where(p => EF.Functions.ILike(p.Region!, $"%{filter.Region}%"));
+            query = query.Where(p => EF.Functions.ILike(p.Region!, $"%{filter.Region.Trim()}%"));
+
+        if (!string.IsNullOrWhiteSpace(filter.CurrencyCode))
+            query = query.Where(p => p.CurrencyCode == filter.CurrencyCode.ToUpperInvariant());
 
         // Structured location filters take precedence in matching accuracy over the
         // free-text City/Region filters above — callers may pass both, in which case

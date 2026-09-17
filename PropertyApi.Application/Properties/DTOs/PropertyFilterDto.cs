@@ -12,6 +12,10 @@ public sealed class PropertyFilterDto
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;  // Default 20, max 100
 
+    // Free-text keyword search — matched against Title/Description (ILIKE, case-insensitive).
+    // Independent of, and AND'ed with, every other filter below (Phase 3).
+    public string? SearchTerm { get; set; }
+
     // Location filters
     public string? CountryCode { get; set; }   // ISO 3166-1 alpha-2
     public string? City { get; set; }
