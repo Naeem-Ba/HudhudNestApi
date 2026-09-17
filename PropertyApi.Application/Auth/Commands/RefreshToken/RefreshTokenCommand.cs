@@ -19,6 +19,8 @@ public sealed record RefreshTokenResult
     public string Message { get; init; } =
         string.Empty;
 
+    public string? ErrorCode { get; init; }
+
     public string AccessToken { get; init; } =
         string.Empty;
 
@@ -40,12 +42,26 @@ public sealed record RefreshTokenResult
         };
 
     public static RefreshTokenResult Unauthorized(
-        string message)
+        string message,
+        string errorCode)
         => new()
         {
             Success = false,
-            Message = message
+            Message = message,
+            ErrorCode = errorCode
         };
+}
+
+/// <summary>
+/// Stable codes for <see cref="RefreshTokenResult.ErrorCode"/> — lets the client distinguish a
+/// silently-recoverable-elsewhere case from one that genuinely means "log in again", instead of
+/// parsing the free-text <see cref="RefreshTokenResult.Message"/>.
+/// </summary>
+public static class RefreshTokenErrorCodes
+{
+    public const string Expired = "REFRESH_TOKEN_EXPIRED";
+    public const string ReuseDetected = "REFRESH_TOKEN_REUSE_DETECTED";
+    public const string RotationConflict = "REFRESH_TOKEN_ROTATION_CONFLICT";
 }
 
 public sealed class RefreshTokenCommandHandler
@@ -122,7 +138,8 @@ public sealed class RefreshTokenCommandHandler
 
                         return RefreshTokenResult
                             .Unauthorized(
-                                "Invalid or expired refresh token.");
+                                "Invalid or expired refresh token.",
+                                RefreshTokenErrorCodes.Expired);
                     }
 
                     if (stored.IsRevoked)
@@ -134,7 +151,8 @@ public sealed class RefreshTokenCommandHandler
 
                         return RefreshTokenResult
                             .Unauthorized(
-                                "Refresh token reuse detected. All active sessions were revoked.");
+                                "Refresh token reuse detected. All active sessions were revoked.",
+                                RefreshTokenErrorCodes.ReuseDetected);
                     }
 
                     /*
@@ -157,7 +175,8 @@ public sealed class RefreshTokenCommandHandler
 
                         return RefreshTokenResult
                             .Unauthorized(
-                                "Invalid or expired refresh token.");
+                                "Invalid or expired refresh token.",
+                                RefreshTokenErrorCodes.Expired);
                     }
 
                     var newRefreshToken =
@@ -178,7 +197,8 @@ public sealed class RefreshTokenCommandHandler
                     {
                         return RefreshTokenResult
                             .Unauthorized(
-                                "Refresh token was already rotated by another request.");
+                                "Refresh token was already rotated by another request.",
+                                RefreshTokenErrorCodes.RotationConflict);
                     }
 
                     await _refreshTokens.AddAsync(

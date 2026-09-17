@@ -265,7 +265,7 @@ public sealed class AuthController : ControllerBase
             IpAddress: GetClientIp()), ct);
 
         if (!result.Success)
-            return Unauthorized(new { message = result.Message });
+            return Unauthorized(new { message = result.Message, errorCode = result.ErrorCode });
 
         RefreshTokenCookie.Attach(Response, result.RefreshToken, _jwtSettings.RefreshTokenDays);
 

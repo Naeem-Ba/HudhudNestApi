@@ -84,8 +84,8 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     public async Task<PhoneWorkflowResult> RegisterAsync(Guid challengeId, string code, string password,
         string firstName, string lastName, string? ipAddress, CancellationToken ct)
     {
-        var challenge = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneRegistration, null, ct);
-        if (challenge is null) return Fail("OTP_INVALID");
+        var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneRegistration, null, ct);
+        if (outcome.Challenge is not { } challenge) return Fail(OtpErrorCode(outcome.FailureReason, "OTP_INVALID"));
         await using var transaction = await _db.Database.BeginTransactionAsync(ct);
         try
         {
@@ -145,6 +145,12 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
                 newValue: "{\"outcome\":\"failed\"}", ct: ct);
             return Fail("PHONE_AUTH_FAILED");
         }
+        // Deliberately not distinguishing IsLockedOut here: AuthController.cs's email login
+        // used to do exactly that (a distinct locked-account response) and reverted it as a
+        // documented security fix — a lockout-specific code is an enumeration oracle (wrong
+        // password on a random number always fails generically; a real, rate-limited number
+        // eventually answers differently, confirming it has an account). Same reasoning
+        // applies to phone numbers, so every login failure stays PHONE_AUTH_FAILED.
         var signIn = await _signIn.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true);
         if (!signIn.Succeeded)
         {
@@ -162,8 +168,8 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     public async Task<PhoneWorkflowResult> VerifyPasswordResetAsync(Guid challengeId, string code,
         CancellationToken ct)
     {
-        var challenge = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhonePasswordReset, null, ct);
-        if (challenge is null) return Fail("PASSWORD_RESET_INVALID");
+        var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhonePasswordReset, null, ct);
+        if (outcome.Challenge is not { } challenge) return Fail(PasswordResetErrorCode(outcome.FailureReason));
         var user = await _users.Users.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber, ct);
         if (user is null) return Fail("PASSWORD_RESET_INVALID");
         await ConsumeAsync(challenge.Id, ct);
@@ -198,8 +204,8 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     public async Task<PhoneWorkflowResult> VerifyReverificationAsync(Guid userId, Guid challengeId,
         string code, CancellationToken ct)
     {
-        var challenge = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneReverification, userId, ct);
-        if (challenge is null) return Fail("OTP_INVALID");
+        var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneReverification, userId, ct);
+        if (outcome.Challenge is not { } challenge) return Fail(OtpErrorCode(outcome.FailureReason, "OTP_INVALID"));
         var user = await _users.FindByIdAsync(userId.ToString());
         if (user is null || user.NormalizedPhoneNumber != challenge.NormalizedPhoneNumber) return Fail("OTP_INVALID");
         SetVerified(user, _clock.GetUtcNow());
@@ -217,8 +223,8 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         var user = await _users.FindByIdAsync(userId.ToString());
         if (user is null || !await _users.CheckPasswordAsync(user, currentPassword))
             return Fail("RECENT_AUTHENTICATION_REQUIRED");
-        var challenge = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneNumberChange, userId, ct);
-        if (challenge is null) return Fail("OTP_INVALID");
+        var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneNumberChange, userId, ct);
+        if (outcome.Challenge is not { } challenge) return Fail(OtpErrorCode(outcome.FailureReason, "OTP_INVALID"));
         if (await _users.Users.AnyAsync(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber, ct))
             return Fail("PHONE_NUMBER_ALREADY_IN_USE");
         user.PhoneNumber = challenge.NormalizedPhoneNumber;
@@ -234,39 +240,80 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         return new(true, Message: "Phone number changed.");
     }
 
-    private async Task<PhoneOtpChallenge?> ValidateAndReserveAsync(Guid id, string code,
+    private async Task<OtpValidationOutcome> ValidateAndReserveAsync(Guid id, string code,
         OtpPurpose purpose, Guid? userId, CancellationToken ct)
     {
         var now = _clock.GetUtcNow();
         var challenge = await _db.PhoneOtpChallenges.SingleOrDefaultAsync(x => x.Id == id, ct);
-        if (challenge is null || challenge.Purpose != purpose || challenge.UserId != userId ||
-            challenge.ConsumedAtUtc is not null || challenge.ExpiresAtUtc <= now || challenge.AttemptCount >= 3 ||
-            (challenge.ReservedUntilUtc > now)) return null;
+        if (challenge is null || challenge.Purpose != purpose || challenge.UserId != userId)
+            return OtpValidationOutcome.Failed(OtpFailureReason.NotFound);
+        if (challenge.ConsumedAtUtc is not null)
+            return OtpValidationOutcome.Failed(OtpFailureReason.AlreadyUsed);
+        if (challenge.ExpiresAtUtc <= now)
+            return OtpValidationOutcome.Failed(OtpFailureReason.Expired);
+        if (challenge.AttemptCount >= 3)
+            return OtpValidationOutcome.Failed(OtpFailureReason.TooManyAttempts);
+        if (challenge.ReservedUntilUtc > now)
+            return OtpValidationOutcome.Failed(OtpFailureReason.NotFound);
         if (!_otp.Verify(code, challenge.CodeHash))
         {
             if (!_db.Database.IsRelational())
             {
                 challenge.IncrementAttempts();
                 await _db.SaveChangesAsync(ct);
-                return null;
+                return OtpValidationOutcome.Failed(OtpFailureReason.WrongCode);
             }
             await _db.PhoneOtpChallenges.Where(x => x.Id == id && x.AttemptCount < 3)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.AttemptCount, x => x.AttemptCount + 1), ct);
-            return null;
+            return OtpValidationOutcome.Failed(OtpFailureReason.WrongCode);
         }
         var reservation = Guid.NewGuid();
         if (!_db.Database.IsRelational())
         {
             challenge.Reserve(reservation, now.AddMinutes(2));
             await _db.SaveChangesAsync(ct);
-            return challenge;
+            return OtpValidationOutcome.Success(challenge);
         }
         var affected = await _db.PhoneOtpChallenges.Where(x => x.Id == id && x.ConsumedAtUtc == null &&
                 (x.ReservedUntilUtc == null || x.ReservedUntilUtc <= now))
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.ReservationId, reservation)
                 .SetProperty(x => x.ReservedUntilUtc, now.AddMinutes(2)), ct);
-        return affected == 1 ? await _db.PhoneOtpChallenges.SingleAsync(x => x.Id == id, ct) : null;
+        return affected == 1
+            ? OtpValidationOutcome.Success(await _db.PhoneOtpChallenges.SingleAsync(x => x.Id == id, ct))
+            : OtpValidationOutcome.Failed(OtpFailureReason.NotFound);
     }
+
+    /// <summary>
+    /// Distinguishes wrong/expired/already-used/rate-limited so callers can return a specific
+    /// error code instead of collapsing every OTP failure into one generic response. NotFound
+    /// stays generic (covers purpose/user mismatch and the rare concurrent-reservation race) —
+    /// those are attacker-probing/internal-race shapes, not something a legitimate user needs
+    /// distinguished from "wrong code".
+    /// </summary>
+    private enum OtpFailureReason { NotFound, Expired, AlreadyUsed, TooManyAttempts, WrongCode }
+
+    private readonly record struct OtpValidationOutcome(PhoneOtpChallenge? Challenge, OtpFailureReason? FailureReason)
+    {
+        public static OtpValidationOutcome Success(PhoneOtpChallenge challenge) => new(challenge, null);
+        public static OtpValidationOutcome Failed(OtpFailureReason reason) => new(null, reason);
+    }
+
+    private static string OtpErrorCode(OtpFailureReason? reason, string genericCode) => reason switch
+    {
+        OtpFailureReason.Expired => "OTP_EXPIRED",
+        OtpFailureReason.AlreadyUsed => "OTP_ALREADY_USED",
+        OtpFailureReason.TooManyAttempts => "OTP_RATE_LIMITED",
+        OtpFailureReason.WrongCode => "OTP_WRONG",
+        _ => genericCode
+    };
+
+    private static string PasswordResetErrorCode(OtpFailureReason? reason) => reason switch
+    {
+        OtpFailureReason.Expired => "PASSWORD_RESET_EXPIRED",
+        OtpFailureReason.AlreadyUsed => "PASSWORD_RESET_ALREADY_USED",
+        OtpFailureReason.TooManyAttempts => "PASSWORD_RESET_RATE_LIMITED",
+        _ => "PASSWORD_RESET_INVALID"
+    };
 
     private async Task ConsumeAsync(Guid id, CancellationToken ct)
     {

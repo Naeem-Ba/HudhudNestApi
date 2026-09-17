@@ -247,6 +247,9 @@ public sealed class RefreshTokenCommandHandlerTests
         Assert.Equal(
             "Refresh token reuse detected. All active sessions were revoked.",
             result.Message);
+        Assert.Equal(
+            RefreshTokenErrorCodes.ReuseDetected,
+            result.ErrorCode);
 
         VerifyReuseHandling(
             refreshTokens,
@@ -356,6 +359,9 @@ public sealed class RefreshTokenCommandHandlerTests
         Assert.Equal(
             "Refresh token was already rotated by another request.",
             result.Message);
+        Assert.Equal(
+            RefreshTokenErrorCodes.RotationConflict,
+            result.ErrorCode);
 
         refreshTokens.Verify(x => x.RevokeActiveTokensForUserAsync(
             It.IsAny<Guid>(),
@@ -384,6 +390,54 @@ public sealed class RefreshTokenCommandHandlerTests
             It.IsAny<AccessTokenSubject>(),
             It.IsAny<IReadOnlyCollection<string>>()),
             Times.Never);
+    }
+
+    [Fact(
+        DisplayName =
+            "RefreshToken reports REFRESH_TOKEN_EXPIRED when the token hash is unknown")]
+    public async Task
+        UnknownToken_ReturnsExpiredErrorCode()
+    {
+        var refreshTokens =
+            CreateTransactionalRefreshTokenRepository();
+
+        refreshTokens
+            .Setup(x => x.GetByRefreshTokenAsync(
+                ExistingRefreshToken,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((RefreshTokenRecord?)null);
+
+        var identityService =
+            new Mock<IRefreshTokenIdentityService>();
+
+        var cacheInvalidator =
+            new Mock<IUserSecurityStampCacheInvalidator>();
+
+        var auditLogs =
+            CreateAuditLogService();
+
+        var tokenService =
+            new Mock<ITokenService>();
+
+        var handler =
+            CreateRefreshHandler(
+                refreshTokens,
+                identityService,
+                tokenService,
+                cacheInvalidator,
+                auditLogs);
+
+        var result =
+            await handler.Handle(
+                new RefreshTokenCommand(
+                    ExistingRefreshToken,
+                    IpAddress),
+                CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(
+            RefreshTokenErrorCodes.Expired,
+            result.ErrorCode);
     }
 
     private static RefreshTokenCommandHandler CreateRefreshHandler(
