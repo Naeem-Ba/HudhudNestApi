@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using FluentValidation.Results;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
@@ -218,8 +219,13 @@ public sealed class ResetPasswordCommandHandler
 public sealed class ResetPasswordCommandValidator
     : AbstractValidator<ResetPasswordCommand>
 {
-    public ResetPasswordCommandValidator()
+    private readonly IPasswordSecurityService _passwordSecurityService;
+
+    public ResetPasswordCommandValidator(
+        IPasswordSecurityService passwordSecurityService)
     {
+        _passwordSecurityService = passwordSecurityService;
+
         RuleFor(x => x.Email)
             .NotEmpty()
             .MaximumLength(320)
@@ -230,9 +236,45 @@ public sealed class ResetPasswordCommandValidator
 
         RuleFor(x => x.NewPassword)
             .NotEmpty()
-            .MinimumLength(8);
+            .WithMessage("Password is required.")
+            .MinimumLength(8)
+            .WithMessage("Password must be at least 8 characters long.")
+            .CustomAsync(ValidatePasswordSecurityAsync);
 
         RuleFor(x => x.ConfirmPassword)
             .Equal(x => x.NewPassword);
+    }
+
+    // Same policy as RegisterCommandValidator, via the same abstraction — a password
+    // rejected at registration (breach, complexity, common pattern) must be rejected here
+    // too, or a user could set exactly what registration would have refused.
+    private async Task ValidatePasswordSecurityAsync(
+        string password,
+        ValidationContext<ResetPasswordCommand> context,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(password))
+        {
+            return;
+        }
+
+        var result = await _passwordSecurityService.ValidatePasswordAsync(
+            password,
+            cancellationToken);
+
+        if (result.IsValid)
+        {
+            return;
+        }
+
+        foreach (var error in result.Errors)
+        {
+            context.AddFailure(new ValidationFailure(
+                nameof(ResetPasswordCommand.NewPassword),
+                error.Message)
+            {
+                ErrorCode = error.Code
+            });
+        }
     }
 }
