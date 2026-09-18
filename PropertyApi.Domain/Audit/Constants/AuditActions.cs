@@ -39,4 +39,11 @@ public static class AuditActions
     // -- Admin dashboard: valuation module (Stage 8) -----------------------
     public const string ValuationOfficeFlaggedForReviewByAdmin = "ValuationOfficeFlaggedForReviewByAdmin";
     public const string ValuationOfficeReviewFlagClearedByAdmin = "ValuationOfficeReviewFlagClearedByAdmin";
+
+    // -- Admin dashboard: app update management ----------------------------
+    public const string AppReleaseCreatedByAdmin = "AppReleaseCreatedByAdmin";
+    public const string AppReleaseUpdatedByAdmin = "AppReleaseUpdatedByAdmin";
+    public const string AppReleaseEnabledByAdmin = "AppReleaseEnabledByAdmin";
+    public const string AppReleaseDisabledByAdmin = "AppReleaseDisabledByAdmin";
+    public const string AppReleaseDeletedByAdmin = "AppReleaseDeletedByAdmin";
 }

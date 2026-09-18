@@ -144,6 +144,12 @@ public sealed class PublicEndpointPolicyTests
             "InvestmentsController.GetProjectUpdates",
             "InvestmentsController.Calculate",
 
+            // App Update Management (Phase 1): a client must be able to ask "is my version
+            // still supported?" before it can prove who it is, and the response carries no
+            // sensitive data (just version/store-url/release-notes metadata) — read-only,
+            // bounded by "public-read".
+            "AppUpdatesController.Check",
+
             // Operational surface.
             "ObservabilitySyntheticController.Execute",
             "ObservabilityAlertTestController.SetAlertTestState",

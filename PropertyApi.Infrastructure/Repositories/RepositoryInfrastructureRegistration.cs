@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using PropertyApi.Application.Admin.Interfaces;
 using PropertyApi.Application.Agencies.Interfaces;
 using PropertyApi.Application.Analytics.Interfaces;
+using PropertyApi.Application.AppUpdates.Interfaces;
 using PropertyApi.Application.Bookings.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Contact.Interfaces;
@@ -23,6 +24,7 @@ using PropertyApi.Application.ShortStay.Services;
 using PropertyApi.Application.Valuation.Interfaces;
 using PropertyApi.Infrastructure.Admin;
 using PropertyApi.Infrastructure.Analytics;
+using PropertyApi.Infrastructure.AppUpdates;
 using PropertyApi.Infrastructure.Bookings;
 using PropertyApi.Infrastructure.Investments;
 using PropertyApi.Infrastructure.Listings;
@@ -104,6 +106,10 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IBookingRepository, BookingRepository>();
         services.AddScoped<IShortStayReviewRepository, ShortStayReviewRepository>();
         services.AddScoped<IPricingCalculationService, PricingCalculationService>();
+
+        // App Update Management (Phase 1)
+        services.AddScoped<IAppReleaseRepository, AppReleaseRepository>();
+        services.AddScoped<IAppReleaseCacheService, CachedAppReleaseCacheService>();
 
         // Investment Discovery module (Phase 1)
         services.AddScoped<IInvestmentProjectRepository, InvestmentProjectRepository>();

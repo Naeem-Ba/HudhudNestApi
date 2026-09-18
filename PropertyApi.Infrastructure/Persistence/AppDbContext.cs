@@ -23,6 +23,7 @@ using PropertyApi.Infrastructure.Identity.Entities;
 using PropertyApi.Infrastructure.Security.DataProtection;
 using PropertyApi.Domain.ShortStay.Entities;
 using PropertyApi.Domain.Investments.Entities;
+using PropertyApi.Domain.AppUpdates.Entities;
 using PropertyApi.Domain.Marketing.Entities;
 using PropertyApi.Domain.SocialDistribution.Entities;
 using PropertyApi.Domain.Valuation.Entities;
@@ -128,6 +129,9 @@ public sealed class AppDbContext
     public DbSet<Booking> ShortStayBookings => Set<Booking>();
     public DbSet<ShortStayReview> ShortStayReviews => Set<ShortStayReview>();
     public DbSet<HostVerificationRecord> HostVerificationRecords => Set<HostVerificationRecord>();
+
+    // App Update Management (Phase 1)
+    public DbSet<AppRelease> AppReleases => Set<AppRelease>();
 
     // Investment Discovery module (Phase 1)
     public DbSet<InvestmentProject> InvestmentProjects => Set<InvestmentProject>();
