@@ -56,19 +56,41 @@ public static class CsrfExtensions
             // unconditionally, indistinguishable from an actual missing/invalid token.
             options.Cookie.SameSite = SameSiteMode.None;
 
-            // SameAsRequest, not the seemingly-stronger Always: ASP.NET Core's antiforgery
-            // system actively throws InvalidOperationException out of GetAndStoreTokens /
-            // ValidateRequestAsync when SecurePolicy=Always and the current request is plain
-            // HTTP (Microsoft.AspNetCore.Antiforgery.DefaultAntiforgery.CheckSSLConfig) --
-            // this is not a silently-ignored cookie attribute like Secure on an ordinary
-            // cookie, it is a hard 500 on every request. Testing/CI run the app over plain
-            // HTTP (TestServer has no TLS), so Always made GET /api/security/csrf-token and
-            // every CSRF-protected endpoint fail outright the moment CookieCsrf:Enabled=true
-            // in that environment. SameAsRequest adapts instead of enforcing: Secure=true on
-            // the real HTTPS traffic Production and a correctly-configured local HTTPS
-            // profile actually serve (still satisfying SameSite=None's browser requirement
-            // there), Secure=false on plain-HTTP Testing/CI, and never throws either way.
-            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            // Production incident (2026-09-18): SameAsRequest was chosen to avoid a hard
+            // InvalidOperationException in Testing/CI (see below) -- but "adapt to the
+            // request's own scheme" turned out to be actively wrong in Production. Confirmed
+            // live with a direct curl to https://wohnungen-api.onrender.com (bypassing the
+            // frontend/Netlify entirely): the Set-Cookie response for this exact endpoint
+            // lacked `Secure` even over a genuine HTTPS connection. Render sits behind
+            // Cloudflare, and Request.IsHttps reflects only the immediate hop's scheme as this
+            // app's ForwardedHeaders middleware resolves it -- which does not reliably end up
+            // "https" here, for reasons not fully diagnosable from outside Render's
+            // infrastructure. A `SameSite=None` cookie missing `Secure` is dropped by every
+            // browser outright, so this cookie (and the antiforgery check it backs) has
+            // silently never survived a real Production request. It was masked until now by
+            // the third-party-cookie bug refresh_token itself had (see RefreshTokenCookie.cs):
+            // CookieCsrfProtectionMiddleware only enforces this check when refresh_token is
+            // already present, and refresh_token was never surviving either, so the check was
+            // never actually reached in practice. Fixing the transport bug (Partitioned +
+            // same-origin proxy) exposed this second, independent one.
+            //
+            // Forcing Always specifically in Production sidesteps the unreliable IsHttps
+            // detection instead of trying to fix it: Production is provably always served over
+            // real HTTPS (enforced at startup elsewhere in this codebase), so there is nothing
+            // adaptive to lose. Testing/CI still needs SameAsRequest -- ASP.NET Core's
+            // antiforgery system actively throws InvalidOperationException out of
+            // GetAndStoreTokens/ValidateRequestAsync when SecurePolicy=Always and the current
+            // request is plain HTTP (DefaultAntiforgery.CheckSSLConfig; TestServer has no TLS)
+            // -- this is not a silently-ignored cookie attribute like Secure on an ordinary
+            // cookie, it is a hard 500 on every request. Development/real Staging are left on
+            // SameAsRequest too: local dev is documented to require a real HTTPS profile
+            // already (RefreshTokenCookie.cs), so SameAsRequest already resolves to Secure=true
+            // there in practice, and Staging is a deliberately separate, smaller-blast-radius
+            // fix to make later (also excluded from the same-origin proxy fix for now -- see
+            // the frontend's auth-api-base-url.ts).
+            options.Cookie.SecurePolicy = environment.IsProduction()
+                ? CookieSecurePolicy.Always
+                : CookieSecurePolicy.SameAsRequest;
 
             // See RefreshTokenCookie.cs's doc comment ("Production incident 2026-09"): this
             // cookie has the exact same cross-site posture as refresh_token, so it needs the
