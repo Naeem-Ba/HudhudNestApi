@@ -166,7 +166,7 @@ await app.SeedReferenceDataAsync();
 // -- 11. Middleware order --------------------------------------
 app.UseForwardedHeaders();
 
-if (app.Environment.IsProduction())
+if (app.Environment.IsProduction() || app.Environment.IsStaging())
 {
     // Production incident (2026-09-18): Request.IsHttps is still false on every request here
     // even after ForwardedHeadersRegistration.cs's own RequireHeaderSymmetry=false fix (that
@@ -187,6 +187,19 @@ if (app.Environment.IsProduction())
     // Request.IsHttps) work correctly on that fact instead of on an unreliable internal signal.
     // Must run immediately after UseForwardedHeaders() so it wins over whatever that middleware
     // concluded, and before anything else in the pipeline reads Request.IsHttps.
+    //
+    // Extended to Staging (2026-09-18, same day, found live via a Playwright E2E run — see
+    // docs/audit/CURRENT-ISSUES-VERIFICATION.md): Staging has the exact same structural cause,
+    // arguably more reliably so -- its `propertyapi-staging-api.onrender.com` origin is served
+    // directly off Render's own TLS-terminating edge (no custom domain/Cloudflare in front of
+    // it the way Production has), and `ForwardedHeaders__Enabled=false` there (see
+    // render-staging-deployment memory: no documented Render proxy CIDR was available to scope
+    // KnownNetworks to) means Kestrel never learns the original request was HTTPS at all.
+    // Confirmed live: a real login + forced-401 + silent-refresh E2E run against deployed
+    // Staging got a 403 (CSRF validation failed) from POST /auth/refresh, because the
+    // antiforgery cookie's Secure attribute -- computed from this same unreliable
+    // Request.IsHttps -- was never set, so the browser dropped the SameSite=None cookie and no
+    // real CSRF token ever reached the client to echo back.
     app.Use((context, next) =>
     {
         context.Request.Scheme = "https";
