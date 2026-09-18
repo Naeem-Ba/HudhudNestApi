@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -62,6 +63,25 @@ public sealed class CookieCsrfProtectionIntegrationTests : IAsyncLifetime
         var bodyToken = body.RootElement.GetProperty("csrfToken").GetString();
         Assert.False(string.IsNullOrEmpty(bodyToken));
         Assert.Equal(xsrfCookie, bodyToken);
+    }
+
+    /// <summary>
+    /// Production incident (2026-09): realestateworld.world and onrender.com are different
+    /// registrable domains, so this cookie (and refresh_token — see RefreshTokenCookie.cs's
+    /// doc comment) is a third-party cookie by definition. Chrome/Edge were confirmed live to
+    /// be dropping it outright, so it never survived a page reload. Partitioned (CHIPS) is the
+    /// browser-sanctioned fix; this asserts it actually reaches the wire.
+    /// </summary>
+    [Fact(DisplayName = "GET csrf-token's cookies carry the Partitioned (CHIPS) attribute")]
+    public async Task GetCsrfToken_SetsCookiesWithPartitionedAttribute()
+    {
+        using var response = await _client.GetAsync("/api/security/csrf-token");
+
+        response.Headers.TryGetValues("Set-Cookie", out var setCookieHeaders);
+        var headers = setCookieHeaders?.ToList() ?? [];
+
+        Assert.NotEmpty(headers);
+        Assert.All(headers, header => Assert.Contains("Partitioned", header));
     }
 
     [Fact(DisplayName = "POST refresh with no refresh_token cookie is not blocked by CSRF (nothing ambient to protect)")]

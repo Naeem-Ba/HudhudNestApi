@@ -69,6 +69,12 @@ public static class CsrfExtensions
             // profile actually serve (still satisfying SameSite=None's browser requirement
             // there), Secure=false on plain-HTTP Testing/CI, and never throws either way.
             options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+
+            // See RefreshTokenCookie.cs's doc comment ("Production incident 2026-09"): this
+            // cookie has the exact same cross-site posture as refresh_token, so it needs the
+            // same CHIPS fix or the antiforgery check it backs would fail even once
+            // refresh_token itself starts surviving.
+            options.Cookie.Extensions.Add("Partitioned");
         });
 
         return services;

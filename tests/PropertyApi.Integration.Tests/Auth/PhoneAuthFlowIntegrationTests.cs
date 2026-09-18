@@ -35,6 +35,10 @@ public sealed class PhoneAuthFlowIntegrationTests : IClassFixture<PhoneAuthWebAp
         // response body — it travels only in the HttpOnly refresh_token cookie now.
         Assert.True(string.IsNullOrWhiteSpace(await Property<string>(registration, "refreshToken")));
         Assert.True(HasRefreshTokenCookie(registration), "Registration did not set the refresh_token cookie.");
+        // Production incident (2026-09): see RefreshTokenCookie.cs's doc comment — Chrome/Edge
+        // confirmed live to drop this cookie outright without the Partitioned (CHIPS) attribute
+        // because the real deployed frontend/backend are different registrable domains.
+        Assert.True(RefreshTokenCookieIsPartitioned(registration), "refresh_token cookie is missing the Partitioned attribute.");
 
         var login = await _client.PostAsJsonAsync("/api/auth/phone/login", new { phoneNumber = phone, password = "SecurePass9" });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
@@ -68,5 +72,9 @@ public sealed class PhoneAuthFlowIntegrationTests : IClassFixture<PhoneAuthWebAp
     private static bool HasRefreshTokenCookie(HttpResponseMessage response) =>
         response.Headers.TryGetValues("Set-Cookie", out var cookies) &&
         cookies.Any(cookie => cookie.StartsWith("refresh_token=", StringComparison.Ordinal));
+
+    private static bool RefreshTokenCookieIsPartitioned(HttpResponseMessage response) =>
+        response.Headers.TryGetValues("Set-Cookie", out var cookies) &&
+        cookies.Any(cookie => cookie.StartsWith("refresh_token=", StringComparison.Ordinal) && cookie.Contains("Partitioned"));
     private static string UniquePhone() => $"+49{Math.Abs(DateTime.UtcNow.Ticks % 10_000_000_000_000L):D13}";
 }
