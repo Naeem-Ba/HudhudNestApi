@@ -1,7 +1,9 @@
 using System.Security.Cryptography;
 using MediatR;
+using PropertyApi.Application.Common.Enums;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Common.Models;
 using PropertyApi.Application.Investments.Interfaces;
 using PropertyApi.Domain.Investments.Entities;
 
@@ -14,7 +16,6 @@ namespace PropertyApi.Application.Investments.Commands.AddInvestmentDocument;
 public sealed class AddInvestmentDocumentCommandHandler : IRequestHandler<AddInvestmentDocumentCommand, Guid>
 {
     private const long MaxDocumentSize = 15_000_000;
-    private const string DocumentFolder = "investment-documents";
 
     private static readonly HashSet<string> AllowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -24,17 +25,20 @@ public sealed class AddInvestmentDocumentCommandHandler : IRequestHandler<AddInv
     private readonly IInvestmentProjectRepository _projects;
     private readonly IInvestmentDocumentRepository _documents;
     private readonly IMediaStorageService _storage;
+    private readonly IMediaFolderBuilder _folderBuilder;
     private readonly IUnitOfWork _uow;
 
     public AddInvestmentDocumentCommandHandler(
         IInvestmentProjectRepository projects,
         IInvestmentDocumentRepository documents,
         IMediaStorageService storage,
+        IMediaFolderBuilder folderBuilder,
         IUnitOfWork uow)
     {
         _projects = projects;
         _documents = documents;
         _storage = storage;
+        _folderBuilder = folderBuilder;
         _uow = uow;
     }
 
@@ -64,11 +68,13 @@ public sealed class AddInvestmentDocumentCommandHandler : IRequestHandler<AddInv
         var hash = Convert.ToHexString(SHA256.HashData(bytes));
 
         using var uploadStream = new MemoryStream(bytes);
+        var folder = _folderBuilder.BuildFolder(
+            MediaEntityType.Investment, request.InvestmentProjectId, MediaCategories.Documents);
         var uploadResult = await _storage.UploadImageAsync(
             uploadStream,
             file.FileName,
             file.ContentType,
-            DocumentFolder,
+            folder,
             ct);
 
         if (!uploadResult.Succeeded)

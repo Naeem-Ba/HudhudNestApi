@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using PropertyApi.Application.Common.Enums;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Common.Models;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.SocialDistribution.DTOs;
 using PropertyApi.Application.SocialDistribution.Interfaces;
@@ -33,11 +35,10 @@ namespace PropertyApi.Application.SocialDistribution.Services;
 /// </summary>
 public sealed class SocialMediaAssetGenerator : ISocialMediaAssetGenerator
 {
-    private const string AssetFolder = "social-assets";
-
     private readonly IPropertyRepository _properties;
     private readonly ISocialMediaAssetRepository _assets;
     private readonly ISocialMediaAssetStorage _storage;
+    private readonly IMediaFolderBuilder _folderBuilder;
     private readonly IBrandIdentityProvider _brandProvider;
     private readonly IUnitOfWork _uow;
 
@@ -45,12 +46,14 @@ public sealed class SocialMediaAssetGenerator : ISocialMediaAssetGenerator
         IPropertyRepository properties,
         ISocialMediaAssetRepository assets,
         ISocialMediaAssetStorage storage,
+        IMediaFolderBuilder folderBuilder,
         IBrandIdentityProvider brandProvider,
         IUnitOfWork uow)
     {
         _properties = properties;
         _assets = assets;
         _storage = storage;
+        _folderBuilder = folderBuilder;
         _brandProvider = brandProvider;
         _uow = uow;
     }
@@ -116,7 +119,8 @@ public sealed class SocialMediaAssetGenerator : ISocialMediaAssetGenerator
         try
         {
             var fileName = $"{request.PropertyId:N}-{request.Platform}-{assetType}-{checksum[..12]}.svg";
-            uploaded = await _storage.SaveAsync(bytes, fileName, "image/svg+xml", AssetFolder, ct);
+            var folder = _folderBuilder.BuildFolder(MediaEntityType.Social, request.PropertyId, MediaCategories.Share);
+            uploaded = await _storage.SaveAsync(bytes, fileName, "image/svg+xml", folder, ct);
         }
         catch (Exception ex)
         {

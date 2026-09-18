@@ -1,5 +1,7 @@
+using PropertyApi.Application.Common.Enums;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Common.Models;
+using PropertyApi.Application.Common.Services;
 using PropertyApi.Application.Listings.Commands.DeletePropertyImage;
 using PropertyApi.Application.Listings.Commands.UploadPropertyImages;
 using PropertyApi.Application.Listings.DTOs;
@@ -31,12 +33,15 @@ public sealed class PropertyImagesHandlerTests
                 It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
+        var folderBuilder = new MediaFolderBuilder();
+        var expectedFolder = folderBuilder.BuildFolder(MediaEntityType.Property, property.Id, MediaCategories.Images);
+
         var storage = new Mock<IMediaStorageService>();
         storage.Setup(x => x.UploadImageAsync(
                 It.IsAny<Stream>(),
                 "image.jpg",
                 "image/jpeg",
-                "property-images",
+                expectedFolder,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(MediaUploadResult.Success("https://cdn.test/image.jpg", "public-id"));
 
@@ -47,6 +52,7 @@ public sealed class PropertyImagesHandlerTests
             repository.Object,
             ownership.Object,
             storage.Object,
+            folderBuilder,
             uow.Object);
 
         var result = await handler.Handle(

@@ -1,6 +1,8 @@
 using MediatR;
+using PropertyApi.Application.Common.Enums;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Common.Models;
 using PropertyApi.Application.Services.DTOs;
 using PropertyApi.Application.Services.Interfaces;
 using PropertyApi.Application.Services.Mapping;
@@ -19,7 +21,6 @@ public sealed class UploadServiceRequestDocumentCommandHandler
     : IRequestHandler<UploadServiceRequestDocumentCommand, ServiceRequestDocumentDto>
 {
     private const long MaxFileSize = 5_000_000;
-    private const string DocumentFolder = "service-request-documents";
 
     private static readonly HashSet<string> AllowedTypes =
         new(StringComparer.OrdinalIgnoreCase) { "image/jpeg", "image/png", "image/webp" };
@@ -31,6 +32,7 @@ public sealed class UploadServiceRequestDocumentCommandHandler
     private readonly IServiceProviderRepository _providers;
     private readonly IServiceRequestDocumentRepository _documents;
     private readonly IMediaStorageService _storage;
+    private readonly IMediaFolderBuilder _folderBuilder;
     private readonly IUnitOfWork _uow;
 
     public UploadServiceRequestDocumentCommandHandler(
@@ -38,12 +40,14 @@ public sealed class UploadServiceRequestDocumentCommandHandler
         IServiceProviderRepository providers,
         IServiceRequestDocumentRepository documents,
         IMediaStorageService storage,
+        IMediaFolderBuilder folderBuilder,
         IUnitOfWork uow)
     {
         _requests = requests;
         _providers = providers;
         _documents = documents;
         _storage = storage;
+        _folderBuilder = folderBuilder;
         _uow = uow;
     }
 
@@ -80,8 +84,16 @@ public sealed class UploadServiceRequestDocumentCommandHandler
         if (request.Content.CanSeek)
             request.Content.Position = 0;
 
+        if (!await HasValidImageSignatureAsync(request.Content, request.ContentType, ct))
+        {
+            throw new PropertyApi.Application.Common.Exceptions.ValidationException(
+                nameof(request.Content), "الملف ليس صورة صالحة.");
+        }
+
+        var folder = _folderBuilder.BuildFolder(
+            MediaEntityType.ServiceRequest, request.ServiceRequestId, MediaCategories.Documents);
         var uploadResult = await _storage.UploadImageAsync(
-            request.Content, request.FileName, request.ContentType, DocumentFolder, ct);
+            request.Content, request.FileName, request.ContentType, folder, ct);
 
         if (!uploadResult.Succeeded)
             throw new ConflictException(uploadResult.ErrorMessage ?? "فشل رفع الملف.");
@@ -99,5 +111,49 @@ public sealed class UploadServiceRequestDocumentCommandHandler
         await _uow.SaveChangesAsync(ct);
 
         return ServiceMapper.ToDto(document);
+    }
+
+    private static async Task<bool> HasValidImageSignatureAsync(
+        Stream content,
+        string contentType,
+        CancellationToken ct)
+    {
+        if (!content.CanSeek)
+            return false;
+
+        var originalPosition = content.Position;
+        var header = new byte[12];
+        var bytesRead = await content.ReadAsync(header.AsMemory(0, header.Length), ct);
+        content.Position = originalPosition;
+
+        return contentType.ToLowerInvariant() switch
+        {
+            "image/jpeg" => bytesRead >= 3 &&
+                header[0] == 0xFF &&
+                header[1] == 0xD8 &&
+                header[2] == 0xFF,
+
+            "image/png" => bytesRead >= 8 &&
+                header[0] == 0x89 &&
+                header[1] == 0x50 &&
+                header[2] == 0x4E &&
+                header[3] == 0x47 &&
+                header[4] == 0x0D &&
+                header[5] == 0x0A &&
+                header[6] == 0x1A &&
+                header[7] == 0x0A,
+
+            "image/webp" => bytesRead >= 12 &&
+                header[0] == 0x52 &&
+                header[1] == 0x49 &&
+                header[2] == 0x46 &&
+                header[3] == 0x46 &&
+                header[8] == 0x57 &&
+                header[9] == 0x45 &&
+                header[10] == 0x42 &&
+                header[11] == 0x50,
+
+            _ => false
+        };
     }
 }

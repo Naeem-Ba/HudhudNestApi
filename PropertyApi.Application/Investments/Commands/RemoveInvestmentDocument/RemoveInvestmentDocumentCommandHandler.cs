@@ -1,4 +1,5 @@
 using MediatR;
+using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Investments.Interfaces;
@@ -10,15 +11,18 @@ public sealed class RemoveInvestmentDocumentCommandHandler : IRequestHandler<Rem
     private readonly IInvestmentDocumentRepository _documents;
     private readonly IMediaStorageService _storage;
     private readonly IUnitOfWork _uow;
+    private readonly ILogger<RemoveInvestmentDocumentCommandHandler> _logger;
 
     public RemoveInvestmentDocumentCommandHandler(
         IInvestmentDocumentRepository documents,
         IMediaStorageService storage,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        ILogger<RemoveInvestmentDocumentCommandHandler> logger)
     {
         _documents = documents;
         _storage = storage;
         _uow = uow;
+        _logger = logger;
     }
 
     public async Task Handle(RemoveInvestmentDocumentCommand request, CancellationToken ct)
@@ -39,9 +43,16 @@ public sealed class RemoveInvestmentDocumentCommandHandler : IRequestHandler<Rem
         {
             await _storage.DeleteImageAsync(document.StorageKey, ct);
         }
-        catch
+        catch (Exception ex)
         {
-            // Swallowed deliberately — see comment above.
+            // The metadata row is already gone (source of truth), so we don't rethrow — but
+            // unlike before, we no longer swallow this silently: without a log line there was no
+            // way to ever find this orphaned Cloudinary asset again.
+            _logger.LogWarning(
+                ex,
+                "Failed to delete storage asset for removed investment document. DocumentId={DocumentId}, StorageKey={StorageKey}",
+                document.Id,
+                document.StorageKey);
         }
     }
 }

@@ -1,5 +1,6 @@
 using Moq;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Common.Services;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.SocialDistribution.DTOs;
 using PropertyApi.Application.SocialDistribution.Interfaces;
@@ -33,7 +34,8 @@ public sealed class SocialMediaAssetGeneratorTests
                 .ReturnsAsync(("https://cdn.example.com/generated.svg", "public-id-1"));
         }
 
-        public SocialMediaAssetGenerator Build() => new(Properties.Object, Assets.Object, Storage.Object, Brand.Object, UnitOfWork.Object);
+        public SocialMediaAssetGenerator Build() => new(
+            Properties.Object, Assets.Object, Storage.Object, new MediaFolderBuilder(), Brand.Object, UnitOfWork.Object);
     }
 
     private static Property MakeProperty()
