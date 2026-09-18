@@ -37,15 +37,18 @@ public sealed class CsrfController : ControllerBase
             {
                 HttpOnly = false,
 
-                // Same reasoning as the internal antiforgery cookie in CsrfExtensions: must
-                // match RefreshTokenCookie's cross-site posture, and SecurePolicy has to
-                // adapt to the request's own scheme rather than being hard-coded true, or
-                // this cookie silently would not be set at all on plain-HTTP Testing/CI
-                // (browsers drop SameSite=None cookies missing Secure outright -- unlike the
-                // antiforgery-internal cookie above, a plain CookieOptions.Secure=true on
-                // HTTP does not throw here, it just produces a cookie no HTTP client can use).
+                // Production incident (2026-09-18): Request.IsHttps is NOT a reliable signal
+                // in Production -- see CsrfExtensions.cs's own doc comment on the internal
+                // antiforgery cookie for the full story (confirmed live via a direct curl to
+                // the backend: Secure was missing from this exact cookie even over genuine
+                // HTTPS). Unlike that framework-managed cookie, a plain CookieOptions on an
+                // ordinary Response.Cookies.Append never throws regardless of the current
+                // request's actual scheme -- Secure is just a flag written into the header,
+                // not a runtime HTTPS-enforcement check -- so there is no Testing/CI exception
+                // to preserve here at all; hardcoding true is strictly safe, matching
+                // RefreshTokenCookie.Attach's own already-hardcoded Secure=true.
                 SameSite = SameSiteMode.None,
-                Secure = Request.IsHttps,
+                Secure = true,
                 Extensions = { "Partitioned" }
             });
 
