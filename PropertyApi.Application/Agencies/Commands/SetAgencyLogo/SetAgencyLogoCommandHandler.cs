@@ -3,7 +3,9 @@ using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Agencies.DTOs;
 using PropertyApi.Application.Agencies.Interfaces;
 using PropertyApi.Application.Agencies.Mapping;
+using PropertyApi.Application.Common.Enums;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Common.Models;
 
 namespace PropertyApi.Application.Agencies.Commands.SetAgencyLogo;
 
@@ -18,7 +20,6 @@ public sealed class SetAgencyLogoCommandHandler
     : IRequestHandler<SetAgencyLogoCommand, SetAgencyLogoResult>
 {
     private const long MaxLogoSize = 2_000_000; // 2 MB — same limit as the user avatar upload
-    private const string LogoFolder = "agency-logos";
 
     private static readonly HashSet<string> AllowedImageTypes =
         new(StringComparer.OrdinalIgnoreCase)
@@ -38,17 +39,20 @@ public sealed class SetAgencyLogoCommandHandler
 
     private readonly IAgencyRepository _agencies;
     private readonly IMediaStorageService _storage;
+    private readonly IMediaFolderBuilder _folderBuilder;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<SetAgencyLogoCommandHandler> _logger;
 
     public SetAgencyLogoCommandHandler(
         IAgencyRepository agencies,
         IMediaStorageService storage,
+        IMediaFolderBuilder folderBuilder,
         IUnitOfWork unitOfWork,
         ILogger<SetAgencyLogoCommandHandler> logger)
     {
         _agencies = agencies;
         _storage = storage;
+        _folderBuilder = folderBuilder;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -79,11 +83,12 @@ public sealed class SetAgencyLogoCommandHandler
 
         await using var content = request.File.Content;
 
+        var folder = _folderBuilder.BuildFolder(MediaEntityType.Agency, agency.Id, MediaCategories.Logo);
         var uploadResult = await _storage.UploadImageAsync(
             content,
             request.File.FileName,
             request.File.ContentType,
-            LogoFolder,
+            folder,
             cancellationToken);
 
         if (!uploadResult.Succeeded)

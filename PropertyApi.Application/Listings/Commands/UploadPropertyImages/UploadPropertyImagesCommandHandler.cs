@@ -1,6 +1,8 @@
 using MediatR;
+using PropertyApi.Application.Common.Enums;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Common.Models;
 using PropertyApi.Application.Listings.DTOs;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Domain.Listings.Entities;
@@ -13,7 +15,6 @@ public sealed class UploadPropertyImagesCommandHandler
     private const long MaxImageSize = 5_000_000;
     private const int MaxImagesPerUpload = 10;
     private const int MaxImagesPerProperty = 20;
-    private const string ImageFolder = "property-images";
 
     private static readonly HashSet<string> AllowedImageTypes =
         new(StringComparer.OrdinalIgnoreCase)
@@ -35,17 +36,20 @@ public sealed class UploadPropertyImagesCommandHandler
     private readonly IPropertyImageRepository _images;
     private readonly IPropertyOwnershipService _ownership;
     private readonly IMediaStorageService _storage;
+    private readonly IMediaFolderBuilder _folderBuilder;
     private readonly IUnitOfWork _uow;
 
     public UploadPropertyImagesCommandHandler(
         IPropertyImageRepository images,
         IPropertyOwnershipService ownership,
         IMediaStorageService storage,
+        IMediaFolderBuilder folderBuilder,
         IUnitOfWork uow)
     {
         _images = images;
         _ownership = ownership;
         _storage = storage;
+        _folderBuilder = folderBuilder;
         _uow = uow;
     }
 
@@ -94,6 +98,7 @@ public sealed class UploadPropertyImagesCommandHandler
 
         var uploaded = new List<PropertyImageDto>();
         var uploadedPublicIds = new List<string>();
+        var folder = _folderBuilder.BuildFolder(MediaEntityType.Property, request.PropertyId, MediaCategories.Images);
 
         try
         {
@@ -110,7 +115,7 @@ public sealed class UploadPropertyImagesCommandHandler
                     content,
                     file.FileName,
                     file.ContentType,
-                    ImageFolder,
+                    folder,
                     cancellationToken);
 
                 if (!result.Succeeded)

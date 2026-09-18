@@ -1,6 +1,8 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
+using PropertyApi.Application.Common.Enums;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Common.Models;
 using PropertyApi.Application.Users.DTOs;
 using PropertyApi.Application.Users.Interfaces;
 
@@ -18,7 +20,6 @@ public sealed class UploadUserAvatarCommandHandler
     : IRequestHandler<UploadUserAvatarCommand, UploadUserAvatarResult>
 {
     private const long MaxAvatarSize = 2_000_000; // 2 MB — مطابق لـ profile.component.ts
-    private const string AvatarFolder = "user-avatars";
 
     private static readonly HashSet<string> AllowedImageTypes =
         new(StringComparer.OrdinalIgnoreCase)
@@ -38,17 +39,20 @@ public sealed class UploadUserAvatarCommandHandler
 
     private readonly IUserAccountRepository _accounts;
     private readonly IMediaStorageService _storage;
+    private readonly IMediaFolderBuilder _folderBuilder;
     private readonly IUnitOfWork _uow;
     private readonly ILogger<UploadUserAvatarCommandHandler> _logger;
 
     public UploadUserAvatarCommandHandler(
         IUserAccountRepository accounts,
         IMediaStorageService storage,
+        IMediaFolderBuilder folderBuilder,
         IUnitOfWork uow,
         ILogger<UploadUserAvatarCommandHandler> logger)
     {
         _accounts = accounts;
         _storage = storage;
+        _folderBuilder = folderBuilder;
         _uow = uow;
         _logger = logger;
     }
@@ -76,11 +80,12 @@ public sealed class UploadUserAvatarCommandHandler
 
         await using var content = request.File.Content;
 
+        var folder = _folderBuilder.BuildFolder(MediaEntityType.User, request.UserId, MediaCategories.Profile);
         var uploadResult = await _storage.UploadImageAsync(
             content,
             request.File.FileName,
             request.File.ContentType,
-            AvatarFolder,
+            folder,
             ct);
 
         if (!uploadResult.Succeeded)

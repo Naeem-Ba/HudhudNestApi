@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Logging;
 using Moq;
+using PropertyApi.Application.Common.Enums;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Common.Models;
+using PropertyApi.Application.Common.Services;
 using PropertyApi.Application.Users.Commands.UploadUserAvatar;
 using PropertyApi.Application.Users.DTOs;
 using PropertyApi.Application.Users.Interfaces;
@@ -53,6 +55,7 @@ public sealed class UploadUserAvatarCommandHandlerTests
         var handler = new UploadUserAvatarCommandHandler(
             accounts.Object,
             storage.Object,
+            new MediaFolderBuilder(),
             unitOfWork.Object,
             logger.Object);
 
@@ -60,7 +63,7 @@ public sealed class UploadUserAvatarCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_UploadsToTheUserAvatarsFolder_NotThePropertyImagesFolder()
+    public async Task Handle_UploadsToTheUsersOwnFolder_NotThePropertyImagesFolder()
     {
         var account = CreateAccount(Guid.NewGuid());
         var (_, storage, unitOfWork, _, handler) = CreateSut(account);
@@ -80,9 +83,12 @@ public sealed class UploadUserAvatarCommandHandlerTests
         var result = await handler.Handle(
             new UploadUserAvatarCommand(account.Id, ValidPngFile()), CancellationToken.None);
 
+        var expectedFolder = new MediaFolderBuilder()
+            .BuildFolder(MediaEntityType.User, account.Id, MediaCategories.Profile);
+
         Assert.Equal(UploadUserAvatarStatus.Success, result.Status);
-        Assert.Equal("user-avatars", capturedFolder);
-        Assert.NotEqual("property-images", capturedFolder);
+        Assert.Equal(expectedFolder, capturedFolder);
+        Assert.DoesNotContain("properties", capturedFolder);
     }
 
     [Fact]
@@ -256,6 +262,7 @@ public sealed class UploadUserAvatarCommandHandlerTests
         var handler = new UploadUserAvatarCommandHandler(
             accounts.Object,
             Mock.Of<IMediaStorageService>(),
+            new MediaFolderBuilder(),
             Mock.Of<IUnitOfWork>(),
             Mock.Of<ILogger<UploadUserAvatarCommandHandler>>());
 

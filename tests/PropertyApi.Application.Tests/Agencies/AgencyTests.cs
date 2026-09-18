@@ -11,9 +11,11 @@ using PropertyApi.Application.Agencies.Commands.UpdateAgency;
 using PropertyApi.Application.Agencies.DTOs;
 using PropertyApi.Application.Agencies.Interfaces;
 using PropertyApi.Application.Agencies.Queries.GetAgencyBySlug;
+using PropertyApi.Application.Common.Enums;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Common.Models;
+using PropertyApi.Application.Common.Services;
 using PropertyApi.Domain.Agencies.Entities;
 using PropertyApi.Domain.Common.Exceptions;
 using PropertyApi.Domain.Users.Constants;
@@ -885,10 +887,12 @@ public sealed class AgencyTests
         var owner = BuildAccount(ownerId);
 
         var repo = BuildRepository(owner, agency);
+        var expectedFolder = new MediaFolderBuilder()
+            .BuildFolder(MediaEntityType.Agency, agency.Id, MediaCategories.Logo);
         var storage = new Mock<IMediaStorageService>();
         storage
             .Setup(x => x.UploadImageAsync(
-                It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), "agency-logos",
+                It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), expectedFolder,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(MediaUploadResult.Success(
                 "https://cdn.example.com/new.png", "agency-logos/new"));
@@ -1103,6 +1107,7 @@ public sealed class AgencyTests
         => new(
             repo.Object,
             storage.Object,
+            new MediaFolderBuilder(),
             Mock.Of<IUnitOfWork>(),
             NullLogger<SetAgencyLogoCommandHandler>.Instance);
 

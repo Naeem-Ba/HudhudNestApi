@@ -2,6 +2,8 @@
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using PropertyApi.Application.Common.Behaviors;
+using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Common.Services;
 using PropertyApi.Application.Admin.Interfaces;
 using PropertyApi.Application.Admin.Services;
 using PropertyApi.Application.Auth.Commands.SocialLogin;
@@ -63,6 +65,12 @@ public static class DependencyInjection
         services.AddScoped<IAdminListingService, AdminListingService>();
         services.AddScoped<IAdminValuationInquiryService, AdminValuationInquiryService>();
         services.AddScoped<IPropertyOwnershipService, PropertyOwnershipService>();
+
+        // Media storage folder layout (Cloudinary today) — deterministic/pure (no I/O), so a
+        // singleton is safe, same reasoning as PwnedPasswordsCircuitBreaker below. Every upload
+        // handler asks this for the folder instead of hardcoding one, so the storage layout is
+        // defined in exactly one place.
+        services.AddSingleton<IMediaFolderBuilder, MediaFolderBuilder>();
 
         // Valuation Stage 4 (Office Matching) — a plain orchestration service, not a
         // MediatR handler, so it needs an explicit registration here rather than assembly
