@@ -165,6 +165,35 @@ await app.SeedReferenceDataAsync();
 
 // -- 11. Middleware order --------------------------------------
 app.UseForwardedHeaders();
+
+if (app.Environment.IsProduction())
+{
+    // Production incident (2026-09-18): Request.IsHttps is still false on every request here
+    // even after ForwardedHeadersRegistration.cs's own RequireHeaderSymmetry=false fix (that
+    // fix addressed a header-count-mismatch log/HSTS issue, not this) -- confirmed live via a
+    // direct curl to https://wohnungen-api.onrender.com: cookies whose Secure attribute is
+    // computed from Request.IsHttps (CookieSecurePolicy.SameAsRequest in CsrfExtensions.cs)
+    // came back without it, and every browser drops a SameSite=None cookie missing Secure
+    // outright. Render sits behind Cloudflare; whatever the true internal cause is (an
+    // internal hop that isn't itself HTTPS, X-Forwarded-Proto not propagating as expected,
+    // or something else), it isn't fixable from inside this app's ForwardedHeaders config --
+    // confirmed by testing that config change already, live, twice.
+    //
+    // This sidesteps the unreliable detection instead of continuing to chase it: Production is
+    // only ever reachable from the outside over real HTTPS (Cloudflare enforces this at its own
+    // edge before any request reaches Render at all), so forcing the scheme here is not
+    // pretending — it's asserting a fact that is already true for every real client, and letting
+    // the rest of the pipeline (HSTS, CookieSecurePolicy.SameAsRequest, anything else that reads
+    // Request.IsHttps) work correctly on that fact instead of on an unreliable internal signal.
+    // Must run immediately after UseForwardedHeaders() so it wins over whatever that middleware
+    // concluded, and before anything else in the pipeline reads Request.IsHttps.
+    app.Use((context, next) =>
+    {
+        context.Request.Scheme = "https";
+        return next();
+    });
+}
+
 app.UsePerformanceInstanceHeader(app.Environment, app.Configuration);
 app.UsePerformanceDatabaseDiagnostics(app.Environment, app.Configuration);
 app.UsePropertyApiObservability();
