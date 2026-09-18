@@ -45,7 +45,8 @@ public sealed class CsrfController : ControllerBase
                 // antiforgery-internal cookie above, a plain CookieOptions.Secure=true on
                 // HTTP does not throw here, it just produces a cookie no HTTP client can use).
                 SameSite = SameSiteMode.None,
-                Secure = Request.IsHttps
+                Secure = Request.IsHttps,
+                Extensions = { "Partitioned" }
             });
 
         // RELEASE-BLOCKERS-AR.md B-20: the XSRF-TOKEN cookie above is host-only and, in

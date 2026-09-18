@@ -16,6 +16,21 @@ namespace PropertyApi.Security.Auth;
 /// wherever this cookie needs to work, including local development (use the "https" launch
 /// profile, not "http"). Path is scoped to /api/auth: nothing outside the two endpoints that
 /// read this cookie has any reason to receive it on every request.
+///
+/// Production incident (2026-09): on the real deployed frontend (realestateworld.world) and
+/// backend (onrender.com — a different registrable domain, per this file's own comment
+/// above), a plain SameSite=None cookie is a third-party cookie by definition, and Chrome/Edge
+/// were confirmed (live, via POST /api/auth/refresh returning "No refresh token was supplied"
+/// immediately after a real login) to be dropping it outright — every page reload looked
+/// exactly like a first-time guest, 100% of the time, not intermittently. This is a browser
+/// third-party-cookie policy, not a timing/race bug (see app.config.ts's restoreSession fix,
+/// which addressed a real but different, secondary issue and did not touch this one). The
+/// `Partitioned` extension (CHIPS) is Chrome/Edge's sanctioned fix for exactly this pattern —
+/// one frontend consistently talking to one third-party API domain: the browser stores the
+/// cookie scoped to (this cookie's domain, the top-level site), so it is no longer treated as
+/// a blockable cross-site tracking cookie, and correctly persists across reloads. Harmless
+/// where unsupported (Safari, older browsers) — an unrecognized cookie attribute is ignored,
+/// leaving today's (broken, for those browsers) behavior unchanged, not worse.
 /// </summary>
 public static class RefreshTokenCookie
 {
@@ -31,7 +46,8 @@ public static class RefreshTokenCookie
             Secure = true,
             SameSite = SameSiteMode.None,
             Path = Path,
-            Expires = DateTimeOffset.UtcNow.AddDays(refreshTokenDays)
+            Expires = DateTimeOffset.UtcNow.AddDays(refreshTokenDays),
+            Extensions = { "Partitioned" }
         });
     }
 
@@ -54,6 +70,14 @@ public static class RefreshTokenCookie
 
     public static void Clear(HttpResponse response)
     {
-        response.Cookies.Delete(Name, new CookieOptions { Path = Path });
+        // Attributes must match Attach()'s: a browser matches a Set-Cookie deletion against
+        // the exact cookie it stored (including its Partitioned jar), not just by name/path.
+        response.Cookies.Delete(Name, new CookieOptions
+        {
+            Path = Path,
+            Secure = true,
+            SameSite = SameSiteMode.None,
+            Extensions = { "Partitioned" }
+        });
     }
 }
