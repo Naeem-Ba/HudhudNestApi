@@ -15,12 +15,12 @@ PropertyApi uses NuGet Central Package Management through `Directory.Packages.pr
 
 | Package | Central Version |
 | --- | ---: |
-| `Microsoft.NET.Test.Sdk` | `17.8.0` |
-| `xunit` | `2.6.6` |
-| `xunit.runner.visualstudio` | `2.5.6` |
-| `coverlet.collector` | `6.0.0` |
+| `Microsoft.NET.Test.Sdk` | `18.10.0` |
+| `xunit` | `2.9.3` |
+| `xunit.runner.visualstudio` | `4.0.0` |
+| `coverlet.collector` | `10.0.1` |
 
-These versions were selected because they are already compatible with the repository's .NET 8 test execution path and existing xUnit tests.
+These versions were selected because they are already compatible with the repository's .NET 8 test execution path and existing xUnit tests. Versions are kept current with `Directory.Packages.props` as the single source of truth (last verified 2026-09-18 during a `docs/audit/` review).
 
 ## Restore Reproducibility
 

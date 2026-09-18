@@ -6,12 +6,14 @@ All external `uses:` references must be pinned to a full 40-character commit SHA
 
 | Action | Previous Ref | Pinned SHA | Release Comment | Verification |
 | --- | --- | --- | --- | --- |
-| `actions/checkout` | `v5` | `fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09` | `# v5` | `git ls-remote https://github.com/actions/checkout.git refs/tags/v5` |
-| `actions/setup-dotnet` | `v5` | `26b0ec14cb23fa6904739307f278c14f94c95bf1` | `# v5` | `git ls-remote https://github.com/actions/setup-dotnet.git refs/tags/v5` |
-| `actions/cache` | `v4` | `0057852bfaa89a56745cba8c7296529d2fc39830` | `# v4` | `git ls-remote https://github.com/actions/cache.git refs/tags/v4` |
-| `actions/upload-artifact` | `v6` | `b7c566a772e6b6bfb58ed0dc250532a479d7789f` | `# v6` | `git ls-remote https://github.com/actions/upload-artifact.git refs/tags/v6` |
-| `gitleaks/gitleaks-action` | `v2` | `dcedce43c6f43de0b836d1fe38946645c9c638dc` | `# v2` | `git ls-remote https://github.com/gitleaks/gitleaks-action.git refs/tags/v2` |
-| `aquasecurity/trivy-action` | new | `ed142fd0673e97e23eac54620cfb913e5ce36c25` | `# v0.36.0` | `git ls-remote --tags https://github.com/aquasecurity/trivy-action.git` peeled tag `v0.36.0` |
+| `actions/checkout` | `v7` | `3d3c42e5aac5ba805825da76410c181273ba90b1` | `# v7.0.1` | `git ls-remote https://github.com/actions/checkout.git refs/tags/v7.0.1` |
+| `actions/setup-dotnet` | `v6` | `a98b56852c35b8e3190ac28c8c2271da59106c68` | `# v6.0.0` | `git ls-remote https://github.com/actions/setup-dotnet.git refs/tags/v6.0.0` |
+| `actions/cache` | `v6` | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` | `# v6.1.0` | `git ls-remote https://github.com/actions/cache.git refs/tags/v6.1.0` |
+| `actions/upload-artifact` | `v7` | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` | `# v7.0.1` | `git ls-remote https://github.com/actions/upload-artifact.git refs/tags/v7.0.1` |
+| `gitleaks/gitleaks-action` | `v3` | `e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e` | `# v3.0.0` | `git ls-remote https://github.com/gitleaks/gitleaks-action.git refs/tags/v3.0.0` |
+| `aquasecurity/trivy-action` | — | `ed142fd0673e97e23eac54620cfb913e5ce36c25` | `# v0.36.0` | `git ls-remote --tags https://github.com/aquasecurity/trivy-action.git` peeled tag `v0.36.0` |
+
+_Table last verified against actual `.github/workflows/*.yml` pins on 2026-09-18 (`docs/audit/` review). Previous versions of this table listed older SHAs (checkout@v5, setup-dotnet@v5, cache@v4, upload-artifact@v6, gitleaks-action@v2) that no longer matched the workflows — verify with `git ls-remote` before trusting this table again after any future Dependabot bump._
 
 ## Enforcement
 
