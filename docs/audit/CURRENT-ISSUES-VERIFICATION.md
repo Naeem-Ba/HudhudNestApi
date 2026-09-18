@@ -133,19 +133,84 @@ evidence. The gap is a **local developer-experience** one: there is no documente
 locally run `npm run start:staging` against the real Staging API. This is now called out in
 the recommendation below (a docs-only fix, no env values touched).
 
-**Not verified this session (no live network access from this environment):** live
-`OPTIONS` preflight response headers against the real deployed Staging origin. Recommend the
-manual browser check described in the original report's item 3 be run by someone with network
-access to confirm this holds only if any future Staging redeploy changes CORS config.
+**Update — 2026-09-18, later same day, this environment gained live network access:**
+Re-verified directly. `curl -X OPTIONS` against the real Staging API with
+`Origin: https://staging--bizorealestateworld.netlify.app` returns a normal `204` (CORS
+allows that origin, as expected). The same preflight with `Origin: https://localhost:4200`
+(what a locally-run `ng serve --configuration staging` sends) comes back with **no**
+`Access-Control-Allow-Origin` header at all — confirming that even after setting `API_URL`
+locally (the P1-3 doc fix below), a local dev server still cannot complete an authenticated
+call against real Staging, because Staging's `Cors:AllowedOrigins` only lists the deployed
+Netlify origin, not any localhost port. This is a real, now-directly-confirmed constraint,
+not a hypothesis — added to the local-dev doc; **not** changed in Staging's config (that
+would require adding a `localhost` entry to a live environment variable, which needs explicit
+approval — see the P1-4 section below for why this session did not need to work around it).
 
 ---
 
 ## P1-4 — No real E2E framework
 
-**Status: CONFIRMED — still true.** `grep` of `Wohnungsmieten/package.json` found no
-`cypress`/`playwright`/`@playwright/*` dependency or script. Not fixed this session (a
-dedicated testing-infrastructure phase, per the task's own instruction not to build this out
-without a plan — see Remediation Plan).
+**Status: Phase A implemented this session (2026-09-18, follow-up pass) — and it immediately
+caught a real, previously-unknown live bug.**
+
+Added `@playwright/test`, `playwright.config.ts` (targets deployed Staging by default,
+overridable via `E2E_BASE_URL`), and one spec,
+`Wohnungsmieten/e2e/auth-session-refresh.spec.ts`, guarding the B-20 regression class: an
+access token rejected mid-session must trigger a silent `/auth/refresh` (real
+`refresh_token` cookie) and a transparent retry — never a visible failure.
+
+**This test was actually run against the real, live, deployed Staging environment** (this
+sandboxed session unexpectedly had outbound network access this pass — confirmed via
+`docker info`/`curl` reachability checks first). Findings from real runs, in order:
+
+1. First run, against the deployed Staging *frontend*: failed at registration — the deployed
+   Netlify build does not yet include the consent-checkbox UI that current `main` has
+   (`ConsentCheckboxComponent`, merged for `docs/privacy/privacy-gaps.md` P1). This is a
+   **Staging deploy-staleness gap**, not a bug in the test or in current source — the deployed
+   bundle is behind `main`. Worked around for verification by registering the throwaway test
+   account directly via the API (`POST /api/Auth/Register`, which treats
+   `PrivacyPolicyAccepted` as optional/additive by design) instead of through the stale UI.
+2. Second run, using that account to log in against the real deployed Staging frontend, with
+   the first post-login `/users/me` call forced to `401` to simulate an already-expired access
+   token: the app correctly attempted a silent `/auth/refresh` — but the **real** `/auth/refresh`
+   call came back **`403` (CSRF validation failed)**, not `200`. This is a genuine, newly
+   discovered, live-confirmed defect, not a test artifact.
+
+**Root cause (confirmed by reading the code, not guessed):** today's earlier fix in this same
+session (PR #155 / commit `81d97c8`) made `PropertyApi/Program.cs` force
+`Request.Scheme = "https"` — needed because `Request.IsHttps` is unreliable on Render — but
+scoped to `app.Environment.IsProduction()` only. Staging has the identical structural cause
+(confirmed via `render-staging-deployment` memory: `ForwardedHeaders__Enabled=false` there, so
+Kestrel never learns the original request was HTTPS at all), so `CsrfExtensions.cs`'s
+`CookieSecurePolicy.SameAsRequest` resolves to `Secure=false` in Staging, the antiforgery
+cookie's `SameSite=None` without `Secure` is dropped by the browser outright, no real CSRF
+token ever reaches the client, and any CSRF-guarded call — including `/auth/refresh` once
+`refresh_token` is present — 403s. Staging's `production-gate.yml`/staging-smoke suite has
+apparently not caught this because (per `render-staging-deployment` memory) its own historical
+blockers on that exact call were rate-limiting and a different CSRF-token-omission bug in the
+*test script itself* (fixed in PR #141) — this new E2E run is the first time this specific
+path was driven through a real browser, with real cookie/CORS/CSRF semantics, end to end.
+
+**Fix prepared, NOT deployed:** `PropertyApi/Program.cs`'s condition changed to
+`IsProduction() || IsStaging()` (uncommitted on `master`, tests green — see Implementation
+Report). **Not pushed or merged.** This is exactly the kind of change the project's own
+history flags as historically sensitive (CSRF/cookie config has been touched at least 5 times
+now: `da7307a`, `0043b2a`, `3b80fdc`, `263c3ff`/PR #155, and now this) — it can only be truly
+verified by an actual Staging deploy, which this session does not have authority to trigger.
+**Requires explicit approval before push/merge/deploy.**
+
+**E2E spec status:** correct and complete for Phase A's scope; **currently fails against real
+deployed Staging**, and will continue to until the fix above is deployed there. This is the
+test doing its job, not a defect in it. Not wired into any CI workflow this session (per the
+original plan — a spec that cannot pass yet must not be added as a required or even
+optional-but-silently-red CI job). `test-results/` and Playwright's own output directories are
+now git-ignored (see `Wohnungsmieten/.gitignore`).
+
+**Test data left in Staging:** one throwaway account,
+`e2e-smoke-<unix-timestamp>@example.com` / a password only used for this test, created via
+direct API call for verification. Marked with the same `E2E-SMOKE-` convention
+`docs/testing/staging-smoke-test-data.md` already documents a TTL-cleanup policy for — no
+extra action needed, and no cleanup secret was used or accessed.
 
 ## P1-5 — No real PostgreSQL integration tests for new OTP/Search paths
 

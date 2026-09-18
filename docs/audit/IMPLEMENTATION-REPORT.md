@@ -91,9 +91,101 @@ doc is the correct place to record the correction instead.
   is now on `master` at that commit; the password-validator fix and its tests were rebuilt and
   re-tested on top of it (still 261/261, 1166/1166, 164/164 green) to confirm no interaction.
 
-## Actions NOT performed (require explicit approval)
+## Actions NOT performed in the original pass (require explicit approval)
 
 - No `git add`/`git commit`/`git push` was run in either repo.
 - No merge, no PR creation, no deploy.
 - No Staging/Production environment variable was read, set, or changed.
 - No branch or worktree was deleted.
+
+**Update:** the fix above was subsequently committed, pushed, and merged as
+[PR #156](https://github.com/Naeem-Ba/PropertyApi/pull/156), on the user's explicit
+instruction in a later turn (`/create-pr`). See the follow-up section below for what happened
+after that.
+
+---
+
+## Follow-up session — 2026-09-18, later same day — remediation plan execution
+
+Executed the remaining P1-P3 items from `docs/audit/REMEDIATION-PLAN.md` as it stood right
+after the original pass (that file has since been overwritten on disk by an unrelated,
+separately-run "Full Code Audit" — see the note at the top of
+`CURRENT-ISSUES-VERIFICATION.md`; this section is the authoritative record of what *this*
+line of work did).
+
+### What changed
+
+| File | Change |
+|---|---|
+| `PropertyApi/Program.cs` | Extended the Production-only `Request.Scheme = "https"` override (from today's earlier PR #155) to also cover Staging (`IsProduction() \|\| IsStaging()`). **Uncommitted — see below, requires explicit approval.** |
+| `Wohnungsmieten/playwright.config.ts` (new) | Playwright config; targets deployed Staging by default, `E2E_BASE_URL` override for local runs. |
+| `Wohnungsmieten/e2e/auth-session-refresh.spec.ts` (new) | Phase A E2E spec (P1-4) — session-refresh-after-expired-token scenario. |
+| `Wohnungsmieten/package.json`, `package-lock.json` | Added `@playwright/test` devDependency. |
+| `Wohnungsmieten/.gitignore` | Added Playwright output directories (`test-results/`, `playwright-report/`, etc.). |
+| `Wohnungsmieten/docs/development/local-staging-testing.md` (new) | P1-3 — documents the `API_URL` env var needed to run `ng serve --configuration staging` locally against the real Staging API, and the separate, confirmed CORS constraint that still blocks it from `localhost` specifically. |
+
+### Why
+
+- **P1-3 (CORS):** confirmed via a live `curl -X OPTIONS` against the real Staging API that
+  (a) the deployed Netlify Staging origin is correctly allowed (204, matching origin), and
+  (b) `localhost` is not, and never was expected to be — this is a local dev-experience gap,
+  documented, not a Staging misconfiguration. No code or environment change made.
+- **P1-4 (E2E):** implemented Phase A exactly as scoped in the remediation plan — one
+  scenario, not a full suite, not wired into a CI gate. Actually running it against live
+  Staging (this session unexpectedly had network egress) surfaced two real findings instead of
+  a theoretical "no framework exists" gap:
+  1. Deployed Staging's frontend bundle is behind current `main` (missing the consent
+     checkbox) — a deploy-staleness observation, not something this session's scope covers
+     fixing (would require triggering a Staging deploy).
+  2. `/auth/refresh` returns `403` in Staging because the Production-only HTTPS-scheme fix
+     from PR #155 was never extended to Staging, which has the identical root cause. Fixed in
+     code (see `Program.cs` above) but **not deployed** — this touches the single most
+     historically incident-prone area of this codebase (CSRF/cookie config, 5 touches now),
+     so it is held for explicit approval rather than pushed automatically, per this task's own
+     standing rule on Staging/Production-affecting changes.
+
+### Tests run and results
+
+| Command | Result |
+|---|---|
+| `dotnet build PropertyApi.sln -c Release` | 0 errors, 0 warnings (after the `Program.cs` change) |
+| `dotnet test tests/PropertyApi.Architecture.Tests --no-build` | 164/164 PASS |
+| `dotnet test tests/PropertyApi.Auth.Tests --no-build` | 261/261 PASS |
+| `dotnet format --verify-no-changes --include PropertyApi/Program.cs` | clean |
+| `npx playwright test` (E2E spec), run 1, against deployed Staging frontend | FAILED — registration step, deploy-staleness (see above); not a code defect |
+| `npx playwright test`, run 2, against a local `ng serve --configuration staging` pointed at the real Staging API | FAILED — CORS-blocked from `localhost` (confirmed expected, see P1-3) |
+| `npx playwright test`, run 3, using a directly API-registered throwaway account against the deployed Staging frontend | FAILED at the `/auth/refresh` assertion — **this is the real bug** (see above), not a test defect; login itself, the forced-401 simulation, and the interceptor's reactive refresh attempt all worked exactly as designed up to that point |
+
+The E2E spec was not re-run after the `Program.cs` fix because that fix is not deployed
+anywhere the spec could observe it (it only exists in this local working tree) — re-running
+against unchanged live Staging would just reproduce the same 403. It should be re-run once the
+fix is deployed, as the acceptance check for that deploy.
+
+### What was NOT implemented this follow-up pass
+
+- P1-5 / P2-6 (Testcontainers, DB indexes): still blocked — `docker info` still fails in this
+  environment (re-checked at the start of this pass).
+- P2-7 (unify 4 error shapes), P2-9 (`NameDe`), P2-10 (geo write-time consistency): not
+  started this pass — ran out of session scope after the E2E work surfaced the Staging CSRF
+  finding, which took priority to investigate and document properly rather than leaving it as
+  an unexplained red test.
+- P2-8, P3-11, P3-12: unchanged from the original pass — still open, still low-priority.
+
+### Remaining risks
+
+- The `Program.cs` Staging fix is **reasoned and unit/architecture-test-clean but not deployed
+  or live-verified** — the only way to fully verify it is to deploy it to Staging and re-run
+  the E2E spec, which needs explicit approval.
+- Until that fix deploys, `/auth/refresh` — and by extension any CSRF-guarded endpoint reached
+  while `refresh_token` is present — is presumed broken in Staging for real browser clients.
+  This may already be masking other live-Staging test failures beyond what this session probed.
+- One throwaway Staging test account was created (see `CURRENT-ISSUES-VERIFICATION.md`,
+  P1-4) — no cleanup secret was available or used; it will age out under the existing
+  `E2E-SMOKE-` TTL policy.
+
+### Actions NOT performed this pass (require explicit approval)
+
+- `PropertyApi/Program.cs`'s Staging fix was **not** committed, pushed, or deployed.
+- The new Playwright files (config, spec, `package.json`/`package-lock.json`,
+  `.gitignore`, docs) were **not** committed or pushed.
+- No Staging environment variable or deployment was triggered.
