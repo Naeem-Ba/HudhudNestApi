@@ -173,15 +173,11 @@ if (useRedisRateLimiting)
 {
     var startupLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Redis");
     var redisMultiplexer = app.Services.GetRequiredService<IConnectionMultiplexer>();
-    var connectBudgetSeconds = Math.Clamp(
-        app.Configuration.GetValue<int?>("Redis:StartupConnectTimeoutSeconds") ?? 15, 0, 60);
-    var connectDeadline = DateTime.UtcNow.AddSeconds(connectBudgetSeconds);
-    while (!redisMultiplexer.IsConnected && DateTime.UtcNow < connectDeadline)
-    {
-        await Task.Delay(100);
-    }
-
-    if (redisMultiplexer.IsConnected)
+    var connectBudgetSeconds = RedisStartupConnection.ResolveTimeoutSeconds(app.Configuration);
+    if (await RedisStartupConnection.WaitUntilConnectedAsync(
+            () => redisMultiplexer.IsConnected,
+            TimeSpan.FromSeconds(connectBudgetSeconds),
+            TimeSpan.FromMilliseconds(100)))
     {
         startupLogger.LogInformation("Redis connected before accepting traffic.");
     }
