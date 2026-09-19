@@ -55,6 +55,12 @@ Warm-up is excluded from custom steady-state endpoint metrics. A suspected noisy
 same environment; the median determines the result. A security invariant, 5xx response, missing instance, missing
 artifact, or database-plan regression is never dismissed as an outlier.
 
+The query-plan capture applies that rule itself: `scripts/capture-query-plans.sh` executes every plan 3 times
+(`PERF_QUERY_PLAN_SAMPLES`) and keeps the median-execution-time run, so its plan, node types and buffer counts are what
+the comparison sees. Release run 35448089286 failed only on `property-list-deep-page` (5.249 ms -> 6.938 ms, +32%, delta
+1.7 ms) with an identical plan (same index scan, 17,848 buffer hits, 0 reads) while the same commit tree had passed
+minutes earlier; a single sample of a ~5 ms plan on a shared 2-vCPU runner is that noisy. Percentage limits are unchanged.
+
 ## Updating the baseline
 
 1. Run the release or Staging profile three times without changing infrastructure.

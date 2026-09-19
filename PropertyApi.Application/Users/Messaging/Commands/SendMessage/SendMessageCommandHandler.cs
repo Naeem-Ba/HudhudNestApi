@@ -56,7 +56,7 @@ public sealed class SendMessageCommandHandler
 
         if (property is null)
         {
-            throw new KeyNotFoundException(
+            throw new NotFoundException(
                 "Property was not found.");
         }
 
