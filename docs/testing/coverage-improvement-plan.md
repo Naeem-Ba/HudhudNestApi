@@ -40,3 +40,10 @@ Current stage:
 - Generated files, EF migrations, and designer files may be excluded from critical-module denominator.
 - Handlers, token rotation, OTP, authorization, repositories, domain logic, security middleware, and error-handling logic must not be excluded to raise coverage.
 - Tests must assert behavior, branches, and failure paths.
+
+## Note on the 48.2% / 50.3% figures
+
+The raw branch (48.2%) and PropertyApi-project (50.3%) percentages printed by the coverage report are informational.
+The enforced gates are the staged minimums in `ci/coverage-thresholds.json` (currently stage-1: line 6%, branch 12%,
+auth-sensitive 12%/15%), which run `validate-coverage-thresholds.py`; they passed on the reviewed run. Raise them
+stage by stage, with behavior tests, per the stages above.

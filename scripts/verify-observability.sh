@@ -25,6 +25,18 @@ fi
 
 mkdir -p "$(dirname "${REPORT}")"
 
+# If any command below aborts the script (set -e) before the final report is written, leave a
+# machine-readable failure report instead of no file at all. The final jq overwrites it.
+write_abort_report() {
+  local status=$?
+  if [ "${status}" -ne 0 ] && [ ! -s "${REPORT}" ]; then
+    jq -n --arg runId "${RUN_ID}" --arg environment "${ENVIRONMENT}" --arg sha "${EXPECTED_SHA}" \
+      --arg started "${STARTED_AT}" --arg status "${status}" \
+      '{runId:$runId,environment:$environment,expectedCommitSha:$sha,startedAtUtc:$started,result:"failed",error:("verification aborted before completion (exit " + $status + ")")}' > "${REPORT}" || true
+  fi
+}
+trap write_abort_report EXIT
+
 curl --fail --silent --show-error \
   -X POST \
   -H "X-Correlation-ID: ${CORRELATION_ID}" \

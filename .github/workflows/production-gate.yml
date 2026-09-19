@@ -1030,6 +1030,53 @@ jobs:
           set -euo pipefail
           bash scripts/smoke-staging.sh --validate-only
 
+      - name: Apply database migrations to Staging
+        shell: bash
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          # The API never migrates on startup (see docs/DATABASE-PRODUCTION-READINESS.md), and
+          # the Render Free Staging service has no pre-deploy command, so nothing else applies
+          # migrations to Staging. Without this step a release that ships a migration is
+          # deployed with complete=false forever and the readiness wait below times out.
+          # Migrations are applied *before* the deploy hook so the old code keeps serving on
+          # the (additive) new schema until the new build takes over.
+          mkdir -p artifacts/staging-smoke
+          if [ -z "${STAGING_DATABASE_URL:-}" ]; then
+            echo "::error::STAGING_DATABASE_URL is not set. Add the Render Staging Postgres external connection string as a secret on the 'staging' GitHub environment (see docs/testing/staging-smoke-runbook.md)."
+            exit 1
+          fi
+          echo "::add-mask::${STAGING_DATABASE_URL}"
+          db_name="${STAGING_DATABASE_URL##*/}"
+          db_name="${db_name%%\?*}"
+          case "${db_name,,}" in
+            *staging*) ;;
+            *) echo "::error::Refusing to migrate: target database name does not contain 'staging'."; exit 1 ;;
+          esac
+          connection="${STAGING_DATABASE_URL}"
+          case "${connection}" in
+            *sslmode=*) ;;
+            *\?*) connection="${connection}&sslmode=require" ;;
+            *) connection="${connection}?sslmode=require" ;;
+          esac
+          # Testing environment: the Migrator's Staging/Production mode demands a Redis
+          # configuration it never uses; schema + seed logic is environment-independent.
+          export ASPNETCORE_ENVIRONMENT=Testing DOTNET_ENVIRONMENT=Testing
+          export ConnectionStrings__DefaultConnection="${connection}"
+          export Jwt__Issuer=PropertyApi Jwt__Audience=PropertyApiClient
+          Jwt__Key="$(openssl rand -base64 48 | tr -d '\n')"
+          OtpSettings__SecretKey="$(openssl rand -base64 48 | tr -d '\n')"
+          Security__PhoneLookupHmacKey="$(openssl rand -base64 32 | tr -d '\n')"
+          export Jwt__Key OtpSettings__SecretKey Security__PhoneLookupHmacKey
+          dotnet run --project tools/PropertyApi.Migrator/PropertyApi.Migrator.csproj \
+            --configuration Release > artifacts/staging-smoke/staging-migrator.log 2>&1 || {
+            grep -E "pending migration|fail|Exception" artifacts/staging-smoke/staging-migrator.log | head -20 || true
+            echo "::error::Staging migrator failed; see staging-migrator.log in the evidence artifact."
+            exit 1
+          }
+          grep -E "pending migration|completed" artifacts/staging-smoke/staging-migrator.log || true
+
       - name: Trigger staging deployment
         shell: bash
         env:
@@ -1067,6 +1114,27 @@ jobs:
           deadline=$((SECONDS + STAGING_READY_TIMEOUT_SECONDS))
           release_ready=false
           attempt=0
+          verification_started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          mkdir -p artifacts/staging-smoke
+          last_reason="no attempt completed"
+          pending_count=""; applied_count=""; latest_migration=""; health_ready=""
+          write_verification() {
+            # Secret-free evidence of what was expected vs. actually running.
+            jq -n --arg expected "${EXPECTED_COMMIT_SHA}" --arg deployed "${deployed_sha:-}" \
+              --arg env "${environment:-}" --arg ref "${GITHUB_REF_NAME}" --arg repo "${GITHUB_REPOSITORY}" \
+              --arg started "${verification_started}" --arg finished "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --arg deploymentId "${deployment_id:-}" --arg reason "${last_reason}" \
+              --arg migrationsComplete "${migrations_complete:-}" --arg pending "${pending_count}" \
+              --arg applied "${applied_count}" --arg latest "${latest_migration}" \
+              --arg ready "${health_ready}" --argjson attempts "${attempt}" --arg ok "${release_ready}" \
+              '{expectedCommitSha:$expected,deployedCommitSha:$deployed,
+                commitShaMatches:(($expected|ascii_downcase)==($deployed|ascii_downcase)),
+                environment:$env,triggeredFromBranch:$ref,repository:$repo,providerDeploymentId:$deploymentId,
+                migration:{complete:$migrationsComplete,pendingCount:$pending,appliedCount:$applied,latest:$latest},
+                readiness:$ready,startedAtUtc:$started,finishedAtUtc:$finished,attempts:$attempts,
+                ready:($ok=="true"),lastReason:$reason}' \
+              > artifacts/staging-smoke/staging-release-verification.json
+          }
           while [ "${SECONDS}" -lt "${deadline}" ]; do
             attempt=$((attempt + 1))
             deployed_sha=""
@@ -1083,6 +1151,9 @@ jobs:
               environment="$(jq -r '.environment // empty' "${body}")"
               migrations_complete="$(jq -r '.migration.complete // false' "${body}")"
               postgis_available="$(jq -r '.migration.postGisAvailable // false' "${body}")"
+              pending_count="$(jq -r '.migration.pendingCount // empty' "${body}")"
+              applied_count="$(jq -r '.migration.appliedCount // empty' "${body}")"
+              latest_migration="$(jq -r '.migration.latest // empty' "${body}")"
               if [ "${environment}" = "Staging" ] && \
                  [ "${deployed_sha,,}" = "${EXPECTED_COMMIT_SHA,,}" ] && \
                  [ "${migrations_complete}" = "true" ] && \
@@ -1090,6 +1161,8 @@ jobs:
                  curl --fail --silent --show-error --max-time 10 \
                    "${base_url}/health/ready" > /dev/null; then
                 release_ready=true
+                health_ready=200
+                last_reason="ready"
                 rm -f "${body}"
                 break
               fi
@@ -1103,13 +1176,16 @@ jobs:
             if [ "${status}" != "200" ]; then
               echo "Waiting for intended Staging release (attempt ${attempt}): build-info returned HTTP ${status}."
             else
-              echo "Waiting for intended Staging release (attempt ${attempt}): commitSha=${deployed_sha:-<none>} (expected ${EXPECTED_COMMIT_SHA}), environment=${environment:-<none>}, migrationsComplete=${migrations_complete:-false}, postGisAvailable=${postgis_available:-false}."
+              echo "Waiting for intended Staging release (attempt ${attempt}): commitSha=${deployed_sha:-<none>} (expected ${EXPECTED_COMMIT_SHA}), environment=${environment:-<none>}, migrationsComplete=${migrations_complete:-false} (pending=${pending_count:-?}, applied=${applied_count:-?}, latest=${latest_migration:-?}), postGisAvailable=${postgis_available:-false}."
+              last_reason="commitSha=${deployed_sha:-none} migrationsComplete=${migrations_complete:-false} pending=${pending_count:-?} postGis=${postgis_available:-false}"
             fi
+            [ "${status}" = "200" ] || last_reason="build-info returned HTTP ${status}"
             rm -f "${body}"
             sleep 5
           done
+          write_verification
           if [ "${release_ready}" != "true" ]; then
-            echo "::error::Staging did not activate the intended commit with complete migrations before timeout. Check the per-attempt diagnostics above -- a persistent commitSha mismatch usually means the Render service is tracking the wrong branch, not a slow deploy."
+            echo "::error::Staging did not activate the intended commit with complete migrations before timeout (last state: ${last_reason}). See staging-release-verification.json: commitShaMatches=false means a stale deploy or a service tracking the wrong branch; commitShaMatches=true with pending migrations means the Staging database was not migrated."
             exit 1
           fi
 
@@ -1149,6 +1225,29 @@ jobs:
           done
           bash scripts/verify-observability.sh
 
+      - name: Write failure evidence for missing reports
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          d=artifacts/staging-smoke
+          o=artifacts/observability
+          mkdir -p "$d/test-results" "$o"
+          reason="A step before the E2E smoke tests failed or was skipped; see the job log."
+          if [ -s "$d/staging-release-verification.json" ]; then
+            reason="$(jq -r '"Staging release not ready: " + .lastReason' "$d/staging-release-verification.json")"
+          fi
+          if [ ! -s "$d/staging-smoke-report.json" ]; then
+            jq -n --arg r "$reason" --arg sha "${GITHUB_SHA}" \
+              '{environment:"Staging",expectedCommitSha:$sha,journeys:[],result:"failed",error:$r}' > "$d/staging-smoke-report.json"
+            printf '<?xml version="1.0" encoding="utf-8"?>\n<testsuites><testsuite name="PropertyApi.StagingSmoke.Bootstrap" tests="1" failures="1"><testcase name="release-ready"><failure message="%s"/></testcase></testsuite></testsuites>\n' "$reason" > "$d/staging-smoke-junit.xml"
+            printf '# Staging E2E smoke report\n\n- Result: **Failed**\n- Reason: %s\n' "$reason" > "$d/staging-smoke-summary.md"
+          fi
+          if [ ! -s "$o/observability-verification-report.json" ]; then
+            jq -n --arg r "$reason" '{result:"not-run",reason:$r}' > "$o/observability-verification-report.json"
+          fi
+          [ -e "$d/test-results/.keep" ] || echo "no per-test artifacts produced" > "$d/test-results/.keep"
+
       - name: Upload sanitized staging evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -1160,6 +1259,8 @@ jobs:
             artifacts/staging-smoke/staging-smoke-report.json
             artifacts/staging-smoke/staging-smoke-junit.xml
             artifacts/staging-smoke/staging-smoke-summary.md
+            artifacts/staging-smoke/staging-release-verification.json
+            artifacts/staging-smoke/staging-migrator.log
             artifacts/staging-smoke/test-results/**
             artifacts/observability/observability-verification-report.json
 
