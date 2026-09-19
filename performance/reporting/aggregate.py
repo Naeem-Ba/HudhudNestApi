@@ -97,9 +97,9 @@ def main():
 
     with (root / "endpoint-results.csv").open("w", newline="", encoding="utf-8") as stream:
         writer = csv.writer(stream)
-        writer.writerow(["scenario", "virtual_users", "duration", "requests", "rps", "p50_ms", "p95_ms", "p99_ms", "error_rate", "passed"])
+        writer.writerow(["scenario", "virtual_users", "duration", "requests", "rps", "p50_ms", "p95_ms", "p99_ms", "non_2xx_rate", "unexpected_error_rate", "passed"])
         for item in scenarios:
-            writer.writerow([item.get("scenario"), item.get("virtualUsers"), item.get("duration"), item.get("requestCount"), item.get("requestsPerSecond"), item.get("p50Milliseconds"), item.get("p95Milliseconds"), item.get("p99Milliseconds"), item.get("errorRate"), item.get("thresholdsPassed")])
+            writer.writerow([item.get("scenario"), item.get("virtualUsers"), item.get("duration"), item.get("requestCount"), item.get("requestsPerSecond"), item.get("p50Milliseconds"), item.get("p95Milliseconds"), item.get("p99Milliseconds"), item.get("errorRate"), item.get("unexpectedErrorRate", item.get("errorRate")), item.get("thresholdsPassed")])
 
     markdown = [
         "# Concurrent performance and query-analysis report", "",
@@ -108,11 +108,11 @@ def main():
         f'- API instances: {summary["apiInstanceCount"]}',
         f'- Dataset: {summary["datasetSize"]} properties',
         f'- Result: **{summary["result"].title()}**', "",
-        "| Scenario | VUs | Requests | RPS | p50 ms | p95 ms | p99 ms | Error rate | Result |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|"
+        "| Scenario | VUs | Requests | RPS | p50 ms | p95 ms | p99 ms | Non-2xx rate (incl. intentional 4xx/429) | Unexpected error rate (5xx) | Result |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"
     ]
     for item in scenarios:
-        markdown.append(f'| {item.get("scenario")} | {item.get("virtualUsers")} | {item.get("requestCount")} | {float(item.get("requestsPerSecond", 0)):.2f} | {float(item.get("p50Milliseconds", 0)):.2f} | {float(item.get("p95Milliseconds", 0)):.2f} | {float(item.get("p99Milliseconds", 0)):.2f} | {float(item.get("errorRate", 0)):.4f} | {"Passed" if item.get("thresholdsPassed") else "Failed"} |')
+        markdown.append(f'| {item.get("scenario")} | {item.get("virtualUsers")} | {item.get("requestCount")} | {float(item.get("requestsPerSecond", 0)):.2f} | {float(item.get("p50Milliseconds", 0)):.2f} | {float(item.get("p95Milliseconds", 0)):.2f} | {float(item.get("p99Milliseconds", 0)):.2f} | {float(item.get("errorRate", 0)):.4f} | {float(item.get("unexpectedErrorRate", item.get("errorRate", 0))):.4f} | {"Passed" if item.get("thresholdsPassed") else "Failed"} |')
     if failures:
         markdown.extend(["", "## Failures", ""] + [f"- {failure}" for failure in failures])
     (root / "summary.md").write_text("\n".join(markdown) + "\n", encoding="utf-8")
