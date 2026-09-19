@@ -23,17 +23,17 @@ public sealed class AdminAppReleasesCrudTests : IClassFixture<AppUpdateApiTestFa
     private static object ValidCreatePayload(
         AppPlatform platform = AppPlatform.Android, string version = "1.1.0", string minimumSupportedVersion = "1.0.0",
         bool isEnabled = true) => new
-    {
-        platform = platform.ToString(),
-        version,
-        minimumSupportedVersion,
-        storeUrl = (string?)null,
-        releaseNotesAr = "ar",
-        releaseNotesEn = "en",
-        releaseNotesDe = "de",
-        releaseDate = DateTime.UtcNow,
-        isEnabled,
-    };
+        {
+            platform = platform.ToString(),
+            version,
+            minimumSupportedVersion,
+            storeUrl = (string?)null,
+            releaseNotesAr = "ar",
+            releaseNotesEn = "en",
+            releaseNotesDe = "de",
+            releaseDate = DateTime.UtcNow,
+            isEnabled,
+        };
 
     private async Task<SeededUser> AdminAsync() =>
         await _factory.SeedUserAsync("admin", RoleNames.Admin);

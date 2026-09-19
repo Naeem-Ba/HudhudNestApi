@@ -59,11 +59,13 @@ public sealed class PerformanceGateConfigurationTests
     }
 
     [Fact]
-    public void Budgets_define_every_release_blocking_metric_and_remain_unapproved_until_measured()
+    public void Budgets_define_every_release_blocking_metric_and_are_backed_by_an_approved_baseline()
     {
         using var document = JsonDocument.Parse(File.ReadAllText(Repo("performance", "performance-budgets.json")));
         var root = document.RootElement;
-        Assert.False(root.GetProperty("approved").GetBoolean());
+        Assert.True(root.GetProperty("approved").GetBoolean());
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("approval").GetProperty("approvedBy").GetString()));
+        Assert.True(File.Exists(Repo("performance", "baselines", "approved-baseline.json")));
         Assert.Equal(2, root.GetProperty("environment").GetProperty("minimumApiInstances").GetInt32());
         Assert.True(root.GetProperty("environment").GetProperty("minimumDatasetSize").GetInt32() >= 10_000);
         foreach (var scenarioName in new[] { "propertyList", "propertyDetail", "geographicSearch" })

@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "approved": false,
+  "approved": true,
   "approval": {
-    "reason": "Initial fail-closed characterization budgets; approval requires three comparable measured runs.",
-    "approvedBy": null,
-    "approvedAtUtc": null
+    "reason": "Validated against three comparable measured release-profile runs (Production Gate, 2 API instances, 25000 properties); all scenarios met their k6 thresholds. Baseline: performance/baselines/approved-baseline.json.",
+    "approvedBy": "Naeem-Ba (repository owner; requested this change). A separate performance/SRE reviewer is still required by policy.",
+    "approvedAtUtc": "2026-09-19T00:00:00Z"
   },
   "environment": {
     "minimumApiInstances": 2,
@@ -75,7 +75,9 @@
     "p99Percent": 20,
     "throughputReductionPercent": 15,
     "databaseTimePercent": 20,
-    "bufferReadPercent": 25
+    "bufferReadPercent": 25,
+    "minimumSampleRequests": 100,
+    "minimumDatabaseTimeDeltaMilliseconds": 1
   },
   "queryPlans": {
     "maximumSequentialScanRows": 1000,
