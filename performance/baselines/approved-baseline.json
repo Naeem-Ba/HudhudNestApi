@@ -1,0 +1,391 @@
+{
+  "schemaVersion": 1,
+  "profile": "release",
+  "provenance": {
+    "selection": "Median of 3 comparable measured runs (ordered by summed p95 across scenarios), per docs/performance/performance-baseline-policy.md",
+    "sourceRuns": [
+      {
+        "runId": "35352983265-1-10ad5cbb16f56ff81f0c3324e54c9b48a84a23b7",
+        "commitSha": "10ad5cbb16f56ff81f0c3324e54c9b48a84a23b7",
+        "sumP95Milliseconds": 4289.1
+      },
+      {
+        "runId": "35353188641-1-e1d5eb12bd2f992efdc8b1bf8aaa9c5abbef724c",
+        "commitSha": "e1d5eb12bd2f992efdc8b1bf8aaa9c5abbef724c",
+        "sumP95Milliseconds": 4179.7
+      },
+      {
+        "runId": "35422584983-1-653cbd72f03605975816ad348fe03fb8bb53b396",
+        "commitSha": "653cbd72f03605975816ad348fe03fb8bb53b396",
+        "sumP95Milliseconds": 4360.7
+      }
+    ],
+    "selectedRunId": "35352983265-1-10ad5cbb16f56ff81f0c3324e54c9b48a84a23b7",
+    "selectedCommitSha": "10ad5cbb16f56ff81f0c3324e54c9b48a84a23b7",
+    "measuredAtUtc": "2026-09-18T13:59:18.810Z",
+    "workflow": "Production Gate (release profile, GitHub-hosted runner)",
+    "environment": {
+      "apiInstanceCount": 2,
+      "datasetSize": 25000,
+      "datasetSeed": 20260728,
+      "postgis": "postgis/postgis:17-3.5",
+      "redis": "redis:7-alpine",
+      "k6": "grafana/k6:0.54.0",
+      "nginx": "nginx:1.27-alpine"
+    },
+    "approval": {
+      "status": "pending-owner-review",
+      "note": "Generated from real CI measurements; not authoritative until reviewed and approved by the service owner and a performance/SRE reviewer."
+    }
+  },
+  "datasetManifestHash": "D10376568143584CBE563E244082FD4E23BC709E7C29094EB5C760E646735D2A",
+  "apiInstanceCount": 2,
+  "scenarios": [
+    {
+      "scenario": "auth-otp-10",
+      "virtualUsers": 10,
+      "duration": "60s",
+      "requestCount": 11,
+      "requestsPerSecond": 3.5490571381544482,
+      "p50Milliseconds": 13.576416,
+      "p95Milliseconds": 57.37109149999999,
+      "p99Milliseconds": 89.11994230000002,
+      "maximumMilliseconds": 97.057155,
+      "errorRate": 0.8181818181818182,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "auth-otp-2",
+      "virtualUsers": 2,
+      "duration": "60s",
+      "requestCount": 3,
+      "requestsPerSecond": 0.9710282364621161,
+      "p50Milliseconds": 12.117267,
+      "p95Milliseconds": 80.5174416,
+      "p99Milliseconds": 86.59745712,
+      "maximumMilliseconds": 88.117461,
+      "errorRate": 0.3333333333333333,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "auth-otp-5",
+      "virtualUsers": 5,
+      "duration": "60s",
+      "requestCount": 6,
+      "requestsPerSecond": 1.941573364674133,
+      "p50Milliseconds": 9.870401000000001,
+      "p95Milliseconds": 68.87447374999999,
+      "p99Milliseconds": 84.46268755000001,
+      "maximumMilliseconds": 88.359741,
+      "errorRate": 0.6666666666666666,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "auth-otp-invalid-10",
+      "virtualUsers": 10,
+      "duration": "60s",
+      "requestCount": 11,
+      "requestsPerSecond": 3.6489967199457087,
+      "p50Milliseconds": 10.238697,
+      "p95Milliseconds": 12.2613,
+      "p99Milliseconds": 12.3606664,
+      "maximumMilliseconds": 12.385508,
+      "errorRate": 0.9090909090909091,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "auth-refresh-10",
+      "virtualUsers": 10,
+      "duration": "60s",
+      "requestCount": 12,
+      "requestsPerSecond": 3.9200440160051646,
+      "p50Milliseconds": 31.4038505,
+      "p95Milliseconds": 186.8664761499998,
+      "p99Milliseconds": 311.03748883000014,
+      "maximumMilliseconds": 342.080242,
+      "errorRate": 0.75,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "auth-refresh-2",
+      "virtualUsers": 2,
+      "duration": "60s",
+      "requestCount": 4,
+      "requestsPerSecond": 1.283749104429345,
+      "p50Milliseconds": 140.3292765,
+      "p95Milliseconds": 529.1932097499998,
+      "p99Milliseconds": 580.3933979499999,
+      "maximumMilliseconds": 593.193445,
+      "errorRate": 0.25,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "auth-refresh-5",
+      "virtualUsers": 5,
+      "duration": "60s",
+      "requestCount": 7,
+      "requestsPerSecond": 2.3012064561716015,
+      "p50Milliseconds": 22.697005,
+      "p95Milliseconds": 76.36682889999996,
+      "p99Milliseconds": 88.53987057999997,
+      "maximumMilliseconds": 91.583131,
+      "errorRate": 0.5714285714285714,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "auth-registration-10",
+      "virtualUsers": 10,
+      "duration": "60s",
+      "requestCount": 12,
+      "requestsPerSecond": 3.7739836175352712,
+      "p50Milliseconds": 13.174881,
+      "p95Milliseconds": 159.66733895,
+      "p99Milliseconds": 174.42163499000003,
+      "maximumMilliseconds": 178.110209,
+      "errorRate": 0.75,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "browse-cold",
+      "virtualUsers": 9,
+      "duration": "60s",
+      "requestCount": 2350,
+      "requestsPerSecond": 38.260269943924335,
+      "p50Milliseconds": 171.446527,
+      "p95Milliseconds": 418.5898270999999,
+      "p99Milliseconds": 591.0409757599967,
+      "maximumMilliseconds": 839.539888,
+      "errorRate": 0,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "browse-warm",
+      "virtualUsers": 9,
+      "duration": "60s",
+      "requestCount": 3017,
+      "requestsPerSecond": 42.9148061133303,
+      "p50Milliseconds": 115.283778,
+      "p95Milliseconds": 363.5397234,
+      "p99Milliseconds": 440.4226422000004,
+      "maximumMilliseconds": 569.040977,
+      "errorRate": 0,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "rate-limit-geo-search",
+      "virtualUsers": 25,
+      "duration": "60s",
+      "requestCount": 26,
+      "requestsPerSecond": 1.993344677065866,
+      "p50Milliseconds": 288.4450895,
+      "p95Milliseconds": 349.3448665,
+      "p99Milliseconds": 352.1512055,
+      "maximumMilliseconds": 353.016397,
+      "errorRate": 0.38461538461538464,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "rate-limit-login",
+      "virtualUsers": 20,
+      "duration": "60s",
+      "requestCount": 21,
+      "requestsPerSecond": 1.5958147727707697,
+      "p50Milliseconds": 156.978217,
+      "p95Milliseconds": 974.886112,
+      "p99Milliseconds": 977.4246408,
+      "maximumMilliseconds": 978.059273,
+      "errorRate": 1,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "rate-limit-otp-request",
+      "virtualUsers": 8,
+      "duration": "60s",
+      "requestCount": 9,
+      "requestsPerSecond": 0.6919391895535294,
+      "p50Milliseconds": 8.113843,
+      "p95Milliseconds": 106.4681702,
+      "p99Milliseconds": 106.50801404,
+      "maximumMilliseconds": 106.517975,
+      "errorRate": 0.5555555555555556,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "rate-limit-otp-verify",
+      "virtualUsers": 12,
+      "duration": "60s",
+      "requestCount": 13,
+      "requestsPerSecond": 0.9994849889115529,
+      "p50Milliseconds": 12.241335,
+      "p95Milliseconds": 93.5522138,
+      "p99Milliseconds": 93.57403556,
+      "maximumMilliseconds": 93.579491,
+      "errorRate": 1,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "rate-limit-public-search",
+      "virtualUsers": 30,
+      "duration": "60s",
+      "requestCount": 31,
+      "requestsPerSecond": 2.3726723009562645,
+      "p50Milliseconds": 576.348326,
+      "p95Milliseconds": 670.2444244999999,
+      "p99Milliseconds": 674.5581483999999,
+      "maximumMilliseconds": 675.679912,
+      "errorRate": 0.3225806451612903,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "rate-limit-refresh",
+      "virtualUsers": 30,
+      "duration": "60s",
+      "requestCount": 31,
+      "requestsPerSecond": 2.3816244332957504,
+      "p50Milliseconds": 89.47018,
+      "p95Milliseconds": 95.6085475,
+      "p99Milliseconds": 97.5805979,
+      "maximumMilliseconds": 97.996334,
+      "errorRate": 1,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    },
+    {
+      "scenario": "rate-limit-registration",
+      "virtualUsers": 12,
+      "duration": "60s",
+      "requestCount": 13,
+      "requestsPerSecond": 0.999631523671007,
+      "p50Milliseconds": 13.079705,
+      "p95Milliseconds": 45.7529568,
+      "p99Milliseconds": 45.775899360000004,
+      "maximumMilliseconds": 45.781635,
+      "errorRate": 1,
+      "serverErrorRate": 0,
+      "checkFailureRate": 0
+    }
+  ],
+  "queryPlans": [
+    {
+      "planFile": "property-combined-filter.json",
+      "executionTimeMilliseconds": 0.62,
+      "planningTimeMilliseconds": 1.722,
+      "actualRows": 20,
+      "nodeTypes": [
+        "Index Scan",
+        "Limit"
+      ],
+      "indexes": [
+        "IX_Properties_CreatedAt"
+      ],
+      "sequentialScanCount": 0,
+      "largeSequentialScanCount": 0,
+      "sharedBufferHits": 1076,
+      "sharedBufferReads": 0,
+      "temporaryBlocks": 0,
+      "spatialIndexRequired": false,
+      "spatialIndexUsed": false
+    },
+    {
+      "planFile": "property-detail.json",
+      "executionTimeMilliseconds": 0.11,
+      "planningTimeMilliseconds": 1.898,
+      "actualRows": 1,
+      "nodeTypes": [
+        "Index Scan",
+        "Limit",
+        "Nested Loop"
+      ],
+      "indexes": [
+        "IX_Properties_CreatedAt",
+        "PK_Properties",
+        "PK_UserAccounts"
+      ],
+      "sequentialScanCount": 0,
+      "largeSequentialScanCount": 0,
+      "sharedBufferHits": 22,
+      "sharedBufferReads": 0,
+      "temporaryBlocks": 0,
+      "spatialIndexRequired": false,
+      "spatialIndexUsed": false
+    },
+    {
+      "planFile": "property-geo-radius.json",
+      "executionTimeMilliseconds": 8.344,
+      "planningTimeMilliseconds": 9.684,
+      "actualRows": 20,
+      "nodeTypes": [
+        "CTE Scan",
+        "Index Scan",
+        "Limit",
+        "Sort",
+        "Subquery Scan"
+      ],
+      "indexes": [
+        "IX_Properties_GeoLocation_Published"
+      ],
+      "sequentialScanCount": 0,
+      "largeSequentialScanCount": 0,
+      "sharedBufferHits": 717,
+      "sharedBufferReads": 0,
+      "temporaryBlocks": 0,
+      "spatialIndexRequired": true,
+      "spatialIndexUsed": true
+    },
+    {
+      "planFile": "property-list-deep-page.json",
+      "executionTimeMilliseconds": 5.249,
+      "planningTimeMilliseconds": 1.168,
+      "actualRows": 20,
+      "nodeTypes": [
+        "Index Scan",
+        "Limit"
+      ],
+      "indexes": [
+        "IX_Properties_CreatedAt"
+      ],
+      "sequentialScanCount": 0,
+      "largeSequentialScanCount": 0,
+      "sharedBufferHits": 17848,
+      "sharedBufferReads": 0,
+      "temporaryBlocks": 0,
+      "spatialIndexRequired": false,
+      "spatialIndexUsed": false
+    },
+    {
+      "planFile": "property-list-first-page.json",
+      "executionTimeMilliseconds": 0.1,
+      "planningTimeMilliseconds": 1.198,
+      "actualRows": 20,
+      "nodeTypes": [
+        "Index Scan",
+        "Limit"
+      ],
+      "indexes": [
+        "IX_Properties_CreatedAt"
+      ],
+      "sequentialScanCount": 0,
+      "largeSequentialScanCount": 0,
+      "sharedBufferHits": 44,
+      "sharedBufferReads": 0,
+      "temporaryBlocks": 0,
+      "spatialIndexRequired": false,
+      "spatialIndexUsed": false
+    }
+  ]
+}

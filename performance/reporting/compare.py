@@ -17,10 +17,17 @@ def main():
             failures.append(f"Non-comparable environment metadata: {key} differs.")
 
     baseline_scenarios = {item["scenario"]: item for item in baseline.get("scenarios", [])}
+    minimum_sample = int(limits.get("minimumSampleRequests", 0))
+    minimum_db_delta = float(limits.get("minimumDatabaseTimeDeltaMilliseconds", 0))
     for item in current.get("scenarios", []):
         previous = baseline_scenarios.get(item["scenario"])
         if not previous:
             failures.append(f'Missing approved baseline scenario: {item["scenario"]}')
+            continue
+        # Correctness/race scenarios issue a handful of requests; their latency is noise, not a
+        # regression signal. They stay gated by their own k6 thresholds and security invariants.
+        if int(item.get("requestCount", 0)) < minimum_sample or int(previous.get("requestCount", 0)) < minimum_sample:
+            comparisons.append({"scenario": item["scenario"], "skipped": f"fewer than {minimum_sample} requests"})
             continue
         metrics = {}
         for metric, allowed, lower_is_better in (
@@ -56,7 +63,7 @@ def main():
         read_regression = ((new_reads - old_reads) / old_reads * 100) if old_reads > 0 else (100 if new_reads > 0 else 0)
         new_node_types = sorted(set(plan.get("nodeTypes", [])) - set(previous.get("nodeTypes", [])))
         passed = (
-            time_regression <= limits["databaseTimePercent"]
+            (time_regression <= limits["databaseTimePercent"] or (new_time - old_time) <= minimum_db_delta)
             and read_regression <= limits["bufferReadPercent"]
             and plan.get("largeSequentialScanCount", 0) <= previous.get("largeSequentialScanCount", 0)
             and plan.get("temporaryBlocks", 0) <= previous.get("temporaryBlocks", 0)
