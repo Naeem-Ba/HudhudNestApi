@@ -73,6 +73,10 @@ Response:
 }
 ```
 
+**Errors**: a `platform` that is not `Android`/`IOS`/`Web` fails model binding and returns `400`; an invalid
+`currentVersion` or `lang`, and every admin-endpoint validation failure (malformed `storeUrl`,
+`minimumSupportedVersion` above `version`, ...), returns `422` — the API-wide FluentValidation convention.
+
 `mandatory` is computed as `currentVersion < minimumSupportedVersion` — **not** compared against
 `latestVersion`.
 

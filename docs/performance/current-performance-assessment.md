@@ -59,6 +59,8 @@ are measured on the same dataset.
 
 ## Missing historical evidence
 
-There is no approved comparable performance baseline, no measured local result in source control, and no valid
-reason to fabricate one. `performance/performance-budgets.json` is explicitly unapproved and the release profile
-fails closed until three comparable runs are reviewed and approved.
+Since 2026-09-19 `performance/baselines/approved-baseline.json` exists. It is the median of three real,
+comparable release-profile runs from the Production Gate (2 API instances, 25000 properties, identical dataset
+hash); its `provenance` section lists the source runs. `performance/performance-budgets.json` is `approved: true`
+on the repository owner's request. The policy's separate performance/SRE review is still pending, and the release
+profile continues to fail closed if either file is missing. Nothing in the baseline is fabricated.
