@@ -79,6 +79,7 @@ public sealed class StagingSmokeJourneyTests
         private Session? _visitor;
         private Guid _propertyId;
         private int _governorateId;
+        private int _districtId;
         private int _propertyTypeId;
         private string _imageUrl = string.Empty;
         private string _deployedCommitSha = string.Empty;
@@ -366,9 +367,15 @@ public sealed class StagingSmokeJourneyTests
             using var body = await ReadJsonAsync(response);
             AssertProperty(body.RootElement);
 
-            var publicDraft = await _client.GetAsync($"/api/properties/{_propertyId}");
-            Expect(publicDraft.StatusCode == HttpStatusCode.NotFound,
-                "An unpublished draft leaked through the public detail endpoint.");
+            // New listings are published on creation ("Publish new properties by default",
+            // 1a25540: the POST answers isPublished=true/status=Published, nextAction=UploadImages),
+            // so the public endpoint must serve it right away. The old draft-must-be-hidden
+            // assertion described a workflow that no longer exists.
+            var publicRead = await _client.GetAsync($"/api/properties/{_propertyId}");
+            Expect(publicRead.StatusCode == HttpStatusCode.OK,
+                $"A newly created listing is published by default but the public detail endpoint returned {(int)publicRead.StatusCode}.");
+            using var publicBody = await ReadJsonAsync(publicRead);
+            AssertProperty(publicBody.RootElement);
         }
 
         private async Task ImageUploadAsync()
@@ -603,7 +610,7 @@ public sealed class StagingSmokeJourneyTests
         // up from the public lookup endpoints instead of being hard-coded.
         private async Task LoadListingReferenceDataAsync()
         {
-            if (_governorateId > 0 && _propertyTypeId > 0) return;
+            if (_governorateId > 0 && _districtId > 0 && _propertyTypeId > 0) return;
 
             var governorates = await SendAsync(HttpMethod.Get, "/api/lookups/governorates?countryCode=SY");
             Expect(governorates.StatusCode == HttpStatusCode.OK, "Governorate lookup failed.");
@@ -612,6 +619,17 @@ public sealed class StagingSmokeJourneyTests
                 .FirstOrDefault(item => item.TryGetProperty("nameEn", out var name) && name.GetString() == "Damascus");
             Expect(governorate.ValueKind == JsonValueKind.Object, "Seeded governorate 'Damascus' was not found.");
             _governorateId = Integer(governorate, "id");
+
+            // A seeded district, not free DistrictText: free text files a LocationSuggestion whose
+            // SubmittedByUserId FK (Restrict) blocks deleting the smoke user in cleanup (HTTP 500)
+            // and would also pollute the admin review queue on every run.
+            var districts = await SendAsync(HttpMethod.Get,
+                $"/api/lookups/districts?governorateId={_governorateId}");
+            Expect(districts.StatusCode == HttpStatusCode.OK, "District lookup failed.");
+            using var districtBody = await ReadJsonAsync(districts);
+            var district = districtBody.RootElement.EnumerateArray().FirstOrDefault();
+            Expect(district.ValueKind == JsonValueKind.Object, "No seeded district exists for 'Damascus'.");
+            _districtId = Integer(district, "id");
 
             var types = await SendAsync(HttpMethod.Get, "/api/lookups/property-type-catalog");
             Expect(types.StatusCode == HttpStatusCode.OK, "Property type catalog lookup failed.");
@@ -634,7 +652,7 @@ public sealed class StagingSmokeJourneyTests
             CountryCode = "SY",
             PostalCode = "10115",
             GovernorateId = _governorateId,
-            DistrictText = "Smoke Test District",
+            DistrictId = _districtId,
             PropertyTypeId = _propertyTypeId,
             Latitude = 33.5138m,
             Longitude = 36.2765m,
