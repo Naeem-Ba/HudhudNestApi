@@ -25,6 +25,7 @@ original plan (Inspect -> Diagnose -> Plan -> Fix in phases -> Verify -> Report)
 - Do not assume Render tracks the wrong branch: the deployed SHA matched; the cause was unapplied migrations.
 - Do not treat a `Passed` sub-report as gate success: check the step exit code and the aggregate's failure list.
 - Do not run a first aggregation with checks whose inputs do not exist yet (baseline comparison).
+- Do not declare a root cause fixed from logs alone: my first theory (harness readiness) was incomplete; the PR run disproved it. Verify against the PR run before merging.
 - Do not count a service as ready because it answered; require HTTP 200 on `/health/ready` (Redis-backed rate
   limiting fails closed with 503 when Redis is not connected).
 - Do not order a smoke test so it uses a token after a probe that legitimately revokes it (refresh-token reuse
@@ -36,8 +37,7 @@ original plan (Inspect -> Diagnose -> Plan -> Fix in phases -> Verify -> Report)
 - PR/branch state can change under you (a PR may already exist, commits may appear): `git log`, `gh pr list` first.
 
 ## Open items after PR #163
-1. `rate-limit-login`: api2 was recreated with Redis not yet connected -> 503 fail-closed; harness waited on any
-   response instead of HTTP 200 readiness. Fixed in `scripts/run-performance-tests.sh` (needs a green CI re-run).
+1. `rate-limit-login`: a real product defect, not only a harness issue. The Redis IConnectionMultiplexer singleton was built lazily on the first request that needed it; with abortConnect=false it returned disconnected, so the first rate-limited requests on any fresh instance got the limiter's fail-closed 503 while /health/ready already said 200 (readiness does not touch that singleton). Waiting for HTTP 200 alone (first attempt, PR #164) did NOT fix it - PR run 35437616240 failed identically. Fix: connect eagerly before Kestrel listens with a bounded wait (Program.cs, Redis:StartupConnectTimeoutSeconds, default 15). Needs a green CI re-run.
 2. Staging smoke `Refresh token rotation`: test used the new access token after a replay probe that correctly
    revoked the session family. Reordered and strengthened in `StagingSmokeJourneyTests.cs`; later journeys re-login.
 3. Confirm on the next run: Recovery green, Staging migrations applied by CI (`STAGING_DATABASE_URL` present),

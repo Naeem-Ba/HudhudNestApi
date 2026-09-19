@@ -160,6 +160,39 @@ builder.Services.AddPropertyApiRateLimiting();
 
 var app = builder.Build();
 
+// The IConnectionMultiplexer singleton is otherwise built lazily by whichever request needs it
+// first, and with abortConnect=false ConnectionMultiplexer.Connect returns before the socket is
+// up. On a freshly started instance the first rate-limited requests therefore hit
+// IsConnected=false and were rejected with the limiter's intentional fail-closed 503
+// ("Redis rate limiter is enabled but Redis is not connected"), while /health/ready already
+// answered 200 -- seen as 10 unexpected 5xx in the rate-limit-login gate and, equally, a
+// window of failed logins after every deploy. Connect eagerly before Kestrel starts listening
+// and give the connection a bounded time to establish. If Redis is really down the instance
+// still starts (fail-closed behaviour and readiness are unchanged).
+if (useRedisRateLimiting)
+{
+    var startupLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Redis");
+    var redisMultiplexer = app.Services.GetRequiredService<IConnectionMultiplexer>();
+    var connectBudgetSeconds = Math.Clamp(
+        app.Configuration.GetValue<int?>("Redis:StartupConnectTimeoutSeconds") ?? 15, 0, 60);
+    var connectDeadline = DateTime.UtcNow.AddSeconds(connectBudgetSeconds);
+    while (!redisMultiplexer.IsConnected && DateTime.UtcNow < connectDeadline)
+    {
+        await Task.Delay(100);
+    }
+
+    if (redisMultiplexer.IsConnected)
+    {
+        startupLogger.LogInformation("Redis connected before accepting traffic.");
+    }
+    else
+    {
+        startupLogger.LogWarning(
+            "Redis was not connected after {Seconds}s; starting anyway. Rate-limited endpoints will answer 503 until it connects.",
+            connectBudgetSeconds);
+    }
+}
+
 // -- 10. Reference-data seeding ---------------------------------
 await app.SeedReferenceDataAsync();
 
