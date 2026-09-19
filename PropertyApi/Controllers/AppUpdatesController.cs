@@ -25,6 +25,7 @@ public sealed class AppUpdatesController : ControllerBase
     [EnableRateLimiting("public-read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> Check(
         [FromQuery] AppPlatform platform,
         [FromQuery] string currentVersion,

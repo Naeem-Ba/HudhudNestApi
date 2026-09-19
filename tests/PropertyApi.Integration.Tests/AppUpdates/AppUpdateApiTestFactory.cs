@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using PropertyApi.Application.AppUpdates.Interfaces;
 using PropertyApi.Application.Auth.Contracts;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
@@ -74,6 +75,16 @@ public sealed class AppUpdateApiTestFactory : WebApplicationFactory<Program>
         await db.Database.MigrateAsync();
         await DatabaseSeeder.SeedAsync(scope.ServiceProvider);
         await TruncateMutableTablesAsync(db);
+        await InvalidateReleaseCacheAsync(scope.ServiceProvider);
+    }
+
+    /// <summary>The effective-release lookup is cached for the fixture's lifetime while tests truncate and
+    /// re-seed the table directly, so every direct DB write must be followed by a cache invalidation.</summary>
+    private static async Task InvalidateReleaseCacheAsync(IServiceProvider services)
+    {
+        var cache = services.GetRequiredService<IAppReleaseCacheService>();
+        foreach (var platform in Enum.GetValues<AppPlatform>())
+            await cache.InvalidateAsync(platform, CancellationToken.None);
     }
 
     public async Task<T> InScopeAsync<T>(Func<IServiceProvider, Task<T>> action)
@@ -149,6 +160,7 @@ public sealed class AppUpdateApiTestFactory : WebApplicationFactory<Program>
                 storeUrl, "ar-notes", "en-notes", "de-notes", DateTime.UtcNow, isEnabled);
             db.AppReleases.Add(release);
             await db.SaveChangesAsync(CancellationToken.None);
+            await InvalidateReleaseCacheAsync(services);
             return release.Id;
         });
 

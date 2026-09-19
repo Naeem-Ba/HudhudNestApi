@@ -74,13 +74,13 @@ public sealed class AppUpdateCheckEndpointTests : IClassFixture<AppUpdateApiTest
         Assert.Null(body.LatestVersion);
     }
 
-    [Fact(DisplayName = "Invalid currentVersion -> 400")]
-    public async Task InvalidVersion_Returns400()
+    [Fact(DisplayName = "Invalid currentVersion -> 422")]
+    public async Task InvalidVersion_Returns422()
     {
         var client = _factory.AuthedClient();
         var response = await client.GetAsync("/api/app-updates/check?platform=Android&currentVersion=not-a-version");
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     [Fact(DisplayName = "Invalid platform -> 400")]

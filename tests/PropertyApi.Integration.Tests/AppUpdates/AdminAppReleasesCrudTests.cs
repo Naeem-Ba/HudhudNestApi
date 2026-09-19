@@ -67,8 +67,8 @@ public sealed class AdminAppReleasesCrudTests : IClassFixture<AppUpdateApiTestFa
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
     }
 
-    [Fact(DisplayName = "MinimumSupportedVersion above Version -> 400")]
-    public async Task MinimumAboveVersion_Returns400()
+    [Fact(DisplayName = "MinimumSupportedVersion above Version -> 422")]
+    public async Task MinimumAboveVersion_Returns422()
     {
         var admin = await AdminAsync();
         var client = _factory.AuthedClient(admin.AccessToken);
@@ -76,10 +76,10 @@ public sealed class AdminAppReleasesCrudTests : IClassFixture<AppUpdateApiTestFa
         var response = await client.PostAsJsonAsync(
             "/api/admin/app-releases", ValidCreatePayload(version: "1.0.0", minimumSupportedVersion: "1.1.0"));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
-    [Fact(DisplayName = "Malformed StoreUrl -> 400, empty StoreUrl accepted -> 201")]
+    [Fact(DisplayName = "Malformed StoreUrl -> 422, empty StoreUrl accepted -> 201")]
     public async Task StoreUrlValidation()
     {
         var admin = await AdminAsync();
@@ -94,7 +94,7 @@ public sealed class AdminAppReleasesCrudTests : IClassFixture<AppUpdateApiTestFa
             releaseDate = DateTime.UtcNow,
             isEnabled = true,
         });
-        Assert.Equal(HttpStatusCode.BadRequest, malformed.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, malformed.StatusCode);
 
         var empty = await client.PostAsJsonAsync("/api/admin/app-releases", ValidCreatePayload());
         Assert.Equal(HttpStatusCode.Created, empty.StatusCode);
