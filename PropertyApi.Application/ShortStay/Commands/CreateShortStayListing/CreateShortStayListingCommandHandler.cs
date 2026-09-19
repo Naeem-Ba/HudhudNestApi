@@ -34,6 +34,7 @@ public sealed class CreateShortStayListingCommandHandler
     private readonly IUserIdentityReadService _identity;
     private readonly IActiveListingCounter _activeListingCounter;
     private readonly IListingQuotaPolicy _quotaPolicy;
+    private readonly IPropertyOwnershipService _propertyOwnership;
     private readonly IUnitOfWork _uow;
     private readonly ILogger<CreateShortStayListingCommandHandler> _logger;
 
@@ -44,6 +45,7 @@ public sealed class CreateShortStayListingCommandHandler
         IUserIdentityReadService identity,
         IActiveListingCounter activeListingCounter,
         IListingQuotaPolicy quotaPolicy,
+        IPropertyOwnershipService propertyOwnership,
         IUnitOfWork uow,
         ILogger<CreateShortStayListingCommandHandler> logger)
     {
@@ -53,6 +55,7 @@ public sealed class CreateShortStayListingCommandHandler
         _identity = identity;
         _activeListingCounter = activeListingCounter;
         _quotaPolicy = quotaPolicy;
+        _propertyOwnership = propertyOwnership;
         _uow = uow;
         _logger = logger;
     }
@@ -61,6 +64,15 @@ public sealed class CreateShortStayListingCommandHandler
     {
         var accommodationType = await _accommodationTypes.GetByIdAsync(request.AccommodationTypeId, ct)
             ?? throw new NotFoundException($"AccommodationType {request.AccommodationTypeId} was not found.");
+
+        // Security audit finding (2026-09-18): request.PropertyId used to be passed straight
+        // into ShortStayListing.Create with no lookup at all -- any authenticated user could
+        // link a Short-Stay listing to a PropertyId they don't own. Reuses the same
+        // IPropertyOwnershipService every Property-mutating handler already goes through
+        // (UpdatePropertyCommandHandler, UploadPropertyImagesCommandHandler, etc.) rather than
+        // writing a second, parallel ownership check.
+        if (request.PropertyId is { } propertyId)
+            await _propertyOwnership.EnsureOwnerAsync(propertyId, request.OwnerId, "link", ct);
 
         // Same two gates CreatePropertyCommandHandler enforces before its first listing —
         // see that handler's doc comments for why both apply regardless of role. Checked

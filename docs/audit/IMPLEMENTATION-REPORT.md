@@ -189,3 +189,28 @@ fix is deployed, as the acceptance check for that deploy.
 - The new Playwright files (config, spec, `package.json`/`package-lock.json`,
   `.gitignore`, docs) were **not** committed or pushed.
 - No Staging environment variable or deployment was triggered.
+
+---
+
+## Security/quality audit remediation — 2026-09-19
+
+Each finding was re-verified against the live code first; several audit claims were stale or
+only partly true (noted below).
+
+| Finding | Verified state | Action |
+|---|---|---|
+| Android signing password in shared archive | File never in git history (`.gitignore` correct since PR #37); exposure was via a plain zip, which ignores `.gitignore`. Owner confirmed an archive was shared. | Store password rotated with `keytool -storepasswd` (same key: identical SHA-256 fingerprint before/after). `RELEASE_STORE_PASSWORD`/`RELEASE_KEY_PASSWORD` set in GitHub Secrets. Details in the frontend repo's `android/RELEASE_SIGNING.md`. PKCS12 has no separate key password (`-keypasswd` unsupported), so both stay identical. |
+| Staging falls back to Production API | Real: `environment.staging.ts` defaulted to `wohnungen-api.onrender.com`. `netlify.toml` has no `[[redirects]]`, so the Netlify half of the claim was already stale. | Staging fallback removed; the bundle now throws at load if `API_URL` is missing. Production keeps its own fallback (intended). |
+| Short-Stay edit wipes data | Real, frontend-side: the form hardcoded `governorateId/districtId/neighborhoodId/pool*` to `null` and forced `depositPercentage = null` on load; the PUT is full-replace, so `null` is an explicit clear. The GET DTO also never returned `DepositPercentage`/location ids. | `ShortStayListingDto` now returns them; the form captures them on load and echoes them back on save. Backend full-replace semantics deliberately unchanged. |
+| `npm ci` fails (no lockfile) | **Not reproducible**: `package-lock.json` is tracked, not ignored, matches HEAD; `npm ci` succeeds from a clean `node_modules`. The one failure seen was a local OneDrive file lock (EPERM). | None needed. |
+| Unbounded `pageSize` | Real (floor of 1, no ceiling, anonymous endpoint). | `SearchShortStayListingsQueryValidator` (1–100) plus `Math.Clamp` in the repository. |
+| Missing validators / `Enum.Parse` → 500 | Real for `UpdateShortStayListingCommand` and `SetPricingRulesCommand`. | New validators using `Enum.TryParse` guards, numeric bounds, deposit 0–100. |
+| `PropertyId` without ownership check | Real. | `CreateShortStayListingCommandHandler` now calls `IPropertyOwnershipService.EnsureOwnerAsync`. |
+| Non-atomic multi-request save | Real but mitigated by design: `IsPublished` defaults to false and public reads filter on it, so a partial sequence leaves an invisible draft, not corrupt live data. | Documented; no saga/transaction redesign. |
+| GitHub Actions not SHA-pinned (frontend) | Real, 9/9. | All pinned to commit SHAs with version comments. |
+| Availability unbounded range | Real (also on booking creation). | 366-day cap in `GetUnitAvailabilityQueryValidator` and `CreateBookingCommandValidator`. |
+| Archive hygiene (`.claude/worktrees`, Gradle cache) | Process issue with how the zip was made, not a repo defect. | Use `git archive HEAD` (respects `.gitignore`/tracked files only) for any hand-off; never zip the working directory. |
+| Frontend telemetry limited | Not addressed; product/observability scope. | Deferred. |
+
+Tests: Application.Tests 1186/1186 (+20 new: validators and ownership), Architecture 164/164,
+Auth 261/261, ShortStay integration 4/4; frontend typecheck clean, unit 323/323.
