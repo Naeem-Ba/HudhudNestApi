@@ -500,18 +500,20 @@ public sealed class StagingSmokeJourneyTests
             var refresh = _owner!.RefreshToken;
             var response = await SendJsonAsync(HttpMethod.Post, "/api/auth/logout",
                 new { RefreshToken = refresh }, _owner.AccessToken);
-            Expect(response.StatusCode == HttpStatusCode.NoContent, "Logout failed.");
+            Expect(response.StatusCode == HttpStatusCode.NoContent,
+                $"Logout expected HTTP 204, got {(int)response.StatusCode}{await ApiErrorAsync(response)}.");
 
-            // Check the stateless access token *before* probing the revoked refresh token: presenting
-            // an already-revoked refresh token is treated as reuse (RefreshTokenCommand ->
-            // RefreshTokenReuseHandler), which revokes every session and rotates the security stamp,
-            // deliberately invalidating the access token too. Probing first made this assertion
-            // fail on correct behaviour.
-            var statelessAccess = await SendAsync(HttpMethod.Get,
+            // Logout rotates the Identity security stamp and clears its cache (LogoutCommandHandler),
+            // and the JWT pipeline validates the stamp claim on every request, so an explicit logout
+            // also ends the current access token -- confirmed locally by
+            // LogoutFlowIntegrationTests. The old "stateless access token stays valid" expectation
+            // described a model the API no longer has.
+            var afterLogout = await SendAsync(HttpMethod.Get,
                 "/api/users/me", token: _owner.AccessToken);
-            Expect(statelessAccess.StatusCode == HttpStatusCode.OK,
-                "Logout unexpectedly revoked a stateless access token contrary to the current model.");
+            Expect(afterLogout.StatusCode == HttpStatusCode.Unauthorized,
+                "Logout did not end the access token (security stamp was not rotated).");
 
+            // The refresh token was revoked by logout; replaying it is refused (as reuse).
             var reuse = await SendJsonAsync(HttpMethod.Post, "/api/auth/refresh",
                 new { RefreshToken = refresh });
             Expect(reuse.StatusCode == HttpStatusCode.Unauthorized,
