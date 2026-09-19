@@ -36,6 +36,7 @@ public sealed class SearchShortStayListingsQueryHandler
                 Bedrooms: listing.Bedrooms,
                 Bathrooms: listing.Bathrooms,
                 FromPricePerNight: cheapestRoomType?.BasePricePerNight,
+                CurrencyCode: listing.CurrencyCode,
                 City: listing.City,
                 Latitude: listing.LocationVisibility == Domain.ShortStay.Enums.LocationVisibility.Exact ? listing.Latitude : null,
                 Longitude: listing.LocationVisibility == Domain.ShortStay.Enums.LocationVisibility.Exact ? listing.Longitude : null,

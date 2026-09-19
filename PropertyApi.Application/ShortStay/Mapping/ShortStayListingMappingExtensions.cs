@@ -40,6 +40,7 @@ public static class ShortStayListingMappingExtensions
         PropertyId: listing.PropertyId,
         AccommodationTypeId: listing.AccommodationTypeId,
         AccommodationTypeCode: accommodationType.Code,
+        CurrencyCode: listing.CurrencyCode,
         Title: listing.Title,
         Description: listing.Description,
         Capacity: listing.Capacity,
@@ -77,5 +78,6 @@ public static class ShortStayListingMappingExtensions
         IsPublished: listing.IsPublished,
         PublishedAt: listing.PublishedAt,
         RoomTypes: listing.RoomTypes.Select(rt => rt.ToDto()).ToList(),
-        PhotoUrls: listing.Photos.OrderBy(p => p.SortOrder).Select(p => p.Url).ToList());
+        PhotoUrls: listing.Photos.OrderBy(p => p.SortOrder).Select(p => p.Url).ToList(),
+        AmenityIds: listing.ListingAmenities.Select(a => a.AmenityId).ToList());
 }

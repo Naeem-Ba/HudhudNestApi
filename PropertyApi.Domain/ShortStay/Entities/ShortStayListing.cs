@@ -18,6 +18,20 @@ public sealed class ShortStayListing : AuditableEntity
     public Guid? PropertyId { get; private set; }
     public int AccommodationTypeId { get; private set; }
 
+    /// <summary>ISO 4217 code all of this listing's prices (nightly rates, fees, booking totals)
+    /// are quoted in. Fixed at creation — existing bookings snapshot amounts without a currency
+    /// of their own, so changing it afterwards would silently re-denominate them. Same allowlist
+    /// and "SYP" default as Property.CurrencyCode; no conversion is performed anywhere.</summary>
+    public string CurrencyCode { get; private set; } = DefaultCurrencyCode;
+
+    public const string DefaultCurrencyCode = "SYP";
+
+    /// <summary>Kept identical to CreatePropertyCommandValidator.ValidCurrencyCodes.</summary>
+    public static readonly IReadOnlySet<string> SupportedCurrencyCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "EUR", "USD", "GBP", "SYP", "TRY", "AED", "SAR", "EGP", "JOD", "LBP"
+    };
+
     // ── Basic info ────────────────────────────────────────────────
     public string Title { get; private set; } = string.Empty;
     public string Description { get; private set; } = string.Empty;
@@ -89,7 +103,8 @@ public sealed class ShortStayListing : AuditableEntity
         TimeOnly checkOutTime,
         decimal latitude,
         decimal longitude,
-        Guid? propertyId = null)
+        Guid? propertyId = null,
+        string currencyCode = DefaultCurrencyCode)
     {
         if (string.IsNullOrWhiteSpace(title))
             throw new DomainException("عنوان الإعلان مطلوب.");
@@ -97,9 +112,13 @@ public sealed class ShortStayListing : AuditableEntity
         if (capacity < 1)
             throw new DomainException("سعة الإعلان يجب أن تكون ضيفاً واحداً على الأقل.");
 
+        if (string.IsNullOrWhiteSpace(currencyCode) || !SupportedCurrencyCodes.Contains(currencyCode.Trim()))
+            throw new DomainException("رمز العملة غير مدعوم.");
+
         return new ShortStayListing
         {
             OwnerId = ownerId,
+            CurrencyCode = currencyCode.Trim().ToUpperInvariant(),
             PropertyId = propertyId,
             AccommodationTypeId = accommodationTypeId,
             Title = title.Trim(),
@@ -193,6 +212,22 @@ public sealed class ShortStayListing : AuditableEntity
             throw new DomainException("نسبة العربون يجب أن تكون بين 0 و 100.");
 
         DepositPercentage = depositPercentage;
+    }
+
+    /// <summary>
+    /// Replaces the full amenity set in one call (not additive) — mirrors how the host-facing
+    /// form actually works (a checklist submitted as a whole), and avoids ever accumulating
+    /// duplicate rows for the same AmenityId. Does not validate that each id refers to a real,
+    /// active Amenity — the FK constraint on ShortStayListingAmenities.AmenityId is the backstop
+    /// (same trust level CreatePropertyCommandHandler already applies to PropertyAmenities).
+    /// </summary>
+    public void SetAmenities(IReadOnlyCollection<Guid> amenityIds)
+    {
+        ListingAmenities.Clear();
+        foreach (var amenityId in amenityIds.Distinct())
+        {
+            ListingAmenities.Add(new ShortStayListingAmenity { ShortStayListingId = Id, AmenityId = amenityId });
+        }
     }
 
     /// <summary>Builds the immutable snapshot text stored on a Booking at creation time.</summary>

@@ -9,6 +9,7 @@ public sealed record ShortStayListingSummaryDto(
     int Bedrooms,
     int Bathrooms,
     decimal? FromPricePerNight,
+    string CurrencyCode,
     string? City,
     decimal? Latitude,
     decimal? Longitude,
@@ -23,6 +24,7 @@ public sealed record ShortStayListingDto(
     Guid? PropertyId,
     int AccommodationTypeId,
     string AccommodationTypeCode,
+    string CurrencyCode,
     string Title,
     string Description,
     int Capacity,
@@ -66,4 +68,5 @@ public sealed record ShortStayListingDto(
     bool IsPublished,
     DateTime? PublishedAt,
     IReadOnlyList<RoomTypeDto> RoomTypes,
-    IReadOnlyList<string> PhotoUrls);
+    IReadOnlyList<string> PhotoUrls,
+    IReadOnlyList<Guid> AmenityIds);

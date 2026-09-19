@@ -33,6 +33,6 @@ public sealed class CheckInBookingCommandHandler : IRequestHandler<CheckInBookin
         await _bookings.MarkRangeCheckedInAsync(booking.Id, ct);
         await _uow.SaveChangesAsync(ct);
 
-        return booking.ToDto(listing.Id, listing.Title);
+        return booking.ToDto(listing.Id, listing.Title, listing.CurrencyCode);
     }
 }

@@ -1,4 +1,5 @@
 using FluentValidation;
+using PropertyApi.Domain.ShortStay.Entities;
 
 namespace PropertyApi.Application.ShortStay.Commands.CreateShortStayListing;
 
@@ -14,6 +15,10 @@ public sealed class CreateShortStayListingCommandValidator : AbstractValidator<C
         RuleFor(x => x.Bedrooms).GreaterThanOrEqualTo(0);
         RuleFor(x => x.Bathrooms).GreaterThanOrEqualTo(0);
         RuleFor(x => x.DefaultBasePricePerNight).GreaterThan(0);
+        RuleFor(x => x.CurrencyCode)
+            .NotEmpty()
+            .Must(c => c is not null && ShortStayListing.SupportedCurrencyCodes.Contains(c.Trim()))
+            .WithMessage("رمز العملة غير مدعوم.");
         RuleFor(x => x.Latitude).InclusiveBetween(-90m, 90m);
         RuleFor(x => x.Longitude).InclusiveBetween(-180m, 180m);
     }

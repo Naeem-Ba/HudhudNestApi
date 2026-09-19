@@ -33,6 +33,6 @@ public sealed class CompleteBookingCommandHandler : IRequestHandler<CompleteBook
         await _bookings.ReleaseRangeAsync(booking.Id, ct); // frees the row from the "active" set; historical Completed booking stays queryable via Booking itself
         await _uow.SaveChangesAsync(ct);
 
-        return booking.ToDto(listing.Id, listing.Title);
+        return booking.ToDto(listing.Id, listing.Title, listing.CurrencyCode);
     }
 }

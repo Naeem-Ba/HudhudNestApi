@@ -5,6 +5,7 @@ public sealed record BookingDto(
     Guid UnitId,
     Guid ShortStayListingId,
     string ListingTitle,
+    string CurrencyCode,
     Guid GuestId,
     DateOnly CheckIn,
     DateOnly CheckOut,

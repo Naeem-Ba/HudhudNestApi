@@ -153,6 +153,11 @@ erDiagram
     SHORTSTAYLISTINGS ||--o{ SHORTSTAYREVIEWS : ""
     SHORTSTAYLISTINGS ||--o{ SHORTSTAYBOOKINGS : ""
 
+    SHORTSTAYLISTINGS {
+        guid Id PK
+        string CurrencyCode "varchar(3), ISO 4217, NOT NULL, default SYP, fixed at creation; all prices are per night"
+    }
+
     UNITBOOKINGRANGES {
         guid Id PK
         guid UnitId FK

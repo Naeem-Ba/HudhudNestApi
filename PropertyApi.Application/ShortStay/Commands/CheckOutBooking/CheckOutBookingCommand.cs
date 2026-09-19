@@ -32,6 +32,6 @@ public sealed class CheckOutBookingCommandHandler : IRequestHandler<CheckOutBook
         booking.CheckOutGuest();
         await _uow.SaveChangesAsync(ct);
 
-        return booking.ToDto(listing.Id, listing.Title);
+        return booking.ToDto(listing.Id, listing.Title, listing.CurrencyCode);
     }
 }

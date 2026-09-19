@@ -41,6 +41,6 @@ public sealed class CancelBookingCommandHandler : IRequestHandler<CancelBookingC
             NotificationType.ShortStayBookingCancelled,
             $"ألغى الضيف حجزه لـ '{listing.Title}'.", ct);
 
-        return booking.ToDto(listing.Id, listing.Title);
+        return booking.ToDto(listing.Id, listing.Title, listing.CurrencyCode);
     }
 }

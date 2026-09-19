@@ -5,13 +5,17 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using PropertyApi.Application.ShortStay.Commands.AddAccommodationUnit;
 using PropertyApi.Application.ShortStay.Commands.AddRoomType;
+using PropertyApi.Application.ShortStay.Commands.AddShortStayListingPhotos;
+using PropertyApi.Application.Listings.DTOs;
 using PropertyApi.Application.ShortStay.Commands.CreateShortStayListing;
 using PropertyApi.Application.ShortStay.Commands.DeleteShortStayListing;
 using PropertyApi.Application.ShortStay.Commands.PublishShortStayListing;
 using PropertyApi.Application.ShortStay.Commands.SetMinimumStayRules;
 using PropertyApi.Application.ShortStay.Commands.SetPricingRules;
+using PropertyApi.Application.ShortStay.Commands.SetShortStayListingAmenities;
 using PropertyApi.Application.ShortStay.Commands.UpdateShortStayListing;
 using PropertyApi.Application.ShortStay.DTOs;
+using PropertyApi.Application.ShortStay.Queries.GetActiveAccommodationTypes;
 using PropertyApi.Application.ShortStay.Queries.GetMyShortStayListings;
 using PropertyApi.Application.ShortStay.Queries.GetShortStayListingById;
 using PropertyApi.Application.ShortStay.Queries.SearchShortStayListings;
@@ -24,6 +28,16 @@ public sealed class ShortStayListingsController : ControllerBase
 {
     private readonly ISender _mediator;
     public ShortStayListingsController(ISender mediator) => _mediator = mediator;
+
+    [HttpGet("accommodation-types")]
+    [AllowAnonymous]
+    [EnableRateLimiting("shortstay-search")]
+    [ProducesResponseType(typeof(IReadOnlyList<AccommodationTypeDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAccommodationTypes(CancellationToken ct)
+    {
+        var result = await _mediator.Send(new GetActiveAccommodationTypesQuery(), ct);
+        return Ok(result);
+    }
 
     [HttpGet]
     [AllowAnonymous]
@@ -87,7 +101,7 @@ public sealed class ShortStayListingsController : ControllerBase
         var command = new CreateShortStayListingCommand(
             GetUserId(), dto.AccommodationTypeId, dto.Title, dto.Description, dto.Capacity, dto.Bedrooms,
             dto.Bathrooms, dto.CheckInTime, dto.CheckOutTime, dto.Latitude, dto.Longitude,
-            dto.DefaultBasePricePerNight, dto.PropertyId);
+            dto.DefaultBasePricePerNight, dto.PropertyId, dto.CurrencyCode);
 
         var result = await _mediator.Send(command, ct);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
@@ -145,6 +159,32 @@ public sealed class ShortStayListingsController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{id:guid}/photos")]
+    [Authorize]
+    [RequestSizeLimit(20_000_000)]
+    [ProducesResponseType(typeof(IReadOnlyList<string>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadPhotos(Guid id, [FromForm] IFormFileCollection files, CancellationToken ct)
+    {
+        var uploadFiles = (files ?? new FormFileCollection())
+            .Select(file => new UploadPropertyImageFileDto(
+                file.OpenReadStream(), file.FileName, file.ContentType, file.Length))
+            .ToList();
+
+        var result = await _mediator.Send(new AddShortStayListingPhotosCommand(id, GetUserId(), uploadFiles), ct);
+        return Ok(result);
+    }
+
+    [HttpPut("{id:guid}/amenities")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> SetAmenities(Guid id, [FromBody] IReadOnlyList<Guid> amenityIds, CancellationToken ct)
+    {
+        await _mediator.Send(new SetShortStayListingAmenitiesCommand(id, GetUserId(), amenityIds), ct);
+        return NoContent();
+    }
+
     [HttpPost("{id:guid}/room-types")]
     [Authorize]
     [ProducesResponseType(typeof(RoomTypeDto), StatusCodes.Status201Created)]
@@ -199,7 +239,7 @@ public sealed class ShortStayListingsController : ControllerBase
 public sealed record CreateShortStayListingRequest(
     int AccommodationTypeId, string Title, string Description, int Capacity, int Bedrooms, int Bathrooms,
     TimeOnly CheckInTime, TimeOnly CheckOutTime, decimal Latitude, decimal Longitude,
-    decimal DefaultBasePricePerNight, Guid? PropertyId);
+    decimal DefaultBasePricePerNight, Guid? PropertyId, string CurrencyCode);
 
 public sealed record UpdateShortStayListingRequest(
     string Title, string Description, int Capacity, int Bedrooms, int Bathrooms, TimeOnly CheckInTime,

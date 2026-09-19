@@ -121,7 +121,8 @@ public sealed class CreateShortStayListingCommandHandler
                 request.CheckOutTime,
                 request.Latitude,
                 request.Longitude,
-                request.PropertyId);
+                request.PropertyId,
+                request.CurrencyCode);
 
             var defaultRoomType = new RoomType
             {

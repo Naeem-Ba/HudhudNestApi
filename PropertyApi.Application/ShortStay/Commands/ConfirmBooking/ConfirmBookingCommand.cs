@@ -41,6 +41,6 @@ public sealed class ConfirmBookingCommandHandler : IRequestHandler<ConfirmBookin
             NotificationType.ShortStayBookingConfirmed,
             $"تم تأكيد حجزك لـ '{listing.Title}'.", ct);
 
-        return booking.ToDto(listing.Id, listing.Title);
+        return booking.ToDto(listing.Id, listing.Title, listing.CurrencyCode);
     }
 }

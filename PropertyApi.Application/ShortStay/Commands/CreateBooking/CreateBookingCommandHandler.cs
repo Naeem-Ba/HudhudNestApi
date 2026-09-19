@@ -159,7 +159,7 @@ public sealed class CreateBookingCommandHandler : IRequestHandler<CreateBookingC
                     booking.Id, listing.Id);
             }
 
-            return booking.ToDto(listing.Id, listing.Title);
+            return booking.ToDto(listing.Id, listing.Title, listing.CurrencyCode);
         }
         catch
         {

@@ -20,7 +20,7 @@ public sealed class GetMyShortStayBookingsQueryHandler
         var bookings = await _bookings.GetByGuestIdAsync(request.GuestId, ct);
 
         return bookings
-            .Select(b => b.ToDto(b.Unit!.RoomType.ShortStayListingId, b.Unit.RoomType.ShortStayListing.Title))
+            .Select(b => b.ToDto(b.Unit!.RoomType.ShortStayListingId, b.Unit.RoomType.ShortStayListing.Title, b.Unit.RoomType.ShortStayListing.CurrencyCode))
             .ToList();
     }
 }
