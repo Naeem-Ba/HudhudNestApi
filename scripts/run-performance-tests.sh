@@ -324,15 +324,21 @@ export PERF_LIMIT_AUTH_REFRESH=20
 export PERF_LIMIT_PUBLIC_SEARCH=20
 export PERF_LIMIT_GEO_SEARCH=15
 docker compose -f "${compose_file}" up -d --force-recreate api1 api2 load-balancer
+# Count an instance only once it answers /health/ready with HTTP 200. The previous loop counted
+# any response carrying X-Instance-Id, including 503, so the rate-limit workloads could start
+# while a freshly recreated instance still had no Redis connection. With the Redis rate limiter
+# enabled that instance fails closed (503, "Redis rate limiter is enabled but Redis is not
+# connected"), which made rate-limit-login report 10 unexpected 5xx (run 35435434719). That
+# fail-closed behaviour is intended and stays; the harness must wait for real readiness.
 rate_instance_file="$(mktemp)"
 for attempt in $(seq 1 90); do
   curl --silent --show-error --max-time 5 -D - -o /dev/null "${PERF_BASE_URL}/health/ready" 2>/dev/null |
-    awk 'BEGIN { IGNORECASE=1 } /^X-Instance-Id:/ { gsub("\r", "", $2); print $2 }' >> "${rate_instance_file}" || true
+    awk 'BEGIN { IGNORECASE=1 } /^HTTP\// { code=$2 } /^X-Instance-Id:/ { gsub("\r", "", $2); id=$2 } END { if (code == "200" && id != "") print id }' >> "${rate_instance_file}" || true
   if [ "$(sort -u "${rate_instance_file}" | wc -l | tr -d ' ')" -ge 2 ]; then
     break
   fi
-  if [ "${attempt}" -eq 90 ]; then fail "Both rate-limit API instances did not become ready."; fi
-  sleep 2
+  if [ "${attempt}" -eq 90 ]; then fail "Both rate-limit API instances did not become ready (HTTP 200 on /health/ready)."; fi
+  sleep 1
 done
 rm -f "${rate_instance_file}"
 
