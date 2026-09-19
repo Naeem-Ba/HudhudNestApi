@@ -167,7 +167,14 @@ if [ "$(jq -r '.result' "${artifacts_dir}/staging-smoke-report.json")" != "passe
   exit 1
 fi
 
-if jq -e '.journeys[] | select(.status != "passed")' \
+# The report serialises each journey with PascalCase keys (Name/Status), while the top-level
+# fields are camelCase. This check read `.status`, which does not exist on a journey, so it was
+# `null != "passed"` for every journey and rejected even a fully passed run (Production Gate
+# run 35461159726: all 12 journeys passed, then "A mandatory journey is failed or skipped").
+# Accept either spelling and refuse an empty journey list, so it can neither pass vacuously nor
+# fail spuriously.
+if [ "$(jq -r '(.journeys // []) | length' "${artifacts_dir}/staging-smoke-report.json")" -eq 0 ] ||
+  jq -e '.journeys[] | select((.Status // .status // "missing") != "passed")' \
   "${artifacts_dir}/staging-smoke-report.json" > /dev/null; then
   failure_message="A mandatory journey is failed or skipped."
   echo "::error::${failure_message}"
