@@ -1,3 +1,5 @@
+using StackExchange.Redis;
+
 namespace PropertyApi.Security.RateLimiting;
 
 /// <summary>
@@ -17,6 +19,37 @@ public static class RedisStartupConnection
             configuration.GetValue<int?>(TimeoutConfigurationKey) ?? DefaultTimeoutSeconds,
             0,
             MaximumTimeoutSeconds);
+
+    /// <summary>
+    /// Waits (bounded) for <paramref name="multiplexer"/> to connect and logs the outcome.
+    /// Never throws for an unreachable Redis: the instance still starts and the limiter keeps
+    /// failing closed until the connection comes up.
+    /// </summary>
+    public static async Task<bool> EnsureConnectedAsync(
+        IConnectionMultiplexer multiplexer,
+        IConfiguration configuration,
+        ILogger logger,
+        TimeSpan? pollInterval = null)
+    {
+        var budgetSeconds = ResolveTimeoutSeconds(configuration);
+        var connected = await WaitUntilConnectedAsync(
+            () => multiplexer.IsConnected,
+            TimeSpan.FromSeconds(budgetSeconds),
+            pollInterval ?? TimeSpan.FromMilliseconds(100));
+
+        if (connected)
+        {
+            logger.LogInformation("Redis connected before accepting traffic.");
+        }
+        else
+        {
+            logger.LogWarning(
+                "Redis was not connected after {Seconds}s; starting anyway. Rate-limited endpoints will answer 503 until it connects.",
+                budgetSeconds);
+        }
+
+        return connected;
+    }
 
     /// <returns><c>true</c> when the connection was established within the budget.</returns>
     public static async Task<bool> WaitUntilConnectedAsync(

@@ -171,22 +171,10 @@ var app = builder.Build();
 // still starts (fail-closed behaviour and readiness are unchanged).
 if (useRedisRateLimiting)
 {
-    var startupLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Redis");
-    var redisMultiplexer = app.Services.GetRequiredService<IConnectionMultiplexer>();
-    var connectBudgetSeconds = RedisStartupConnection.ResolveTimeoutSeconds(app.Configuration);
-    if (await RedisStartupConnection.WaitUntilConnectedAsync(
-            () => redisMultiplexer.IsConnected,
-            TimeSpan.FromSeconds(connectBudgetSeconds),
-            TimeSpan.FromMilliseconds(100)))
-    {
-        startupLogger.LogInformation("Redis connected before accepting traffic.");
-    }
-    else
-    {
-        startupLogger.LogWarning(
-            "Redis was not connected after {Seconds}s; starting anyway. Rate-limited endpoints will answer 503 until it connects.",
-            connectBudgetSeconds);
-    }
+    await RedisStartupConnection.EnsureConnectedAsync(
+        app.Services.GetRequiredService<IConnectionMultiplexer>(),
+        app.Configuration,
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Redis"));
 }
 
 // -- 10. Reference-data seeding ---------------------------------

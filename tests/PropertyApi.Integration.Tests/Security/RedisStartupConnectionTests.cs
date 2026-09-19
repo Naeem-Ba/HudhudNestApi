@@ -1,5 +1,8 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using PropertyApi.Security.RateLimiting;
+using StackExchange.Redis;
 
 namespace PropertyApi.Integration.Tests.Security;
 
@@ -40,6 +43,38 @@ public sealed class RedisStartupConnectionTests
 
         Assert.False(connected);
     }
+
+    [Fact(DisplayName = "A connected Redis is reported and the instance starts")]
+    public async Task EnsureConnectedAsync_Connected_ReturnsTrue()
+    {
+        var multiplexer = new Mock<IConnectionMultiplexer>();
+        multiplexer.SetupGet(m => m.IsConnected).Returns(true);
+
+        var connected = await RedisStartupConnection.EnsureConnectedAsync(
+            multiplexer.Object, EmptyConfiguration(), NullLogger.Instance, Poll);
+
+        Assert.True(connected);
+    }
+
+    [Fact(DisplayName = "An unreachable Redis does not stop the instance from starting")]
+    public async Task EnsureConnectedAsync_NeverConnects_ReturnsFalseWithoutThrowing()
+    {
+        var multiplexer = new Mock<IConnectionMultiplexer>();
+        multiplexer.SetupGet(m => m.IsConnected).Returns(false);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [RedisStartupConnection.TimeoutConfigurationKey] = "0"
+            })
+            .Build();
+
+        var connected = await RedisStartupConnection.EnsureConnectedAsync(
+            multiplexer.Object, configuration, NullLogger.Instance, Poll);
+
+        Assert.False(connected);
+    }
+
+    private static IConfiguration EmptyConfiguration() => new ConfigurationBuilder().Build();
 
     [Theory(DisplayName = "The startup timeout is configurable and bounded")]
     [InlineData(null, 15)]
