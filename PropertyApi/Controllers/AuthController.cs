@@ -277,7 +277,18 @@ public sealed class AuthController : ControllerBase
     }
 
     // POST /api/auth/logout
+    //
+    // Exempt from CookieCsrfProtectionMiddleware on purpose. The middleware exists for
+    // requests whose only credential is the ambient refresh_token cookie; this endpoint also
+    // requires a valid Bearer access token ([Authorize]), which a cross-site page can neither
+    // read nor attach, so there is no CSRF exposure left to protect. Enforcing it here only
+    // broke real clients: antiforgery request tokens are bound to the authenticated user, and
+    // the SPA (like the Staging smoke) fetches its token once, before sign-in, so every logout
+    // that carried the refresh cookie was rejected with 403 CSRF_VALIDATION_FAILED and the
+    // refresh token was never revoked server-side. POST /api/auth/refresh keeps full CSRF
+    // protection (it is anonymous and cookie-driven).
     [Authorize]
+    [IgnoreAntiforgeryToken]
     [HttpPost("logout")]
     [EnableRateLimiting("auth-logout")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
