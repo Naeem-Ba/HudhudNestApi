@@ -78,6 +78,8 @@ public sealed class StagingSmokeJourneyTests
         private Session? _owner;
         private Session? _visitor;
         private Guid _propertyId;
+        private int _governorateId;
+        private int _propertyTypeId;
         private string _imageUrl = string.Empty;
         private string _deployedCommitSha = string.Empty;
         private string _cleanupStatus = "skipped";
@@ -321,6 +323,7 @@ public sealed class StagingSmokeJourneyTests
         private async Task CreatePropertyAsync()
         {
             RequireSessions();
+            await LoadListingReferenceDataAsync();
             var payload = PropertyPayload(_config.PropertyTitle);
 
             var unauthorized = await SendJsonAsync(HttpMethod.Post, "/api/properties", payload);
@@ -586,6 +589,30 @@ public sealed class StagingSmokeJourneyTests
             return new Session(Guid.Empty, access, refresh);
         }
 
+        // Structured location and property type are mandatory for a listing (see
+        // CreatePropertyCommandValidator); the ids belong to seeded reference data and are looked
+        // up from the public lookup endpoints instead of being hard-coded.
+        private async Task LoadListingReferenceDataAsync()
+        {
+            if (_governorateId > 0 && _propertyTypeId > 0) return;
+
+            var governorates = await SendAsync(HttpMethod.Get, "/api/lookups/governorates?countryCode=SY");
+            Expect(governorates.StatusCode == HttpStatusCode.OK, "Governorate lookup failed.");
+            using var governorateBody = await ReadJsonAsync(governorates);
+            var governorate = governorateBody.RootElement.EnumerateArray()
+                .FirstOrDefault(item => item.TryGetProperty("nameEn", out var name) && name.GetString() == "Damascus");
+            Expect(governorate.ValueKind == JsonValueKind.Object, "Seeded governorate 'Damascus' was not found.");
+            _governorateId = Integer(governorate, "id");
+
+            var types = await SendAsync(HttpMethod.Get, "/api/lookups/property-type-catalog");
+            Expect(types.StatusCode == HttpStatusCode.OK, "Property type catalog lookup failed.");
+            using var typeBody = await ReadJsonAsync(types);
+            var apartment = typeBody.RootElement.EnumerateArray()
+                .FirstOrDefault(item => item.TryGetProperty("code", out var code) && code.GetString() == "apartment");
+            Expect(apartment.ValueKind == JsonValueKind.Object, "Seeded property type 'apartment' was not found.");
+            _propertyTypeId = Integer(apartment, "id");
+        }
+
         private object PropertyPayload(string title) => new
         {
             OwnerId = Guid.Empty,
@@ -593,12 +620,15 @@ public sealed class StagingSmokeJourneyTests
             Description = $"Staging smoke property {_config.RunId}",
             ListingType = "ForRent",
             Street = "Smoke Test Street 1",
-            City = "Berlin",
-            Region = "Berlin",
-            CountryCode = "DE",
+            City = "Damascus",
+            Region = "Damascus",
+            CountryCode = "SY",
             PostalCode = "10115",
-            Latitude = 52.5200m,
-            Longitude = 13.4050m,
+            GovernorateId = _governorateId,
+            DistrictText = "Smoke Test District",
+            PropertyTypeId = _propertyTypeId,
+            Latitude = 33.5138m,
+            Longitude = 36.2765m,
             ColdRent = 1250.50m,
             WarmRent = 1450.50m,
             PurchasePrice = (decimal?)null,
@@ -613,6 +643,9 @@ public sealed class StagingSmokeJourneyTests
             HasParkingSpace = false,
             HeatingType = "Gas",
             AvailableFrom = DateTime.UtcNow.AddDays(14),
+            RentalStartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
+            RentalEndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14 + 365)),
+            RentalDurationType = "OneYear",
             AmenityIds = Array.Empty<Guid>()
         };
 
@@ -623,7 +656,7 @@ public sealed class StagingSmokeJourneyTests
             Expect(Text(body, "ListingType") == "ForRent", "Listing type differs.");
             Expect(decimal.Parse(Text(body, "ColdRent"), System.Globalization.CultureInfo.InvariantCulture)
                 == 1250.50m, "Cold rent differs.");
-            Expect(Text(body, "City") == "Berlin", "City differs.");
+            Expect(Text(body, "City") == "Damascus", "City differs.");
             Expect(Integer(body, "Rooms") == 3, "Room count differs.");
             Expect(DateTime.TryParse(Text(body, "CreatedAt"), out _), "Creation timestamp is invalid.");
         }
