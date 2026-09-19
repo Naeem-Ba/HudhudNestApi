@@ -26,6 +26,7 @@ public sealed class GetMyShortStayListingsQueryHandler
             return new ShortStayListingSummaryDto(
                 listing.Id, listing.Title, listing.AccommodationType.Code, listing.AccommodationType.NameAr,
                 listing.Capacity, listing.Bedrooms, listing.Bathrooms, cheapestRoomType?.BasePricePerNight,
+                listing.CurrencyCode,
                 listing.City, listing.Latitude, listing.Longitude, listing.IsPublished,
                 listing.Photos.OrderBy(p => p.SortOrder).FirstOrDefault()?.Url, null, 0);
         }).ToList();

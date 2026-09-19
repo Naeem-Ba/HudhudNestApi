@@ -42,6 +42,6 @@ public sealed class RejectBookingCommandHandler : IRequestHandler<RejectBookingC
             NotificationType.ShortStayBookingRejected,
             $"تم رفض حجزك لـ '{listing.Title}'.", ct);
 
-        return booking.ToDto(listing.Id, listing.Title);
+        return booking.ToDto(listing.Id, listing.Title, listing.CurrencyCode);
     }
 }

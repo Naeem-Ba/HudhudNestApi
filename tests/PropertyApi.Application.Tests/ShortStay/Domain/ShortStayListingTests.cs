@@ -36,6 +36,36 @@ public sealed class ShortStayListingTests
     }
 
     [Fact]
+    public void Create_DefaultsCurrencyToSyp()
+    {
+        Assert.Equal("SYP", CreateListing().CurrencyCode);
+    }
+
+    [Theory]
+    [InlineData("usd", "USD")]
+    [InlineData(" eur ", "EUR")]
+    public void Create_NormalizesSupportedCurrency(string input, string expected)
+    {
+        var listing = ShortStayListing.Create(
+            Guid.NewGuid(), 1, "title", "desc", 2, 1, 1,
+            new TimeOnly(14, 0), new TimeOnly(11, 0), 0m, 0m, currencyCode: input);
+
+        Assert.Equal(expected, listing.CurrencyCode);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("XXX")]
+    [InlineData("US")]
+    public void Create_Throws_WhenCurrencyUnsupported(string code)
+    {
+        Assert.Throws<DomainException>(() => ShortStayListing.Create(
+            Guid.NewGuid(), 1, "title", "desc", 2, 1, 1,
+            new TimeOnly(14, 0), new TimeOnly(11, 0), 0m, 0m, currencyCode: code));
+    }
+
+    [Fact]
     public void Publish_Throws_WhenNoRoomTypes()
     {
         var listing = CreateListing();

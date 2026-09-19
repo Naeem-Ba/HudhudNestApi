@@ -5,11 +5,12 @@ namespace PropertyApi.Application.ShortStay.Mapping;
 
 public static class BookingMappingExtensions
 {
-    public static BookingDto ToDto(this Booking booking, Guid shortStayListingId, string listingTitle) => new(
+    public static BookingDto ToDto(this Booking booking, Guid shortStayListingId, string listingTitle, string currencyCode) => new(
         Id: booking.Id,
         UnitId: booking.UnitId,
         ShortStayListingId: shortStayListingId,
         ListingTitle: listingTitle,
+        CurrencyCode: currencyCode,
         GuestId: booking.GuestId,
         CheckIn: booking.CheckIn,
         CheckOut: booking.CheckOut,

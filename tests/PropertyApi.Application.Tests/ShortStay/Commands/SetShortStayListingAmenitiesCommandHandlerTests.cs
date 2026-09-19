@@ -67,7 +67,10 @@ public sealed class SetShortStayListingAmenitiesCommandHandlerTests
         public Task<ShortStayListing?> GetPublishedByIdWithDetailsAsync(Guid id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IReadOnlyList<ShortStayListing>> GetByOwnerAsync(Guid ownerId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> ExistsAsync(Guid id, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<int> CountActiveByOwnerAsync(Guid ownerId, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<int> CountActiveByOwnerIdsAsync(IReadOnlyCollection<Guid> ownerIds, CancellationToken ct = default) => throw new NotImplementedException();
         public void Update(ShortStayListing listing) { }
+        public void Remove(ShortStayListing listing) { }
     }
 
     private sealed class NoOpUnitOfWork : IUnitOfWork
@@ -77,6 +80,9 @@ public sealed class SetShortStayListingAmenitiesCommandHandlerTests
         public Task CommitTransactionAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task RollbackTransactionAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task AcquireAdvisoryLockAsync(long key, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<bool> TrySaveChangesAsync(CancellationToken ct = default) => Task.FromResult(true);
+        public Task<IReadOnlyList<object>> SaveChangesDroppingConcurrencyConflictsAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<object>>(Array.Empty<object>());
         public void Dispose() { }
     }
 }

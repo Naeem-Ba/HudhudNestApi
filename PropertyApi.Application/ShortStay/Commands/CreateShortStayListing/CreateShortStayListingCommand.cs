@@ -22,4 +22,5 @@ public sealed record CreateShortStayListingCommand(
     decimal Latitude,
     decimal Longitude,
     decimal DefaultBasePricePerNight,
-    Guid? PropertyId) : IRequest<ShortStayListingDto>;
+    Guid? PropertyId,
+    string CurrencyCode) : IRequest<ShortStayListingDto>;

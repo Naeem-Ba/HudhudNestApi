@@ -101,7 +101,7 @@ public sealed class ShortStayListingsController : ControllerBase
         var command = new CreateShortStayListingCommand(
             GetUserId(), dto.AccommodationTypeId, dto.Title, dto.Description, dto.Capacity, dto.Bedrooms,
             dto.Bathrooms, dto.CheckInTime, dto.CheckOutTime, dto.Latitude, dto.Longitude,
-            dto.DefaultBasePricePerNight, dto.PropertyId);
+            dto.DefaultBasePricePerNight, dto.PropertyId, dto.CurrencyCode);
 
         var result = await _mediator.Send(command, ct);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
@@ -239,7 +239,7 @@ public sealed class ShortStayListingsController : ControllerBase
 public sealed record CreateShortStayListingRequest(
     int AccommodationTypeId, string Title, string Description, int Capacity, int Bedrooms, int Bathrooms,
     TimeOnly CheckInTime, TimeOnly CheckOutTime, decimal Latitude, decimal Longitude,
-    decimal DefaultBasePricePerNight, Guid? PropertyId);
+    decimal DefaultBasePricePerNight, Guid? PropertyId, string CurrencyCode);
 
 public sealed record UpdateShortStayListingRequest(
     string Title, string Description, int Capacity, int Bedrooms, int Bathrooms, TimeOnly CheckInTime,

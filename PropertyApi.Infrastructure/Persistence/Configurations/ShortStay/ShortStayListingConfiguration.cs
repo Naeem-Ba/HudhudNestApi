@@ -22,6 +22,8 @@ public sealed class ShortStayListingConfiguration : IEntityTypeConfiguration<Sho
 
         builder.Property(l => l.Title).IsRequired().HasMaxLength(150);
         builder.Property(l => l.Description).IsRequired().HasMaxLength(4000);
+        builder.Property(l => l.CurrencyCode).IsRequired().HasMaxLength(3)
+            .HasDefaultValue(ShortStayListing.DefaultCurrencyCode);
         builder.Property(l => l.City).HasMaxLength(100);
         builder.Property(l => l.CustomRulesText).HasMaxLength(2000);
         builder.Property(l => l.CancellationCustomTermsText).HasMaxLength(2000);

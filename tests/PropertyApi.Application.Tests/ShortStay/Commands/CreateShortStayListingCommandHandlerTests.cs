@@ -35,7 +35,8 @@ public sealed class CreateShortStayListingCommandHandlerTests
         Latitude: 35.5m,
         Longitude: 35.8m,
         DefaultBasePricePerNight: 100m,
-        PropertyId: null);
+        PropertyId: null,
+        CurrencyCode: "USD");
 
     private static Mock<IAccommodationTypeRepository> DefaultAccommodationTypes()
     {

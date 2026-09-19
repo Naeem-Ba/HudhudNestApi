@@ -93,7 +93,7 @@ public sealed class ApproveBookingCommandHandler : IRequestHandler<ApproveBookin
                 _logger.LogError(ex, "Failed to send booking-approved notifications. BookingId={BookingId}", booking.Id);
             }
 
-            return booking.ToDto(listing.Id, listing.Title);
+            return booking.ToDto(listing.Id, listing.Title, listing.CurrencyCode);
         }
         catch
         {

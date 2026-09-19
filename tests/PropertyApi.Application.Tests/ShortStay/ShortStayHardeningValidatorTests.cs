@@ -1,3 +1,4 @@
+using PropertyApi.Application.ShortStay.Commands.CreateShortStayListing;
 using PropertyApi.Application.ShortStay.Commands.SetPricingRules;
 using PropertyApi.Application.ShortStay.Commands.UpdateShortStayListing;
 using PropertyApi.Application.ShortStay.DTOs;
@@ -23,6 +24,22 @@ public sealed class ShortStayHardeningValidatorTests
         var query = new SearchShortStayListingsQuery(new ShortStayListingSearchFilter { PageSize = pageSize });
 
         Assert.Equal(valid, new SearchShortStayListingsQueryValidator().Validate(query).IsValid);
+    }
+
+    private static CreateShortStayListingCommand ValidCreate(string currency) => new(
+        OwnerId: Guid.NewGuid(), AccommodationTypeId: 1, Title: "t", Description: "d", Capacity: 2,
+        Bedrooms: 1, Bathrooms: 1, CheckInTime: new TimeOnly(14, 0), CheckOutTime: new TimeOnly(11, 0),
+        Latitude: 34m, Longitude: 35m, DefaultBasePricePerNight: 50m, PropertyId: null, CurrencyCode: currency);
+
+    [Theory]
+    [InlineData("USD", true)]
+    [InlineData("syp", true)]
+    [InlineData("", false)]
+    [InlineData("XXX", false)]
+    [InlineData("DOLLAR", false)]
+    public void Create_CurrencyCode_MustBeSupported(string currency, bool valid)
+    {
+        Assert.Equal(valid, new CreateShortStayListingCommandValidator().Validate(ValidCreate(currency)).IsValid);
     }
 
     private static UpdateShortStayListingCommand ValidUpdate(

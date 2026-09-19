@@ -40,6 +40,7 @@ public static class ShortStayListingMappingExtensions
         PropertyId: listing.PropertyId,
         AccommodationTypeId: listing.AccommodationTypeId,
         AccommodationTypeCode: accommodationType.Code,
+        CurrencyCode: listing.CurrencyCode,
         Title: listing.Title,
         Description: listing.Description,
         Capacity: listing.Capacity,
