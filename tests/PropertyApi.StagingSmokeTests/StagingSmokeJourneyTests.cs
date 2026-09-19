@@ -324,6 +324,15 @@ public sealed class StagingSmokeJourneyTests
         {
             RequireSessions();
             await LoadListingReferenceDataAsync();
+
+            // Publishing is gated on an explicit plan choice (LISTING_PLAN_REQUIRED, see
+            // CreatePropertyCommandHandler) -- "free" is not an implicit default -- so a fresh
+            // account must pick one first, exactly like a real user does.
+            var plan = await SendJsonAsync(HttpMethod.Post, "/api/users/me/plan",
+                new { Tier = "free" }, _owner!.AccessToken);
+            Expect(plan.StatusCode == HttpStatusCode.NoContent,
+                $"Selecting the free plan expected HTTP 204, got {(int)plan.StatusCode}{await ApiErrorAsync(plan)}.");
+
             var payload = PropertyPayload(_config.PropertyTitle);
 
             var unauthorized = await SendJsonAsync(HttpMethod.Post, "/api/properties", payload);
@@ -331,14 +340,14 @@ public sealed class StagingSmokeJourneyTests
                 "Unauthenticated property creation was accepted.");
 
             var invalid = await SendJsonAsync(HttpMethod.Post, "/api/properties",
-                PropertyPayload(string.Empty), _owner!.AccessToken);
+                PropertyPayload(string.Empty), _owner.AccessToken);
             Expect(invalid.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity,
                 "Invalid property payload was accepted.");
 
             var response = await SendJsonAsync(
                 HttpMethod.Post, "/api/properties", payload, _owner.AccessToken);
             Expect(response.StatusCode == HttpStatusCode.Created,
-                $"Property creation expected HTTP 201, got {(int)response.StatusCode}.");
+                $"Property creation expected HTTP 201, got {(int)response.StatusCode}{await ApiErrorAsync(response)}.");
             using var body = await ReadJsonAsync(response);
             Expect(TryGuid(body.RootElement, "id", out _propertyId),
                 "Property creation response has no valid id.");
@@ -840,6 +849,26 @@ public sealed class StagingSmokeJourneyTests
             await File.WriteAllTextAsync(
                 Path.Combine(_config.ArtifactsDirectory, "staging-smoke-junit.xml"),
                 new XDocument(new XElement("testsuites", suite)).ToString());
+        }
+
+        // Non-secret diagnostics for a failed call: the API's machine-readable code and title
+        // (e.g. " (LISTING_PLAN_REQUIRED: Forbidden)"), so a red journey names its cause.
+        private static async Task<string> ApiErrorAsync(HttpResponseMessage response)
+        {
+            try
+            {
+                using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                var parts = new[] { "code", "title" }
+                    .Select(name => body.RootElement.TryGetProperty(name, out var value) &&
+                                    value.ValueKind == JsonValueKind.String ? value.GetString() : null)
+                    .Where(value => !string.IsNullOrWhiteSpace(value));
+                var text = string.Join(": ", parts);
+                return text.Length == 0 ? string.Empty : $" ({text})";
+            }
+            catch (Exception)
+            {
+                return string.Empty;
+            }
         }
 
         private static async Task<JsonDocument> ReadJsonAsync(HttpResponseMessage response)
