@@ -488,8 +488,10 @@ public sealed class StagingSmokeJourneyTests
             var invalidContent = await SendJsonAsync(HttpMethod.Post, "/api/messages",
                 new { PropertyId = _propertyId, ReceiverId = (Guid?)null, Content = "" },
                 _visitor.AccessToken);
-            Expect(invalidContent.StatusCode == HttpStatusCode.BadRequest,
-                "Empty message content was accepted.");
+            // FluentValidation failures are answered as 422 by ExceptionHandlingMiddleware (the same
+            // contract the property-creation journey already accepts), not 400.
+            Expect(invalidContent.StatusCode == HttpStatusCode.UnprocessableEntity,
+                $"Empty message content expected HTTP 422, got {(int)invalidContent.StatusCode}{await ApiErrorAsync(invalidContent)}.");
         }
 
         private async Task LogoutAsync()
@@ -500,15 +502,20 @@ public sealed class StagingSmokeJourneyTests
                 new { RefreshToken = refresh }, _owner.AccessToken);
             Expect(response.StatusCode == HttpStatusCode.NoContent, "Logout failed.");
 
-            var reuse = await SendJsonAsync(HttpMethod.Post, "/api/auth/refresh",
-                new { RefreshToken = refresh });
-            Expect(reuse.StatusCode == HttpStatusCode.Unauthorized,
-                "Refresh token remained active after logout.");
-
+            // Check the stateless access token *before* probing the revoked refresh token: presenting
+            // an already-revoked refresh token is treated as reuse (RefreshTokenCommand ->
+            // RefreshTokenReuseHandler), which revokes every session and rotates the security stamp,
+            // deliberately invalidating the access token too. Probing first made this assertion
+            // fail on correct behaviour.
             var statelessAccess = await SendAsync(HttpMethod.Get,
                 "/api/users/me", token: _owner.AccessToken);
             Expect(statelessAccess.StatusCode == HttpStatusCode.OK,
                 "Logout unexpectedly revoked a stateless access token contrary to the current model.");
+
+            var reuse = await SendJsonAsync(HttpMethod.Post, "/api/auth/refresh",
+                new { RefreshToken = refresh });
+            Expect(reuse.StatusCode == HttpStatusCode.Unauthorized,
+                "Refresh token remained active after logout.");
         }
 
         private const string RefreshTokenCookieName = "refresh_token";
