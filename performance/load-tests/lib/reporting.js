@@ -38,7 +38,16 @@ export function performanceArtifacts(data, scenario, metadata = {}) {
     p95Milliseconds: metricValue(data, 'http_req_duration', 'p(95)'),
     p99Milliseconds: metricValue(data, 'http_req_duration', 'p(99)'),
     maximumMilliseconds: metricValue(data, 'http_req_duration', 'max'),
+    // k6's http_req_failed counts every 4xx as a failure, including the 400/401/409/429
+    // responses the auth-race and rate-limit scenarios provoke on purpose. Kept for
+    // reference only; unexpectedErrorRate is the honest signal (5xx / transport errors) and
+    // is what the scenario thresholds (server_errors rate==0) actually gate on. Scenarios
+    // without a dedicated server_errors metric (browse) expect only 2xx, so there every
+    // failed request is unexpected.
     errorRate: metricValue(data, 'http_req_failed', 'rate'),
+    unexpectedErrorRate: data.metrics.server_errors
+      ? metricValue(data, 'server_errors', 'rate')
+      : metricValue(data, 'http_req_failed', 'rate'),
     serverErrorRate: metricValue(data, 'server_errors', 'rate'),
     checkFailureRate: 1 - metricValue(data, 'checks', 'rate', 1),
     instances: {
@@ -60,7 +69,8 @@ export function performanceArtifacts(data, scenario, metadata = {}) {
     `- p50: ${summary.p50Milliseconds.toFixed(2)} ms`,
     `- p95: ${summary.p95Milliseconds.toFixed(2)} ms`,
     `- p99: ${summary.p99Milliseconds.toFixed(2)} ms`,
-    `- Error rate: ${(summary.errorRate * 100).toFixed(3)}%`,
+    `- Non-2xx rate (includes intentional 4xx/429 rejections): ${(summary.errorRate * 100).toFixed(3)}%`,
+    `- Unexpected error rate (5xx/transport): ${(summary.unexpectedErrorRate * 100).toFixed(3)}%`,
     `- Instances: api-1=${summary.instances.api1Requests}, api-2=${summary.instances.api2Requests}`,
     `- Result: **${summary.thresholdsPassed ? 'Passed' : 'Failed'}**`,
     '',

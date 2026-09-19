@@ -249,6 +249,9 @@ jobs:
         shell: bash
         env:
           ConnectionStrings__DefaultConnection: Host=127.0.0.1;Port=55433;Database=propertyapi_restore_drill;Username=postgres;Password=postgres
+          # Pre-deploy backups lack the release's new migrations; rehearse applying them on this
+          # disposable, loopback-only restored copy (see DatabaseRecoveryVerifier/Program.cs).
+          RECOVERY_APPLY_PENDING_MIGRATIONS: "true"
         run: dotnet run --project tools/PropertyApi.DatabaseRecoveryVerifier/PropertyApi.DatabaseRecoveryVerifier.csproj --configuration Release --no-build --no-restore
 
       - name: Start API against restored database

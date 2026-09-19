@@ -16,6 +16,44 @@ var options = new DbContextOptionsBuilder<AppDbContext>()
     .UseNpgsql(connectionString)
     .Options;
 await using var db = new AppDbContext(options);
+// The backup restored here is a *pre-deploy* snapshot of Production, so it legitimately lacks
+// any migration shipped in the release being gated. Requiring zero pending migrations on the
+// raw restore made this gate fail on every release that adds a migration. Instead:
+//   1. the restored history must contain no migration this build does not know (a restore
+//      that is ahead of the code is a real problem and always fails);
+//   2. pending migrations are applied to the disposable restored copy (forward-migration
+//      rehearsal, opt-in and loopback-only so it can never touch a real database);
+//   3. zero migrations must remain pending afterwards and the data checks must pass.
+var knownMigrations = db.Database.GetMigrations().ToHashSet(StringComparer.Ordinal);
+var appliedBefore = (await db.Database.GetAppliedMigrationsAsync()).ToArray();
+var unknownApplied = appliedBefore.Where(m => !knownMigrations.Contains(m)).ToArray();
+var pendingBeforeRehearsal = (await db.Database.GetPendingMigrationsAsync()).ToArray();
+var rehearsalRequested = string.Equals(
+    Environment.GetEnvironmentVariable("RECOVERY_APPLY_PENDING_MIGRATIONS"), "true",
+    StringComparison.OrdinalIgnoreCase);
+var targetHost = new NpgsqlConnectionStringBuilder(connectionString).Host ?? string.Empty;
+var targetIsLoopback = targetHost is "127.0.0.1" or "localhost" or "::1";
+string? rehearsalError = null;
+var rehearsalRan = false;
+if (pendingBeforeRehearsal.Length > 0 && unknownApplied.Length == 0 && rehearsalRequested)
+{
+    if (!targetIsLoopback)
+    {
+        rehearsalError = "Refusing to apply migrations: target host is not loopback (disposable restore copies only).";
+    }
+    else
+    {
+        try
+        {
+            await db.Database.MigrateAsync();
+            rehearsalRan = true;
+        }
+        catch (Exception exception)
+        {
+            rehearsalError = $"{exception.GetType().Name}: {exception.Message}";
+        }
+    }
+}
 var pendingMigrations = (await db.Database.GetPendingMigrationsAsync()).ToArray();
 var checks = new Dictionary<string, long>
 {
@@ -29,10 +67,14 @@ var checks = new Dictionary<string, long>
     ["AuditLogs"] = await db.AuditLogs.LongCountAsync(),
 };
 var postGis = await db.Database.SqlQueryRaw<string>("SELECT PostGIS_Lib_Version() AS \"Value\"").SingleAsync();
+var verified = pendingMigrations.Length == 0 && unknownApplied.Length == 0 && rehearsalError is null;
 var result = new
 {
-    status = pendingMigrations.Length == 0 ? "PASS" : "FAIL",
+    status = verified ? "PASS" : "FAIL",
     verifiedAtUtc = DateTimeOffset.UtcNow,
+    pendingMigrationsBeforeRehearsal = pendingBeforeRehearsal,
+    forwardMigrationRehearsal = new { requested = rehearsalRequested, ran = rehearsalRan, error = rehearsalError },
+    unknownAppliedMigrations = unknownApplied,
     pendingMigrations,
     entityRowCounts = checks,
     postGisVersion = postGis,
@@ -48,7 +90,7 @@ if (!string.IsNullOrWhiteSpace(outputDirectory))
 }
 await File.WriteAllTextAsync(outputPath, resultJson + Environment.NewLine);
 Console.WriteLine(resultJson);
-return pendingMigrations.Length == 0 ? 0 : 1;
+return verified ? 0 : 1;
 
 static string NormalizeConnectionString(string value)
 {

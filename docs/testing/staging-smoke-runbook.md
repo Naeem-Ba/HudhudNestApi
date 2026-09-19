@@ -27,6 +27,16 @@ Secrets:
 - `STAGING_SMOKE_PASSWORD`
 - `STAGING_SMOKE_FIXED_OTP`
 - `STAGING_SMOKE_CLEANUP_SECRET`
+- `STAGING_DATABASE_URL` — external connection string of the Render Staging Postgres
+  (`postgresql://user:pass@host/propertyapi_staging`; `sslmode=require` is appended if absent).
+  The gate applies pending EF migrations to it with `tools/PropertyApi.Migrator` **before** the deploy
+  hook, because the API does not migrate on startup and Render Free has no pre-deploy command. The step
+  refuses any database whose name does not contain `staging`.
+
+Evidence: every run uploads `staging-release-verification.json` (expected vs deployed commit SHA, branch,
+migration state, readiness, timestamps) and, even when earlier steps fail, failure-status
+`staging-smoke-*` and observability reports. `commitShaMatches=true` with pending migrations means the
+Staging DB was not migrated; `false` means a stale deploy or the service tracking the wrong branch.
 
 The protected `production` environment requires `PRODUCTION_DEPLOY_HOOK_URL` and should require manual
 reviewers.

@@ -358,7 +358,14 @@ done
 run_and_record "pg_stat_statements capture" bash scripts/capture-pg-stat-statements.sh
 run_and_record "EXPLAIN ANALYZE query-plan gate" bash scripts/capture-query-plans.sh
 
+# This first pass writes the summary.json that the baseline comparison consumes, so
+# baseline-comparison.json cannot exist yet. With PERF_REQUIRE_BASELINE=true the strict
+# evaluation would always report "comparison did not pass" here and poison test_failed even
+# when the real (final) evaluation below passes. This pass still enforces every other check
+# (scenario thresholds, invariants, query plans, instances, dataset, budgets); only the
+# not-yet-computable baseline check is deferred to the final pass, which stays fully strict.
 run_and_record "aggregate performance evidence" \
+  env PERF_REQUIRE_BASELINE=false \
   "${PYTHON_BIN}" performance/reporting/aggregate.py "${artifacts}"
 
 if [ "${PERF_REQUIRE_BASELINE}" = "true" ]; then
