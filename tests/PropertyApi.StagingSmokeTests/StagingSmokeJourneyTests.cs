@@ -732,7 +732,13 @@ public sealed class StagingSmokeJourneyTests
                 request.Headers.TryAddWithoutValidation("X-Staging-Smoke-Secret", stagingSecret);
             if (!string.IsNullOrWhiteSpace(_csrfToken) && !CsrfSafeMethods.Contains(method.Method))
                 request.Headers.TryAddWithoutValidation("X-XSRF-TOKEN", _csrfToken);
-            return await _client.SendAsync(request);
+            var response = await _client.SendAsync(request);
+
+            // Remember the last call so a red journey names it (method, path without query, status
+            // and the API's non-secret code/title) instead of only its assertion text.
+            var error = response.IsSuccessStatusCode ? string.Empty : await ApiErrorAsync(response);
+            _lastCall = $"{method.Method} {path.Split('?')[0]} -> {(int)response.StatusCode}{error}";
+            return response;
         }
 
         private async Task FetchCsrfTokenAsync()
@@ -768,6 +774,8 @@ public sealed class StagingSmokeJourneyTests
             throw new InvalidOperationException($"{path} did not become healthy within the retry budget.");
         }
 
+        private string _lastCall = "none";
+
         private async Task Journey(string name, Func<Task> action)
         {
             var result = _journeys[name];
@@ -783,8 +791,9 @@ public sealed class StagingSmokeJourneyTests
             catch (Exception ex)
             {
                 result.Status = "failed";
-                result.Error = ex.Message;
-                throw;
+                var detail = $"{ex.Message} [last call: {_lastCall}]";
+                result.Error = detail;
+                throw new InvalidOperationException(detail, ex);
             }
             finally
             {
