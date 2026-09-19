@@ -38,6 +38,9 @@ public sealed record ShortStayListingDto(
     // see the exact point. Never redact only in the frontend.
     decimal? Latitude,
     decimal? Longitude,
+    int? GovernorateId,
+    int? DistrictId,
+    int? NeighborhoodId,
     string? City,
     string LocationVisibility,
     string? PoolType,
@@ -56,6 +59,10 @@ public sealed record ShortStayListingDto(
     int CancellationFreeCancellationDays,
     bool CancellationDepositRefundable,
     string? CancellationCustomTermsText,
+    // Security audit finding (2026-09-18): this was missing entirely, so the edit form had no
+    // way to read the current value back and echo it unchanged on save -- see
+    // UpdateShortStayListingCommandHandler's doc comment on the same finding.
+    decimal? DepositPercentage,
     bool IsPublished,
     DateTime? PublishedAt,
     IReadOnlyList<RoomTypeDto> RoomTypes,

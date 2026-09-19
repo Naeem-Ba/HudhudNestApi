@@ -96,7 +96,13 @@ public sealed class ShortStayListingRepository : IShortStayListingRepository
         var totalCount = await query.CountAsync(ct);
 
         var page = Math.Max(1, filter.Page);
-        var pageSize = Math.Max(1, filter.PageSize);
+
+        // Security audit finding (2026-09-18): SearchShortStayListingsQueryValidator now
+        // rejects PageSize outside [1, 100] before this repository ever runs, but this endpoint
+        // is [AllowAnonymous] -- clamping again here means a future caller that bypasses or
+        // predates that validator still can't force an unbounded .Take() (matches the same
+        // belt-and-suspenders pattern AdminListingService/AdminService use).
+        var pageSize = Math.Clamp(filter.PageSize, 1, 100);
 
         var items = await query
             .OrderByDescending(l => l.PublishedAt)

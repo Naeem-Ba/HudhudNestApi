@@ -18,6 +18,13 @@ public sealed class CreateBookingCommandValidator : AbstractValidator<CreateBook
             .GreaterThan(x => x.CheckIn)
             .WithMessage("تاريخ المغادرة يجب أن يكون بعد تاريخ الوصول.");
 
+        // Security audit finding (2026-09-18): no upper bound existed on stay length -- same
+        // missing-cap class as GetUnitAvailabilityQueryValidator, applied to the actual booking
+        // write path this time (not just the read-only availability check).
+        RuleFor(x => x)
+            .Must(x => x.CheckOut.DayNumber - x.CheckIn.DayNumber <= 366)
+            .WithMessage("مدة الحجز لا يمكن أن تتجاوز 366 يوماً.");
+
         RuleFor(x => x.Adults).GreaterThanOrEqualTo(1)
             .WithMessage("يجب أن يكون هناك بالغ واحد على الأقل.");
         RuleFor(x => x.Children).GreaterThanOrEqualTo(0);

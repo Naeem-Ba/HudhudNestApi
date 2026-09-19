@@ -84,7 +84,8 @@ public sealed class CreateShortStayListingCommandHandlerTests
         int limit,
         Mock<IAccommodationTypeRepository>? accommodationTypes = null,
         Mock<IAgencyRepository>? agencies = null,
-        Mock<IUserIdentityReadService>? identity = null)
+        Mock<IUserIdentityReadService>? identity = null,
+        Mock<IPropertyOwnershipService>? propertyOwnership = null)
         => new(
             listings.Object,
             (accommodationTypes ?? DefaultAccommodationTypes()).Object,
@@ -92,8 +93,50 @@ public sealed class CreateShortStayListingCommandHandlerTests
             (identity ?? DefaultIdentity()).Object,
             activeListingCounter.Object,
             new FakeListingQuotaPolicy(limit),
+            (propertyOwnership ?? new Mock<IPropertyOwnershipService>()).Object,
             new Mock<IUnitOfWork>().Object,
             NullLogger<CreateShortStayListingCommandHandler>.Instance);
+
+
+    [Fact]
+    public async Task Handle_PropertyIdNotOwnedByCaller_IsRejectedBeforeAnythingIsPersisted()
+    {
+        var ownerId = Guid.NewGuid();
+        var foreignPropertyId = Guid.NewGuid();
+        var listings = new Mock<IShortStayListingRepository>();
+        var counter = new Mock<IActiveListingCounter>();
+        var ownership = new Mock<IPropertyOwnershipService>();
+        ownership
+            .Setup(x => x.EnsureOwnerAsync(foreignPropertyId, ownerId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ForbiddenException("not the owner"));
+
+        var handler = MakeHandler(listings, counter, limit: 5, propertyOwnership: ownership);
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => handler.Handle(ValidCommand(ownerId) with { PropertyId = foreignPropertyId }, CancellationToken.None));
+
+        listings.Verify(
+            x => x.AddAsync(It.IsAny<ShortStayListing>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_PropertyIdOwnedByCaller_CreatesTheListing()
+    {
+        var ownerId = Guid.NewGuid();
+        var propertyId = Guid.NewGuid();
+        var listings = new Mock<IShortStayListingRepository>();
+        var counter = new Mock<IActiveListingCounter>();
+        counter.Setup(x => x.CountActiveListingsByOwnerAsync(ownerId, It.IsAny<CancellationToken>())).ReturnsAsync(0);
+        var ownership = new Mock<IPropertyOwnershipService>();
+
+        var handler = MakeHandler(listings, counter, limit: 5, propertyOwnership: ownership);
+
+        await handler.Handle(ValidCommand(ownerId) with { PropertyId = propertyId }, CancellationToken.None);
+
+        ownership.Verify(x => x.EnsureOwnerAsync(propertyId, ownerId, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        listings.Verify(x => x.AddAsync(It.IsAny<ShortStayListing>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
 
     [Fact]
     public async Task Handle_BelowTheUnifiedLimit_CreatesTheListing()
