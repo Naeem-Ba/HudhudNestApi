@@ -34,6 +34,21 @@ Relative gates fail when p95 regresses more than 15%, p99 more than 20%, through
 time grows more than 20%, or buffer reads grow more than 25%. These initial policies cannot be loosened merely to
 make a failing release pass.
 
+## Noise floor for relative comparison
+
+`performance/reporting/compare.py` applies the relative gates only where they carry signal, using two values in
+`performance-budgets.json` (`relativeRegression`):
+
+- `minimumSampleRequests` (100): scenarios with fewer requests, in the current run or in the baseline, are skipped
+  by the latency/throughput comparison. Race and rate-limit scenarios issue 3-31 requests; across three identical
+  release-profile runs their p95/p99 drifted by up to 114%, while `browse-cold/warm` (2000+ requests) drifted by at
+  most 5.8%. They remain gated by their own k6 thresholds, database invariants and security invariants.
+- `minimumDatabaseTimeDeltaMilliseconds` (1): a query-plan execution-time increase below this absolute delta is not a
+  regression (sub-millisecond plans varied by 40% between identical runs). Buffer-read, sequential-scan,
+  temporary-block and spatial-index checks are unchanged.
+
+Raising either value, or lowering the percentage limits, is a policy change and needs the same approvals as a baseline.
+
 ## Variance and reruns
 
 Warm-up is excluded from custom steady-state endpoint metrics. A suspected noisy result is rerun three times in the

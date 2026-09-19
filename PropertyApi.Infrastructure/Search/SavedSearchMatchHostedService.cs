@@ -96,7 +96,8 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
                         var since = savedSearch.LastMatchedAt ?? savedSearch.CreatedAt;
 
                         var filter = ToFilterDto(savedSearch);
-                        var query = PropertyRepository.ApplyFilter(db.Properties.AsNoTracking(), filter)
+                        var query = PropertyRepository.ApplyFilter(db.Properties.AsNoTracking(), filter,
+                            await PropertyRepository.ResolveLocationFallbackAsync(db, filter, ct))
                             .Where(p => p.CreatedAt > since);
 
                         var matches = await query

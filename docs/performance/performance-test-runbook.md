@@ -32,7 +32,7 @@ export PRODUCTION_BASE_URL=https://api.example.invalid
 bash scripts/run-performance-tests.sh
 ```
 
-Release characterization, which intentionally fails until budgets/baseline are approved:
+Release characterization, which fails closed if budgets or the baseline are not approved (both are present since 2026-09-19):
 
 ```bash
 export PERF_ENVIRONMENT=Performance

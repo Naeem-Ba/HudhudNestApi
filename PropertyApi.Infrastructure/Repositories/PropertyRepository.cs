@@ -68,7 +68,7 @@ public sealed class PropertyRepository : IPropertyRepository
             .Include(p => p.Images.Where(i => i.IsMain))
             .AsQueryable();
 
-        query = ApplyFilter(query, filter);
+        query = ApplyFilter(query, filter, await ResolveLocationFallbackAsync(_db, filter, ct));
 
         // -- Count (before pagination) -------------------------
         var totalCount = await query.CountAsync(ct);
@@ -339,6 +339,43 @@ public sealed class PropertyRepository : IPropertyRepository
         _db.Properties.Remove(property);
     }
 
+    /// <summary>Names of the selected governorate/district, used to match legacy free-text locations.</summary>
+    public sealed record LocationTextFallback(
+        string? GovernorateNameAr, string? GovernorateNameEn,
+        string? DistrictNameAr, string? DistrictNameEn);
+
+    /// <summary>
+    /// Looks up the selected governorate/district names so <see cref="ApplyFilter"/> can also match
+    /// legacy listings that have no structured location ids. Returns null when no structured
+    /// location filter is set (no extra query).
+    /// </summary>
+    public static async Task<LocationTextFallback?> ResolveLocationFallbackAsync(
+        AppDbContext db, PropertyFilterDto filter, CancellationToken ct = default)
+    {
+        if (!filter.GovernorateId.HasValue && !filter.DistrictId.HasValue)
+            return null;
+
+        string? gAr = null, gEn = null, dAr = null, dEn = null;
+
+        if (filter.GovernorateId is { } gid)
+        {
+            var g = await db.Governorates.AsNoTracking()
+                .Where(x => x.Id == gid).Select(x => new { x.NameAr, x.NameEn })
+                .FirstOrDefaultAsync(ct);
+            gAr = g?.NameAr; gEn = g?.NameEn;
+        }
+
+        if (filter.DistrictId is { } did)
+        {
+            var d = await db.Districts.AsNoTracking()
+                .Where(x => x.Id == did).Select(x => new { x.NameAr, x.NameEn })
+                .FirstOrDefaultAsync(ct);
+            dAr = d?.NameAr; dEn = d?.NameEn;
+        }
+
+        return new LocationTextFallback(gAr, gEn, dAr, dEn);
+    }
+
     /// <summary>
     /// Applies all PropertyFilterDto filter clauses to an IQueryable&lt;Property&gt;.
     /// Extracted out of GetPagedAsync (Phase-0 tech-debt cleanup) so the
@@ -346,7 +383,10 @@ public sealed class PropertyRepository : IPropertyRepository
     /// instead of re-implementing (and inevitably drifting from) them.
     /// Public/static and side-effect free — safe to call from other repositories/services.
     /// </summary>
-    public static IQueryable<Property> ApplyFilter(IQueryable<Property> query, PropertyFilterDto filter)
+    public static IQueryable<Property> ApplyFilter(
+        IQueryable<Property> query,
+        PropertyFilterDto filter,
+        LocationTextFallback? locationFallback = null)
     {
         if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
         {
@@ -372,11 +412,34 @@ public sealed class PropertyRepository : IPropertyRepository
         // free-text City/Region filters above — callers may pass both, in which case
         // both are applied (AND'ed) since a client could combine a governorate filter
         // with an unrelated free-text refinement.
+        //
+        // Legacy listings (created before the structured location columns existed) carry NULL
+        // GovernorateId/DistrictId and hold the place only as free text in City/Region/DistrictText.
+        // When the caller resolved the selected lookup's names (see ResolveLocationFallbackAsync),
+        // a NULL-id row still matches by exact (case-insensitive) name; a row that does have an id
+        // is matched strictly by id, so a stale text value can never override a real id.
         if (filter.GovernorateId.HasValue)
-            query = query.Where(p => p.GovernorateId == filter.GovernorateId.Value);
+        {
+            var gid = filter.GovernorateId.Value;
+            if (locationFallback?.GovernorateNameAr is { } gAr && locationFallback.GovernorateNameEn is { } gEn)
+                query = query.Where(p => p.GovernorateId == gid ||
+                    (p.GovernorateId == null &&
+                     (EF.Functions.ILike(p.City, gAr) || EF.Functions.ILike(p.City, gEn))));
+            else
+                query = query.Where(p => p.GovernorateId == gid);
+        }
 
         if (filter.DistrictId.HasValue)
-            query = query.Where(p => p.DistrictId == filter.DistrictId.Value);
+        {
+            var did = filter.DistrictId.Value;
+            if (locationFallback?.DistrictNameAr is { } dAr && locationFallback.DistrictNameEn is { } dEn)
+                query = query.Where(p => p.DistrictId == did ||
+                    (p.DistrictId == null &&
+                     (EF.Functions.ILike(p.Region!, dAr) || EF.Functions.ILike(p.Region!, dEn) ||
+                      EF.Functions.ILike(p.DistrictText!, dAr) || EF.Functions.ILike(p.DistrictText!, dEn))));
+            else
+                query = query.Where(p => p.DistrictId == did);
+        }
 
         if (filter.NeighborhoodId.HasValue)
             query = query.Where(p => p.NeighborhoodId == filter.NeighborhoodId.Value);
