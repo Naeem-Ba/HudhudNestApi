@@ -63,6 +63,12 @@ wake() { curl --silent --max-time 20 --output /dev/null --fail "$1" 2>/dev/null;
 wait_until 90 wake "${PROMETHEUS_URL}/-/ready" || echo "note: Prometheus did not report ready within 90s"
 wait_until 90 wake "${TEMPO_URL}/ready" || echo "note: Tempo did not report ready within 90s"
 
+# The collector sits between the API and both backends and spins down too (Render Free); the API's own
+# pushes did not wake it in time in run 35466879093. Only when its URL is configured (Staging).
+if [ -n "${OTEL_COLLECTOR_URL:-}" ]; then
+  bash "$(dirname "${BASH_SOURCE[0]}")/wake-otel-collector.sh" "${OTEL_COLLECTOR_URL}" 120
+fi
+
 # Sentinel values (not credentials): they are sent on purpose and must never show up in any stored
 # trace (see the leak check below). Kept in variables rather than a literal Authorization header
 # so secret scanners do not flag a placeholder as a leaked credential.
