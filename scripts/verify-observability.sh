@@ -148,9 +148,6 @@ until find_trace; do
 done
 
 trace_json='{}'
-if [ -n "${trace_id}" ]; then
-  trace_json="$(curl --fail --silent --show-error "${TEMPO_URL}/api/traces/${trace_id}")"
-fi
 
 contains_trace_attribute() {
   echo "${trace_json}" | jq -e --arg key "$1" --arg value "$2" \
@@ -162,11 +159,33 @@ server_span=false
 postgres_span=false
 redis_span=false
 http_client_span=false
-if [ -n "${trace_id}" ]; then
+
+# Tempo returns a trace from the search as soon as its FIRST batch of spans is stored; the rest of the
+# request's spans (the Redis PING, the Postgres query, ...) can arrive in a later export batch. Production
+# Gate run 35469653186 evaluated the trace once, immediately, and reported no Redis span, although the
+# same trace (checked afterwards) held PING with db.system=redis. Re-fetch and re-evaluate until every
+# expected span is present, within a bounded window; a span that never arrives still fails the run.
+evaluate_trace() {
+  server_span=false
+  postgres_span=false
+  redis_span=false
+  http_client_span=false
   echo "${trace_json}" | jq -e '.. | objects | select(.kind? == 2 or .kind? == "SPAN_KIND_SERVER")' >/dev/null && server_span=true
   (contains_trace_attribute "db.system.name" "postgresql" || contains_trace_attribute "db.system" "postgresql") && postgres_span=true
   (contains_trace_attribute "db.system.name" "redis" || contains_trace_attribute "db.system" "redis") && redis_span=true
   echo "${trace_json}" | jq -e '.. | objects | select(.kind? == 3 or .kind? == "SPAN_KIND_CLIENT")' >/dev/null && http_client_span=true
+  return 0
+}
+
+trace_complete() {
+  local fetched
+  fetched="$(curl --fail --silent --max-time 20 "${TEMPO_URL}/api/traces/${trace_id}" 2>/dev/null)" && trace_json="${fetched}"
+  evaluate_trace
+  [ "${server_span}" = true ] && [ "${postgres_span}" = true ] && [ "${redis_span}" = true ] && [ "${http_client_span}" = true ]
+}
+
+if [ -n "${trace_id}" ]; then
+  wait_until "${OBSERVABILITY_TRACE_COMPLETE_SECONDS:-90}" trace_complete || true
 fi
 
 metrics_deadline=$((SECONDS + WAIT_SECONDS))
