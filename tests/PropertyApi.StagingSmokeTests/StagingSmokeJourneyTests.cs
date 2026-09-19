@@ -281,20 +281,41 @@ public sealed class StagingSmokeJourneyTests
             Expect(refresh != previous, "Refresh-token rotation did not issue a new token.");
             _owner = _owner with { AccessToken = access, RefreshToken = refresh };
 
-            var reuse = await SendJsonAsync(HttpMethod.Post, "/api/auth/refresh",
-                new { RefreshToken = previous });
-            Expect(reuse.StatusCode == HttpStatusCode.Unauthorized,
-                "Rotated refresh token was reusable.");
+            // The rotated access token must work *before* the replay probe below: replaying a
+            // rotated refresh token is treated as theft and (RefreshTokenReuseHandler) revokes
+            // every active refresh token of the user and rotates the security stamp, which
+            // deliberately invalidates the access token that was just issued. Probing first and
+            // using the new token afterwards (the old order) made this journey fail on correct
+            // behaviour.
+            var protectedResponse = await SendAsync(
+                HttpMethod.Get, "/api/users/me", token: _owner.AccessToken);
+            Expect(protectedResponse.StatusCode == HttpStatusCode.OK,
+                "Refreshed access token is unusable.");
 
             var invalid = await SendJsonAsync(HttpMethod.Post, "/api/auth/refresh",
                 new { RefreshToken = "not-a-refresh-token" });
             Expect(invalid.StatusCode == HttpStatusCode.Unauthorized,
                 "Invalid refresh token was accepted.");
 
-            var protectedResponse = await SendAsync(
+            var reuse = await SendJsonAsync(HttpMethod.Post, "/api/auth/refresh",
+                new { RefreshToken = previous });
+            Expect(reuse.StatusCode == HttpStatusCode.Unauthorized,
+                "Rotated refresh token was reusable.");
+
+            // Reuse detection must have killed the whole session family, including the token
+            // issued by the legitimate rotation.
+            var afterReuse = await SendAsync(
                 HttpMethod.Get, "/api/users/me", token: _owner.AccessToken);
-            Expect(protectedResponse.StatusCode == HttpStatusCode.OK,
-                "Refreshed access token is unusable.");
+            Expect(afterReuse.StatusCode == HttpStatusCode.Unauthorized,
+                "Refresh-token reuse did not revoke the session family.");
+
+            // Later journeys (property creation, upload, ...) need a live owner session.
+            var ownerId = _owner.UserId;
+            _owner = (await LoginPhoneAsync(_config.OwnerPhone)) with { UserId = ownerId };
+            var relogin = await SendAsync(
+                HttpMethod.Get, "/api/users/me", token: _owner.AccessToken);
+            Expect(relogin.StatusCode == HttpStatusCode.OK,
+                "Owner could not sign in again after refresh-token reuse revocation.");
         }
 
         private async Task CreatePropertyAsync()
