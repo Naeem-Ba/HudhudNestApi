@@ -1189,6 +1189,16 @@ jobs:
             exit 1
           fi
 
+      - name: Wake Staging telemetry collector
+        shell: bash
+        env:
+          OTEL_COLLECTOR_URL: ${{ vars.STAGING_OTEL_COLLECTOR_URL }}
+        run: |
+          # Render Free spins the collector down when idle and the freshly deployed API's own
+          # pushes do not bring it back in time (run 35466879093: no telemetry for 10 minutes,
+          # data within 40 s of a direct request). Best effort, never fails the job.
+          bash scripts/wake-otel-collector.sh
+
       - name: Run mandatory staging E2E smoke tests
         shell: bash
         env:
@@ -1211,6 +1221,7 @@ jobs:
           API_BASE_URL: ${{ vars.STAGING_BASE_URL }}
           PROMETHEUS_URL: ${{ vars.STAGING_PROMETHEUS_URL }}
           TEMPO_URL: ${{ vars.STAGING_TEMPO_URL }}
+          OTEL_COLLECTOR_URL: ${{ vars.STAGING_OTEL_COLLECTOR_URL }}
           OBSERVABILITY_TEST_KEY: ${{ secrets.STAGING_SMOKE_CLEANUP_SECRET }}
           OBSERVABILITY_SERVICE_VERSION: ${{ github.sha }}
           EXPECTED_COMMIT_SHA: ${{ github.sha }}
