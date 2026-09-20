@@ -63,7 +63,7 @@ photo delete/reorder endpoint.
 | `POST /{id}/photos` | new (same) |
 | `PUT /{id}/amenities` | new (same) — `[Guid]` body, owner only |
 | `GET /bookings/pricing-preview` | new (same) |
-| `POST /` request | + required `currencyCode` |
+| `POST /` request | + optional `currencyCode` (omitted -> `SYP`, so clients built before the field keep working; present -> must be a supported code) |
 | `ShortStayListingDto`, `ShortStayListingSummaryDto`, `BookingDto` | + `currencyCode` |
 
 ## Database
