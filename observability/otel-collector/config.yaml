@@ -20,19 +20,19 @@ processors:
     trace_statements:
       - context: span
         statements:
-          - delete_key(attributes, "http.request.header.authorization")
-          - delete_key(attributes, "http.request.header.cookie")
-          - delete_key(attributes, "http.response.header.set-cookie")
-          - delete_key(attributes, "db.connection_string")
-          - delete_key(attributes, "db.statement")
-          - delete_key(attributes, "db.query.text")
-          - delete_key(attributes, "url.query")
-          - delete_key(attributes, "url.full")
-          - delete_key(attributes, "user.email")
-          - delete_key(attributes, "user.phone")
-          - delete_key(attributes, "auth.token")
-          - delete_key(attributes, "auth.otp")
-          - delete_key(attributes, "redis.key")
+          - delete_key(span.attributes, "http.request.header.authorization")
+          - delete_key(span.attributes, "http.request.header.cookie")
+          - delete_key(span.attributes, "http.response.header.set-cookie")
+          - delete_key(span.attributes, "db.connection_string")
+          - delete_key(span.attributes, "db.statement")
+          - delete_key(span.attributes, "db.query.text")
+          - delete_key(span.attributes, "url.query")
+          - delete_key(span.attributes, "url.full")
+          - delete_key(span.attributes, "user.email")
+          - delete_key(span.attributes, "user.phone")
+          - delete_key(span.attributes, "auth.token")
+          - delete_key(span.attributes, "auth.otp")
+          - delete_key(span.attributes, "redis.key")
   batch:
     timeout: 2s
     send_batch_size: 512
