@@ -68,11 +68,9 @@ public sealed class AddShortStayListingPhotosCommandHandler
                 await using var content = file.Content;
 
                 var result = await _storage.UploadImageAsync(content, file.FileName, file.ContentType, PhotoFolder, ct);
+                // Already-uploaded files are removed once, by the catch below.
                 if (!result.Succeeded)
-                {
-                    await CleanupAsync(uploadedPublicIds, ct);
                     throw new DomainException(result.ErrorMessage ?? "تعذر رفع الصورة.");
-                }
 
                 uploadedPublicIds.Add(result.PublicId!);
 
