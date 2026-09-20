@@ -239,7 +239,7 @@ public sealed class ShortStayListingsController : ControllerBase
 public sealed record CreateShortStayListingRequest(
     int AccommodationTypeId, string Title, string Description, int Capacity, int Bedrooms, int Bathrooms,
     TimeOnly CheckInTime, TimeOnly CheckOutTime, decimal Latitude, decimal Longitude,
-    decimal DefaultBasePricePerNight, Guid? PropertyId, string CurrencyCode);
+    decimal DefaultBasePricePerNight, Guid? PropertyId, string? CurrencyCode = null);
 
 public sealed record UpdateShortStayListingRequest(
     string Title, string Description, int Capacity, int Bedrooms, int Bathrooms, TimeOnly CheckInTime,

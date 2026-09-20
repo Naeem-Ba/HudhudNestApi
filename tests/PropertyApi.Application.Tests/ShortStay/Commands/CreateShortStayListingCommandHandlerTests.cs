@@ -139,6 +139,22 @@ public sealed class CreateShortStayListingCommandHandlerTests
         listings.Verify(x => x.AddAsync(It.IsAny<ShortStayListing>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Theory]
+    [InlineData(null, "SYP")]   // client built before the currency field existed
+    [InlineData("usd", "USD")]
+    public async Task Handle_CurrencyOmittedOrGiven_ListingUsesDefaultOrGivenCurrency(string? sent, string expected)
+    {
+        var ownerId = Guid.NewGuid();
+        var listings = new Mock<IShortStayListingRepository>();
+        var counter = new Mock<IActiveListingCounter>();
+        counter.Setup(x => x.CountActiveListingsByOwnerAsync(ownerId, It.IsAny<CancellationToken>())).ReturnsAsync(0);
+        var handler = MakeHandler(listings, counter, limit: 1);
+
+        var result = await handler.Handle(ValidCommand(ownerId) with { CurrencyCode = sent }, CancellationToken.None);
+
+        Assert.Equal(expected, result.CurrencyCode);
+    }
+
     [Fact]
     public async Task Handle_BelowTheUnifiedLimit_CreatesTheListing()
     {

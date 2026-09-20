@@ -15,9 +15,11 @@ public sealed class CreateShortStayListingCommandValidator : AbstractValidator<C
         RuleFor(x => x.Bedrooms).GreaterThanOrEqualTo(0);
         RuleFor(x => x.Bathrooms).GreaterThanOrEqualTo(0);
         RuleFor(x => x.DefaultBasePricePerNight).GreaterThan(0);
+        // Optional: clients built before the currency field existed omit it and get the
+        // system default (SYP) instead of a 400. When present it must be a supported code.
         RuleFor(x => x.CurrencyCode)
-            .NotEmpty()
-            .Must(c => c is not null && ShortStayListing.SupportedCurrencyCodes.Contains(c.Trim()))
+            .Must(c => !string.IsNullOrWhiteSpace(c) && ShortStayListing.SupportedCurrencyCodes.Contains(c.Trim()))
+            .When(x => x.CurrencyCode is not null)
             .WithMessage("رمز العملة غير مدعوم.");
         RuleFor(x => x.Latitude).InclusiveBetween(-90m, 90m);
         RuleFor(x => x.Longitude).InclusiveBetween(-180m, 180m);

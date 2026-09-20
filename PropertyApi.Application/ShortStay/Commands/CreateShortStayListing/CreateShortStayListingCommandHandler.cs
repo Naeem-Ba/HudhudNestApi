@@ -122,7 +122,7 @@ public sealed class CreateShortStayListingCommandHandler
                 request.Latitude,
                 request.Longitude,
                 request.PropertyId,
-                request.CurrencyCode);
+                request.CurrencyCode ?? ShortStayListing.DefaultCurrencyCode);
 
             var defaultRoomType = new RoomType
             {
