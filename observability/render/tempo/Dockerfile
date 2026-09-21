@@ -6,7 +6,7 @@
 # run, not durable history across restarts.
 FROM grafana/tempo:2.8.1 AS tempo-bin
 
-FROM nginx:1.27-alpine
+FROM nginx:1.31-alpine
 
 COPY --from=tempo-bin /tempo /usr/local/bin/tempo
 
