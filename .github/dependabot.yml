@@ -73,7 +73,18 @@ updates:
           - "*"
 
   - package-ecosystem: docker
-    directory: /
+    # No Dockerfile lives at the repository root, so `directory: /` made every
+    # weekly and on-demand run fail with "No Dockerfiles nor Kubernetes YAML
+    # found in /". List the directories that actually hold one. Compose files
+    # (ci/, observability/, performance/) are a separate `docker-compose`
+    # ecosystem and are deliberately not enabled here: the PostGIS/Redis tags
+    # in them are governed by ci/postgres-version.env, not by weekly bumps.
+    directories:
+      - /PropertyApi
+      - /ci
+      - /observability/render/otel-collector
+      - /observability/render/prometheus
+      - /observability/render/tempo
     schedule:
       interval: weekly
       day: monday
