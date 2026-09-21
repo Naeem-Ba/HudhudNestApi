@@ -95,3 +95,16 @@ updates:
           - "mcr.microsoft.com/dotnet/*"
           - "postgis/postgis"
           - "redis"
+    ignore:
+      # The .NET base images track Directory.Build.props (net8.0). 8.0 -> 10.0
+      # (#195-#197) is the same framework migration barred for the NuGet
+      # packages above, and the runtime image is a pinned chiseled 8.0 variant.
+      # Lift together with the TargetFramework.
+      - dependency-name: "dotnet/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "mcr.microsoft.com/dotnet/*"
+        update-types: ["version-update:semver-major"]
+      # ci/postgres-version.env pins PostgreSQL 17 to match production; a
+      # PostGIS image on another PostgreSQL major would break restore parity.
+      - dependency-name: "postgis/postgis"
+        update-types: ["version-update:semver-major"]
