@@ -49,6 +49,18 @@ updates:
       - dependency-name: "MediatR"
         update-types: ["version-update:semver-major"]
 
+      # PropertyApi never calls MessagePack. It is a direct, security-pinned
+      # reference (2.5.302 carries the hash-collision DoS fix) only because
+      # Microsoft.AspNetCore.SignalR.StackExchangeRedis 8.0.x, the SignalR Redis
+      # backplane, is compiled against MessagePack 2.5 for its wire protocol.
+      # 3.1.9 (#185) resolves and round-trips a backplane message in isolation,
+      # but that path cannot be exercised end to end without two nodes sharing a
+      # real Redis, and 3.x brings nothing this project uses. Lift when the
+      # SignalR Redis package moves to a MessagePack 3 line (framework
+      # migration) or when the backplane is covered by a multi-node test.
+      - dependency-name: "MessagePack"
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
