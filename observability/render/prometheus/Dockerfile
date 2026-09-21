@@ -2,7 +2,7 @@
 # plan. No Persistent Disk is attached -- /prometheus is ephemeral container storage, which is
 # fine here: this instance only needs to hold the last few minutes of data for
 # scripts/verify-observability.sh's own queries, not durable history across restarts.
-FROM prom/prometheus:v3.5.0
+FROM prom/prometheus:v3.14.0
 
 # Build context is the repository root (matches PropertyApi/Dockerfile's convention) so this
 # can reuse the exact same rule files the local docker-compose stack uses -- one source of
