@@ -4,7 +4,7 @@
 # multiplexes by path. No Persistent Disk: /var/tempo is ephemeral, which is fine since this
 # instance only needs to hold traces for the lifetime of scripts/verify-observability.sh's own
 # run, not durable history across restarts.
-FROM grafana/tempo:2.8.1 AS tempo-bin
+FROM grafana/tempo:3.0.3 AS tempo-bin
 
 FROM nginx:1.31-alpine
 
