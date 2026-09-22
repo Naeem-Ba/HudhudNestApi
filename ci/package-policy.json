@@ -34,8 +34,8 @@
   ],
   "nonSolutionProjects": [
     {
-      "path": "dbkeys_patch/PropertyApi.Infrastructure/PropertyApi.Infrastructure.csproj",
-      "policy": "Package versions are centrally governed, but lock files are not required because this patch project is not part of PropertyApi.sln."
+      "path": "dbkeys_patch/HudhudNestApi.Infrastructure/HudhudNestApi.Infrastructure.csproj",
+      "policy": "Package versions are centrally governed, but lock files are not required because this patch project is not part of HudhudNestApi.sln."
     }
   ],
   "vulnerabilitySeverityPolicy": {

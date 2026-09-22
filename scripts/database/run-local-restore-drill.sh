@@ -57,7 +57,7 @@ docker compose -f "${COMPOSE_FILE}" run --rm \
 
 export ConnectionStrings__DefaultConnection='Host=127.0.0.1;Port=55433;Database=propertyapi_restore_drill;Username=postgres;Password=postgres'
 export RECOVERY_APPLY_PENDING_MIGRATIONS=true
-dotnet run --project "${REPOSITORY_ROOT}/tools/PropertyApi.DatabaseRecoveryVerifier/PropertyApi.DatabaseRecoveryVerifier.csproj" \
+dotnet run --project "${REPOSITORY_ROOT}/tools/HudhudNestApi.DatabaseRecoveryVerifier/HudhudNestApi.DatabaseRecoveryVerifier.csproj" \
   --configuration Release --no-restore
 docker compose -f "${COMPOSE_FILE}" up -d api-restored
 SMOKE_STARTED_EPOCH="$(date -u +%s)"

@@ -1,0 +1,72 @@
+namespace HudhudNestApi.Application.ShortStay.DTOs;
+
+public sealed record ShortStayListingSummaryDto(
+    Guid Id,
+    string Title,
+    string AccommodationTypeCode,
+    string AccommodationTypeNameAr,
+    int Capacity,
+    int Bedrooms,
+    int Bathrooms,
+    decimal? FromPricePerNight,
+    string CurrencyCode,
+    string? City,
+    decimal? Latitude,
+    decimal? Longitude,
+    bool IsPublished,
+    string? MainPhotoUrl,
+    double? AverageRating,
+    int ReviewCount);
+
+public sealed record ShortStayListingDto(
+    Guid Id,
+    Guid OwnerId,
+    Guid? PropertyId,
+    int AccommodationTypeId,
+    string AccommodationTypeCode,
+    string CurrencyCode,
+    string Title,
+    string Description,
+    int Capacity,
+    int Bedrooms,
+    int Bathrooms,
+    TimeOnly CheckInTime,
+    TimeOnly CheckOutTime,
+    bool SelfCheckInEnabled,
+    bool InstantBookingEnabled,
+    bool RequestBookingEnabled,
+    // Latitude/Longitude are the caller-visible, already location-visibility-redacted values —
+    // null/rounded when LocationVisibility == Approximate and the caller is not authorized to
+    // see the exact point. Never redact only in the frontend.
+    decimal? Latitude,
+    decimal? Longitude,
+    int? GovernorateId,
+    int? DistrictId,
+    int? NeighborhoodId,
+    string? City,
+    string LocationVisibility,
+    string? PoolType,
+    string? PoolLocation,
+    bool? PoolIsSeasonal,
+    bool? PoolIsHeated,
+    decimal CleaningFee,
+    decimal ExtraGuestFee,
+    decimal ExtraBedFee,
+    bool AllowsSmoking,
+    bool AllowsParties,
+    bool AllowsPets,
+    TimeOnly? QuietHoursStart,
+    TimeOnly? QuietHoursEnd,
+    string? CustomRulesText,
+    int CancellationFreeCancellationDays,
+    bool CancellationDepositRefundable,
+    string? CancellationCustomTermsText,
+    // Security audit finding (2026-09-18): this was missing entirely, so the edit form had no
+    // way to read the current value back and echo it unchanged on save -- see
+    // UpdateShortStayListingCommandHandler's doc comment on the same finding.
+    decimal? DepositPercentage,
+    bool IsPublished,
+    DateTime? PublishedAt,
+    IReadOnlyList<RoomTypeDto> RoomTypes,
+    IReadOnlyList<string> PhotoUrls,
+    IReadOnlyList<Guid> AmenityIds);

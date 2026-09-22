@@ -42,12 +42,12 @@ if ([string]::IsNullOrWhiteSpace($OutputPath)) {
 }
 
 $requiredFiles = @(
-    'PropertyApi.Infrastructure/Identity/Services/CachedSecurityStampValidator.cs',
-    'PropertyApi.Infrastructure/Identity/Services/IdentitySecurityStampReader.cs',
-    'PropertyApi.Infrastructure/Identity/Services/DistributedSecurityStampCacheInvalidator.cs',
-    'PropertyApi.Infrastructure/DependencyInjection.cs',
-    'PropertyApi.Infrastructure/PropertyApi.Infrastructure.csproj',
-    'PropertyApi/Program.cs'
+    'HudhudNestApi.Infrastructure/Identity/Services/CachedSecurityStampValidator.cs',
+    'HudhudNestApi.Infrastructure/Identity/Services/IdentitySecurityStampReader.cs',
+    'HudhudNestApi.Infrastructure/Identity/Services/DistributedSecurityStampCacheInvalidator.cs',
+    'HudhudNestApi.Infrastructure/DependencyInjection.cs',
+    'HudhudNestApi.Infrastructure/HudhudNestApi.Infrastructure.csproj',
+    'HudhudNestApi/Program.cs'
 )
 
 $missing = @()
@@ -62,7 +62,7 @@ if ($missing.Count -gt 0) {
     throw "Required files are missing:`n - $($missing -join "`n - ")"
 }
 
-$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("PropertyApi-SecurityStamp-" + [guid]::NewGuid().ToString('N'))
+$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("HudhudNestApi-SecurityStamp-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tempRoot | Out-Null
 
 try {
@@ -74,7 +74,7 @@ try {
         Copy-Item -LiteralPath $source -Destination $destination -Force
     }
 
-    $applicationAuthRoot = Join-Path $root 'PropertyApi.Application/Auth'
+    $applicationAuthRoot = Join-Path $root 'HudhudNestApi.Application/Auth'
     if (Test-Path -LiteralPath $applicationAuthRoot) {
         Get-ChildItem -LiteralPath $applicationAuthRoot -Recurse -File -Filter '*.cs' |
             Where-Object {
@@ -105,7 +105,7 @@ try {
     $supportFiles = @(
         'Directory.Packages.props',
         'Directory.Build.props',
-        'PropertyApi.sln'
+        'HudhudNestApi.sln'
     )
 
     foreach ($relativePath in $supportFiles) {
@@ -118,7 +118,7 @@ try {
     }
 
     $configEvidencePath = Join-Path $tempRoot 'configuration-key-evidence.txt'
-    $configFiles = Get-ChildItem -LiteralPath (Join-Path $root 'PropertyApi') -File -Filter 'appsettings*.json' -ErrorAction SilentlyContinue
+    $configFiles = Get-ChildItem -LiteralPath (Join-Path $root 'HudhudNestApi') -File -Filter 'appsettings*.json' -ErrorAction SilentlyContinue
 
     @(
         '# Configuration key evidence only; secret values intentionally excluded.'

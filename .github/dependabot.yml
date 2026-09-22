@@ -49,7 +49,7 @@ updates:
       - dependency-name: "MediatR"
         update-types: ["version-update:semver-major"]
 
-      # PropertyApi never calls MessagePack. It is a direct, security-pinned
+      # HudhudNestApi never calls MessagePack. It is a direct, security-pinned
       # reference (2.5.302 carries the hash-collision DoS fix) only because
       # Microsoft.AspNetCore.SignalR.StackExchangeRedis 8.0.x, the SignalR Redis
       # backplane, is compiled against MessagePack 2.5 for its wire protocol.
@@ -80,7 +80,7 @@ updates:
     # ecosystem and are deliberately not enabled here: the PostGIS/Redis tags
     # in them are governed by ci/postgres-version.env, not by weekly bumps.
     directories:
-      - /PropertyApi
+      - /HudhudNestApi
       - /ci
       - /observability/render/otel-collector
       - /observability/render/prometheus

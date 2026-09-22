@@ -90,7 +90,7 @@ services:
   api-restored:
     build:
       context: ..
-      dockerfile: PropertyApi/Dockerfile
+      dockerfile: HudhudNestApi/Dockerfile
     environment:
       DOTNET_ENVIRONMENT: RecoveryDrill
       ASPNETCORE_ENVIRONMENT: RecoveryDrill

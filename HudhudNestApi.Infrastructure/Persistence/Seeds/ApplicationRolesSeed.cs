@@ -1,0 +1,45 @@
+﻿using Microsoft.AspNetCore.Identity;
+using HudhudNestApi.Domain.Users.Constants;
+using ApplicationRole = HudhudNestApi.Infrastructure.Identity.Entities.ApplicationRole;
+
+namespace HudhudNestApi.Infrastructure.Persistence.Seeds;
+
+/// <summary>
+/// يضيف أدوار النظام بالعربية والإنجليزية.
+/// يستخدم RoleManager<ApplicationRole> حتى لا يتعارض مع Identity.
+/// </summary>
+public static class ApplicationRolesSeed
+{
+    public static async Task SeedAsync(RoleManager<ApplicationRole> roleManager)
+    {
+        var roles = new[]
+        {
+            new ApplicationRole(RoleNames.Admin, "مدير المنصة"),
+            new ApplicationRole(RoleNames.Agent, "وسيط عقاري"),
+            new ApplicationRole(RoleNames.User, "مستخدم"),
+            new ApplicationRole(RoleNames.AgencyOwner, "مالك مكتب عقاري"),
+            new ApplicationRole(RoleNames.AgencyAgent, "موظف مكتب عقاري"),
+        };
+
+        foreach (var role in roles)
+        {
+            if (string.IsNullOrWhiteSpace(role.Name))
+                continue;
+
+            if (await roleManager.RoleExistsAsync(role.Name))
+                continue;
+
+            var result = await roleManager.CreateAsync(role);
+
+            if (!result.Succeeded)
+            {
+                var errors = string.Join(
+                    ", ",
+                    result.Errors.Select(e => e.Description));
+
+                throw new InvalidOperationException(
+                    $"Failed to seed role '{role.Name}'. Errors: {errors}");
+            }
+        }
+    }
+}

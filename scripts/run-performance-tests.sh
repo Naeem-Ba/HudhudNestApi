@@ -210,10 +210,10 @@ export ConnectionStrings__Redis="localhost:56379,abortConnect=false"
 export Redis__ConnectionString="localhost:56379,abortConnect=false"
 export RateLimiting__Redis__Enabled=true
 export DataProtection__PersistKeysToDatabase=true
-dotnet run --project tools/PropertyApi.Migrator/PropertyApi.Migrator.csproj \
+dotnet run --project tools/HudhudNestApi.Migrator/HudhudNestApi.Migrator.csproj \
   --configuration Release
 
-dotnet run --project tools/PropertyApi.PerformanceDataGenerator/PropertyApi.PerformanceDataGenerator.csproj \
+dotnet run --project tools/HudhudNestApi.PerformanceDataGenerator/HudhudNestApi.PerformanceDataGenerator.csproj \
   --configuration Release -- \
   --environment "${PERF_ENVIRONMENT}" \
   --connection "${PERF_DATABASE_CONNECTION_STRING}" \

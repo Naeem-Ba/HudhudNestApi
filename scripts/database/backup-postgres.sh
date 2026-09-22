@@ -43,7 +43,7 @@ APPLICATION_COMMIT_SHA="${APPLICATION_COMMIT_SHA:-${GITHUB_SHA:-unknown}}"
 
 # The production database is Supabase-hosted. Supabase auto-provisions a
 # "supabase_vault" extension (schema "vault") on every project that
-# PropertyApi's application code never uses. Confirmed via two separate
+# HudhudNestApi's application code never uses. Confirmed via two separate
 # real Recovery Gate runs against production (2026-09-02, runs
 # 33652899781 and 33659828056): the dump's `CREATE EXTENSION IF NOT
 # EXISTS supabase_vault WITH SCHEMA vault;` statement makes pg_restore

@@ -3,10 +3,10 @@ name: Observability Static Validation
 on:
   pull_request:
     paths:
-      - "PropertyApi/Observability/**"
+      - "HudhudNestApi/Observability/**"
       - "observability/**"
       - "scripts/verify-observability.sh"
-      - "tests/PropertyApi.Observability.Tests/**"
+      - "tests/HudhudNestApi.Observability.Tests/**"
   workflow_dispatch:
 
 permissions:
@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 8.0.x
-      - run: dotnet test tests/PropertyApi.Observability.Tests/PropertyApi.Observability.Tests.csproj
+      - run: dotnet test tests/HudhudNestApi.Observability.Tests/HudhudNestApi.Observability.Tests.csproj
       - run: jq -e . observability/grafana/dashboards/property-api-production.json >/dev/null
       - run: docker compose -f observability/docker-compose.observability.yml config --quiet
       - name: Validate collector

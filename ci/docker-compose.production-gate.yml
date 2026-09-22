@@ -190,7 +190,7 @@ services:
     image: propertyapi-api:${PROPERTYAPI_IMAGE_TAG:-production-gate}
     build:
       context: ..
-      dockerfile: PropertyApi/Dockerfile
+      dockerfile: HudhudNestApi/Dockerfile
     environment:
       DOTNET_ENVIRONMENT: Staging
       ASPNETCORE_ENVIRONMENT: Staging

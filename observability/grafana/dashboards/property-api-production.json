@@ -23,7 +23,7 @@
   "templating": { "list": [] },
   "time": { "from": "now-6h", "to": "now" },
   "timezone": "browser",
-  "title": "PropertyApi Production Observability",
+  "title": "HudhudNestApi Production Observability",
   "uid": "property-api-production",
   "version": 1
 }

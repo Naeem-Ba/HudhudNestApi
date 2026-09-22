@@ -28,7 +28,7 @@ concurrency:
 
 env:
   DOTNET_VERSION: 8.0.x
-  SOLUTION_PATH: PropertyApi.sln
+  SOLUTION_PATH: HudhudNestApi.sln
 
 jobs:
   validate-source-supply-chain:

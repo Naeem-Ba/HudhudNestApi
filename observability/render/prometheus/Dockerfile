@@ -4,7 +4,7 @@
 # scripts/verify-observability.sh's own queries, not durable history across restarts.
 FROM prom/prometheus:v3.14.0
 
-# Build context is the repository root (matches PropertyApi/Dockerfile's convention) so this
+# Build context is the repository root (matches HudhudNestApi/Dockerfile's convention) so this
 # can reuse the exact same rule files the local docker-compose stack uses -- one source of
 # truth for alerting/SLO rules across both environments.
 COPY observability/prometheus/rules /etc/prometheus/rules

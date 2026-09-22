@@ -11,7 +11,7 @@
 #     Cloudinary/Resend/the database.
 #   - No "prometheus" pull-style exporter and no spanmetrics connector: the app already
 #     exports http.server.request.duration (and friends) directly via its own OTLP metrics
-#     pipeline (see PropertyApi.Observability.PropertyApiObservabilityExtensions), so nothing
+#     pipeline (see HudhudNestApi.Observability.HudhudNestApiObservabilityExtensions), so nothing
 #     needs to be derived from spans here.
 #
 # TEMPO_PUBLIC_URL / PROMETHEUS_REMOTE_WRITE_URL are resolved from Render environment

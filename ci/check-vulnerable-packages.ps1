@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string] $SolutionPath = "PropertyApi.sln",
+    [string] $SolutionPath = "HudhudNestApi.sln",
     [string] $BaselinePath = "ci/vulnerability-baseline.json",
     [string] $PolicyPath = "ci/vulnerability-exceptions.json",
     [string] $OutputDirectory = "artifacts/vulnerability"

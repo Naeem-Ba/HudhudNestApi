@@ -71,8 +71,8 @@ done < <(jq -r '.tableRowCounts | to_entries[] | [.key, (.value|tostring)] | @ts
 # right along with public but are never touched by this application's own
 # EF Core migrations. An index/constraint left unvalidated inside one of
 # those platform schemas (e.g. realtime.messages) is Supabase's own
-# internal state, not a PropertyApi backup/restore defect, and must not
-# fail a drill whose job is verifying PropertyApi's own schema.
+# internal state, not a HudhudNestApi backup/restore defect, and must not
+# fail a drill whose job is verifying HudhudNestApi's own schema.
 INVALID_INDEXES="$(psql -X -v ON_ERROR_STOP=1 -tAc \
   "SELECT COUNT(*) FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relnamespace = 'public'::regnamespace AND (NOT i.indisvalid OR NOT i.indisready);")"
 [ "${INVALID_INDEXES//[[:space:]]/}" = "0" ] || fail "Invalid or unready indexes found."

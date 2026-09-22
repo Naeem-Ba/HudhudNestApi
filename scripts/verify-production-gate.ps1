@@ -51,11 +51,11 @@ function Assert-NotContains {
     }
 }
 
-$program = Read-RepositoryFile @("PropertyApi", "Program.cs")
-$apiDockerfile = Read-RepositoryFile @("PropertyApi", "Dockerfile")
+$program = Read-RepositoryFile @("HudhudNestApi", "Program.cs")
+$apiDockerfile = Read-RepositoryFile @("HudhudNestApi", "Dockerfile")
 $migratorDockerfile = Read-RepositoryFile @("ci", "Dockerfile.migrator")
 $compose = Read-RepositoryFile @("ci", "docker-compose.production-gate.yml")
-$dependencyInjection = Read-RepositoryFile @("PropertyApi.Infrastructure", "DependencyInjection.cs")
+$dependencyInjection = Read-RepositoryFile @("HudhudNestApi.Infrastructure", "DependencyInjection.cs")
 $workflow = Read-RepositoryFile @(".github", "workflows", "production-gate.yml")
 $stagingSmoke = Read-RepositoryFile @("scripts", "smoke-staging.sh")
 $performanceWorkflow = Read-RepositoryFile @(".github", "workflows", "performance-validation.yml")
@@ -64,7 +64,7 @@ $performanceRunner = Read-RepositoryFile @("scripts", "run-performance-tests.sh"
 Assert-Contains $program "UseForwardedHeaders" "Program.cs must apply forwarded headers before security middleware."
 Assert-Contains $program "UseHsts" "Program.cs must enable HSTS for production."
 Assert-Contains $program "MapOperationalHealthEndpoints" "Program.cs must map operational health endpoints."
-Assert-Contains $program "UsePropertyApiSecurityHeaders" "Program.cs must apply security headers middleware."
+Assert-Contains $program "UseHudhudNestApiSecurityHeaders" "Program.cs must apply security headers middleware."
 
 Assert-Contains $dependencyInjection "ConfigureDataProtection" "Infrastructure composition must configure Data Protection."
 
@@ -84,7 +84,7 @@ Assert-NotContains $workflow "configured=false" "Staging configuration must not 
 Assert-NotContains $workflow "continue-on-error: true" "Mandatory release jobs must not continue on error."
 
 Assert-Contains $stagingSmoke "set -Eeuo pipefail" "Staging smoke script must use strict Bash error handling."
-Assert-Contains $stagingSmoke "PropertyApi.StagingSmokeTests.csproj" "Staging smoke script must run the complete .NET journey suite."
+Assert-Contains $stagingSmoke "HudhudNestApi.StagingSmokeTests.csproj" "Staging smoke script must run the complete .NET journey suite."
 Assert-Contains $stagingSmoke "staging-smoke-report.json" "Staging smoke script must require a JSON report."
 Assert-Contains $stagingSmoke "staging-smoke-junit.xml" "Staging smoke script must require a JUnit report."
 

@@ -122,7 +122,7 @@ jobs:
           } >> "${GITHUB_ENV}"
 
       - name: Restore dependencies
-        run: dotnet restore PropertyApi.sln --locked-mode
+        run: dotnet restore HudhudNestApi.sln --locked-mode
 
       - name: Restore local .NET tools
         run: dotnet tool restore
@@ -132,7 +132,7 @@ jobs:
         run: |
           ./scripts/validate-package-governance.ps1 `
             -RepositoryRoot $PWD.Path `
-            -SolutionPath "PropertyApi.sln" `
+            -SolutionPath "HudhudNestApi.sln" `
             -PolicyPath "ci/package-policy.json" `
             -OutputDirectory "artifacts/supply-chain"
 
@@ -144,13 +144,13 @@ jobs:
 
       - name: Build solution
         run: |
-          dotnet build PropertyApi.sln \
+          dotnet build HudhudNestApi.sln \
             --configuration Release \
             --no-restore
 
       - name: Verify formatting
         run: |
-          dotnet format PropertyApi.sln \
+          dotnet format HudhudNestApi.sln \
             --verify-no-changes \
             --no-restore
 
@@ -191,14 +191,14 @@ jobs:
           set -euo pipefail
 
           dotnet run \
-            --project tools/PropertyApi.Migrator/PropertyApi.Migrator.csproj \
+            --project tools/HudhudNestApi.Migrator/HudhudNestApi.Migrator.csproj \
             --configuration Release \
             --no-build
 
       - name: Run architecture tests without coverage instrumentation
         run: |
           dotnet test \
-            tests/PropertyApi.Architecture.Tests/PropertyApi.Architecture.Tests.csproj \
+            tests/HudhudNestApi.Architecture.Tests/HudhudNestApi.Architecture.Tests.csproj \
             --configuration Release \
             --no-build \
             --logger "trx;LogFileName=architecture-tests.trx"
@@ -206,7 +206,7 @@ jobs:
       - name: Run application tests with coverage
         run: |
           dotnet test \
-            tests/PropertyApi.Application.Tests/PropertyApi.Application.Tests.csproj \
+            tests/HudhudNestApi.Application.Tests/HudhudNestApi.Application.Tests.csproj \
             --configuration Release \
             --no-build \
             --collect:"XPlat Code Coverage" \
@@ -215,7 +215,7 @@ jobs:
       - name: Run authentication tests with coverage
         run: |
           dotnet test \
-            tests/PropertyApi.Auth.Tests/PropertyApi.Auth.Tests.csproj \
+            tests/HudhudNestApi.Auth.Tests/HudhudNestApi.Auth.Tests.csproj \
             --configuration Release \
             --no-build \
             --collect:"XPlat Code Coverage" \
@@ -224,7 +224,7 @@ jobs:
       - name: Run integration tests with coverage
         run: |
           dotnet test \
-            tests/PropertyApi.Integration.Tests/PropertyApi.Integration.Tests.csproj \
+            tests/HudhudNestApi.Integration.Tests/HudhudNestApi.Integration.Tests.csproj \
             --configuration Release \
             --no-build \
             --collect:"XPlat Code Coverage" \
@@ -241,7 +241,7 @@ jobs:
         shell: pwsh
         run: |
           ./ci/check-vulnerable-packages.ps1 `
-            -SolutionPath "PropertyApi.sln" `
+            -SolutionPath "HudhudNestApi.sln" `
             -BaselinePath "ci/vulnerability-baseline.json" `
             -OutputDirectory "artifacts/vulnerability"
 
@@ -829,7 +829,7 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Run observability tests
-        run: dotnet test tests/PropertyApi.Observability.Tests/PropertyApi.Observability.Tests.csproj --configuration Release
+        run: dotnet test tests/HudhudNestApi.Observability.Tests/HudhudNestApi.Observability.Tests.csproj --configuration Release
       - name: Validate observability configuration artifacts
         shell: bash
         run: |
@@ -1069,7 +1069,7 @@ jobs:
           OtpSettings__SecretKey="$(openssl rand -base64 48 | tr -d '\n')"
           Security__PhoneLookupHmacKey="$(openssl rand -base64 32 | tr -d '\n')"
           export Jwt__Key OtpSettings__SecretKey Security__PhoneLookupHmacKey
-          dotnet run --project tools/PropertyApi.Migrator/PropertyApi.Migrator.csproj \
+          dotnet run --project tools/HudhudNestApi.Migrator/HudhudNestApi.Migrator.csproj \
             --configuration Release > artifacts/staging-smoke/staging-migrator.log 2>&1 || {
             grep -E "pending migration|fail|Exception" artifacts/staging-smoke/staging-migrator.log | head -20 || true
             echo "::error::Staging migrator failed; see staging-migrator.log in the evidence artifact."
@@ -1251,7 +1251,7 @@ jobs:
           if [ ! -s "$d/staging-smoke-report.json" ]; then
             jq -n --arg r "$reason" --arg sha "${GITHUB_SHA}" \
               '{environment:"Staging",expectedCommitSha:$sha,journeys:[],result:"failed",error:$r}' > "$d/staging-smoke-report.json"
-            printf '<?xml version="1.0" encoding="utf-8"?>\n<testsuites><testsuite name="PropertyApi.StagingSmoke.Bootstrap" tests="1" failures="1"><testcase name="release-ready"><failure message="%s"/></testcase></testsuite></testsuites>\n' "$reason" > "$d/staging-smoke-junit.xml"
+            printf '<?xml version="1.0" encoding="utf-8"?>\n<testsuites><testsuite name="HudhudNestApi.StagingSmoke.Bootstrap" tests="1" failures="1"><testcase name="release-ready"><failure message="%s"/></testcase></testsuite></testsuites>\n' "$reason" > "$d/staging-smoke-junit.xml"
             printf '# Staging E2E smoke report\n\n- Result: **Failed**\n- Reason: %s\n' "$reason" > "$d/staging-smoke-summary.md"
           fi
           if [ ! -s "$o/observability-verification-report.json" ]; then

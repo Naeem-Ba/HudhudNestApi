@@ -2,7 +2,7 @@
 # Service" (Docker), Free plan. Only one public port is needed (the OTLP-HTTP receiver);
 # everything else this collector does is outbound.
 #
-# Build context is the repository root (matches PropertyApi/Dockerfile's convention and the
+# Build context is the repository root (matches HudhudNestApi/Dockerfile's convention and the
 # other two observability/render/* Dockerfiles).
 FROM otel/opentelemetry-collector-contrib:0.161.0
 
