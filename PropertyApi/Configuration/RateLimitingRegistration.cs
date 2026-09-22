@@ -279,7 +279,7 @@ public static class RateLimitingRegistration
                         QueueLimit = 0
                     }));
 
-            // AqarTech Services Marketplace — same cadence as "visits", the closest existing
+            // HudhudNest Services Marketplace — same cadence as "visits", the closest existing
             // equivalent (one user-initiated request-creation flow against a limited resource).
             options.AddPolicy("service-requests", httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(

@@ -7,7 +7,7 @@ namespace PropertyApi.Domain.SocialDistribution.Attribution;
 /// centralized exactly like the frontend's <c>utm-platform-mapping.ts</c> is for Phase 2's
 /// visitor-initiated sharing, but intentionally a SEPARATE table of constants: Phase 2's
 /// <c>utm_campaign=property_share</c>/<c>utm_content=property_{id}</c> describes a visitor
-/// tapping a share button, while this describes AqarTech's own account posting on the
+/// tapping a share button, while this describes HudhudNest's own account posting on the
 /// property's behalf. Reusing the same campaign name for both would make a report unable to
 /// answer "how much of our traffic did WE generate vs. our users" — the spec explicitly asks
 /// for this distinction (§19: "اختيار Naming Convention واضح ومختلف").

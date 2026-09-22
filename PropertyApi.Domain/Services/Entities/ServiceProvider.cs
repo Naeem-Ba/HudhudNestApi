@@ -6,7 +6,7 @@ namespace PropertyApi.Domain.Services.Entities;
 
 /// <summary>
 /// A business/professional offering one or more ServiceOfferings on the marketplace (e.g. the
-/// AqarTech Verify team). One UserAccount runs at most one ServiceProvider profile.
+/// HudhudNest Verify team). One UserAccount runs at most one ServiceProvider profile.
 ///
 /// AgencyId here is deliberately its own independent field — NOT read transitively from
 /// UserAccount.AgencyId. A real-estate agency membership and "runs a verification/valuation

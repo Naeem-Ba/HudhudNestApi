@@ -249,7 +249,7 @@ if (swaggerEnabled)
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "PropertyApi v1");
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "HudhudNestApi v1");
         c.RoutePrefix = "swagger";
         c.DisplayRequestDuration();
     });

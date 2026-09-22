@@ -49,7 +49,7 @@ public enum NotificationType
     AgencyInvitationDeclined = 18,
 
     /// <summary>
-    /// AqarTech Services Marketplace: a new ServiceRequest was submitted. Sent to the
+    /// HudhudNest Services Marketplace: a new ServiceRequest was submitted. Sent to the
     /// ServiceProvider's UserId. Raised by CreateServiceRequestCommandHandler.
     /// </summary>
     ServiceRequestSubmitted = 19,

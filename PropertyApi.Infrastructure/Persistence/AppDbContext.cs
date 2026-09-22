@@ -93,7 +93,7 @@ public sealed class AppDbContext
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
     public DbSet<ConsentRecord> ConsentRecords => Set<ConsentRecord>();
 
-    // AqarTech Services Marketplace
+    // HudhudNest Services Marketplace
     public DbSet<ServiceProvider> ServiceProviders => Set<ServiceProvider>();
     public DbSet<ServiceOffering> ServiceOfferings => Set<ServiceOffering>();
     public DbSet<ServiceRequest> ServiceRequests => Set<ServiceRequest>();
@@ -203,7 +203,7 @@ public sealed class AppDbContext
 
         builder.Entity<DataProtectionKey>().ToTable("DataProtectionKeys");
 
-        // AqarTech Services Marketplace
+        // HudhudNest Services Marketplace
         builder.Entity<ServiceProvider>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ServiceOffering>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ServiceRequest>().HasQueryFilter(e => !e.IsDeleted);

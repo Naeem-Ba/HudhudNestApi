@@ -105,7 +105,7 @@ public sealed class TemplateSocialContentGenerator : ISocialContentGenerator
         }
 
         Add(isArabic ? "عقارات" : "RealEstate");
-        Add(isArabic ? "عقار_تيك" : "AqarTech");
+        Add(isArabic ? "هدهد_نيست" : "HudhudNest");
         Add(facts.City);
         Add(facts.Province);
         Add(facts.PropertyType);

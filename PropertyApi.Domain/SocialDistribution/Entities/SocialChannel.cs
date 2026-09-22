@@ -5,7 +5,7 @@ using PropertyApi.Domain.SocialDistribution.Enums;
 namespace PropertyApi.Domain.SocialDistribution.Entities;
 
 /// <summary>
-/// A social media platform AqarTech supports distributing to (spec §6.1) — e.g. "Facebook is a
+/// A social media platform HudhudNest supports distributing to (spec §6.1) — e.g. "Facebook is a
 /// platform we can post to". Deliberately NOT the same thing as an actual page/profile: that is
 /// <see cref="SocialAccount"/>. One channel can back many accounts (a Facebook channel with a
 /// Damascus page, an Aleppo page, ...).

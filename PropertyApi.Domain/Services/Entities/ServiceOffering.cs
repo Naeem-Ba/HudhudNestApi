@@ -5,7 +5,7 @@ using PropertyApi.Domain.Services.Enums;
 namespace PropertyApi.Domain.Services.Entities;
 
 /// <summary>
-/// One sellable service a ServiceProvider offers within a single category (e.g. "AqarTech
+/// One sellable service a ServiceProvider offers within a single category (e.g. "HudhudNest
 /// Verify — Standard Document Check"). A ServiceRequest always points at exactly one offering.
 ///
 /// BasePrice/CurrencyId reuse the platform's existing Currency lookup — same FK pattern as

@@ -21,7 +21,7 @@ public static class SocialContentPolicy
     /// <summary>
     /// Realistic, conservative caps per platform (well under each platform's actual technical
     /// ceiling) — generous enough for a real listing description, tight enough that a caption
-    /// isn't silently cut off by the platform itself after AqarTech already "successfully"
+    /// isn't silently cut off by the platform itself after HudhudNest already "successfully"
     /// queued it.
     /// </summary>
     private static readonly Dictionary<SocialPlatform, PlatformLimits> LimitsByPlatform = new()

@@ -12,7 +12,7 @@ public enum SocialAccountStatus
 
     Active = 2,
 
-    /// <summary>Administratively disabled by an AqarTech operator, credentials untouched.</summary>
+    /// <summary>Administratively disabled by a HudhudNest operator, credentials untouched.</summary>
     Inactive = 3,
 
     /// <summary>The platform connection itself was revoked (token cleared) — see <see cref="Entities.SocialAccount.Disconnect"/>.</summary>

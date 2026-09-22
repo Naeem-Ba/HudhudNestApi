@@ -87,7 +87,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IMessageRepository, MessageRepository>();
         services.AddScoped<IPlanRepository, PlanRepository>();
 
-        // AqarTech Services Marketplace
+        // HudhudNest Services Marketplace
         services.AddScoped<IServiceProviderRepository, ServiceProviderRepository>();
         services.AddScoped<IServiceOfferingRepository, ServiceOfferingRepository>();
         services.AddScoped<IServiceRequestRepository, ServiceRequestRepository>();

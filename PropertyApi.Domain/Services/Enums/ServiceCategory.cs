@@ -3,7 +3,7 @@ namespace PropertyApi.Domain.Services.Enums;
 /// <summary>
 /// The full taxonomy of service categories the marketplace is designed to grow into.
 ///
-/// MVP scope (AqarTech Services Marketplace, 2026): only <see cref="Verification"/> is built
+/// MVP scope (HudhudNest Services Marketplace, 2026): only <see cref="Verification"/> is built
 /// as a working, seeded, end-to-end product this vertical slice. Valuation, Inspection,
 /// Photography and PropertyManagement are the next four MVP services and are reserved here
 /// (stable enum values reused later, nothing renumbered) but have no seeded provider/offering
@@ -16,19 +16,19 @@ namespace PropertyApi.Domain.Services.Enums;
 /// </summary>
 public enum ServiceCategory
 {
-    /// <summary>AqarTech Verify — document/ownership verification for a listing.</summary>
+    /// <summary>HudhudNest Verify — document/ownership verification for a listing.</summary>
     Verification = 1,
 
-    /// <summary>AqarTech Valuation — market-price estimation for a property.</summary>
+    /// <summary>HudhudNest Valuation — market-price estimation for a property.</summary>
     Valuation = 2,
 
-    /// <summary>AqarTech Inspect — physical condition inspection.</summary>
+    /// <summary>HudhudNest Inspect — physical condition inspection.</summary>
     Inspection = 3,
 
-    /// <summary>AqarTech Media — professional photography/media production.</summary>
+    /// <summary>HudhudNest Media — professional photography/media production.</summary>
     Photography = 4,
 
-    /// <summary>AqarTech Care — remote property management for owners abroad.</summary>
+    /// <summary>HudhudNest Care — remote property management for owners abroad.</summary>
     PropertyManagement = 5,
 
     Legal = 6,

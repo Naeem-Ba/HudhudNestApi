@@ -52,7 +52,7 @@ namespace PropertyApi.Controllers;
 /// <summary>
 /// SocialDistribution bounded context API (Phase 3 of Social Sharing &amp; Distribution). Entirely
 /// operator-facing — unlike Phase 1/2's anonymous, visitor-facing endpoints, every action here
-/// requires the Admin role: this engine posts to AqarTech's OWN social accounts, not something
+/// requires the Admin role: this engine posts to HudhudNest's OWN social accounts, not something
 /// an ordinary user ever triggers. See docs for the RBAC-expansion note (SocialDistributionAdmin/
 /// ContentManager/Publisher/Viewer roles the spec sketches are a documented future step — this
 /// v1 reuses the existing single Admin role rather than fragmenting RBAC no other part of this

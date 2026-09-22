@@ -2,14 +2,14 @@ namespace PropertyApi.Infrastructure.SocialDistribution.Assets;
 
 /// <summary>
 /// Configuration-bound brand identity (Phase 7 spec §24) — section <c>SocialDistribution:Brand</c>.
-/// Defaults match AqarTech's existing navy/gold identity (see the Wohnungsmieten landing page)
-/// so the template engine produces on-brand output even with no configuration present.
+/// Defaults match HudhudNest's navy/gold identity (see the frontend landing page) so the
+/// template engine produces on-brand output even with no configuration present.
 /// </summary>
 public sealed class BrandOptions
 {
     public const string SectionName = "SocialDistribution:Brand";
 
-    public string Name { get; set; } = "عقار تيك";
+    public string Name { get; set; } = "هدهد نيست";
 
     public string LogoUrl { get; set; } = string.Empty;
 

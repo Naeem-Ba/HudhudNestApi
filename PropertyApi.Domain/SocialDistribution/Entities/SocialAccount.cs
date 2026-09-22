@@ -5,11 +5,11 @@ using PropertyApi.Domain.SocialDistribution.Enums;
 namespace PropertyApi.Domain.SocialDistribution.Entities;
 
 /// <summary>
-/// An actual page/profile/channel AqarTech operates on one platform (spec §6.2) — e.g. "عقار
-/// تيك دمشق" on Facebook. Not to be confused with Auth's social-LOGIN concept
+/// An actual page/profile/channel HudhudNest operates on one platform (spec §6.2) — e.g. "هدهد
+/// نيست دمشق" on Facebook. Not to be confused with Auth's social-LOGIN concept
 /// (<c>ISocialLoginIdentityService</c>/<c>SocialAccountMutationCoordinator</c> under
-/// <c>PropertyApi.Application.Auth</c>): that is a visitor signing into AqarTech using their own
-/// Google/Facebook identity; this is AqarTech posting content to an account it operates. Same
+/// <c>PropertyApi.Application.Auth</c>): that is a visitor signing into HudhudNest using their own
+/// Google/Facebook identity; this is HudhudNest posting content to an account it operates. Same
 /// English words, disjoint bounded contexts, never referenced from one another.
 ///
 /// Never stores a raw access/refresh token. <see cref="CredentialReference"/> is an opaque
