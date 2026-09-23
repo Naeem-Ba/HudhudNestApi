@@ -62,7 +62,21 @@ public sealed class AccountDeletionSweepHostedService : BackgroundService
         using var timer = new PeriodicTimer(SweepInterval, _clock);
         do
         {
-            await SweepAsync(stoppingToken);
+            try
+            {
+                await SweepAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // A failed tick (database briefly unreachable, migration not applied yet, ...) must not
+                // escape ExecuteAsync: the default BackgroundServiceExceptionBehavior.StopHost would take
+                // the whole API process down. Log it and try again on the next tick.
+                _logger.LogError(ex, "Account deletion sweep failed; will retry on the next tick.");
+            }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }

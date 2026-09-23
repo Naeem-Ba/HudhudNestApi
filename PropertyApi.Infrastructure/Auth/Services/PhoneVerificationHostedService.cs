@@ -34,7 +34,23 @@ public sealed class PhoneVerificationHostedService : BackgroundService
         do
         {
             if (_configuration.GetValue<bool>("PhoneVerification:ReminderProcessingEnabled"))
-                await ProcessAsync(stoppingToken);
+            {
+                try
+                {
+                    await ProcessAsync(stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // A failed tick (database briefly unreachable, migration not applied yet, ...) must not
+                    // escape ExecuteAsync: the default BackgroundServiceExceptionBehavior.StopHost would take
+                    // the whole API process down. Log it and try again on the next tick.
+                    _logger.LogError(ex, "Phone verification reminder processing failed; will retry on the next tick.");
+                }
+            }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
