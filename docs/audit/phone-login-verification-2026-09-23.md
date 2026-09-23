@@ -33,6 +33,8 @@ The audit itself changed no production code. **Update (same day): F-1, F-3 and F
 | F-10 storage | Info — unchanged | Documented design. |
 | F-11 http dev topology | Info — documented | Not a deployed-environment defect. |
 | F-12 coverage | **Fixed** | Frontend specs for the API service, number normalization, error mapping, the re-verification redirect and login; the backend suite (52 tests) now runs in CI. |
+| F-13 wrong-password wording, DE register, profile links | **Fixed** | Found in the browser round; see F-13. |
+| F-14 hardcoded Arabic consent text | Open (not phone login) | Needs legal wording review; see F-14. |
 
 Every backend fix was proven fail-first: with the previous code 8 tests fail in each of the two rounds; with the fixes `PhoneLoginAuditTests` gives 52 passed, 0 skipped, and the full integration suite 391 passed, 0 failed.
 
@@ -149,6 +151,19 @@ Severity: High / Medium / Low / Info. "Test" names refer to `tests/PropertyApi.I
 - No frontend specs exist for `PhoneAuthApiService` or the four phone pages. The backend suite had only two
   phone HTTP tests before this audit.
 
+### F-13 (Medium, fixed) Wrong current password on phone change said "a recent login is required"
+- Found while verifying in the browser. `RECENT_AUTHENTICATION_REQUIRED` is returned only when the current
+  password is wrong (or the account is locked) on the phone-change step, but the text told people to log in
+  again. Now: "the current password is incorrect, or the account is temporarily locked…" (ar/en/de).
+- Same session: two German strings used informal "du" among the formal "Sie" auth texts (aligned), and the two
+  profile links ("change sign-in number", "verify my number") rendered as run-together plain text (now outlined
+  buttons).
+
+### F-14 (Low, open — not part of phone login) Consent text is hardcoded Arabic
+- `src/app/shared/components/consent-checkbox` ("I agree to the Privacy Policy and Terms of Service") is
+  hardcoded Arabic, so the phone register page (and the email one) shows Arabic consent text in German and
+  English. It is legal copy, so the wording needs the owner's / legal review before it is translated. Not changed.
+
 ## 5. Verified working (highlights)
 
 OTP: CSPRNG 6-digit code, HMAC-SHA256 stored, fixed-time compare, 5-minute expiry (`C3`), 3 attempts then
@@ -198,14 +213,35 @@ Prerequisites: .NET 8 SDK, PostgreSQL, Node 22. Do not use real secrets.
 5. **Automated suite**: `TEST_POSTGRES_CONNECTION_STRING=... dotnet test tests/PropertyApi.Integration.Tests --filter FullyQualifiedName~PhoneLoginAuditTests`
    (needs migrations applied first, as in CI). Failing tests are the open defects above.
 
-## 7. Not verified
+## 7. Verification status
 
+### Verified in a second, browser-driven round (local API + Angular dev server + scratch PostgreSQL)
+- **Login errors, on screen:** wrong password → the phone-specific message (Arabic and German); rate limit → "too many
+  attempts"; PostgreSQL stopped → 500 → "server error"; API stopped → "cannot reach the server"; banned account
+  (`IsBanned = true`) → "this account is unavailable". A local number (`0944 111 001`) is normalized and works.
+- **403 `PHONE_REVERIFICATION_REQUIRED`:** with enforcement on, a restricted user's "mark as read" (PATCH) returns
+  403; the app shows the message and lands on `/profile/phone-reverify`. The notification's "verify my phone number"
+  link opens the same page.
+- **Pages end to end (dev OTP from the log):** re-verification (state Restricted → Verified in the database, the next
+  write succeeds), password reset (weak password shows the full rule; a locked account is unlocked and the new
+  password logs in at once; the old one does not), phone change (wrong current password counted as a failed attempt;
+  correct one changed the number; the old number no longer logs in, the new one does, and the profile shows it).
+- **Reminder worker, run for real** (`PhoneVerification:ReminderProcessingEnabled=true`): users in the due-soon and
+  restricted windows moved to `DueSoon` / `Restricted`, each got exactly one notification and one audit row, and
+  no tick errors were logged. (A user whose grace period began more than a day earlier gets the state change but no
+  "grace started" notice — the code only sends it within a day of the due date.)
+- **Wording:** every new key was read on screen in Arabic and German and in the diff for English; fixes in F-13.
+- **Email sessions and bans (F-1):** covered by the `RefreshTokenCommand` / security-stamp tests and the integration
+  suite, no longer only inferred from the code.
+
+### Still not verified (cannot be done from a development machine)
 - Real SMS delivery (Twilio / HTTP provider), the provider's error handling, cost controls / SMS pumping across many IPs.
-- Redis-backed rate limiting, `ForwardedHeaders` behind a proxy (rate limits key on the client IP), Staging and Production configuration.
-- A real device (Android/iOS Capacitor), Safari, and browser session restore over HTTPS (see F-11).
-- The reset, reverify and change pages in the browser (read only; i18n keys checked), and the EN/DE wording.
-- The reverification background worker and reminders (hosted services were disabled in the probes).
-- Whether email sessions honor a ban on refresh (F-1, only inferred from the code).
+- Redis-backed rate limiting, `ForwardedHeaders` behind a proxy (rate limits key on the client IP), Staging and
+  Production configuration.
+- A real device (Android/iOS Capacitor), Safari, and browser session restore over HTTPS. Over plain HTTP the session is
+  lost on reload (F-11); the browser round ran with `CookieCsrf:Enabled=false` for that reason, so the CSRF header
+  handshake itself was not exercised in the browser.
+- Frontend CI on the pull requests (GitHub Actions budget exhausted); the same checks were run locally instead.
 
 ## 8. Suggested order of work
 
