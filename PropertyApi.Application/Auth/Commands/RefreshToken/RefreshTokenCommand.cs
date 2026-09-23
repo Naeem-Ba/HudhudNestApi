@@ -167,10 +167,11 @@ public sealed class RefreshTokenCommandHandler
 
                     if (stored.ExpiresAt <= now ||
                         identity is null ||
-                        identity.IsDeleted)
+                        identity.IsDeleted ||
+                        identity.IsBanned)
                     {
                         _logger.LogWarning(
-                            "Refresh token rejected for user {UserId}: expired, missing identity, or deleted identity.",
+                            "Refresh token rejected for user {UserId}: expired, missing identity, or deleted/banned identity.",
                             stored.UserId);
 
                         return RefreshTokenResult

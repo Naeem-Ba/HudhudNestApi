@@ -138,9 +138,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             : null;
         if (user is null)
         {
-            var dummy = new ApplicationUser();
-            var dummyHash = _users.PasswordHasher.HashPassword(dummy, "Dummy-Password-9D6A4E01");
-            _users.PasswordHasher.VerifyHashedPassword(dummy, dummyHash, password);
+            BurnOnePasswordVerification(password);
             await _audit.LogAsync(null, AuditActions.PhoneLoginFailed, ipAddress,
                 newValue: "{\"outcome\":\"failed\"}", ct: ct);
             return Fail("PHONE_AUTH_FAILED");
@@ -152,11 +150,24 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         // eventually answers differently, confirming it has an account). Same reasoning
         // applies to phone numbers, so every login failure stays PHONE_AUTH_FAILED.
         var signIn = await _signIn.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true);
+        // A locked-out account returns before any hashing happens, which made it the fastest of the
+        // three failure shapes (unknown / wrong password / locked). Spend the same single
+        // verification the other two spend, so response time does not tell them apart.
+        if (signIn.IsLockedOut) BurnOnePasswordVerification(password);
         if (!signIn.Succeeded)
         {
             await _audit.LogAsync(user.Id, AuditActions.PhoneLoginFailed, ipAddress,
                 newValue: "{\"outcome\":\"failed\"}", ct: ct);
             return Fail("PHONE_AUTH_FAILED");
+        }
+        // Same rule the email path enforces in AuthenticationSessionIssuer: a banned or deleted
+        // account must not obtain a session even with the right password. Checked only after the
+        // password verified, so it cannot be used to probe which numbers belong to banned accounts.
+        if (user.IsBanned || user.IsDeleted)
+        {
+            await _audit.LogAsync(user.Id, AuditActions.PhoneLoginFailed, ipAddress,
+                newValue: "{\"outcome\":\"blocked\"}", ct: ct);
+            return Fail("ACCOUNT_UNAVAILABLE");
         }
         user.LastLoginAt = _clock.GetUtcNow().UtcDateTime;
         await _users.UpdateAsync(user);
@@ -378,8 +389,20 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             DueAtUtc: user.PhoneVerificationDueAtUtc, GraceEndsAtUtc: user.PhoneVerificationGraceEndsAtUtc);
     }
 
+    // One password-hasher verification against a fixed dummy hash, i.e. exactly the cost of checking a
+    // wrong password for a real account. The hash is computed once per process (a fresh HashPassword on
+    // every miss cost a second, extra hash and made unknown numbers slower than wrong passwords).
+    private static string? _dummyPasswordHash;
+
+    private void BurnOnePasswordVerification(string password)
+    {
+        var dummy = new ApplicationUser();
+        var hash = _dummyPasswordHash ??= _users.PasswordHasher.HashPassword(dummy, "Dummy-Password-9D6A4E01");
+        _users.PasswordHasher.VerifyHashedPassword(dummy, hash, password);
+    }
+
     private static PhoneWorkflowResult Fail(string code) => new(false, code, "The request could not be completed.");
     private static PhoneWorkflowResult IdentityFail(IdentityResult result, string fallback) =>
-        new(false, result.Errors.FirstOrDefault()?.Code == "PasswordTooShort" ? "PASSWORD_POLICY_FAILED" : fallback,
+        new(false, result.Errors.Any(e => e.Code.StartsWith("Password", StringComparison.Ordinal)) ? "PASSWORD_POLICY_FAILED" : fallback,
             "The request could not be completed.");
 }
