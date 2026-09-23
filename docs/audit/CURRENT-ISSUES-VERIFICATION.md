@@ -124,7 +124,7 @@ dev-only gap, and the real Staging deployment is already verified working.**
   actually observed (re-read carefully) was CORS errors from running `ng serve --configuration
   staging` **locally** — confirmed by `src/environments/environment.staging.ts`: its
   `apiBaseUrl` falls back to the **production** API host
-  (`https://propertyapi-api.onrender.com/api`) whenever the `API_URL` env var isn't set locally,
+  (`https://wohnungen-api.onrender.com/api`) whenever the `API_URL` env var isn't set locally,
   and Production's CORS correctly rejects `localhost`. This is expected behavior for an
   un-configured local run, not a Staging deployment defect.
 
