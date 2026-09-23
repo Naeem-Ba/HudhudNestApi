@@ -68,3 +68,11 @@ Existing users with no trustworthy phone-confirmation timestamp remain `NotConfi
 ## Operational limitations
 
 Data Protection keys must be shared across instances for Identity reset tokens. The reminder worker is database-idempotent but runs in every API instance; the deduplication key prevents duplicate notifications. Apply the conflict report before the unique index in databases containing legacy phone data.
+
+## Known gaps (audit 2026-09-23)
+
+See [docs/audit/phone-login-verification-2026-09-23.md](audit/phone-login-verification-2026-09-23.md) for evidence and fixes. Corrections to statements above until they are fixed:
+
+- "Anonymous OTP send responses are generic" holds for the message text only: `challengeId` is returned only when the number is eligible, so the send endpoints reveal whether a number is registered (F-2).
+- An access token issued before an account was banned stays valid until it expires (F-1); there is no ban workflow yet.
+- The reverification and phone-change pages have no entry point in the app (F-5); do not enable `PhoneVerification:EnforcementEnabled` before that is added.
