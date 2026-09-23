@@ -21,15 +21,24 @@ The audit itself changed no production code. **Update (same day): F-1, F-3 and F
 
 | Finding | Status | Change |
 |---|---|---|
-| F-1 banned accounts | **Fixed for login and refresh** | `PhoneAuthenticationWorkflow.LoginAsync` refuses `IsBanned`/`IsDeleted` after the password verified (`ACCOUNT_UNAVAILABLE`, audited as `blocked`); `RefreshTokenCommand` also refuses banned identities. **Still open:** an access token issued before a ban stays valid until it expires (30 min) — nothing in the code base sets `IsBanned` today (no ban workflow), so this needs to be designed together with one (security-stamp bump / session revoke). Test `D4` is skipped with that note. |
-| F-3 timing | **Fixed** | Unknown numbers and locked accounts now spend exactly one password-hasher operation, the same as a wrong password (asserted by `E4`, which counts hasher calls instead of measuring time). |
-| F-4 password message | **Fixed on the API** | Every Identity password-rule failure now returns `PASSWORD_POLICY_FAILED` (registration and reset). The Angular hint text still says only "at least 8 characters" — a separate frontend change. |
+| F-1 banned accounts | **Fixed** | Phone login refuses `IsBanned`/`IsDeleted` after the password verified (`ACCOUNT_UNAVAILABLE`, audited as `blocked`); `RefreshTokenCommand` and the per-request security-stamp check (`CachedSecurityStampValidator`, `SecurityStampSnapshot.IsBanned`) refuse banned identities. **Residual:** the snapshot is cached for 5 minutes, so a ban takes effect on existing access tokens within 5 minutes unless the ban workflow (none exists yet — nothing sets `IsBanned`) also calls `IUserSecurityStampCacheInvalidator`. |
+| F-2 enumeration | **Fixed (response and verify behaviour)** | An ineligible number gets a stored *decoy* challenge that behaves exactly like a real one at verify time (`OTP_WRONG` ×3 then `OTP_RATE_LIMITED`, expiry) and can never be satisfied; no SMS. Past 3 challenges/hour every number is answered with its latest challenge. **Residual:** an eligible request also sends an SMS, so response *time* can still differ, and `SMS_FAILED` is returned only for eligible numbers (provider outage only). Closing that fully needs an asynchronous send queue. |
+| F-3 timing | **Fixed** | Unknown numbers and locked accounts spend exactly one password-hasher operation (`E4` counts hasher calls). |
+| F-4 password message | **Fixed (API + Angular)** | Every Identity password-rule failure returns `PASSWORD_POLICY_FAILED`; the field hint and the error text now state the full rule in ar/en/de (verified in the browser). |
+| F-5 no UI path | **Fixed** | Profile page links to phone change and verification; a 403 `PHONE_REVERIFICATION_REQUIRED` explains itself and redirects to `/profile/phone-reverify` (`ApiErrorInterceptor`); reminder notifications link to the page. Profile link and page verified in the browser. |
+| F-6 login error text | **Fixed** | Phone login distinguishes rate limit / network / server / blocked account from bad credentials and uses phone-specific wording. |
+| F-7 lockout after reset | **Fixed** | A completed OTP password reset clears the failed-attempt count and the lockout. |
+| F-8 change-phone password guessing | **Fixed** | The current-password check counts towards Identity lockout. |
+| F-9 local number formats | **Fixed on the client** | `normalizePhoneInput`: `09xxxxxxxx`, `00963…`, spaces/dashes, Arabic-Indic and Persian digits are accepted and sent as strict E.164; the server contract is unchanged (verified in the browser with `0944 111 222`). |
+| F-10 storage | Info — unchanged | Documented design. |
+| F-11 http dev topology | Info — documented | Not a deployed-environment defect. |
+| F-12 coverage | **Fixed** | Frontend specs for the API service, number normalization, error mapping, the re-verification redirect and login; the backend suite (52 tests) now runs in CI. |
 
-Each fix was proven fail-first: with the original code 8 of the new/updated tests fail (`B3`×3, `B5`, `D2`, `D2b`, `D5`, `E4`); with the fix `PhoneLoginAuditTests` gives 46 passed, 4 skipped (`D4`, `E1`, `E2`, `F2` — the open items), 0 failed.
+Every backend fix was proven fail-first: with the previous code 8 tests fail in each of the two rounds; with the fixes `PhoneLoginAuditTests` gives 52 passed, 0 skipped, and the full integration suite 391 passed, 0 failed.
 
 ## 1. Verdict
 
-**Ready with conditions.** All five journeys work end to end against real PostgreSQL, the production
+**Ready (all findings closed except the documented residuals below and the items in section 7).** Originally: ready with conditions. All five journeys work end to end against real PostgreSQL, the production
 `OtpService`, Identity, JWT and refresh-token stack. One high-severity defect (banned accounts) and
 four medium ones should be fixed before launch; the rest are low or informational.
 

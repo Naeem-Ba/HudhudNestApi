@@ -85,6 +85,23 @@ public sealed class CachedSecurityStampValidatorTests
 
     [Fact]
     [Trait("Category", "SecurityStampCache")]
+    public async Task ValidateAsync_BannedUser_ReturnsInvalid_EvenWithAMatchingStamp()
+    {
+        var userId = Guid.NewGuid();
+        var cache = CreateCache();
+        var reader = new CountingSecurityStampReader(
+            new SecurityStampSnapshot("stamp-1", IsDeleted: false, IsBanned: true));
+
+        var validator = CreateValidator(cache, reader);
+
+        var result = await validator.ValidateAsync(userId, "stamp-1");
+
+        Assert.False(result.IsValid);
+        Assert.Equal("The user account is disabled.", result.FailureMessage);
+    }
+
+    [Fact]
+    [Trait("Category", "SecurityStampCache")]
     public async Task ValidateAsync_UnknownUser_ReturnsInvalid_AndDoesNotCacheNull()
     {
         var userId = Guid.NewGuid();
