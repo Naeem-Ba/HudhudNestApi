@@ -27,7 +27,7 @@ public sealed class MediaFolderBuilderTests
 
         var folder = _sut.BuildFolder(entityType, entityId, MediaCategories.Images);
 
-        Assert.Equal($"realestateworld/{expectedSegment}/{entityId:D}/{MediaCategories.Images}", folder);
+        Assert.Equal($"hudhudnest/{expectedSegment}/{entityId:D}/{MediaCategories.Images}", folder);
     }
 
     [Fact]
@@ -37,8 +37,8 @@ public sealed class MediaFolderBuilderTests
 
         var folder = _sut.BuildFolder(MediaEntityType.Social, propertyId, MediaCategories.Share);
 
-        Assert.Equal($"realestateworld/system/social/{propertyId:D}/{MediaCategories.Share}", folder);
-        Assert.DoesNotContain("realestateworld/properties/", folder);
+        Assert.Equal($"hudhudnest/system/social/{propertyId:D}/{MediaCategories.Share}", folder);
+        Assert.DoesNotContain("hudhudnest/properties/", folder);
     }
 
     [Fact]

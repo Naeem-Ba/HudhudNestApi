@@ -11,7 +11,7 @@ namespace HudhudNestApi.Application.Common.Interfaces;
 public interface IMediaFolderBuilder
 {
     /// <summary>
-    /// Builds a deterministic folder path such as "realestateworld/properties/{propertyId}/images".
+    /// Builds a deterministic folder path such as "hudhudnest/properties/{propertyId}/images".
     /// </summary>
     /// <param name="entityType">The kind of entity the media belongs to.</param>
     /// <param name="entityId">The owning entity's id. Must not be <see cref="Guid.Empty"/>.</param>

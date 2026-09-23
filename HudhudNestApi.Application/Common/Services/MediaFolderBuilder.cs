@@ -9,14 +9,20 @@ namespace HudhudNestApi.Application.Common.Services;
 /// singleton is safe (same reasoning as the other stateless orchestration services registered in
 /// <see cref="DependencyInjection"/>).
 ///
-/// Folder shape: "realestateworld/{entitySegment}/{entityId}/{mediaCategory}", e.g.
-/// "realestateworld/properties/3fa8.../images". Social (system-generated) assets nest under
-/// "realestateworld/system/social/{sourceEntityId}/{mediaCategory}" to keep them out of the
+/// Folder shape: "hudhudnest/{entitySegment}/{entityId}/{mediaCategory}", e.g.
+/// "hudhudnest/properties/3fa8.../images". Social (system-generated) assets nest under
+/// "hudhudnest/system/social/{sourceEntityId}/{mediaCategory}" to keep them out of the
 /// source entity's own user-facing folder while still being traceable back to it.
+///
+/// Root changed from "realestateworld" to "hudhudnest" on 2026-09-23 (brand rename). Only new
+/// uploads land under the new root — existing Cloudinary assets keep their already-assigned
+/// public_id/URL under the old "realestateworld/..." prefix and are unaffected, since this
+/// builder only computes the destination folder for a fresh upload, never a lookup path for
+/// existing media.
 /// </summary>
 public sealed partial class MediaFolderBuilder : IMediaFolderBuilder
 {
-    private const string Root = "realestateworld";
+    private const string Root = "hudhudnest";
 
     public string BuildFolder(MediaEntityType entityType, Guid entityId, string mediaCategory)
     {
