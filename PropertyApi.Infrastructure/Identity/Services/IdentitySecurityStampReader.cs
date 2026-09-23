@@ -27,6 +27,7 @@ public sealed class IdentitySecurityStampReader : IUserSecurityStampReader
 
         return new SecurityStampSnapshot(
             user.SecurityStamp ?? string.Empty,
-            user.IsDeleted);
+            user.IsDeleted,
+            user.IsBanned);
     }
 }

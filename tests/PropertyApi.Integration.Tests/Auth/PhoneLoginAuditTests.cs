@@ -387,7 +387,7 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
         Assert.False(login.Has("accessToken"));
     }
 
-    [Fact(Skip = "Known open item (audit F-1, cross-cutting): an access token issued before a ban stays valid until it expires (30 min). No ban workflow exists yet (nothing sets IsBanned); when one is added it must bump the security stamp / revoke sessions.")]
+    [Fact]
     public async Task D4_BannedAccount_ExistingAccessToken_StopsWorking()
     {
         var (phone, access, _) = await RegisterUser();
@@ -418,7 +418,7 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
 
     // ───────────────────────── E. enumeration ─────────────────────────
 
-    [Fact(Skip = "Known open defect (audit F-2): send-otp reveals whether a number is registered via challengeId. Fix needs API + Angular changes.")]
+    [Fact]
     public async Task E1_RegistrationSendOtp_DoesNotRevealWhetherTheNumberIsRegistered()
     {
         var (existing, _, _) = await RegisterUser();
@@ -429,7 +429,7 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
         Assert.Equal(fresh.Has("challengeId"), known.Has("challengeId"));
     }
 
-    [Fact(Skip = "Known open defect (audit F-2): password-reset/send-otp reveals whether a number is registered via challengeId.")]
+    [Fact]
     public async Task E2_PasswordResetSendOtp_DoesNotRevealWhetherTheNumberIsRegistered()
     {
         var (existing, _, _) = await RegisterUser();
@@ -506,7 +506,7 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
         Assert.Equal(HttpStatusCode.BadRequest, reuse.Status);
     }
 
-    [Fact(Skip = "Known open defect (audit F-7): a completed password reset does not clear the account lockout.")]
+    [Fact]
     public async Task F2_PasswordReset_ClearsAnAccountLockout_SoTheOwnerCanLogInAgain()
     {
         var (phone, _, _) = await RegisterUser();
@@ -566,21 +566,28 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
         var (other, _, _) = await RegisterUser();
         var send = await Post("/api/auth/phone/change/send-otp", new { phoneNumber = other }, bearer: access);
         Assert.Equal(HttpStatusCode.OK, send.Status);
-        Assert.False(send.Has("challengeId"), "a challenge was issued for a number owned by someone else");
+        // Audit F-2: the response looks like any other (decoy challenge), but it can never be satisfied.
+        Assert.True(send.Has("challengeId"));
+        var verify = await Post("/api/auth/phone/change/verify",
+            new { challengeId = Guid.Parse(send.Str("challengeId")!), code = "123456", currentPassword = Password }, bearer: access);
+        Assert.NotEqual(HttpStatusCode.OK, verify.Status);
     }
 
     [Fact]
-    public async Task G3_PhoneChange_Verify_CannotBrutePassword_WithoutLockoutTracking()
+    public async Task G3_PhoneChange_WrongCurrentPassword_CountsTowardsLockout()
     {
-        var (_, access, _) = await RegisterUser();
+        var (phone, access, _) = await RegisterUser();
         var send = await Post("/api/auth/phone/change/send-otp", new { phoneNumber = NewPhone() }, bearer: access);
         var challengeId = Guid.Parse(send.Str("challengeId")!);
         // Each wrong password must count towards Identity lockout (or be tightly rate limited): 8 wrong tries from 8 IPs.
-        var results = new List<string>();
-        for (var i = 0; i < 8; i++)
-            results.Add((await Post("/api/auth/phone/change/verify", new { challengeId, code = "000000", currentPassword = "Nope9Nope9" }, bearer: access)).Code);
-        _output.WriteLine(string.Join(",", results));
-        Assert.Contains(results, c => c != "RECENT_AUTHENTICATION_REQUIRED");
+        for (var i = 0; i < 5; i++)
+            await Post("/api/auth/phone/change/verify", new { challengeId, code = "000000", currentPassword = "Nope9Nope9" }, bearer: access);
+        // Audit F-8: the wrong passwords count towards Identity lockout (5 attempts).
+        await WithDb(async db =>
+        {
+            var user = await db.Users.SingleAsync(u => u.NormalizedPhoneNumber == phone);
+            Assert.True(user.LockoutEnd > DateTimeOffset.UtcNow);
+        });
     }
 
     [Fact]
@@ -642,6 +649,35 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
         var stolen = await Post("/api/auth/phone/reverification/verify",
             new { challengeId, code = _factory.Sms.LastCodeFor(a) }, bearer: accessB);
         Assert.Equal(HttpStatusCode.BadRequest, stolen.Status);
+    }
+
+    [Fact]
+    public async Task E5_DecoyChallenge_BehavesLikeARealOne_AtVerifyTime()
+    {
+        var (existing, _, _) = await RegisterUser();
+        var (_, realChallenge, _) = await SendRegistrationOtp();               // real: number is free
+        var decoy = Guid.Parse((await Post("/api/auth/phone/registration/send-otp", new { phoneNumber = existing })).Str("challengeId")!);
+
+        async Task<string> Wrong(Guid id) => (await Post("/api/auth/phone/registration/verify",
+            new { challengeId = id, code = "000001", password = Password, firstName = "A", lastName = "B" })).Code;
+
+        // identical error sequence for a real and a decoy challenge: wrong, wrong, wrong, then locked
+        var real = new[] { await Wrong(realChallenge), await Wrong(realChallenge), await Wrong(realChallenge), await Wrong(realChallenge) };
+        var fake = new[] { await Wrong(decoy), await Wrong(decoy), await Wrong(decoy), await Wrong(decoy) };
+        Assert.Equal(real, fake);
+    }
+
+    [Fact]
+    public async Task E6_NoSms_ForIneligibleNumbers_AndFourthSendReturnsTheLatestChallenge()
+    {
+        var (existing, _, _) = await RegisterUser();
+        var before = _factory.Sms.SendCount;
+        var ids = new List<string?>();
+        for (var i = 0; i < 4; i++)
+            ids.Add((await Post("/api/auth/phone/registration/send-otp", new { phoneNumber = existing })).Str("challengeId"));
+        Assert.Equal(before, _factory.Sms.SendCount); // never texted: the number already has an account
+        Assert.All(ids, id => Assert.NotNull(id));
+        Assert.Equal(ids[2], ids[3]); // over the hourly limit -> the most recent challenge, as for any number
     }
 
     // ───────────────────────── H. abuse controls ─────────────────────────
