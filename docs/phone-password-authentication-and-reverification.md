@@ -71,8 +71,9 @@ Data Protection keys must be shared across instances for Identity reset tokens. 
 
 ## Known gaps (audit 2026-09-23)
 
-See [docs/audit/phone-login-verification-2026-09-23.md](audit/phone-login-verification-2026-09-23.md) for evidence and fixes. Corrections to statements above until they are fixed:
+See [docs/audit/phone-login-verification-2026-09-23.md](audit/phone-login-verification-2026-09-23.md). The audit findings are fixed; what remains is documented residual risk:
 
-- "Anonymous OTP send responses are generic" holds for the message text only: `challengeId` is returned only when the number is eligible, so the send endpoints reveal whether a number is registered (F-2).
-- An access token issued before an account was banned stays valid until it expires (F-1); there is no ban workflow yet.
-- The reverification and phone-change pages have no entry point in the app (F-5); do not enable `PhoneVerification:EnforcementEnabled` before that is added.
+- Anti-enumeration: ineligible numbers receive a stored decoy challenge (same responses at verify time), but an eligible request also sends an SMS, so response time can differ, and `SMS_FAILED` is returned only for eligible numbers.
+- A ban takes effect on existing access tokens within 5 minutes (security-stamp snapshot cache) unless the ban workflow invalidates `IUserSecurityStampCacheInvalidator`; no ban workflow exists yet.
+- `PhoneNumber` is encrypted, but `NormalizedPhoneNumber` and `UserName` hold the E.164 number in plaintext (lookup column).
+- The shared consent checkbox (`consent-checkbox`) shows hardcoded Arabic text on the phone register page in every language; it is legal copy and needs review before translation (audit F-14).

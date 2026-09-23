@@ -21,15 +21,26 @@ The audit itself changed no production code. **Update (same day): F-1, F-3 and F
 
 | Finding | Status | Change |
 |---|---|---|
-| F-1 banned accounts | **Fixed for login and refresh** | `PhoneAuthenticationWorkflow.LoginAsync` refuses `IsBanned`/`IsDeleted` after the password verified (`ACCOUNT_UNAVAILABLE`, audited as `blocked`); `RefreshTokenCommand` also refuses banned identities. **Still open:** an access token issued before a ban stays valid until it expires (30 min) — nothing in the code base sets `IsBanned` today (no ban workflow), so this needs to be designed together with one (security-stamp bump / session revoke). Test `D4` is skipped with that note. |
-| F-3 timing | **Fixed** | Unknown numbers and locked accounts now spend exactly one password-hasher operation, the same as a wrong password (asserted by `E4`, which counts hasher calls instead of measuring time). |
-| F-4 password message | **Fixed on the API** | Every Identity password-rule failure now returns `PASSWORD_POLICY_FAILED` (registration and reset). The Angular hint text still says only "at least 8 characters" — a separate frontend change. |
+| F-1 banned accounts | **Fixed** | Phone login refuses `IsBanned`/`IsDeleted` after the password verified (`ACCOUNT_UNAVAILABLE`, audited as `blocked`); `RefreshTokenCommand` and the per-request security-stamp check (`CachedSecurityStampValidator`, `SecurityStampSnapshot.IsBanned`) refuse banned identities. **Residual:** the snapshot is cached for 5 minutes, so a ban takes effect on existing access tokens within 5 minutes unless the ban workflow (none exists yet — nothing sets `IsBanned`) also calls `IUserSecurityStampCacheInvalidator`. |
+| F-2 enumeration | **Fixed (response and verify behaviour)** | An ineligible number gets a stored *decoy* challenge that behaves exactly like a real one at verify time (`OTP_WRONG` ×3 then `OTP_RATE_LIMITED`, expiry) and can never be satisfied; no SMS. Past 3 challenges/hour every number is answered with its latest challenge. **Residual:** an eligible request also sends an SMS, so response *time* can still differ, and `SMS_FAILED` is returned only for eligible numbers (provider outage only). Closing that fully needs an asynchronous send queue. |
+| F-3 timing | **Fixed** | Unknown numbers and locked accounts spend exactly one password-hasher operation (`E4` counts hasher calls). |
+| F-4 password message | **Fixed (API + Angular)** | Every Identity password-rule failure returns `PASSWORD_POLICY_FAILED`; the field hint and the error text now state the full rule in ar/en/de (verified in the browser). |
+| F-5 no UI path | **Fixed** | Profile page links to phone change and verification; a 403 `PHONE_REVERIFICATION_REQUIRED` explains itself and redirects to `/profile/phone-reverify` (`ApiErrorInterceptor`); reminder notifications link to the page. Profile link and page verified in the browser. |
+| F-6 login error text | **Fixed** | Phone login distinguishes rate limit / network / server / blocked account from bad credentials and uses phone-specific wording. |
+| F-7 lockout after reset | **Fixed** | A completed OTP password reset clears the failed-attempt count and the lockout. |
+| F-8 change-phone password guessing | **Fixed** | The current-password check counts towards Identity lockout. |
+| F-9 local number formats | **Fixed on the client** | `normalizePhoneInput`: `09xxxxxxxx`, `00963…`, spaces/dashes, Arabic-Indic and Persian digits are accepted and sent as strict E.164; the server contract is unchanged (verified in the browser with `0944 111 222`). |
+| F-10 storage | Info — unchanged | Documented design. |
+| F-11 http dev topology | Info — documented | Not a deployed-environment defect. |
+| F-12 coverage | **Fixed** | Frontend specs for the API service, number normalization, error mapping, the re-verification redirect and login; the backend suite (52 tests) now runs in CI. |
+| F-13 wrong-password wording, DE register, profile links | **Fixed** | Found in the browser round; see F-13. |
+| F-14 hardcoded Arabic consent text | Open (not phone login) | Needs legal wording review; see F-14. |
 
-Each fix was proven fail-first: with the original code 8 of the new/updated tests fail (`B3`×3, `B5`, `D2`, `D2b`, `D5`, `E4`); with the fix `PhoneLoginAuditTests` gives 46 passed, 4 skipped (`D4`, `E1`, `E2`, `F2` — the open items), 0 failed.
+Every backend fix was proven fail-first: with the previous code 8 tests fail in each of the two rounds; with the fixes `PhoneLoginAuditTests` gives 52 passed, 0 skipped, and the full integration suite 391 passed, 0 failed.
 
 ## 1. Verdict
 
-**Ready with conditions.** All five journeys work end to end against real PostgreSQL, the production
+**Ready (all findings closed except the documented residuals below and the items in section 7).** Originally: ready with conditions. All five journeys work end to end against real PostgreSQL, the production
 `OtpService`, Identity, JWT and refresh-token stack. One high-severity defect (banned accounts) and
 four medium ones should be fixed before launch; the rest are low or informational.
 
@@ -140,6 +151,19 @@ Severity: High / Medium / Low / Info. "Test" names refer to `tests/PropertyApi.I
 - No frontend specs exist for `PhoneAuthApiService` or the four phone pages. The backend suite had only two
   phone HTTP tests before this audit.
 
+### F-13 (Medium, fixed) Wrong current password on phone change said "a recent login is required"
+- Found while verifying in the browser. `RECENT_AUTHENTICATION_REQUIRED` is returned only when the current
+  password is wrong (or the account is locked) on the phone-change step, but the text told people to log in
+  again. Now: "the current password is incorrect, or the account is temporarily locked…" (ar/en/de).
+- Same session: two German strings used informal "du" among the formal "Sie" auth texts (aligned), and the two
+  profile links ("change sign-in number", "verify my number") rendered as run-together plain text (now outlined
+  buttons).
+
+### F-14 (Low, open — not part of phone login) Consent text is hardcoded Arabic
+- `src/app/shared/components/consent-checkbox` ("I agree to the Privacy Policy and Terms of Service") is
+  hardcoded Arabic, so the phone register page (and the email one) shows Arabic consent text in German and
+  English. It is legal copy, so the wording needs the owner's / legal review before it is translated. Not changed.
+
 ## 5. Verified working (highlights)
 
 OTP: CSPRNG 6-digit code, HMAC-SHA256 stored, fixed-time compare, 5-minute expiry (`C3`), 3 attempts then
@@ -189,14 +213,35 @@ Prerequisites: .NET 8 SDK, PostgreSQL, Node 22. Do not use real secrets.
 5. **Automated suite**: `TEST_POSTGRES_CONNECTION_STRING=... dotnet test tests/PropertyApi.Integration.Tests --filter FullyQualifiedName~PhoneLoginAuditTests`
    (needs migrations applied first, as in CI). Failing tests are the open defects above.
 
-## 7. Not verified
+## 7. Verification status
 
+### Verified in a second, browser-driven round (local API + Angular dev server + scratch PostgreSQL)
+- **Login errors, on screen:** wrong password → the phone-specific message (Arabic and German); rate limit → "too many
+  attempts"; PostgreSQL stopped → 500 → "server error"; API stopped → "cannot reach the server"; banned account
+  (`IsBanned = true`) → "this account is unavailable". A local number (`0944 111 001`) is normalized and works.
+- **403 `PHONE_REVERIFICATION_REQUIRED`:** with enforcement on, a restricted user's "mark as read" (PATCH) returns
+  403; the app shows the message and lands on `/profile/phone-reverify`. The notification's "verify my phone number"
+  link opens the same page.
+- **Pages end to end (dev OTP from the log):** re-verification (state Restricted → Verified in the database, the next
+  write succeeds), password reset (weak password shows the full rule; a locked account is unlocked and the new
+  password logs in at once; the old one does not), phone change (wrong current password counted as a failed attempt;
+  correct one changed the number; the old number no longer logs in, the new one does, and the profile shows it).
+- **Reminder worker, run for real** (`PhoneVerification:ReminderProcessingEnabled=true`): users in the due-soon and
+  restricted windows moved to `DueSoon` / `Restricted`, each got exactly one notification and one audit row, and
+  no tick errors were logged. (A user whose grace period began more than a day earlier gets the state change but no
+  "grace started" notice — the code only sends it within a day of the due date.)
+- **Wording:** every new key was read on screen in Arabic and German and in the diff for English; fixes in F-13.
+- **Email sessions and bans (F-1):** covered by the `RefreshTokenCommand` / security-stamp tests and the integration
+  suite, no longer only inferred from the code.
+
+### Still not verified (cannot be done from a development machine)
 - Real SMS delivery (Twilio / HTTP provider), the provider's error handling, cost controls / SMS pumping across many IPs.
-- Redis-backed rate limiting, `ForwardedHeaders` behind a proxy (rate limits key on the client IP), Staging and Production configuration.
-- A real device (Android/iOS Capacitor), Safari, and browser session restore over HTTPS (see F-11).
-- The reset, reverify and change pages in the browser (read only; i18n keys checked), and the EN/DE wording.
-- The reverification background worker and reminders (hosted services were disabled in the probes).
-- Whether email sessions honor a ban on refresh (F-1, only inferred from the code).
+- Redis-backed rate limiting, `ForwardedHeaders` behind a proxy (rate limits key on the client IP), Staging and
+  Production configuration.
+- A real device (Android/iOS Capacitor), Safari, and browser session restore over HTTPS. Over plain HTTP the session is
+  lost on reload (F-11); the browser round ran with `CookieCsrf:Enabled=false` for that reason, so the CSRF header
+  handshake itself was not exercised in the browser.
+- Frontend CI on the pull requests (GitHub Actions budget exhausted); the same checks were run locally instead.
 
 ## 8. Suggested order of work
 

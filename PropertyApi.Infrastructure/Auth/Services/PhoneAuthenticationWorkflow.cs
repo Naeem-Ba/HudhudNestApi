@@ -54,12 +54,28 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             OtpPurpose.PhoneNumberChange => user is null && userId.HasValue,
             _ => false
         };
-        if (!eligible) return new(true, Message: GenericSendMessage);
 
+        // Anti-enumeration (audit F-2): the response must not depend on whether the number is
+        // eligible. An ineligible number gets a stored *decoy* challenge that behaves exactly like a
+        // real one at verify time (wrong code, attempt limit, expiry) but can never be satisfied, and
+        // no SMS is sent. Past three challenges per hour every number is answered with its most
+        // recent challenge, so the limit does not depend on eligibility either.
         var cutoff = _clock.GetUtcNow().AddHours(-1);
-        var count = await _db.PhoneOtpChallenges.CountAsync(x =>
-            x.NormalizedPhoneNumber == phone && x.Purpose == purpose && x.CreatedAtUtc >= cutoff, ct);
-        if (count >= 3) return new(true, Message: GenericSendMessage);
+        var recent = await _db.PhoneOtpChallenges
+            .Where(x => x.NormalizedPhoneNumber == phone && x.Purpose == purpose && x.CreatedAtUtc >= cutoff)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Select(x => x.Id)
+            .Take(3)
+            .ToListAsync(ct);
+        if (recent.Count >= 3) return new(true, Message: GenericSendMessage, ChallengeId: recent[0]);
+
+        if (!eligible)
+        {
+            var decoy = PhoneOtpChallenge.Create(phone, UnsatisfiableHash(), purpose, _clock.GetUtcNow(), userId);
+            _db.PhoneOtpChallenges.Add(decoy);
+            await _db.SaveChangesAsync(ct);
+            return new(true, Message: GenericSendMessage, ChallengeId: decoy.Id);
+        }
 
         var (code, hash) = _otp.Generate();
         var challenge = PhoneOtpChallenge.Create(phone, hash, purpose, _clock.GetUtcNow(), userId);
@@ -196,6 +212,10 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         if (user is null) return Fail("PASSWORD_RESET_INVALID");
         var reset = await _users.ResetPasswordAsync(user, confirmationToken, newPassword);
         if (!reset.Succeeded) return IdentityFail(reset, "PASSWORD_RESET_INVALID");
+        // Proving control of the number by OTP is stronger than the failed guesses that locked the
+        // account, so the owner must be able to sign in with the new password straight away (audit F-7).
+        await _users.ResetAccessFailedCountAsync(user);
+        await _users.SetLockoutEndDateAsync(user, null);
         await _users.UpdateSecurityStampAsync(user);
         await _refreshTokens.RevokeActiveTokensForUserAsync(user.Id, _clock.GetUtcNow().UtcDateTime, ipAddress, ct);
         await _audit.LogAsync(user.Id, AuditActions.PhonePasswordResetCompleted, ipAddress,
@@ -232,7 +252,10 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         string code, string currentPassword, string? ipAddress, CancellationToken ct)
     {
         var user = await _users.FindByIdAsync(userId.ToString());
-        if (user is null || !await _users.CheckPasswordAsync(user, currentPassword))
+        // Counted towards Identity lockout (audit F-8): a stolen access token must not allow unlimited
+        // guessing of the current password, only the rate limiter's few tries before the account locks.
+        if (user is null ||
+            !(await _signIn.CheckPasswordSignInAsync(user, currentPassword, lockoutOnFailure: true)).Succeeded)
             return Fail("RECENT_AUTHENTICATION_REQUIRED");
         var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneNumberChange, userId, ct);
         if (outcome.Challenge is not { } challenge) return Fail(OtpErrorCode(outcome.FailureReason, "OTP_INVALID"));
@@ -392,6 +415,9 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     // One password-hasher verification against a fixed dummy hash, i.e. exactly the cost of checking a
     // wrong password for a real account. The hash is computed once per process (a fresh HashPassword on
     // every miss cost a second, extra hash and made unknown numbers slower than wrong passwords).
+    private static string UnsatisfiableHash() =>
+        Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
     private static string? _dummyPasswordHash;
 
     private void BurnOnePasswordVerification(string password)

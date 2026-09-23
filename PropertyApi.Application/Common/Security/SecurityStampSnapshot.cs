@@ -2,5 +2,6 @@
 
 public sealed record SecurityStampSnapshot(
     string SecurityStamp,
-    bool IsDeleted);
+    bool IsDeleted,
+    bool IsBanned = false);
 
