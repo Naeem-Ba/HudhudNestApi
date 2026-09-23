@@ -57,7 +57,7 @@ public static class CsrfExtensions
             options.Cookie.SameSite = SameSiteMode.None;
 
             // Production incident (2026-09-18): confirmed live with a direct curl to
-            // https://wohnungen-api.onrender.com (bypassing the frontend/Netlify entirely)
+            // https://propertyapi-api.onrender.com (bypassing the frontend/Netlify entirely)
             // that this cookie's Set-Cookie lacked `Secure` even over a genuine HTTPS
             // connection -- Request.IsHttps was false. A `SameSite=None` cookie missing
             // `Secure` is dropped by every browser outright, so this cookie (and the

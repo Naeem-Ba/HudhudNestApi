@@ -188,7 +188,7 @@ if (app.Environment.IsProduction() || app.Environment.IsStaging())
     // Production incident (2026-09-18): Request.IsHttps is still false on every request here
     // even after ForwardedHeadersRegistration.cs's own RequireHeaderSymmetry=false fix (that
     // fix addressed a header-count-mismatch log/HSTS issue, not this) -- confirmed live via a
-    // direct curl to https://wohnungen-api.onrender.com: cookies whose Secure attribute is
+    // direct curl to https://propertyapi-api.onrender.com: cookies whose Secure attribute is
     // computed from Request.IsHttps (CookieSecurePolicy.SameAsRequest in CsrfExtensions.cs)
     // came back without it, and every browser drops a SameSite=None cookie missing Secure
     // outright. Render sits behind Cloudflare; whatever the true internal cause is (an
