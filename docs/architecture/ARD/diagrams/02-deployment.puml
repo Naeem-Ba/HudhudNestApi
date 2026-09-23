@@ -14,13 +14,13 @@ cloud "Netlify" {
 
 cloud "Render.com — My project (prj-d5b6uk2li9vc73bhpe20)" {
   node "بيئة Production" as RenderProd {
-    node "Web Service\npropertyapi-api\n(Docker: dotnet/aspnet:8.0-jammy-chiseled-extra)\nASPNETCORE_HTTP_PORTS=8080" as ApiProd
+    node "Web Service\nHudhudNest (Render service name: propertyapi-api)\n(Docker: dotnet/aspnet:8.0-jammy-chiseled-extra)\nASPNETCORE_HTTP_PORTS=8080" as ApiProd
     database "propertyapi-production-db\n(PostgreSQL + PostGIS)" as DbProd
   }
 
   node "بيئة Staging (معزولة)" as RenderStage {
-    node "Web Service\npropertyapi-staging-api\n(srv-dacpbgf40ujc73epheig)\nDocker, Free plan, فرع master\nAuto-Deploy: off" as ApiStage
-    database "propertyapi-staging-db\n(PostgreSQL 18, Free،\nبدون نسخ احتياطي، صلاحية ~30 يومًا)" as DbStage
+    node "Web Service\nhudhudnest-staging-api\n(srv-dacpbgf40ujc73epheig)\nDocker, Free plan, فرع master\nAuto-Deploy: off" as ApiStage
+    database "hudhudnest-staging-db\n(PostgreSQL 18, Free،\nبدون نسخ احتياطي، صلاحية ~30 يومًا)" as DbStage
   }
 }
 
@@ -28,7 +28,7 @@ cloud "Upstash" {
   database "Redis (Production)" as RedisProd
 }
 
-node "Render Redis (Valkey 8)\npropertyapi-redis\n(معاد استخدامه لبيئة Staging)" as RedisStage
+node "Render Redis (Valkey 8)\nhudhudnest-redis\n(معاد استخدامه لبيئة Staging)" as RedisStage
 
 cloud "خدمات SaaS خارجية" {
   [Cloudinary\n(صور — بيئة إنتاج مشتركة،\nمفاتيح API منفصلة لكل بيئة)] as Cloudinary

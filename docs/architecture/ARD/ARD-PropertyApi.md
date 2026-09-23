@@ -278,9 +278,9 @@ Controller → IMediator.Send(Command|Query)
 
 | | Production | Staging |
 |---|---|---|
-| خدمة الويب | `propertyapi-api` | `propertyapi-staging-api` (`srv-dacpbgf40ujc73epheig`) |
-| قاعدة البيانات | PostgreSQL + PostGIS مخصَّصة | `propertyapi-staging-db` (PostgreSQL 18، خطة Free، بلا نسخ احتياطي، صلاحية ~30 يومًا) |
-| Redis | Upstash (مُدار خارجيًا) | `propertyapi-redis` (Valkey 8 على Render، مُعاد استخدامه) |
+| خدمة الويب | `HudhudNest` (اسم خدمة Render السابق: `propertyapi-api`) | `hudhudnest-staging-api` (`srv-dacpbgf40ujc73epheig`) |
+| قاعدة البيانات | PostgreSQL + PostGIS مخصَّصة | `hudhudnest-staging-db` (PostgreSQL 18، خطة Free، بلا نسخ احتياطي، صلاحية ~30 يومًا) |
+| Redis | Upstash (مُدار خارجيًا) | `hudhudnest-redis` (Valkey 8 على Render، مُعاد استخدامه) |
 | الواجهة الأمامية | `realestateworld.world` (Netlify، فرع `main`) | `staging--bizorealestateworld.netlify.app` (فرع `staging`) |
 | النشر التلقائي | — (بوابة تحقق فقط، لا نشر آلي مباشر موثَّق في هذه الوثيقة) | مُعطَّل (Auto-Deploy: off) — نشر عبر Deploy Hook يدويًا بعد نجاح `production-gate.yml` |
 | ترحيلات قاعدة البيانات | يدوية عبر `tools/PropertyApi.Migrator` | يدوية عبر `tools/PropertyApi.Migrator` (لا تطبيق تلقائي عند الإقلاع في أي بيئة) |
