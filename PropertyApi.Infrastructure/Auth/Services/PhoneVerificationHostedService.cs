@@ -92,8 +92,11 @@ public sealed class PhoneVerificationHostedService : BackgroundService
                         var now = _clock.GetUtcNow();
                         foreach (var user in users)
                         {
-                            var due = user.PhoneVerificationDueAtUtc!.Value;
-                            var grace = user.PhoneVerificationGraceEndsAtUtc!.Value;
+                            // A verified user without due dates (imported, edited by hand, an older release) used
+                            // to throw here and abort the whole tick, so nobody got a reminder until someone fixed
+                            // that one row. Derive the dates the way SetVerified would have and repair the row.
+                            var due = user.PhoneVerificationDueAtUtc ??= user.PhoneLastVerifiedAtUtc!.Value.AddDays(180);
+                            var grace = user.PhoneVerificationGraceEndsAtUtc ??= due.AddDays(3);
                             var state = now >= grace ? PhoneVerificationState.Restricted : now >= due
                                 ? PhoneVerificationState.GracePeriod : now >= due.AddDays(-14)
                                     ? PhoneVerificationState.DueSoon : PhoneVerificationState.Verified;

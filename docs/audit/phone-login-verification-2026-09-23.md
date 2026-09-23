@@ -35,6 +35,13 @@ The audit itself changed no production code. **Update (same day): F-1, F-3 and F
 | F-12 coverage | **Fixed** | Frontend specs for the API service, number normalization, error mapping, the re-verification redirect and login; the backend suite (52 tests) now runs in CI. |
 | F-13 wrong-password wording, DE register, profile links | **Fixed** | Found in the browser round; see F-13. |
 | F-14 hardcoded Arabic consent text | Open (not phone login) | Needs legal wording review; see F-14. |
+| F-15 SMS pumping (any country, per-IP limits only) | **Mitigated, needs config** | `SmsProvider:AllowedCountryCodes` refuses NEW numbers (registration, number change) outside the list with `PHONE_COUNTRY_NOT_SUPPORTED`; empty = unchanged behaviour. **The owner must set it.** |
+| F-16 HTTP SMS adapter without timeout | **Fixed** | `SmsProvider:TimeoutSeconds` (default 10, clamped 1–60); a silent provider no longer holds the request for 100 s. |
+| F-17 number change vs registration race → 500 + burnt code | **Fixed** | Transaction + unique-index handling like registration; loser gets `PHONE_NUMBER_ALREADY_IN_USE` and keeps a usable code. |
+| F-18 one inconsistent row stops every reminder | **Fixed** | Worker derives and repairs missing due dates instead of throwing. |
+| F-19 auth responses cacheable | **Fixed** | `Cache-Control: no-store` on the three auth controllers. |
+| F-20 no OTP autofill, errors not announced | **Fixed (app)** | `autocomplete="one-time-code"`, `role="alert"` / `role="status"`. |
+| F-21–F-24 | Info | See findings. |
 
 Every backend fix was proven fail-first: with the previous code 8 tests fail in each of the two rounds; with the fixes `PhoneLoginAuditTests` gives 52 passed, 0 skipped, and the full integration suite 391 passed, 0 failed.
 
@@ -164,6 +171,64 @@ Severity: High / Medium / Low / Info. "Test" names refer to `tests/PropertyApi.I
   hardcoded Arabic, so the phone register page (and the email one) shows Arabic consent text in German and
   English. It is legal copy, so the wording needs the owner's / legal review before it is translated. Not changed.
 
+### F-15 (High, mitigated — needs owner configuration) SMS pumping / international revenue share
+- Any well-formed E.164 number in the world was accepted for a registration OTP, and every limit keys on the client IP
+  (3 sends per 15 min per IP, 3 challenges per hour per number). An attacker with many IPs can therefore make the API
+  send unlimited paid SMS to premium-rate numbers they control. Nothing capped the total.
+- Fix: `SmsProvider:AllowedCountryCodes` (for example `["+963"]`). A NEW registration or number change outside the list
+  is refused with `PHONE_COUNTRY_NOT_SUPPORTED` before any SMS is sent. The answer depends only on the public prefix, so it
+  reveals nothing about accounts, and existing accounts (login, reset, re-verification) are never blocked by it.
+  The default is empty (no restriction) so nothing changes until the owner decides which countries to serve.
+- Still open (product decision): a global send cap / alert on SMS spend. Counting challenge rows would also count decoys,
+  which would let an attacker exhaust the cap, so it needs its own counter; see section 8.
+
+### F-16 (Medium, fixed) The HTTP SMS adapter had no timeout of its own
+- It used the HttpClient default of 100 seconds inside the send-OTP request, so a provider that stops answering held every
+  send request (and the person waiting for a code) for that long. Now bounded by `SmsProvider:TimeoutSeconds`
+  (default 10). Proven fail-first with a provider that never answers; the adapter also maps every non-2xx status and
+  connection failure to `false` without throwing and never logs the OTP, the API key or the full number.
+
+### F-17 (Medium, fixed) Phone change racing a registration for the same number returned 500
+- `VerifyPhoneChangeAsync` checked the number with `AnyAsync` and then wrote; if a registration took the number in
+  between, the unique index threw out of `UpdateSecurityStampAsync`/`UpdateAsync`, the caller saw a 500 and the OTP was
+  already consumed. It now runs in a transaction like registration: on the conflict the code is released and the answer
+  is `PHONE_NUMBER_ALREADY_IN_USE`. The race cannot be forced deterministically: one 500 was observed before the fix,
+  five parallel scenarios ran clean three times after it.
+
+### F-18 (Medium, fixed) One inconsistent user stopped everybody's reminders
+- A verified user with no due dates (imported, edited by hand, older release) made the hourly tick throw
+  `Nullable object must have a value`; since the tick is retried against the same row, no reminder or state change was
+  ever processed again. The worker now derives the dates (verified + 180 days, grace +3 days) and repairs the row.
+  Also proven: 250 users across three pages get exactly one reminder each, a second tick adds none, and two instances
+  ticking at the same time never duplicate one.
+
+### F-19 (Low, fixed) Auth responses carried no cache directive
+- Login, refresh, OTP and reset responses (tokens, challenge ids) had no `Cache-Control`. They are now `no-store`.
+
+### F-20 (Low, fixed in the app) One-time-code autofill and screen-reader announcements
+- The four OTP inputs lacked `autocomplete="one-time-code"`, so phones could not offer the SMS code, and the error /
+  success paragraphs on the phone pages were not live regions, so a wrong code was never announced.
+
+### F-21 (Info) Development logging exposes data on purpose
+- `AddDbContext` enables `EnableSensitiveDataLogging` in Development only, so Debug logs contain phone numbers, code
+  hashes and password hashes as SQL parameters, and `ConsoleSmsService` prints the OTP. Re-running every flow under the
+  `Testing` environment with Debug logging produced no full number, password, JWT or refresh-token value.
+
+### F-22 (Info, decision needed) No ban workflow exists
+- Nothing in the code base sets `IsBanned`. The enforcement is proven (login, refresh, per-request stamp check) and
+  `PhoneBanCacheTests` documents the one thing a future ban action must do: call
+  `IUserSecurityStampCacheInvalidator.InvalidateAsync(userId)`, otherwise a token whose stamp is already cached keeps
+  working until the 5-minute TTL ends. A complete ban feature also needs the admin endpoint, refresh-token revocation,
+  audit, and a user-facing message; that scope is a product decision.
+
+### F-23 (Info) The Twilio adapter is not covered
+- `TwilioSmsService` calls a static `TwilioClient.Init` on every send and has no test seam or explicit timeout, so its
+  behaviour against a slow or failing Twilio was not exercised (the HTTP adapter was).
+
+### F-24 (Info) Validation errors name C# parameters
+- A malformed body answers 400 with messages such as "The r field is required" (the record's constructor parameter).
+  No stack trace or internal type is exposed; cosmetic only.
+
 ## 5. Verified working (highlights)
 
 OTP: CSPRNG 6-digit code, HMAC-SHA256 stored, fixed-time compare, 5-minute expiry (`C3`), 3 attempts then
@@ -183,39 +248,89 @@ without errors (`B1`).
 
 ## 6. Owner's guide — try it yourself
 
-Prerequisites: .NET 8 SDK, PostgreSQL, Node 22. Do not use real secrets.
+Prerequisites: .NET 8 SDK, `dotnet-ef` (`dotnet tool install -g dotnet-ef`), PostgreSQL with the `postgis` and `pg_trgm`
+extensions, Node 22. Do not use real secrets. Every command below was run while preparing this report.
 
-1. **Database** — create an empty database and set the connection string.
-2. **API** (Development mode prints the OTP in the console, phone masked):
+1. **Database** — create an empty database, then apply the schema (the API does **not** migrate on startup; there is no
+   `ApplyMigrationsOnStartup` setting):
    ```bash
-   export ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=https://localhost:7136
    export ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=phone_try;Username=postgres;Password=<yours>"
+   export ASPNETCORE_ENVIRONMENT=Development RateLimiting__Redis__Enabled=false
+   dotnet ef database update --context AppDbContext --project PropertyApi.Infrastructure --startup-project PropertyApi
+   ```
+2. **API** (Development mode prints the OTP in the console, phone masked; it also logs SQL parameters, so never reuse this
+   setup for anything but local trials):
+   ```bash
+   export ASPNETCORE_URLS=https://localhost:7136
    export Jwt__Key="$(openssl rand -base64 48)" OtpSettings__SecretKey="$(openssl rand -base64 48)"
-   export Security__PhoneLookupHmacKey="$(openssl rand -base64 32)"
-   export Database__ApplyMigrationsOnStartup=true Database__SeedOnStartup=true RateLimiting__Redis__Enabled=false
+   export Security__PhoneLookupHmacKey="$(openssl rand -base64 32)" Database__SeedOnStartup=true
+   export SmsProvider__AllowedCountryCodes__0=+963      # optional: refuse numbers from other countries
+   export PhoneVerification__EnforcementEnabled=true PhoneVerification__ReminderProcessingEnabled=true   # optional
    dotnet run --project PropertyApi
    ```
    Use HTTPS (see F-11). Look for `[DEV MODE] OTP for ***1234: 123456` in the console.
 3. **Frontend**: `API_URL=https://localhost:7136/api npm start`, open `https://localhost:4200/#/auth/phone-register`
-   (trust the dev certificate first).
+   (trust the dev certificate first: `dotnet dev-certs https --trust`). Over plain `http://` the browser drops the CSRF
+   cookie (F-11); for a quick try you can add `CookieCsrf__Enabled=false`, which also skips what you are testing.
 4. **Scenarios** (expected result in brackets):
    1. Register with `+963933000111` (OTP from the API console, password `SecurePass9`, tick the consent box) [signed in, lands on home].
-   2. Register again with `0933000111` [format error before any request].
-   3. Register with password `abcdefgh1` [today: "phone login failed" — see F-4].
-   4. Sign out, sign in on the phone tab with the right password [success]; then with a wrong password [generic error];
-      wrong password 5+ times, then the right one [still refused while locked].
-   5. Forgot password: `#/auth/phone-password-reset` → OTP → new password [old password refused, new works; other sessions signed out].
+   2. Register with `0933 000 222` [accepted: normalized to `+963933000222`, the OTP arrives].
+   3. Register with password `abcdefgh1` [the full rule is shown: 8 characters, upper, lower, digit].
+   4. Sign out, sign in on the phone tab with the right password [success]; with a wrong password [one phone-specific message];
+      wrong password 5+ times, then the right one [still refused while locked, same message].
+   5. Forgot password: `#/auth/phone-password-reset` → OTP → new password [old password refused, new works, a locked account is
+      unlocked, other sessions signed out].
    6. Use a wrong OTP three times, then the right one [refused: too many attempts]; wait 5 minutes [expired].
-   7. Request four OTPs for one number within an hour [4th is silently not delivered, no console line].
-   8. Change/reverify: routes `#/profile/phone-change` and `#/profile/phone-reverify` (signed in) — reachable only by URL today (F-5).
-   9. Ban check (F-1): set `IsBanned = true` for the user in the `Users` table, then log in on the phone tab [today: still succeeds — defect].
+   7. Request four OTPs for one number within an hour [the 4th is answered without sending, no console line].
+   8. Profile → "Change sign-in phone number" and "Verify my phone number" [both pages open; a wrong current password says so and
+      counts as a failed attempt].
+   9. Ban check: set `"IsBanned" = true` for the user in the `Users` table, then log in on the phone tab [refused:
+      "this account is unavailable"]. An access token that was already used keeps working for up to 5 minutes (F-22).
+   10. With `SmsProvider__AllowedCountryCodes__0=+963`, register with `+4915112345678` [refused: "phone numbers from this country
+       are not supported"; no OTP in the console].
+   11. Re-verification: set the user's `"PhoneVerificationState" = 'Restricted'` with due dates in the past, then mark a notification as read
+       [403 → message → redirected to `/profile/phone-reverify`]; verify with the OTP [state `Verified`, actions work again].
    Signs of a problem: any success where a refusal is listed, an OTP or your number in a network response, or a `refreshToken` in a JSON body.
-5. **Automated suite**: `TEST_POSTGRES_CONNECTION_STRING=... dotnet test tests/PropertyApi.Integration.Tests --filter FullyQualifiedName~PhoneLoginAuditTests`
-   (needs migrations applied first, as in CI). Failing tests are the open defects above.
+5. **Automated suites** (need the migrated database above, as in CI):
+   ```bash
+   export TEST_POSTGRES_CONNECTION_STRING="Host=localhost;Port=5432;Database=phone_try;Username=postgres;Password=<yours>"
+   dotnet test tests/PropertyApi.Integration.Tests --filter "FullyQualifiedName~Phone"
+   dotnet test tests/PropertyApi.Infrastructure.Tests                                       # SMS adapter contract, hosted services
+   cd <frontend repo> && npm run test:ci && npm run typecheck && npm run audit:frontend && npm run build:prod
+   ```
 
 ## 7. Verification status
 
-### Verified in a second, browser-driven round (local API + Angular dev server + scratch PostgreSQL)
+### Verified in a third round (full audit: HTTPS API, real PostgreSQL, integration tests, browser at 375 / 768 / desktop)
+- **CSRF, cookies and sessions over HTTPS** (dev certificate, `CookieCsrf:Enabled=true`, curl with a cookie jar):
+  refresh without the header → 403, with it → 200 and a rotated cookie; reusing the previous refresh token → 401 and
+  the whole family is revoked (the newer token is dead too); logout revokes the session and the old access token stops at
+  once; the refresh cookie is `HttpOnly; Secure; SameSite=None; Partitioned; path=/api/auth`; CORS allows the
+  configured origin and answers a foreign origin with no allow-origin header; security headers present. Logout is
+  deliberately exempt from CSRF (it requires the bearer token; documented in `AuthController`).
+- **Rate limiting behind a proxy** (`ForwardedHeaders`): with the proxy trusted, limits partition by the forwarded
+  client IP (4th request from one IP → 429, another IP → 200); with an untrusted hop, a spoofed `X-Forwarded-For`
+  changing every request is ignored (4th → 429).
+- **SMS provider contract** against a stub handler: 200/202 succeed; 400/401/429/500/503 and a connection failure return
+  false without throwing; a provider that never answers is given up on after the timeout (F-16); caller cancellation
+  returns false; the OTP, API key and full number never reach the log.
+- **Concurrency on PostgreSQL:** 12 parallel verifies of one challenge → one winner, one account; three challenges for
+  one number verified together → one account; 15 parallel send-OTP → bounded and no 500; one reset token used 8 times →
+  once; number change vs registration for the same number → one owner (F-17).
+- **Time, with a controllable clock:** a code works at 4:50 and is rejected as expired at 5:10; the hourly challenge
+  window closes after 3, answers the 4th without sending, and reopens after 61 minutes.
+- **Reminder worker at scale and with two instances** (F-18).
+- **Empty database:** all 59 migrations apply; the API starts with hosted services enabled, logs "will retry" for the
+  ticks that need tables and stays up.
+- **Bans:** login, refresh and a fresh token refuse a banned user; a token with a cached stamp keeps working until the
+  cache is invalidated, and invalidation makes the ban immediate (F-22).
+- **Privacy:** Debug logs under `Testing` contain no full number, password, JWT or refresh value (F-21); malformed
+  bodies return validation problems without stack traces (F-24).
+- **App, real browser:** the country refusal shows in German; a triple-clicked submit sends one request; `one-time-code`
+  is present; controls are labelled; no horizontal scroll at 375 px and 768 px in LTR and RTL; a hostile `returnUrl`
+  cannot leave the app (falls back to `/home`); errors are now announced (F-20).
+
+### Verified in the second round (earlier)
 - **Login errors, on screen:** wrong password → the phone-specific message (Arabic and German); rate limit → "too many
   attempts"; PostgreSQL stopped → 500 → "server error"; API stopped → "cannot reach the server"; banned account
   (`IsBanned = true`) → "this account is unavailable". A local number (`0944 111 001`) is normalized and works.
@@ -234,19 +349,25 @@ Prerequisites: .NET 8 SDK, PostgreSQL, Node 22. Do not use real secrets.
 - **Email sessions and bans (F-1):** covered by the `RefreshTokenCommand` / security-stamp tests and the integration
   suite, no longer only inferred from the code.
 
-### Still not verified (cannot be done from a development machine)
-- Real SMS delivery (Twilio / HTTP provider), the provider's error handling, cost controls / SMS pumping across many IPs.
-- Redis-backed rate limiting, `ForwardedHeaders` behind a proxy (rate limits key on the client IP), Staging and
-  Production configuration.
-- A real device (Android/iOS Capacitor), Safari, and browser session restore over HTTPS. Over plain HTTP the session is
-  lost on reload (F-11); the browser round ran with `CookieCsrf:Enabled=false` for that reason, so the CSRF header
-  handshake itself was not exercised in the browser.
-- Frontend CI on the pull requests (GitHub Actions budget exhausted); the same checks were run locally instead.
+### Still not verified — and why
+| Item | Why it could not be verified here | Who can |
+|---|---|---|
+| Real SMS delivery, the provider's real error behaviour, real spend | needs a provider account and real phones; nothing was sent | owner, on Staging with a test number |
+| Twilio adapter (F-23) | no test seam, needs the SDK talking to Twilio | owner / follow-up |
+| Redis-backed rate limiting | no Redis server on this machine and the Docker daemon is not running; downloading one was not done without asking | CI already runs Redis; owner can run the same tests locally |
+| Staging / Production configuration (`ForwardedHeaders:KnownProxies`, CORS origins, `AllowedCountryCodes`) | no access, by design | owner |
+| CSRF handshake **in a browser** over HTTPS | the browser pane rejects the self-signed development certificate and trusting it would change the system trust store; the same handshake was proven with curl over HTTPS, and the browser round ran with `CookieCsrf:Enabled=false` | owner with a trusted dev certificate |
+| Session restore after reload in a browser | same cause (HTTPS needed for the Secure cookie) | owner |
+| Capacitor Android / iOS, real device, Safari | the only Android virtual device on this machine is broken (its `.ini` is missing) and a dev build needs `CAPACITOR_ALLOW_CLEARTEXT`; no iOS/Safari | owner |
+| Frontend CI on the pull requests | GitHub Actions budget exhausted; the same checks were run locally (typecheck, audit, 415 unit tests, production build) | owner (billing) |
+| Global SMS spend cap (F-15) | product decision | owner |
+| Ban workflow (F-22) | product decision | owner |
+| Legal wording of the consent text (F-14) | needs approved wording | owner / legal |
 
 ## 8. Suggested order of work
 
-1. F-1 (ban), F-3 (timing), F-4 (password message) — small, isolated fixes with tests already written.
-2. F-2 (enumeration) together with the Angular pages.
-3. F-6, F-7, F-8, F-9 quick wins.
-4. F-5 before switching `PhoneVerification:EnforcementEnabled` on.
-5. Convert the fixed probes to permanent regression tests (fail-first, then pass) and add frontend specs (F-12).
+1. Set `SmsProvider:AllowedCountryCodes` in every deployed environment (F-15) and decide on a global send cap with its own counter and an alert.
+2. Decide the ban workflow scope (F-22) before anything can set `IsBanned`.
+3. Run the browser CSRF/session-restore checks once with a trusted HTTPS development certificate, and the Redis limiter tests locally or read them from CI.
+4. Staging: real SMS to a test number, the `ForwardedHeaders` trust list, then `PhoneVerification:ReminderProcessingEnabled` and enforcement per the rollout in the feature doc.
+5. Capacitor: repair or recreate the Android virtual device and run register / login / re-verification on it; Safari and a real iPhone.

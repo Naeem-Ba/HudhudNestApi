@@ -35,6 +35,12 @@ public sealed class PhoneLoginAuditFactory : WebApplicationFactory<Program>
 
     public bool EnforcementEnabled { get; init; }
 
+    /// <summary>SmsProvider:AllowedCountryCodes for the host (empty = no restriction).</summary>
+    public string[] AllowedCountryCodes { get; init; } = [];
+
+    /// <summary>When set, replaces the process clock so expiry and windows can be crossed without waiting.</summary>
+    public ManualTimeProvider? Clock { get; init; }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         TestSecuritySettings.EnsureEnvironmentConfigured();
@@ -54,6 +60,8 @@ public sealed class PhoneLoginAuditFactory : WebApplicationFactory<Program>
                 ["RateLimiting:Redis:Enabled"] = "false",
                 ["PhoneVerification:EnforcementEnabled"] = EnforcementEnabled ? "true" : "false",
             };
+            for (var i = 0; i < AllowedCountryCodes.Length; i++)
+                settings[$"SmsProvider:AllowedCountryCodes:{i}"] = AllowedCountryCodes[i];
             TestHostConfiguration.AddDataProtectionSettings(settings, nameof(PhoneLoginAuditFactory));
             config.AddInMemoryCollection(settings);
         });
@@ -67,6 +75,11 @@ public sealed class PhoneLoginAuditFactory : WebApplicationFactory<Program>
             services.RemoveAll<IPasswordHasher<ApplicationUser>>();
             services.AddSingleton<IPasswordHasher<ApplicationUser>>(Hasher);
             services.AddSingleton<IStartupFilter, TestIpStartupFilter>();
+            if (Clock is not null)
+            {
+                services.RemoveAll<TimeProvider>();
+                services.AddSingleton<TimeProvider>(Clock);
+            }
         });
     }
 
@@ -93,6 +106,14 @@ public sealed class PhoneLoginAuditFactory : WebApplicationFactory<Program>
             next(app);
         };
     }
+}
+
+/// <summary>A clock the test moves by hand.</summary>
+public sealed class ManualTimeProvider : TimeProvider
+{
+    private long _offsetTicks;
+    public void Advance(TimeSpan by) => Interlocked.Add(ref _offsetTicks, by.Ticks);
+    public override DateTimeOffset GetUtcNow() => DateTimeOffset.UtcNow.AddTicks(Volatile.Read(ref _offsetTicks));
 }
 
 /// <summary>Counts password-hasher work so login timing can be asserted without measuring time.</summary>

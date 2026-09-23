@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
 using PropertyApi.Application.Auth.Phone;
@@ -29,12 +30,16 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     private readonly IPhoneVerificationPolicy _policy;
     private readonly TimeProvider _clock;
     private readonly IAuditLogService _audit;
+    private readonly string[] _allowedCountryCodes;
 
     public PhoneAuthenticationWorkflow(AppDbContext db, UserManager<ApplicationUser> users,
         SignInManager<ApplicationUser> signIn, IPhoneNumberNormalizer normalizer, IOtpService otp,
         ISmsService sms, ITokenService tokens, IRefreshTokenRepository refreshTokens,
-        IPhoneVerificationPolicy policy, TimeProvider clock, IAuditLogService audit)
+        IPhoneVerificationPolicy policy, TimeProvider clock, IAuditLogService audit,
+        IOptions<SmsProviderOptions> smsOptions)
     {
+        _allowedCountryCodes = smsOptions.Value.AllowedCountryCodes
+            .Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToArray();
         _db = db; _users = users; _signIn = signIn; _normalizer = normalizer; _otp = otp;
         _sms = sms; _tokens = tokens; _refreshTokens = refreshTokens; _policy = policy; _clock = clock; _audit = audit;
     }
@@ -45,6 +50,15 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         var normalized = _normalizer.Normalize(phoneNumber);
         if (!normalized.Succeeded) return Fail("PHONE_NUMBER_INVALID");
         var phone = normalized.Value!;
+
+        // SMS pumping guard: a NEW number (registration / number change) may only target the configured
+        // countries. The answer depends on the public prefix alone, so it reveals nothing about accounts,
+        // and existing accounts (reset, re-verification) are never blocked by it.
+        if (purpose is OtpPurpose.PhoneRegistration or OtpPurpose.PhoneNumberChange &&
+            _allowedCountryCodes.Length > 0 &&
+            !_allowedCountryCodes.Any(prefix => phone.StartsWith(prefix, StringComparison.Ordinal)))
+            return Fail("PHONE_COUNTRY_NOT_SUPPORTED");
+
         var user = await _users.Users.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == phone, ct);
         var eligible = purpose switch
         {
@@ -261,13 +275,27 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         if (outcome.Challenge is not { } challenge) return Fail(OtpErrorCode(outcome.FailureReason, "OTP_INVALID"));
         if (await _users.Users.AnyAsync(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber, ct))
             return Fail("PHONE_NUMBER_ALREADY_IN_USE");
-        user.PhoneNumber = challenge.NormalizedPhoneNumber;
-        user.NormalizedPhoneNumber = challenge.NormalizedPhoneNumber;
-        user.PhoneNumberConfirmed = true;
-        SetVerified(user, _clock.GetUtcNow());
-        await ConsumeAsync(challenge.Id, ct);
-        await _users.UpdateSecurityStampAsync(user);
-        await _users.UpdateAsync(user);
+        // The AnyAsync above is only a friendly early answer: another request can take the number between it
+        // and the write, and the unique index is what actually decides. Registration handles that with a
+        // transaction; so does this, otherwise the loser got a 500 and a burnt code.
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            user.PhoneNumber = challenge.NormalizedPhoneNumber;
+            user.NormalizedPhoneNumber = challenge.NormalizedPhoneNumber;
+            user.PhoneNumberConfirmed = true;
+            SetVerified(user, _clock.GetUtcNow());
+            await ConsumeAsync(challenge.Id, ct);
+            await _users.UpdateSecurityStampAsync(user);
+            await _users.UpdateAsync(user);
+            await transaction.CommitAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            await transaction.RollbackAsync(ct);
+            await ReleaseAsync(challenge.Id, ct);
+            return Fail("PHONE_NUMBER_ALREADY_IN_USE");
+        }
         await _refreshTokens.RevokeActiveTokensForUserAsync(user.Id, _clock.GetUtcNow().UtcDateTime, ipAddress, ct);
         await _audit.LogAsync(user.Id, AuditActions.PhoneNumberChanged, ipAddress,
             newValue: "{\"outcome\":\"succeeded\"}", ct: ct);
