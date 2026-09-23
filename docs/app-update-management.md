@@ -139,12 +139,36 @@ no leading zeros).
   soft-deleted duplicates are allowed to coexist.
 - **Non-unique**: `(Platform, IsEnabled)` — the hot lookup path, hit on every app launch.
 
-## Future phases (explicitly out of scope here)
+## Rollout status (all phases)
 
-- Frontend `AppUpdateService` + optional/mandatory dialogs (Angular, reusing the existing
-  `ConfirmModalComponent` pattern and `@capacitor/app` for reading the native version).
-- Native store deep-linking (`market://` / `itms-apps://`).
-- CI/CD version-bump automation for Android `versionCode`/`versionName` and iOS
-  `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` (which have already drifted out of sync as of
-  this writing — Android 1.1.0/2, iOS 1.0/1).
-- Admin dashboard "App Updates" screen in the Angular admin section.
+| Phase | Scope | Where |
+|---|---|---|
+| 1 | Backend: data model, check endpoint, admin CRUD, audit, cache, tests | this repo (PR #153) |
+| 2 | Angular `AppUpdateService`, optional/mandatory dialogs, native store deep-link | Angular repo (HudhudNest) PR #80 |
+| 3 | Admin dashboard `/admin/app-updates` | HudhudNest PR #81 |
+| 4 | Native version tooling (`version:check` / `version:set`), CI check, release + rollback runbook | HudhudNest PR #82, `docs/app-release-procedure.md` |
+
+The frontend repo documents its own side: `docs/app-update-admin-dashboard.md` and
+`docs/app-release-procedure.md` (release order and rollback scenarios — read the latter before
+raising a `MinimumSupportedVersion` in production).
+
+## Troubleshooting
+
+- **A user is stuck on the "update required" screen after a bad release.** Disable that release (or
+  lower its `MinimumSupportedVersion`) in the admin dashboard. The cache entry is invalidated
+  immediately; the client re-checks on its next app launch (not on resume).
+- **The dashboard change is not visible to the check endpoint.** It should be immediate (every admin
+  mutation invalidates the platform key). If Redis is unreachable the read path already bypasses the
+  cache and reads the database, so a stale answer can only last up to the 5-minute TTL when the
+  invalidation itself failed during a Redis outage.
+- **Check returns `updateAvailable=false` for everyone.** No *enabled, non-deleted* release exists for
+  that platform (the endpoint deliberately answers "no update" rather than an error). Note that
+  `Platform` values are `Android`, `IOS`, `Web`.
+- **422 from the check endpoint.** `currentVersion` is not `major.minor.patch` or `platform`/`lang`
+  is invalid. The client normalizes a two-segment iOS `1.0` to `1.0.0` before calling.
+- **409 when enabling/creating.** Another enabled release already exists for the same platform +
+  version (partial unique index). Disable or edit the other one first.
+- **Running the integration tests locally against an empty database** can fail the first test class
+  with `ObjectDisposedException` (the host stops when a background service hits a table that is not
+  migrated yet). Apply the migrations first — CI does (`Apply EF Core migrations` step in
+  `ci.yml`) — or simply re-run; the existing Investments suite behaves identically.
