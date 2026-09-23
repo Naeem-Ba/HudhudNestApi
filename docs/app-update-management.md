@@ -168,7 +168,8 @@ raising a `MinimumSupportedVersion` in production).
   is invalid. The client normalizes a two-segment iOS `1.0` to `1.0.0` before calling.
 - **409 when enabling/creating.** Another enabled release already exists for the same platform +
   version (partial unique index). Disable or edit the other one first.
-- **Running the integration tests locally against an empty database** can fail the first test class
-  with `ObjectDisposedException` (the host stops when a background service hits a table that is not
-  migrated yet). Apply the migrations first — CI does (`Apply EF Core migrations` step in
-  `ci.yml`) — or simply re-run; the existing Investments suite behaves identically.
+- **Integration tests failing locally with `ObjectDisposedException` / "host is stopping".** A hosted
+  service threw on a failed database call and stopped the test host (unmigrated tables on an empty
+  database, or a local Postgres rejecting the test's hardcoded `postgres/postgres` credentials). Fixed in
+  PR #204 (per-tick guards on the three unguarded timers); on older branches apply the migrations
+  first, as CI does (`Apply EF Core migrations` in `ci.yml`).
