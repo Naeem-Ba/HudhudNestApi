@@ -5,6 +5,9 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Auth.Phone;
+using PropertyApi.Domain.Enums;
+using PropertyApi.Infrastructure.Auth.Otp;
 using PropertyApi.Infrastructure.Auth;
 using PropertyApi.Infrastructure.Auth.Services;
 using Xunit;
@@ -55,6 +58,107 @@ public sealed class SmsProviderRegistrationTests
         var failure = Assert.Throws<OptionsValidationException>(
             () => services.GetRequiredService<IOptions<SmsProviderOptions>>().Value);
         Assert.Contains("ApiKey", failure.Message);
+    }
+
+    // ───────────── OTP channels (Telegram / WhatsApp) ─────────────
+
+    private static Dictionary<string, string?> SmsSettings() => new()
+    {
+        ["SmsProvider:Provider"] = "D7",
+        ["SmsProvider:ApiKey"] = "k",
+        ["SmsProvider:FromNumber"] = "HudhudNest"
+    };
+
+    private static IOtpChannelService Channels(ServiceProvider services) =>
+        services.CreateScope().ServiceProvider.GetRequiredService<IOtpChannelService>();
+
+    [Fact]
+    public void Production_WithoutTheChannelFlags_OnlySmsExists_AndTheHostStartsWithNoTelegramOrWhatsAppSettings()
+    {
+        using var services = Build(SmsSettings());
+
+        var channels = Channels(services).Describe("+4915772378923");
+
+        Assert.True(channels.Single(x => x.Channel == OtpChannel.Sms).Available);
+        Assert.False(channels.Single(x => x.Channel == OtpChannel.Telegram).Available);
+        Assert.False(channels.Single(x => x.Channel == OtpChannel.WhatsApp).Available);
+    }
+
+    [Fact]
+    public void Production_TelegramEnabled_UsesTheRealGatewayProvider_AndNeedsAToken()
+    {
+        var settings = SmsSettings();
+        settings["OtpChannels:Telegram:Enabled"] = "true";
+
+        using (var withoutToken = Build(settings))
+        {
+            var failure = Assert.Throws<OptionsValidationException>(
+                () => withoutToken.GetRequiredService<IOptions<TelegramGatewayOptions>>().Value);
+            Assert.Contains("TelegramGateway:ApiToken", failure.Message);
+        }
+
+        settings["TelegramGateway:ApiToken"] = "token";
+        using var withToken = Build(settings);
+        Assert.Contains(withToken.CreateScope().ServiceProvider.GetServices<IOtpProvider>(), x => x is TelegramGatewayOtpProvider);
+        Assert.True(Channels(withToken).IsAvailable(OtpChannel.Telegram, "+4915772378923"));
+    }
+
+    [Fact]
+    public void Production_WhatsAppEnabled_NeedsItsCredentialsAndTemplate_AndIsRefusedForSyria()
+    {
+        var settings = SmsSettings();
+        settings["OtpChannels:WhatsApp:Enabled"] = "true";
+
+        using (var incomplete = Build(settings))
+        {
+            var failure = Assert.Throws<OptionsValidationException>(
+                () => incomplete.GetRequiredService<IOptions<WhatsAppCloudOptions>>().Value);
+            Assert.Contains("WhatsAppCloud:AccessToken", failure.Message);
+        }
+
+        settings["WhatsAppCloud:AccessToken"] = "t";
+        settings["WhatsAppCloud:PhoneNumberId"] = "123";
+        settings["WhatsAppCloud:TemplateName"] = "hudhud_otp";
+        using var complete = Build(settings);
+        Assert.Contains(complete.CreateScope().ServiceProvider.GetServices<IOtpProvider>(), x => x is WhatsAppCloudOtpProvider);
+        Assert.True(Channels(complete).IsAvailable(OtpChannel.WhatsApp, "+4915772378923"));
+        Assert.False(Channels(complete).IsAvailable(OtpChannel.WhatsApp, "+963944111222"));
+    }
+
+    [Fact]
+    public void Production_ATelegramTokenOverPlainHttp_IsRefused()
+    {
+        var settings = SmsSettings();
+        settings["OtpChannels:Telegram:Enabled"] = "true";
+        settings["TelegramGateway:ApiToken"] = "token";
+        settings["TelegramGateway:BaseUrl"] = "http://gatewayapi.telegram.org/";
+        using var services = Build(settings);
+
+        var failure = Assert.Throws<OptionsValidationException>(
+            () => services.GetRequiredService<IOptions<TelegramGatewayOptions>>().Value);
+        Assert.Contains("HTTPS", failure.Message);
+    }
+
+    [Fact]
+    public void Development_EnabledChannels_UseTheConsoleStandIn_SoNoCredentialIsNeeded()
+    {
+        var settings = new Dictionary<string, string?>
+        {
+            ["OtpChannels:Telegram:Enabled"] = "true",
+            ["OtpChannels:WhatsApp:Enabled"] = "true"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+        var collection = new ServiceCollection();
+        collection.AddLogging();
+        typeof(AuthInfrastructureRegistration)
+            .GetMethod("AddSmsAndOtpServices", BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, [collection, configuration, new ProductionEnvironment { EnvironmentName = Environments.Development }]);
+        using var services = collection.BuildServiceProvider();
+
+        var providers = services.CreateScope().ServiceProvider.GetServices<IOtpProvider>().ToArray();
+
+        Assert.Equal(2, providers.OfType<ConsoleOtpProvider>().Count());
+        Assert.True(Channels(services).IsAvailable(OtpChannel.Telegram, "+963944111222"));
     }
 
     private static ServiceProvider Build(Dictionary<string, string?> settings)

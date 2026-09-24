@@ -12,6 +12,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using PropertyApi.Application.Auth.Interfaces;
+using PropertyApi.Application.Auth.Phone;
+using PropertyApi.Domain.Enums;
 using PropertyApi.Infrastructure.Persistence;
 using PropertyApi.Integration.Tests.TestInfrastructure;
 
@@ -38,6 +40,14 @@ public sealed class PhoneLoginAuditFactory : WebApplicationFactory<Program>
     /// <summary>SmsProvider:AllowedCountryCodes for the host (empty = no restriction).</summary>
     public string[] AllowedCountryCodes { get; init; } = [];
 
+    /// <summary>Fake Telegram / WhatsApp providers; a channel is only offered when its flag is on (OtpChannels:*:Enabled).</summary>
+    public CapturingOtpProvider Telegram { get; } = new(OtpChannel.Telegram);
+    public CapturingOtpProvider WhatsApp { get; } = new(OtpChannel.WhatsApp);
+    public bool TelegramEnabled { get; init; }
+    public bool WhatsAppEnabled { get; init; }
+    public string DefaultRecommended { get; init; } = string.Empty;
+    public Dictionary<string, string> RecommendedByCountryCode { get; init; } = new();
+
     /// <summary>When set, replaces the process clock so expiry and windows can be crossed without waiting.</summary>
     public ManualTimeProvider? Clock { get; init; }
 
@@ -62,6 +72,11 @@ public sealed class PhoneLoginAuditFactory : WebApplicationFactory<Program>
             };
             for (var i = 0; i < AllowedCountryCodes.Length; i++)
                 settings[$"SmsProvider:AllowedCountryCodes:{i}"] = AllowedCountryCodes[i];
+            if (TelegramEnabled) settings["OtpChannels:Telegram:Enabled"] = "true";
+            if (WhatsAppEnabled) settings["OtpChannels:WhatsApp:Enabled"] = "true";
+            if (DefaultRecommended.Length > 0) settings["OtpChannels:DefaultRecommended"] = DefaultRecommended;
+            foreach (var (prefix, channel) in RecommendedByCountryCode)
+                settings[$"OtpChannels:RecommendedByCountryCode:{prefix}"] = channel;
             TestHostConfiguration.AddDataProtectionSettings(settings, nameof(PhoneLoginAuditFactory));
             config.AddInMemoryCollection(settings);
         });
@@ -72,6 +87,9 @@ public sealed class PhoneLoginAuditFactory : WebApplicationFactory<Program>
             services.UseEphemeralDataProtection();
             services.RemoveAll<ISmsService>();
             services.AddSingleton<ISmsService>(Sms);
+            // Registered last, so these win over the console stand-ins the Testing environment adds for enabled channels.
+            services.AddSingleton<IOtpProvider>(Telegram);
+            services.AddSingleton<IOtpProvider>(WhatsApp);
             services.RemoveAll<IPasswordHasher<ApplicationUser>>();
             services.AddSingleton<IPasswordHasher<ApplicationUser>>(Hasher);
             services.AddSingleton<IStartupFilter, TestIpStartupFilter>();
@@ -147,6 +165,26 @@ public sealed class CapturingSmsService : ISmsService
         if (Fail) return Task.FromResult(false);
         _last[phoneNumber] = otp;
         return Task.FromResult(true);
+    }
+
+    public string? LastCodeFor(string phone) => _last.TryGetValue(phone, out var code) ? code : null;
+}
+
+/// <summary>A Telegram / WhatsApp stand-in that records the code it was asked to deliver and answers with a chosen outcome.</summary>
+public sealed class CapturingOtpProvider(OtpChannel channel) : IOtpProvider
+{
+    private readonly ConcurrentDictionary<string, string> _last = new();
+    public int SendCount;
+    public OtpSendOutcome Outcome = OtpSendOutcome.Sent;
+
+    public OtpChannel Channel => channel;
+
+    public Task<OtpSendResult> SendAsync(string phoneNumber, string code, CancellationToken ct)
+    {
+        Interlocked.Increment(ref SendCount);
+        if (Outcome != OtpSendOutcome.Sent) return Task.FromResult(new OtpSendResult(Outcome));
+        _last[phoneNumber] = code;
+        return Task.FromResult(OtpSendResult.Sent($"req-{SendCount}"));
     }
 
     public string? LastCodeFor(string phone) => _last.TryGetValue(phone, out var code) ? code : null;

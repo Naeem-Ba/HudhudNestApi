@@ -5,7 +5,10 @@ using PropertyApi.Application.Auth.Contracts;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Infrastructure.Audit;
+using PropertyApi.Domain.Enums;
+using PropertyApi.Infrastructure.Auth.Otp;
 using PropertyApi.Infrastructure.Auth.Repositories;
+using Microsoft.Extensions.Logging;
 using PropertyApi.Infrastructure.Auth.Security;
 using PropertyApi.Application.Auth.Phone;
 using PropertyApi.Infrastructure.Auth.Services;
@@ -498,6 +501,78 @@ internal static class AuthInfrastructureRegistration
             else
             {
                 services.AddHttpClient<ISmsService, HttpSmsService>();
+            }
+        }
+
+        AddOtpChannels(services, configuration, environment, stagingTestSupportEnabled);
+    }
+
+    /// <summary>
+    /// Registers one <see cref="IOtpProvider"/> per channel. SMS always exists (it wraps whatever ISmsService was
+    /// chosen above). Telegram and WhatsApp exist only when their own OtpChannels:*:Enabled flag is on, so a
+    /// deployment without their credentials starts and behaves exactly as before.
+    /// </summary>
+    private static void AddOtpChannels(
+        IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment environment,
+        bool stagingTestSupportEnabled)
+    {
+        services.AddOptions<OtpChannelOptions>()
+            .Bind(configuration.GetSection(OtpChannelOptions.SectionName));
+        services.AddScoped<IOtpProvider, SmsOtpProvider>();
+        services.AddScoped<IOtpChannelService, OtpChannelService>();
+
+        // The Staging smoke suite exercises the SMS path only; it must never reach a real Telegram/WhatsApp account.
+        if (stagingTestSupportEnabled)
+            return;
+
+        var channels = configuration.GetSection(OtpChannelOptions.SectionName).Get<OtpChannelOptions>() ?? new OtpChannelOptions();
+        var localConsole = environment.IsDevelopment() ||
+            environment.EnvironmentName == "Testing" ||
+            environment.EnvironmentName == "CI";
+
+        if (channels.IsEnabled(OtpChannel.Telegram))
+        {
+            if (localConsole)
+            {
+                services.AddScoped<IOtpProvider>(sp => new ConsoleOtpProvider(
+                    OtpChannel.Telegram, sp.GetRequiredService<ILogger<ConsoleOtpProvider>>()));
+            }
+            else
+            {
+                services.AddOptions<TelegramGatewayOptions>()
+                    .Bind(configuration.GetSection(TelegramGatewayOptions.SectionName))
+                    .Validate(o => !string.IsNullOrWhiteSpace(o.ApiToken),
+                        "TelegramGateway:ApiToken is required when OtpChannels:Telegram:Enabled is true.")
+                    .Validate(o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps,
+                        "TelegramGateway:BaseUrl must be a valid absolute HTTPS URL.")
+                    .ValidateOnStart();
+                services.AddHttpClient<IOtpProvider, TelegramGatewayOtpProvider>();
+            }
+        }
+
+        if (channels.IsEnabled(OtpChannel.WhatsApp))
+        {
+            if (localConsole)
+            {
+                services.AddScoped<IOtpProvider>(sp => new ConsoleOtpProvider(
+                    OtpChannel.WhatsApp, sp.GetRequiredService<ILogger<ConsoleOtpProvider>>()));
+            }
+            else
+            {
+                services.AddOptions<WhatsAppCloudOptions>()
+                    .Bind(configuration.GetSection(WhatsAppCloudOptions.SectionName))
+                    .Validate(o => !string.IsNullOrWhiteSpace(o.AccessToken),
+                        "WhatsAppCloud:AccessToken is required when OtpChannels:WhatsApp:Enabled is true.")
+                    .Validate(o => !string.IsNullOrWhiteSpace(o.PhoneNumberId),
+                        "WhatsAppCloud:PhoneNumberId is required when OtpChannels:WhatsApp:Enabled is true.")
+                    .Validate(o => !string.IsNullOrWhiteSpace(o.TemplateName),
+                        "WhatsAppCloud:TemplateName is required when OtpChannels:WhatsApp:Enabled is true.")
+                    .Validate(o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps,
+                        "WhatsAppCloud:BaseUrl must be a valid absolute HTTPS URL.")
+                    .ValidateOnStart();
+                services.AddHttpClient<IOtpProvider, WhatsAppCloudOtpProvider>();
             }
         }
     }
