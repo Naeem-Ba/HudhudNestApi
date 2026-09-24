@@ -257,7 +257,8 @@ Controller → IMediator.Send(Command|Query)
 10. UseCors("DefaultCors")
 11. UseAuthentication             (فك تشفير JWT إن وُجد)
 12. PhoneVerificationRestrictionMiddleware
-13. UseRedisRateLimiting | UseRateLimiter  (حسب توفر Redis)
+13. UseRedisRateLimiting | UseRateLimiter  (واحد فقط، يُختار بعد builder.Build() من IsRedisRateLimitingActive:
+    مُسجَّل + RateLimiting:Redis:Enabled في الإعدادات النهائية — لا من الإعدادات قبل البناء)
 14. UseCookieCsrfProtection       (لطلبات POST/PUT/DELETE غير الآمنة، عند وجود كوكي refresh_token)
 15. UseAuthorization              (فحص [Authorize]/[Authorize(Roles=...)])
 16. UseOutputCache

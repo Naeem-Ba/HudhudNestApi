@@ -229,6 +229,21 @@ Severity: High / Medium / Low / Info. "Test" names refer to `tests/PropertyApi.I
 - A malformed body answers 400 with messages such as "The r field is required" (the record's constructor parameter).
   No stack trace or internal type is exposed; cosmetic only.
 
+### F-25 (High, fixed 2026-09-24) CI ran the H1–H3 hosts with no rate limiter at all
+- `H1`–`H3` passed locally and failed on master CI (run 35918522176, `[OK, OK, OK, OK, OK]`). ci.yml sets
+  `RateLimiting__Redis__Enabled=true` for the process; Program.cs read that before the test host's own
+  `RateLimiting:Redis:Enabled=false` applied and mounted the Redis middleware instead of the in-memory limiter;
+  the middleware then read the final options (disabled) and passed every request.
+- Production was not affected (one configuration source there), but any host whose final configuration differed
+  from its pre-build configuration had no limiter. Fix: Program.cs chooses the limiter after `Build()` via
+  `IsRedisRateLimitingActive` (`RedisRateLimitingActivationTests`); reproduced and re-run locally with CI's variables.
+- So the "Redis-backed rate limiting — CI already runs Redis" line in §7 was not true for these tests before this fix.
+
+### F-26 (High, fixed 2026-09-24) Staging smoke asserted the pre-#207 duplicate-registration contract
+- The Production Gate failed on master (run 35918522603): the smoke journey still required *no* challenge id for an
+  already registered number, while #207 deliberately answers with a decoy challenge (F-2). The journey now expects
+  the challenge id and proves the decoy cannot be completed, not even with Staging's fixed OTP.
+
 ## 5. Verified working (highlights)
 
 OTP: CSPRNG 6-digit code, HMAC-SHA256 stored, fixed-time compare, 5-minute expiry (`C3`), 3 attempts then

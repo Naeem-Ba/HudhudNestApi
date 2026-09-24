@@ -13,6 +13,8 @@ public static class RedisRateLimitingServiceCollectionExtensions
     {
         var redisConnectionString = ResolveRedisConnectionString(configuration);
 
+        services.TryAddSingleton<RedisRateLimitingRegistration>();
+
         services.AddOptions<RedisRateLimitingOptions>()
             .Bind(configuration.GetSection(RedisRateLimitingOptions.SectionName))
             .PostConfigure(options =>
