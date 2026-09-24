@@ -67,6 +67,24 @@ Existing users with no trustworthy phone-confirmation timestamp remain `NotConfi
 
 ## SMS configuration
 
+### SMS providers
+
+`SmsProvider:Provider` selects the adapter. **Twilio does not deliver to Syria** (its console lists Syria as "Not Available"), so a
+deployment with Syrian users needs one of the providers below.
+
+| `Provider` | Adapter | `ApiKey` is | `FromNumber` is | `ApiUrl` default |
+|---|---|---|---|---|
+| `D7` | D7 Networks (UAE), `POST /messages/v1/send`, Bearer token, Unicode text | the D7 API token | the originator (sender id), required | `https://api.d7networks.com/messages/v1/send` |
+| `Unimatrix` | Unimatrix, `POST /?action=sms.message.send`, success = HTTP 2xx and `{"code":"0"}` | the AccessKey ID (sent in the URL query, so this client has request logging removed) | the signature, optional (2–16 characters) | `https://api.unimtx.com/` |
+| `Twilio` | Twilio SDK | not used: `Twilio:AccountSid`, `Twilio:AuthToken`, `Twilio:FromNumber` | not used | not used |
+| anything else / `Http` | generic JSON POST `{to, from, message, apiKey}` | shared secret in the body | sender | required, HTTPS |
+
+Only `Development`, `Testing` and `CI` use the console sink; every other environment uses the selected provider. In Production the
+key, the sender (except Unimatrix) and an HTTPS URL are validated at startup; Twilio is no longer forced to fill in the HTTP provider's keys.
+
+Syria specifics (from the providers' public pages, verify with the provider before launch): A2P traffic to Syria is restricted to OTP and
+banking-type messages, marketing SMS is not allowed, the sender id may need registering, and the Syrian regulator (SYTRA) applies.
+
 | Key | Default | Meaning |
 |---|---|---|
 | `SmsProvider:TimeoutSeconds` | 10 (clamped 1–60) | how long a send-OTP request waits for the HTTP provider before the send counts as failed (`SMS_FAILED`) |

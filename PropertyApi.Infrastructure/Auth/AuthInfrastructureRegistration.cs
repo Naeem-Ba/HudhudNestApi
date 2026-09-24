@@ -437,18 +437,19 @@ internal static class AuthInfrastructureRegistration
                     options => !string.IsNullOrWhiteSpace(options.Provider),
                     "SmsProvider:Provider is required in Production.")
                 .Validate(
-                    options => !string.IsNullOrWhiteSpace(options.ApiUrl),
+                    options => !options.UsesSmsProviderKeys || !string.IsNullOrWhiteSpace(options.ResolveApiUrl()),
                     "SmsProvider:ApiUrl is required in Production.")
                 .Validate(
                     options =>
-                        Uri.TryCreate(options.ApiUrl, UriKind.Absolute, out var uri) &&
-                        uri.Scheme == Uri.UriSchemeHttps,
+                        !options.UsesSmsProviderKeys ||
+                        (Uri.TryCreate(options.ResolveApiUrl(), UriKind.Absolute, out var uri) &&
+                         uri.Scheme == Uri.UriSchemeHttps),
                     "SmsProvider:ApiUrl must be a valid absolute HTTPS URL in Production.")
                 .Validate(
-                    options => !string.IsNullOrWhiteSpace(options.ApiKey),
+                    options => !options.UsesSmsProviderKeys || !string.IsNullOrWhiteSpace(options.ApiKey),
                     "SmsProvider:ApiKey is required in Production.")
                 .Validate(
-                    options => !string.IsNullOrWhiteSpace(options.FromNumber),
+                    options => !options.RequiresFromNumber || !string.IsNullOrWhiteSpace(options.FromNumber),
                     "SmsProvider:FromNumber is required in Production.")
                 .ValidateOnStart();
         }
@@ -484,6 +485,15 @@ internal static class AuthInfrastructureRegistration
                     StringComparison.OrdinalIgnoreCase))
             {
                 services.AddScoped<ISmsService, TwilioSmsService>();
+            }
+            else if (string.Equals(smsProvider, "D7", StringComparison.OrdinalIgnoreCase))
+            {
+                services.AddHttpClient<ISmsService, D7SmsService>();
+            }
+            else if (string.Equals(smsProvider, "Unimatrix", StringComparison.OrdinalIgnoreCase))
+            {
+                // The AccessKey ID travels in the URL query, so no HttpClient request logging for this client.
+                services.AddHttpClient<ISmsService, UnimatrixSmsService>().RemoveAllLoggers();
             }
             else
             {
