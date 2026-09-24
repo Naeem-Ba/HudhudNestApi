@@ -160,6 +160,11 @@ builder.Services.AddPropertyApiRateLimiting();
 
 var app = builder.Build();
 
+// useRedisRateLimiting above only decides what to register. Which limiter runs is decided from the
+// built host's configuration, the same options the Redis middleware reads per request -- see
+// IsRedisRateLimitingActive for how the two disagreeing left a host with no rate limiting at all.
+var redisRateLimitingActive = app.Services.IsRedisRateLimitingActive();
+
 // The IConnectionMultiplexer singleton is otherwise built lazily by whichever request needs it
 // first, and with abortConnect=false ConnectionMultiplexer.Connect returns before the socket is
 // up. On a freshly started instance the first rate-limited requests therefore hit
@@ -169,7 +174,7 @@ var app = builder.Build();
 // window of failed logins after every deploy. Connect eagerly before Kestrel starts listening
 // and give the connection a bounded time to establish. If Redis is really down the instance
 // still starts (fail-closed behaviour and readiness are unchanged).
-if (useRedisRateLimiting)
+if (redisRateLimitingActive)
 {
     await RedisStartupConnection.EnsureConnectedAsync(
         app.Services.GetRequiredService<IConnectionMultiplexer>(),
@@ -264,7 +269,7 @@ app.UseCors("DefaultCors");
 app.UseAuthentication();
 app.UseMiddleware<PropertyApi.Security.PhoneVerificationRestrictionMiddleware>();
 
-if (useRedisRateLimiting)
+if (redisRateLimitingActive)
 {
     app.UseRedisRateLimiting();
 }

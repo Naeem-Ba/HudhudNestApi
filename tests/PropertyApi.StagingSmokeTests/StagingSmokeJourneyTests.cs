@@ -224,8 +224,24 @@ public sealed class StagingSmokeJourneyTests
             Expect(duplicate.StatusCode == HttpStatusCode.OK,
                 "Duplicate-registration privacy response must remain generic HTTP 200.");
             using var duplicateBody = await ReadJsonAsync(duplicate);
-            Expect(!TryGuid(duplicateBody.RootElement, "ChallengeId", out _),
-                "An already registered number received a new registration challenge.");
+            // Since #207 a registered number gets the same answer as a new one -- a challenge id -- so the
+            // response no longer tells an attacker the number has an account. That challenge is a decoy: no
+            // SMS is sent and no code, not even Staging's fixed one, can complete it.
+            Expect(TryGuid(duplicateBody.RootElement, "ChallengeId", out var decoyChallengeId),
+                "Duplicate-registration response must look like any other send (a challenge id).");
+            var takeover = await SendJsonAsync(HttpMethod.Post,
+                "/api/auth/phone/registration/verify",
+                new
+                {
+                    ChallengeId = decoyChallengeId,
+                    Code = _config.FixedOtp,
+                    Password = _config.Password,
+                    FirstName = "E2E",
+                    LastName = $"{_config.RunId}-DUPLICATE"
+                },
+                stagingSecret: _config.CleanupSecret);
+            Expect(takeover.StatusCode == HttpStatusCode.BadRequest,
+                "An already registered number could be registered a second time.");
         }
 
         private Task VerifyOtpSecurityAsync()
