@@ -66,6 +66,33 @@ public static class ApplicationTelemetry
             new KeyValuePair<string, object?>("authentication_method", method));
     }
 
+    private static readonly Counter<long> OtpSendCounter =
+        Meter.CreateCounter<long>(
+            "auth.otp.send",
+            unit: "sends",
+            description:
+                "Phone OTP sends by channel and outcome (sent, unreachable, provider_unavailable, " +
+                "channel_unavailable, rate_limited). Never labelled with a phone number.");
+
+    private static readonly Counter<long> OtpVerificationCounter =
+        Meter.CreateCounter<long>(
+            "auth.otp.verification",
+            unit: "verifications",
+            description: "Phone OTP verification attempts by channel and outcome (succeeded, failed).");
+
+    /// <summary>Channel and outcome are small fixed sets, so the label cardinality stays bounded.</summary>
+    public static void RecordOtpSend(string channel, string outcome)
+        => OtpSendCounter.Add(
+            1,
+            new KeyValuePair<string, object?>("channel", channel),
+            new KeyValuePair<string, object?>("outcome", outcome));
+
+    public static void RecordOtpVerification(string channel, string outcome)
+        => OtpVerificationCounter.Add(
+            1,
+            new KeyValuePair<string, object?>("channel", channel),
+            new KeyValuePair<string, object?>("outcome", outcome));
+
     private static readonly Counter<long> BreachScreeningCounter =
         Meter.CreateCounter<long>(
             "auth.password_breach_screening",

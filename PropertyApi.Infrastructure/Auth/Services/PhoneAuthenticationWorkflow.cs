@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Auth.Models;
 using PropertyApi.Application.Auth.Phone;
 using PropertyApi.Application.Auth.Services;
+using PropertyApi.Application.Common.Observability;
+using PropertyApi.Application.Common.Security;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Domain.Auth.Entities;
 using PropertyApi.Domain.Enums;
@@ -24,7 +27,8 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     private readonly SignInManager<ApplicationUser> _signIn;
     private readonly IPhoneNumberNormalizer _normalizer;
     private readonly IOtpService _otp;
-    private readonly ISmsService _sms;
+    private readonly IOtpChannelService _channels;
+    private readonly ILogger<PhoneAuthenticationWorkflow> _logger;
     private readonly ITokenService _tokens;
     private readonly IRefreshTokenRepository _refreshTokens;
     private readonly IPhoneVerificationPolicy _policy;
@@ -34,18 +38,18 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
 
     public PhoneAuthenticationWorkflow(AppDbContext db, UserManager<ApplicationUser> users,
         SignInManager<ApplicationUser> signIn, IPhoneNumberNormalizer normalizer, IOtpService otp,
-        ISmsService sms, ITokenService tokens, IRefreshTokenRepository refreshTokens,
+        IOtpChannelService channels, ITokenService tokens, IRefreshTokenRepository refreshTokens,
         IPhoneVerificationPolicy policy, TimeProvider clock, IAuditLogService audit,
-        IOptions<SmsProviderOptions> smsOptions)
+        IOptions<SmsProviderOptions> smsOptions, ILogger<PhoneAuthenticationWorkflow> logger)
     {
         _allowedCountryCodes = smsOptions.Value.AllowedCountryCodes
             .Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToArray();
         _db = db; _users = users; _signIn = signIn; _normalizer = normalizer; _otp = otp;
-        _sms = sms; _tokens = tokens; _refreshTokens = refreshTokens; _policy = policy; _clock = clock; _audit = audit;
+        _channels = channels; _logger = logger; _tokens = tokens; _refreshTokens = refreshTokens; _policy = policy; _clock = clock; _audit = audit;
     }
 
     public async Task<PhoneWorkflowResult> SendOtpAsync(string phoneNumber, OtpPurpose purpose,
-        Guid? userId, string? ipAddress, CancellationToken ct)
+        Guid? userId, string? ipAddress, CancellationToken ct, OtpChannel channel = OtpChannel.Sms)
     {
         var normalized = _normalizer.Normalize(phoneNumber);
         if (!normalized.Succeeded) return Fail("PHONE_NUMBER_INVALID");
@@ -58,6 +62,10 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             _allowedCountryCodes.Length > 0 &&
             !_allowedCountryCodes.Any(prefix => phone.StartsWith(prefix, StringComparison.Ordinal)))
             return Fail("PHONE_COUNTRY_NOT_SUPPORTED");
+
+        // A channel that is off, or does not work for this country, is refused before anything else. The answer
+        // comes from configuration and the public calling code alone, so it says nothing about any account.
+        if (!_channels.IsAvailable(channel, phone)) return Fail("OTP_CHANNEL_UNAVAILABLE");
 
         var user = await _users.Users.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == phone, ct);
         var eligible = purpose switch
@@ -81,25 +89,51 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             .Select(x => x.Id)
             .Take(3)
             .ToListAsync(ct);
-        if (recent.Count >= 3) return new(true, Message: GenericSendMessage, ChallengeId: recent[0]);
+        if (recent.Count >= 3)
+        {
+            ApplicationTelemetry.RecordOtpSend(channel.ToString(), "rate_limited");
+            _logger.LogWarning("OTP send rate-limited on {Channel} for {Phone}.", channel, PiiMasking.MaskPhone(phone));
+            return new(true, Message: GenericSendMessage, ChallengeId: recent[0], Channel: channel);
+        }
 
         if (!eligible)
         {
-            var decoy = PhoneOtpChallenge.Create(phone, UnsatisfiableHash(), purpose, _clock.GetUtcNow(), userId);
+            var decoy = PhoneOtpChallenge.Create(phone, UnsatisfiableHash(), purpose, _clock.GetUtcNow(), userId, channel);
             _db.PhoneOtpChallenges.Add(decoy);
             await _db.SaveChangesAsync(ct);
-            return new(true, Message: GenericSendMessage, ChallengeId: decoy.Id);
+            return new(true, Message: GenericSendMessage, ChallengeId: decoy.Id, Channel: channel);
         }
 
         var (code, hash) = _otp.Generate();
-        var challenge = PhoneOtpChallenge.Create(phone, hash, purpose, _clock.GetUtcNow(), userId);
+        var challenge = PhoneOtpChallenge.Create(phone, hash, purpose, _clock.GetUtcNow(), userId, channel);
         _db.PhoneOtpChallenges.Add(challenge);
         await _db.SaveChangesAsync(ct);
-        if (!await _sms.SendOtpAsync(phone, code, ct))
+        _logger.LogInformation("OTP challenge created for {Phone} on {Channel} ({Purpose}).",
+            PiiMasking.MaskPhone(phone), channel, purpose);
+        var sent = await _channels.SendAsync(channel, phone, code, ct);
+        switch (sent.Outcome)
         {
-            _db.PhoneOtpChallenges.Remove(challenge);
-            await _db.SaveChangesAsync(ct);
-            return Fail("SMS_FAILED");
+            case OtpSendOutcome.Sent:
+                if (sent.ProviderRequestId is not null)
+                {
+                    challenge.SetProviderRequestId(sent.ProviderRequestId);
+                    await _db.SaveChangesAsync(ct);
+                }
+                break;
+
+            case OtpSendOutcome.RecipientUnreachable:
+                // A fact about the number (for example: not on Telegram). Saying so would tell anyone probing
+                // this endpoint that the number is eligible, so the answer stays the generic one and the person
+                // is offered another channel by the app. The stored code was never delivered and simply expires.
+                return new(true, Message: GenericSendMessage, ChallengeId: challenge.Id, Channel: channel);
+
+            default:
+                // The provider itself could not be used. Nothing was delivered, so the challenge is discarded and
+                // the failure is reported (SMS keeps its historical code).
+                _db.PhoneOtpChallenges.Remove(challenge);
+                await _db.SaveChangesAsync(ct);
+                return Fail(sent.Outcome == OtpSendOutcome.ChannelUnavailable ? "OTP_CHANNEL_UNAVAILABLE"
+                    : channel == OtpChannel.Sms ? "SMS_FAILED" : "OTP_PROVIDER_UNAVAILABLE");
         }
         await _audit.LogAsync(userId, purpose switch
         {
@@ -107,14 +141,14 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             OtpPurpose.PhonePasswordReset => AuditActions.PhonePasswordResetOtpRequested,
             OtpPurpose.PhoneReverification => AuditActions.PhoneReverificationRequested,
             _ => AuditActions.PhoneNumberChangeRequested
-        }, ipAddress, newValue: "{\"outcome\":\"accepted\"}", ct: ct);
-        return new(true, Message: GenericSendMessage, ChallengeId: challenge.Id);
+        }, ipAddress, newValue: $"{{\"outcome\":\"accepted\",\"channel\":\"{channel}\"}}", ct: ct);
+        return new(true, Message: GenericSendMessage, ChallengeId: challenge.Id, Channel: channel);
     }
 
     public async Task<PhoneWorkflowResult> RegisterAsync(Guid challengeId, string code, string password,
-        string firstName, string lastName, string? ipAddress, CancellationToken ct)
+        string firstName, string lastName, string? ipAddress, CancellationToken ct, OtpChannel? channel = null)
     {
-        var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneRegistration, null, ct);
+        var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneRegistration, null, channel, ct);
         if (outcome.Challenge is not { } challenge) return Fail(OtpErrorCode(outcome.FailureReason, "OTP_INVALID"));
         await using var transaction = await _db.Database.BeginTransactionAsync(ct);
         try
@@ -207,9 +241,9 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     }
 
     public async Task<PhoneWorkflowResult> VerifyPasswordResetAsync(Guid challengeId, string code,
-        CancellationToken ct)
+        CancellationToken ct, OtpChannel? channel = null)
     {
-        var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhonePasswordReset, null, ct);
+        var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhonePasswordReset, null, channel, ct);
         if (outcome.Challenge is not { } challenge) return Fail(PasswordResetErrorCode(outcome.FailureReason));
         var user = await _users.Users.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber, ct);
         if (user is null) return Fail("PASSWORD_RESET_INVALID");
@@ -247,9 +281,9 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     }
 
     public async Task<PhoneWorkflowResult> VerifyReverificationAsync(Guid userId, Guid challengeId,
-        string code, CancellationToken ct)
+        string code, CancellationToken ct, OtpChannel? channel = null)
     {
-        var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneReverification, userId, ct);
+        var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneReverification, userId, channel, ct);
         if (outcome.Challenge is not { } challenge) return Fail(OtpErrorCode(outcome.FailureReason, "OTP_INVALID"));
         var user = await _users.FindByIdAsync(userId.ToString());
         if (user is null || user.NormalizedPhoneNumber != challenge.NormalizedPhoneNumber) return Fail("OTP_INVALID");
@@ -263,7 +297,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     }
 
     public async Task<PhoneWorkflowResult> VerifyPhoneChangeAsync(Guid userId, Guid challengeId,
-        string code, string currentPassword, string? ipAddress, CancellationToken ct)
+        string code, string currentPassword, string? ipAddress, CancellationToken ct, OtpChannel? channel = null)
     {
         var user = await _users.FindByIdAsync(userId.ToString());
         // Counted towards Identity lockout (audit F-8): a stolen access token must not allow unlimited
@@ -271,7 +305,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         if (user is null ||
             !(await _signIn.CheckPasswordSignInAsync(user, currentPassword, lockoutOnFailure: true)).Succeeded)
             return Fail("RECENT_AUTHENTICATION_REQUIRED");
-        var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneNumberChange, userId, ct);
+        var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneNumberChange, userId, channel, ct);
         if (outcome.Challenge is not { } challenge) return Fail(OtpErrorCode(outcome.FailureReason, "OTP_INVALID"));
         if (await _users.Users.AnyAsync(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber, ct))
             return Fail("PHONE_NUMBER_ALREADY_IN_USE");
@@ -303,12 +337,19 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     }
 
     private async Task<OtpValidationOutcome> ValidateAndReserveAsync(Guid id, string code,
-        OtpPurpose purpose, Guid? userId, CancellationToken ct)
+        OtpPurpose purpose, Guid? userId, OtpChannel? channel, CancellationToken ct)
     {
         var now = _clock.GetUtcNow();
         var challenge = await _db.PhoneOtpChallenges.SingleOrDefaultAsync(x => x.Id == id, ct);
         if (challenge is null || challenge.Purpose != purpose || challenge.UserId != userId)
             return OtpValidationOutcome.Failed(OtpFailureReason.NotFound);
+        // A code belongs to the channel it was created for. A caller that names another channel is refused
+        // with the same generic outcome as an unknown challenge, and the attempt is not counted against the code.
+        if (channel is { } requested && requested != challenge.Channel)
+        {
+            ApplicationTelemetry.RecordOtpVerification(challenge.Channel.ToString(), "failed");
+            return OtpValidationOutcome.Failed(OtpFailureReason.NotFound);
+        }
         if (challenge.ConsumedAtUtc is not null)
             return OtpValidationOutcome.Failed(OtpFailureReason.AlreadyUsed);
         if (challenge.ExpiresAtUtc <= now)
@@ -319,6 +360,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             return OtpValidationOutcome.Failed(OtpFailureReason.NotFound);
         if (!_otp.Verify(code, challenge.CodeHash))
         {
+            ApplicationTelemetry.RecordOtpVerification(challenge.Channel.ToString(), "failed");
             if (!_db.Database.IsRelational())
             {
                 challenge.IncrementAttempts();
@@ -329,6 +371,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.AttemptCount, x => x.AttemptCount + 1), ct);
             return OtpValidationOutcome.Failed(OtpFailureReason.WrongCode);
         }
+        ApplicationTelemetry.RecordOtpVerification(challenge.Channel.ToString(), "succeeded");
         var reservation = Guid.NewGuid();
         if (!_db.Database.IsRelational())
         {
