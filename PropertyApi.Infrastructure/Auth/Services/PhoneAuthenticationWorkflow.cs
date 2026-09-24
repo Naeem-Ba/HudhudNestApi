@@ -424,8 +424,9 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
 
     private static void SetVerified(ApplicationUser user, DateTimeOffset now)
     {
-        user.PhoneLastVerifiedAtUtc = now; user.PhoneVerificationDueAtUtc = now.AddDays(180);
-        user.PhoneVerificationGraceEndsAtUtc = now.AddDays(183);
+        user.PhoneLastVerifiedAtUtc = now;
+        user.PhoneVerificationDueAtUtc = now + PhoneVerificationPolicy.VerificationInterval;
+        user.PhoneVerificationGraceEndsAtUtc = user.PhoneVerificationDueAtUtc + PhoneVerificationPolicy.GracePeriod;
         user.PhoneVerificationState = PhoneVerificationState.Verified;
     }
 

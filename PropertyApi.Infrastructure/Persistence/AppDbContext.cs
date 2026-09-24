@@ -195,6 +195,16 @@ public sealed class AppDbContext
         // see IActiveListingCounter).
         builder.Entity<ShortStayListing>().HasQueryFilter(e => !e.IsDeleted);
 
+        // Photos and amenity links belong to one listing and nothing else points at them, so they
+        // follow the listing's filter the way Favorite follows Property's (EF warned at model build
+        // time, and a query on them alone still returned rows of deleted listings).
+        // RoomType -> AccommodationUnit deliberately does NOT: Booking requires its unit, and a
+        // booking (money, dates, history) must stay readable after its listing is deleted -- see
+        // BookingRepository, which reads that chain with the listing filter off. EF still reports
+        // ShortStayListing -> RoomType at model build; that warning is accepted for this reason.
+        builder.Entity<ShortStayListingPhoto>().HasQueryFilter(p => !p.ShortStayListing.IsDeleted);
+        builder.Entity<ShortStayListingAmenity>().HasQueryFilter(a => !a.ShortStayListing.IsDeleted && !a.Amenity.IsDeleted);
+
         builder.Entity<Favorite>().HasQueryFilter(favorite => !favorite.Property.IsDeleted);
 
         builder.Entity<PropertyAmenity>().HasQueryFilter(propertyAmenity => !propertyAmenity.Property.IsDeleted && !propertyAmenity.Amenity.IsDeleted);
