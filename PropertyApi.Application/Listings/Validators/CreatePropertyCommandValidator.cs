@@ -28,7 +28,7 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
         "EUR", "USD", "GBP", "SYP", "TRY", "AED", "SAR", "EGP", "JOD", "LBP"
     };
 
-    public CreatePropertyCommandValidator(ICommonLookupService lookups)
+    public CreatePropertyCommandValidator(ICommonLookupService lookups, ILocationHierarchyChecker locations)
     {
         _lookups = lookups;
 
@@ -84,6 +84,11 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
         RuleFor(x => x.NeighborhoodText)
             .MaximumLength(150)
             .When(x => x.NeighborhoodText is not null);
+
+        RuleFor(x => x)
+            .MustAsync((x, ct) => locations.IsConsistentAsync(x.GovernorateId, x.DistrictId, x.NeighborhoodId, ct))
+            .WithName("Location")
+            .WithMessage("The district must belong to the governorate and the neighborhood to the district.");
 
         RuleFor(x => x.PropertyTypeId)
             .NotNull()
