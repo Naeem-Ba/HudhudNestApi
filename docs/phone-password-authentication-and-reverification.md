@@ -118,7 +118,7 @@ The answer depends on configuration and the public calling code only, never on w
 | `OtpChannels:WhatsApp:Enabled` | `false` | switches WhatsApp on; needs the `WhatsAppCloud:*` keys |
 | `OtpChannels:<Channel>:UnavailableCountryCodes` | Telegram/SMS: none. WhatsApp: `["+963","+53","+98","+850"]` | calling-code prefixes where the channel is not offered. Setting it **replaces** the built-in list |
 | `OtpChannels:DefaultRecommended` | empty | channel suggested when no country entry matches |
-| `OtpChannels:RecommendedByCountryCode:<+code>` | none | channel suggested for numbers starting with the code (longest prefix wins), for example `+963` = `Telegram`. Only suggested when it is available |
+| `OtpChannels:RecommendedByCountryCode:<code>` | none | channel suggested for numbers starting with the calling code (longest prefix wins), for example `963` or `+963` = `Telegram`; write it without the plus in environment variables (`OtpChannels__RecommendedByCountryCode__963`). Only suggested when it is available |
 | `TelegramGateway:ApiToken` | none | Gateway access token (secret, sent as a Bearer header) |
 | `TelegramGateway:BaseUrl` / `TimeoutSeconds` / `SenderUsername` | `https://gatewayapi.telegram.org/` / 10 / empty | transport settings; the optional verified sender channel |
 | `WhatsAppCloud:AccessToken` / `PhoneNumberId` / `TemplateName` | none | Graph API token (secret), sending number id, approved AUTHENTICATION template |

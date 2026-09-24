@@ -338,6 +338,20 @@ public sealed class OtpChannelProvidersTests
     }
 
     [Fact]
+    public void Recommended_CountryCodeKeys_MayBeWrittenWithoutThePlus_ForEnvironmentVariables()
+    {
+        var options = new OtpChannelOptions
+        {
+            Telegram = new OtpChannelSettings { Enabled = true },
+            RecommendedByCountryCode = new() { ["963"] = "Telegram" }
+        };
+        var service = Service(options, Fake(OtpChannel.Sms), Fake(OtpChannel.Telegram));
+
+        Assert.Equal(OtpChannel.Telegram, RecommendedFor(service, "+963944111222"));
+        Assert.Null(RecommendedFor(service, Phone));
+    }
+
+    [Fact]
     public void Recommended_IgnoresAnUnknownChannelName()
     {
         var service = Service(new OtpChannelOptions { DefaultRecommended = "Carrier pigeon" }, Fake(OtpChannel.Sms));

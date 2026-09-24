@@ -106,14 +106,22 @@ public sealed class OtpChannelService : IOtpChannelService
         string? name = null;
         if (normalizedPhone is not null)
         {
+            // Keys may be written with or without the plus ("+963" or "963"): environment-variable names cannot hold a "+".
             name = _options.RecommendedByCountryCode
-                .Where(x => normalizedPhone.StartsWith(x.Key.Trim(), StringComparison.Ordinal))
-                .OrderByDescending(x => x.Key.Length)
+                .Select(x => (Prefix: CallingCode(x.Key), x.Value))
+                .Where(x => normalizedPhone.StartsWith(x.Prefix, StringComparison.Ordinal))
+                .OrderByDescending(x => x.Prefix.Length)
                 .Select(x => x.Value)
                 .FirstOrDefault();
         }
         name ??= _options.DefaultRecommended;
         return Enum.TryParse<OtpChannel>(name, true, out var channel) && usable.Contains(channel) ? channel : null;
+    }
+
+    private static string CallingCode(string key)
+    {
+        var trimmed = key.Trim();
+        return trimmed.StartsWith('+') ? trimmed : "+" + trimmed;
     }
 
     private static bool MatchesPrefix(string phone, IReadOnlyList<string> prefixes) =>
