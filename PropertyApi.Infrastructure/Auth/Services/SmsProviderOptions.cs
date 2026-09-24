@@ -14,6 +14,9 @@ public sealed class SmsProviderOptions
     /// <summary>Seconds the send-OTP request waits for the provider before treating the send as failed.</summary>
     public int TimeoutSeconds { get; init; } = 10;
 
+    /// <summary>Message template code for providers that only accept registered templates (Unimatrix). Empty = the provider's public Arabic OTP template.</summary>
+    public string TemplateId { get; init; } = string.Empty;
+
     /// <summary>
     /// Calling-code prefixes (for example "+963") a NEW number may have when registering or changing a
     /// number. Empty means no restriction. Existing accounts are never blocked by this list.

@@ -42,6 +42,7 @@ The audit itself changed no production code. **Update (same day): F-1, F-3 and F
 | F-19 auth responses cacheable | **Fixed** | `Cache-Control: no-store` on the three auth controllers. |
 | F-20 no OTP autofill, errors not announced | **Fixed (app)** | `autocomplete="one-time-code"`, `role="alert"` / `role="status"`. |
 | F-21–F-24 | Info | See findings. |
+| F-27 Twilio cannot deliver to Syria; HTTP adapter matched no provider; Production forced Twilio to fill HTTP-provider keys | **Fixed in code; real delivery to Syria pending** | D7 Networks and Unimatrix adapters (template-based), provider-aware startup validation; see F-27 |
 
 Every backend fix was proven fail-first: with the previous code 8 tests fail in each of the two rounds; with the fixes `PhoneLoginAuditTests` gives 52 passed, 0 skipped, and the full integration suite 391 passed, 0 failed.
 
@@ -243,6 +244,20 @@ Severity: High / Medium / Low / Info. "Test" names refer to `tests/PropertyApi.I
 - The Production Gate failed on master (run 35918522603): the smoke journey still required *no* challenge id for an
   already registered number, while #207 deliberately answers with a decoy challenge (F-2). The journey now expects
   the challenge id and proves the decoy cannot be completed, not even with Staging's fixed OTP.
+
+### F-27 (High for a Syria-focused product, fixed in code) Twilio cannot deliver to Syria; the HTTP adapter matched no real provider
+- Found while running the first real SMS test (Germany, worked): the Twilio console lists Syria (+963) as "Not Available", so Syrian users can never
+  receive a code through Twilio. The generic HTTP adapter sent one fixed shape (`to/from/message/apiKey`) that no real provider accepts.
+- Added `SmsProvider:Provider = D7` (D7 Networks) and `Unimatrix` adapters with the requests those providers document, the timeout of F-16, and no
+  OTP, credential or full number in any log (Unimatrix takes its key in the URL, so its HttpClient logging is removed and its failures log the
+  exception type only). Verified against a stub provider and live with fake keys (both answered 401, `SMS_FAILED`, the key never reached the Debug log).
+- **First real Syrian number (Unimatrix, unverified account):** refused before sending with `107141` SmsTemplateNotExists, no message and no charge.
+  Unimatrix only accepts registered templates to that destination, so the adapter now sends the public Arabic OTP template `pub_otp_ar_security`
+  through `templateId` + `templateData.code` (`SmsProvider:TemplateId` overrides it once the account is verified). **Delivery to a real Syrian number
+  is still to be confirmed.**
+- Also fixed: in Production the Twilio provider failed startup unless `SmsProvider:ApiUrl/ApiKey/FromNumber` were filled in with values Twilio never uses.
+- Account note: the Unimatrix account shows "Not verified"; carriers require identity verification before a custom sender name or custom templates,
+  which is the owner's step.
 
 ## 5. Verified working (highlights)
 

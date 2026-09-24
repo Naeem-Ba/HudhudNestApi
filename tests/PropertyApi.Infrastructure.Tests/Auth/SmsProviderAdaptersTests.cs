@@ -19,8 +19,8 @@ public sealed class SmsProviderAdaptersTests
     private const string Secret = "provider-secret-key-123";
     private const string Phone = "+963944111222";
 
-    private static IOptions<SmsProviderOptions> Opts(string provider, string from = "HudhudNest", string apiUrl = "", int timeout = 1) =>
-        Options.Create(new SmsProviderOptions { Provider = provider, ApiKey = Secret, FromNumber = from, ApiUrl = apiUrl, TimeoutSeconds = timeout });
+    private static IOptions<SmsProviderOptions> Opts(string provider, string from = "HudhudNest", string apiUrl = "", int timeout = 1, string templateId = "") =>
+        Options.Create(new SmsProviderOptions { Provider = provider, ApiKey = Secret, FromNumber = from, ApiUrl = apiUrl, TimeoutSeconds = timeout, TemplateId = templateId });
 
     // ───────────── D7 Networks ─────────────
 
@@ -98,7 +98,34 @@ public sealed class SmsProviderAdaptersTests
         using var body = JsonDocument.Parse(handler.Body);
         Assert.Equal(Phone, body.RootElement.GetProperty("to").GetString());
         Assert.Equal("Hudhud", body.RootElement.GetProperty("signature").GetString());
-        Assert.Contains(Otp, body.RootElement.GetProperty("text").GetString());
+    }
+
+    [Fact]
+    public async Task Unimatrix_SendsATemplate_NotFreeText_BecauseSyriaRejectsUnregisteredText()
+    {
+        // Free text to Syria was refused with 107141 (SmsTemplateNotExists) on an unverified account; the public
+        // Arabic OTP template works without verification.
+        var handler = new RecordingHandler(HttpStatusCode.OK, """{"code":"0"}""");
+        var service = new UnimatrixSmsService(new HttpClient(handler), Opts("Unimatrix"), NullLogger<UnimatrixSmsService>.Instance);
+
+        await service.SendOtpAsync(Phone, Otp);
+
+        using var body = JsonDocument.Parse(handler.Body);
+        Assert.Equal("pub_otp_ar_security", body.RootElement.GetProperty("templateId").GetString());
+        Assert.Equal(Otp, body.RootElement.GetProperty("templateData").GetProperty("code").GetString());
+        Assert.False(body.RootElement.TryGetProperty("text", out _));
+    }
+
+    [Fact]
+    public async Task Unimatrix_ACustomTemplateId_OverridesTheDefault()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, """{"code":"0"}""");
+        var service = new UnimatrixSmsService(new HttpClient(handler), Opts("Unimatrix", templateId: "my_custom_otp"), NullLogger<UnimatrixSmsService>.Instance);
+
+        await service.SendOtpAsync(Phone, Otp);
+
+        using var body = JsonDocument.Parse(handler.Body);
+        Assert.Equal("my_custom_otp", body.RootElement.GetProperty("templateId").GetString());
     }
 
     [Fact]
