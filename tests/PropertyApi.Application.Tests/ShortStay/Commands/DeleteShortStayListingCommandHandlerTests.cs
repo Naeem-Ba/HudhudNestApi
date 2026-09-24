@@ -23,9 +23,11 @@ public sealed class DeleteShortStayListingCommandHandlerTests
         Mock<IShortStayListingRepository> listings,
         Mock<IUnitOfWork>? uow = null,
         Mock<IMediaStorageService>? storage = null,
-        Mock<IAuditLogService>? auditLogs = null)
+        Mock<IAuditLogService>? auditLogs = null,
+        Mock<IBookingRepository>? bookings = null)
         => new(
             listings.Object,
+            (bookings ?? new Mock<IBookingRepository>()).Object,
             (storage ?? new Mock<IMediaStorageService>()).Object,
             (uow ?? new Mock<IUnitOfWork>()).Object,
             (auditLogs ?? new Mock<IAuditLogService>()).Object,
@@ -50,6 +52,30 @@ public sealed class DeleteShortStayListingCommandHandlerTests
         Assert.True(listing.IsDeleted);
         Assert.Equal(ownerId, listing.DeletedByUserId);
         listings.Verify(x => x.Remove(listing), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_ListingWithActiveBookings_IsAConflict_AndNothingIsRemoved()
+    {
+        var ownerId = Guid.NewGuid();
+        var listing = CreateListing(ownerId);
+
+        var listings = new Mock<IShortStayListingRepository>();
+        listings.Setup(x => x.GetByIdWithDetailsAsync(listing.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(listing);
+        var bookings = new Mock<IBookingRepository>();
+        bookings.Setup(x => x.HasActiveBookingsForListingAsync(listing.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var uow = new Mock<IUnitOfWork>();
+
+        var handler = MakeHandler(listings, uow, bookings: bookings);
+
+        await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
+            new DeleteShortStayListingCommand(listing.Id, ownerId), CancellationToken.None));
+
+        Assert.False(listing.IsDeleted);
+        listings.Verify(x => x.Remove(It.IsAny<ShortStayListing>()), Times.Never);
+        uow.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

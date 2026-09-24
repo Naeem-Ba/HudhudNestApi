@@ -96,6 +96,13 @@ public sealed class BookingRepository : IBookingRepository
         => await _db.ShortStayBookings.AnyAsync(
             b => b.Id == bookingId && b.GuestId == guestId && b.Status == BookingStatus.Completed, ct);
 
+    public async Task<bool> HasActiveBookingsForListingAsync(Guid listingId, CancellationToken ct = default)
+        => await _db.ShortStayBookings.AnyAsync(b =>
+            b.Unit!.RoomType.ShortStayListingId == listingId &&
+            (b.Status == BookingStatus.Pending || b.Status == BookingStatus.Approved ||
+             b.Status == BookingStatus.DepositPaid || b.Status == BookingStatus.Confirmed ||
+             b.Status == BookingStatus.CheckedIn || b.Status == BookingStatus.CheckedOut), ct);
+
     public async Task<bool> HasReviewAsync(Guid bookingId, CancellationToken ct = default)
         => await _db.ShortStayReviews.AnyAsync(r => r.BookingId == bookingId, ct);
 
