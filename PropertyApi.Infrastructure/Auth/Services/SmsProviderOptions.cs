@@ -14,11 +14,31 @@ public sealed class SmsProviderOptions
     /// <summary>Seconds the send-OTP request waits for the provider before treating the send as failed.</summary>
     public int TimeoutSeconds { get; init; } = 10;
 
+    /// <summary>Message template code for providers that only accept registered templates (Unimatrix). Empty = the provider's public Arabic OTP template.</summary>
+    public string TemplateId { get; init; } = string.Empty;
+
     /// <summary>
     /// Calling-code prefixes (for example "+963") a NEW number may have when registering or changing a
     /// number. Empty means no restriction. Existing accounts are never blocked by this list.
     /// </summary>
     public string[] AllowedCountryCodes { get; init; } = [];
+
+    public bool IsProvider(string name) => string.Equals(Provider?.Trim(), name, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The endpoint to call: SmsProvider:ApiUrl, or the provider's public default when it is not set.</summary>
+    public string ResolveApiUrl()
+    {
+        if (!string.IsNullOrWhiteSpace(ApiUrl)) return ApiUrl.Trim();
+        if (IsProvider("D7")) return "https://api.d7networks.com/messages/v1/send";
+        if (IsProvider("Unimatrix")) return "https://api.unimtx.com/";
+        return string.Empty;
+    }
+
+    /// <summary>Twilio is configured through its own Twilio:* keys; ApiUrl/ApiKey/FromNumber do not apply to it.</summary>
+    public bool UsesSmsProviderKeys => !IsProvider("Twilio");
+
+    /// <summary>Unimatrix treats the sender signature as optional; every other HTTP provider needs a sender id.</summary>
+    public bool RequiresFromNumber => UsesSmsProviderKeys && !IsProvider("Unimatrix");
 
     public void ValidateForEnvironment(string environmentName)
     {
@@ -37,17 +57,22 @@ public sealed class SmsProviderOptions
             return;
         }
 
+        if (!UsesSmsProviderKeys)
+        {
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(ApiKey))
         {
             throw new InvalidOperationException("SmsProvider:ApiKey is required in Production.");
         }
 
-        if (string.IsNullOrWhiteSpace(FromNumber))
+        if (RequiresFromNumber && string.IsNullOrWhiteSpace(FromNumber))
         {
             throw new InvalidOperationException("SmsProvider:FromNumber is required in Production.");
         }
 
-        if (!Uri.TryCreate(ApiUrl, UriKind.Absolute, out var endpoint))
+        if (!Uri.TryCreate(ResolveApiUrl(), UriKind.Absolute, out var endpoint))
         {
             throw new InvalidOperationException("SmsProvider:ApiUrl must be a valid absolute HTTPS URL in Production.");
         }

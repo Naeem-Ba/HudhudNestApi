@@ -67,9 +67,28 @@ Existing users with no trustworthy phone-confirmation timestamp remain `NotConfi
 
 ## SMS configuration
 
+### SMS providers
+
+`SmsProvider:Provider` selects the adapter. **Twilio does not deliver to Syria** (its console lists Syria as "Not Available"), so a
+deployment with Syrian users needs one of the providers below.
+
+| `Provider` | Adapter | `ApiKey` is | `FromNumber` is | `ApiUrl` default |
+|---|---|---|---|---|
+| `D7` | D7 Networks (UAE), `POST /messages/v1/send`, Bearer token, Unicode text | the D7 API token | the originator (sender id), required | `https://api.d7networks.com/messages/v1/send` |
+| `Unimatrix` | Unimatrix, `POST /?action=sms.message.send`, **always through a template** (`templateId` + `templateData.code`), success = HTTP 2xx and `{"code":"0"}` | the AccessKey ID (sent in the URL query, so this client has request logging removed) | the signature, optional (2–16 characters) | `https://api.unimtx.com/` |
+| `Twilio` | Twilio SDK | not used: `Twilio:AccountSid`, `Twilio:AuthToken`, `Twilio:FromNumber` | not used | not used |
+| anything else / `Http` | generic JSON POST `{to, from, message, apiKey}` | shared secret in the body | sender | required, HTTPS |
+
+Only `Development`, `Testing` and `CI` use the console sink; every other environment uses the selected provider. In Production the
+key, the sender (except Unimatrix) and an HTTPS URL are validated at startup; Twilio is no longer forced to fill in the HTTP provider's keys.
+
+Syria specifics (from the providers' public pages, verify with the provider before launch): A2P traffic to Syria is restricted to OTP and
+banking-type messages, marketing SMS is not allowed, the sender id may need registering, and the Syrian regulator (SYTRA) applies.
+
 | Key | Default | Meaning |
 |---|---|---|
 | `SmsProvider:TimeoutSeconds` | 10 (clamped 1–60) | how long a send-OTP request waits for the HTTP provider before the send counts as failed (`SMS_FAILED`) |
+| `SmsProvider:TemplateId` | empty | Unimatrix only: template code. Empty = the public Arabic OTP template `pub_otp_ar_security`, which needs no account verification. Free text to Syria was refused with `107141` (SmsTemplateNotExists) |
 | `SmsProvider:AllowedCountryCodes` | empty (no restriction) | calling-code prefixes, for example `["+963", "+49"]`, a NEW registration or phone change may use; anything else is refused with `PHONE_COUNTRY_NOT_SUPPORTED` before any SMS is sent. Existing accounts (login, reset, re-verification) are never affected. **Set this in every deployed environment**: without it any number in the world can be sent a paid SMS, limited only by per-IP rate limits |
 
 Auth responses are `Cache-Control: no-store`. The reminder worker repairs a verified user that has no due dates (verified + 180 days, grace +3 days) instead of failing the tick.
