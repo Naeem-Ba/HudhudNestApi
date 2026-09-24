@@ -23,6 +23,7 @@ public sealed class DeleteShortStayListingCommandHandler
     : IRequestHandler<DeleteShortStayListingCommand, bool>
 {
     private readonly IShortStayListingRepository _listings;
+    private readonly IBookingRepository _bookings;
     private readonly IMediaStorageService _storage;
     private readonly IUnitOfWork _uow;
     private readonly IAuditLogService _auditLogs;
@@ -30,12 +31,14 @@ public sealed class DeleteShortStayListingCommandHandler
 
     public DeleteShortStayListingCommandHandler(
         IShortStayListingRepository listings,
+        IBookingRepository bookings,
         IMediaStorageService storage,
         IUnitOfWork uow,
         IAuditLogService auditLogs,
         ILogger<DeleteShortStayListingCommandHandler> logger)
     {
         _listings = listings;
+        _bookings = bookings;
         _storage = storage;
         _uow = uow;
         _auditLogs = auditLogs;
@@ -49,6 +52,13 @@ public sealed class DeleteShortStayListingCommandHandler
 
         if (listing.OwnerId != request.RequestingUserId)
             throw new ForbiddenException("Only the listing owner can delete it.");
+
+        // Owner decision (2026-09-24): a listing with bookings still in progress cannot be deleted. After a
+        // delete those bookings could no longer be approved, checked in, completed or even cancelled (their
+        // listing is filtered out), so the host has to finish or cancel them first.
+        if (await _bookings.HasActiveBookingsForListingAsync(listing.Id, ct))
+            throw new ConflictException(
+                "This listing has bookings in progress. Complete, reject or cancel them before deleting the listing.");
 
         var oldValue = JsonSerializer.Serialize(new
         {

@@ -189,6 +189,7 @@ public sealed class CreateBookingCommandHandlerTests
         public Task<IReadOnlyList<Booking>> GetByHostIdAsync(Guid hostId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> HasCompletedBookingAsync(Guid bookingId, Guid guestId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> HasReviewAsync(Guid bookingId, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<bool> HasActiveBookingsForListingAsync(Guid listingId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IReadOnlyList<UnitBookingRange>> GetRangesForUnitAsync(Guid unitId, DateOnly from, DateOnly to, CancellationToken ct = default) => throw new NotImplementedException();
     }
 

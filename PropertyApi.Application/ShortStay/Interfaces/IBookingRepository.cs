@@ -48,6 +48,12 @@ public interface IBookingRepository
     Task<IReadOnlyList<Booking>> GetByHostIdAsync(Guid hostId, CancellationToken ct = default);
 
     Task<bool> HasCompletedBookingAsync(Guid bookingId, Guid guestId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Whether any unit of this listing has a booking that is still in progress (pending through checked
+    /// out, i.e. not yet completed, rejected, cancelled, expired or a no-show). Such a listing cannot be deleted.
+    /// </summary>
+    Task<bool> HasActiveBookingsForListingAsync(Guid listingId, CancellationToken ct = default);
     Task<bool> HasReviewAsync(Guid bookingId, CancellationToken ct = default);
 
     /// <summary>Every held/blocked range for a unit that overlaps [from, to) — the calendar view.</summary>
