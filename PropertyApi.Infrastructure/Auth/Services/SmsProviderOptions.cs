@@ -11,6 +11,15 @@ public sealed class SmsProviderOptions
     public string ApiKey { get; init; } = string.Empty;
     public string FromNumber { get; init; } = string.Empty;
 
+    /// <summary>Seconds the send-OTP request waits for the provider before treating the send as failed.</summary>
+    public int TimeoutSeconds { get; init; } = 10;
+
+    /// <summary>
+    /// Calling-code prefixes (for example "+963") a NEW number may have when registering or changing a
+    /// number. Empty means no restriction. Existing accounts are never blocked by this list.
+    /// </summary>
+    public string[] AllowedCountryCodes { get; init; } = [];
+
     public void ValidateForEnvironment(string environmentName)
     {
         var isProduction = string.Equals(

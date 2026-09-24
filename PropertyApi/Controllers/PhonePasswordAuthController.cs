@@ -12,6 +12,8 @@ namespace PropertyApi.Controllers;
 
 [ApiController]
 [Route("api/auth/phone")]
+// Auth responses carry tokens, challenge ids and account status: never stored by a browser or a proxy.
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class PhonePasswordAuthController : ControllerBase
 {
     private readonly ISender _sender;
