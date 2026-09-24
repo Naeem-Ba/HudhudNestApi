@@ -52,11 +52,26 @@ public sealed class CreatePropertyCommandValidatorTests
     };
 
     private readonly Mock<ICommonLookupService> _lookupsMock = BuildLookupsMock();
+    private readonly Mock<ILocationHierarchyChecker> _locationsMock = new();
     private readonly CreatePropertyCommandValidator _validator;
 
     public CreatePropertyCommandValidatorTests()
     {
-        _validator = new CreatePropertyCommandValidator(_lookupsMock.Object);
+        _locationsMock.Setup(x => x.IsConsistentAsync(It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _validator = new CreatePropertyCommandValidator(_lookupsMock.Object, _locationsMock.Object);
+    }
+
+    [Fact]
+    public async Task InconsistentLocation_FailsWithALocationError()
+    {
+        // A district from another governorate used to be saved as is; the checker's answer is now enforced.
+        _locationsMock.Setup(x => x.IsConsistentAsync(It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var result = await _validator.ValidateAsync(ValidCommand());
+
+        Assert.Contains(result.Errors, e => e.PropertyName == "Location");
     }
 
     private static Mock<ICommonLookupService> BuildLookupsMock()

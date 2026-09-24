@@ -10,6 +10,7 @@ internal static class LookupInfrastructureRegistration
         this IServiceCollection services)
     {
         services.AddScoped<ICommonLookupService, CommonLookupService>();
+        services.AddScoped<ILocationHierarchyChecker, LocationHierarchyChecker>();
         services.AddScoped<ILocationSuggestionService, LocationSuggestionService>();
 
         // Stage 4 (Valuation Office Matching) Level 4 fallback — see

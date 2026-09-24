@@ -1,5 +1,7 @@
 ﻿using MediatR;
 using Microsoft.Extensions.Logging;
+using FluentValidation.Results;
+using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Events;
 using PropertyApi.Application.Listings.Interfaces;
@@ -27,6 +29,7 @@ public sealed class UpdatePropertyCommandHandler
     private readonly IUnitOfWork _uow;
     private readonly INotificationService _notifications;
     private readonly ILocationSuggestionService _locationSuggestions;
+    private readonly ILocationHierarchyChecker _locations;
     private readonly IPublisher _publisher;
     private readonly ILogger<UpdatePropertyCommandHandler> _logger;
 
@@ -37,6 +40,7 @@ public sealed class UpdatePropertyCommandHandler
         IUnitOfWork uow,
         INotificationService notifications,
         ILocationSuggestionService locationSuggestions,
+        ILocationHierarchyChecker locations,
         IPublisher publisher,
         ILogger<UpdatePropertyCommandHandler> logger)
     {
@@ -46,6 +50,7 @@ public sealed class UpdatePropertyCommandHandler
         _uow = uow;
         _notifications = notifications;
         _locationSuggestions = locationSuggestions;
+        _locations = locations;
         _publisher = publisher;
         _logger = logger;
     }
@@ -85,6 +90,18 @@ public sealed class UpdatePropertyCommandHandler
         if (request.NeighborhoodId.HasValue) property.NeighborhoodId = request.NeighborhoodId;
         if (request.NeighborhoodText is not null) property.NeighborhoodText = request.NeighborhoodText;
         if (request.PropertyTypeId.HasValue) property.PropertyTypeId = request.PropertyTypeId;
+
+        // Checked on the merged values (a null id keeps the stored one, so the request alone cannot tell),
+        // and only when the request changes the location: a listing saved before this check existed must
+        // stay editable in its other fields.
+        if ((request.GovernorateId.HasValue || request.DistrictId.HasValue || request.NeighborhoodId.HasValue) &&
+            !await _locations.IsConsistentAsync(property.GovernorateId, property.DistrictId, property.NeighborhoodId, cancellationToken))
+        {
+            throw new ValidationException(new[]
+            {
+                new ValidationFailure("Location", "The district must belong to the governorate and the neighborhood to the district.")
+            });
+        }
 
         if (request.Latitude.HasValue) property.Latitude = request.Latitude;
         if (request.Longitude.HasValue) property.Longitude = request.Longitude;
