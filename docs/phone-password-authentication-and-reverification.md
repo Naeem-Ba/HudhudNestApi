@@ -41,7 +41,7 @@ stateDiagram-v2
     Restricted --> Verified: valid reverification OTP
 ```
 
-The hourly batch worker processes 100 identities at a time. It creates persisted in-app reminders at 14, 7, and 1 days, grace start, one day before grace end, and restriction. A cycle/event key prevents duplicate user-facing notifications during retries. SMS is used for OTP delivery; the current notification subsystem has no general email or push reminder contract, so those channels are not invented here.
+The hourly batch worker reads only identities with something to do — inside the 14-day reminder window or past the due date, missing due dates, or a stored state that no longer matches the dates — and processes them 100 at a time by id (not by offset, which skipped users whose state the same tick corrected). The 180-day interval, 3-day grace period and 14-day window live in one place, `PhoneVerificationPolicy`. It creates persisted in-app reminders at 14, 7, and 1 days, grace start, one day before grace end, and restriction. A cycle/event key prevents duplicate user-facing notifications during retries. SMS is used for OTP delivery; the current notification subsystem has no general email or push reminder contract, so those channels are not invented here.
 
 When `PhoneVerification:EnforcementEnabled` is true, restricted users may read data and access phone recovery, refresh, and logout endpoints, but other HTTP mutations receive `PHONE_REVERIFICATION_REQUIRED`.
 

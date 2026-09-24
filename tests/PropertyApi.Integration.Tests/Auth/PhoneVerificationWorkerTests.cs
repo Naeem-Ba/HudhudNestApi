@@ -36,7 +36,8 @@ public sealed class PhoneVerificationWorkerTests : IClassFixture<PhoneLoginAudit
         NullLogger<PhoneVerificationHostedService>.Instance);
 
     /// <summary>Verified 173 days ago: due in 7 days, so the worker moves them to DueSoon and notifies once.</summary>
-    private async Task<List<Guid>> SeedUsers(int count, bool inconsistent = false)
+    private async Task<List<Guid>> SeedUsers(int count, bool inconsistent = false, int verifiedDaysAgo = 173,
+        PhoneVerificationState storedState = PhoneVerificationState.Verified)
     {
         var ids = new List<Guid>();
         using var scope = _factory.Services.CreateScope();
@@ -55,10 +56,10 @@ public sealed class PhoneVerificationWorkerTests : IClassFixture<PhoneLoginAudit
                 PhoneNumberConfirmed = true,
                 CreatedAt = now.UtcDateTime,
                 UpdatedAt = now.UtcDateTime,
-                PhoneLastVerifiedAtUtc = now.AddDays(-173),
-                PhoneVerificationDueAtUtc = inconsistent ? null : now.AddDays(7),
-                PhoneVerificationGraceEndsAtUtc = inconsistent ? null : now.AddDays(10),
-                PhoneVerificationState = PhoneVerificationState.Verified
+                PhoneLastVerifiedAtUtc = now.AddDays(-verifiedDaysAgo),
+                PhoneVerificationDueAtUtc = inconsistent ? null : now.AddDays(180 - verifiedDaysAgo),
+                PhoneVerificationGraceEndsAtUtc = inconsistent ? null : now.AddDays(183 - verifiedDaysAgo),
+                PhoneVerificationState = storedState
             };
             var created = await users.CreateAsync(user);
             Assert.True(created.Succeeded, string.Join(",", created.Errors.Select(e => e.Code)));
@@ -130,5 +131,20 @@ public sealed class PhoneVerificationWorkerTests : IClassFixture<PhoneLoginAudit
         Assert.All((await ReminderCounts(healthy)).Values, c => Assert.Equal(1, c));
         // the inconsistent row is repaired and reminded like everyone else
         Assert.All((await ReminderCounts(poison)).Values, c => Assert.Equal(1, c));
+    }
+
+    [Fact]
+    public async Task FarFromDue_StaleStateIsCorrected_AndNobodyIsReminded()
+    {
+        // The tick only reads users who have something to do; a stored state that no longer matches the
+        // dates (re-verified since the last tick) is one of those and must still be put back to Verified.
+        var stale = await SeedUsers(5, verifiedDaysAgo: 10, storedState: PhoneVerificationState.DueSoon);
+        var settled = await SeedUsers(5, verifiedDaysAgo: 10);
+
+        await NewWorker().ProcessAsync(CancellationToken.None);
+
+        Assert.Equal(5, await CountInState(stale, PhoneVerificationState.Verified));
+        Assert.Equal(5, await CountInState(settled, PhoneVerificationState.Verified));
+        Assert.All((await ReminderCounts(stale.Concat(settled))).Values, c => Assert.Equal(0, c));
     }
 }

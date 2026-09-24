@@ -9,12 +9,24 @@ public interface IPhoneVerificationPolicy
 
 public sealed class PhoneVerificationPolicy : IPhoneVerificationPolicy
 {
+    /// <summary>How long a verification lasts before the number must be verified again.</summary>
+    public static readonly TimeSpan VerificationInterval = TimeSpan.FromDays(180);
+
+    /// <summary>Time after the due date before the account is restricted.</summary>
+    public static readonly TimeSpan GracePeriod = TimeSpan.FromDays(3);
+
+    /// <summary>Time before the due date during which the user is reminded.</summary>
+    public static readonly TimeSpan DueSoonWindow = TimeSpan.FromDays(14);
+
     public PhoneVerificationState Evaluate(DateTimeOffset verified, DateTimeOffset now)
+        => Evaluate(verified + VerificationInterval, verified + VerificationInterval + GracePeriod, now);
+
+    /// <summary>State from stored due / grace-end dates (the reminder worker reads them per user).</summary>
+    public static PhoneVerificationState Evaluate(DateTimeOffset due, DateTimeOffset graceEnds, DateTimeOffset now)
     {
-        var due = verified.AddDays(180);
-        if (now >= due.AddDays(3)) return PhoneVerificationState.Restricted;
+        if (now >= graceEnds) return PhoneVerificationState.Restricted;
         if (now >= due) return PhoneVerificationState.GracePeriod;
-        if (now >= due.AddDays(-14)) return PhoneVerificationState.DueSoon;
+        if (now >= due - DueSoonWindow) return PhoneVerificationState.DueSoon;
         return PhoneVerificationState.Verified;
     }
 }
