@@ -46,9 +46,9 @@ Other checks: `dotnet format whitespace` clean; frontend `typecheck`, `typecheck
 
 | Test | Status |
 |---|---|
-| Telegram self-test (own number, free) | **BLOCKED**: needs a Telegram Gateway account and token (owner) |
+| Telegram self-test (own number, free) | **PASS** on 2026-09-24: local API, real Gateway token, one `registration/send-otp` with `channel=Telegram` to the owner's own German number; the 6-digit code arrived in the Telegram app. Code entry and verification were not exercised in this run |
 | Telegram, another number in Staging | NOT TESTED |
-| Telegram, German number | NOT TESTED |
+| Telegram, German number | PASS (same run as the self-test: the owner's number is German) |
 | Telegram, Syrian number | NOT TESTED |
 | SMS | PASS on 2026-09-23 with Twilio to a German number, before this change; the SMS path is unchanged and covered by the tests above; not re-run afterwards |
 | SMS to Syria (Unimatrix) | provider reported Delivered, **no message arrived on the phone**; unresolved |
