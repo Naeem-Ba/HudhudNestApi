@@ -46,13 +46,14 @@ Other checks: `dotnet format whitespace` clean; frontend `typecheck`, `typecheck
 
 | Test | Status |
 |---|---|
-| Telegram self-test (own number, free) | **BLOCKED**: needs a Telegram Gateway account and token (owner) |
+| Telegram self-test (own number, free) | **PASS** on 2026-09-24: local API, real Gateway token, one `registration/send-otp` with `channel=Telegram` to the owner's own German number; the 6-digit code arrived in the Telegram app. Code entry and verification were not exercised in this run |
 | Telegram, another number in Staging | NOT TESTED |
-| Telegram, German number | NOT TESTED |
-| Telegram, Syrian number | NOT TESTED |
+| Telegram, German number | PASS (same run as the self-test: the owner's number is German) |
+| Telegram, Syrian number | **PASS with a limit** (2026-09-25): the 6-digit code arrived in the Telegram app on the Syrian phone (`+963 ***5672`). The Gateway account was created with that same number, so the send was free (own number). A first attempt with the German account's token had been refused with HTTP 200 and error `BALANCE_NOT_ENOUGH` (sending to a number other than the account's own is billed); the adapter classified that as a provider failure (`OTP_PROVIDER_UNAVAILABLE`, `provider_unavailable`) and logged it without secrets, as designed. **Not proven:** a paid send to a different Syrian number (price, per-country restrictions), and the verify step with real Telegram |
 | SMS | PASS on 2026-09-23 with Twilio to a German number, before this change; the SMS path is unchanged and covered by the tests above; not re-run afterwards |
 | SMS to Syria (Unimatrix) | provider reported Delivered, **no message arrived on the phone**; unresolved |
-| WhatsApp (any) | NOT TESTED: needs a Meta Business account and an approved template |
+| WhatsApp (any) | NOT TESTED (2026-09-25). A Meta developer app with the WhatsApp use case and a Meta test number were set up, but the test WhatsApp Business Account refused to create a template ("this WhatsApp Business account does not have permission to create a message template"), so no AUTHENTICATION template exists and the adapter's payload (body code plus copy-code button) has not been exercised. A real WhatsApp Business Account (own phone number, business verification, message fees) is needed |
+| WhatsApp, Syria | NOT SUPPORTED per Meta's official page (checked 2026-09-25): businesses in Syria are not eligible, and WhatsApp/WhatsApp Business users in Syria are not eligible to receive Business Platform messages. Recipients are what matter, so connecting a Syrian sender number would not help. `+963` stays in `OtpChannels:WhatsApp:UnavailableCountryCodes`; when Meta announces support and a real template is confirmed on a Syrian phone, remove it from that list (configuration only, no code change) |
 | Staging | NOT TESTED: no Staging access from the development environment |
 | RTL / German layout | checked on screenshots at 1000 px and 375 px (ar, en, de) |
 
