@@ -1,5 +1,6 @@
 using FluentValidation;
 using PropertyApi.Domain.ShortStay.Entities;
+using PropertyApi.Domain.ShortStay.Enums;
 
 namespace PropertyApi.Application.ShortStay.Commands.CreateShortStayListing;
 
@@ -21,7 +22,19 @@ public sealed class CreateShortStayListingCommandValidator : AbstractValidator<C
             .Must(c => !string.IsNullOrWhiteSpace(c) && ShortStayListing.SupportedCurrencyCodes.Contains(c.Trim()))
             .When(x => x.CurrencyCode is not null)
             .WithMessage("رمز العملة غير مدعوم.");
-        RuleFor(x => x.Latitude).InclusiveBetween(-90m, 90m);
-        RuleFor(x => x.Longitude).InclusiveBetween(-180m, 180m);
+        RuleFor(x => x.Latitude).InclusiveBetween(-90m, 90m).When(x => x.Latitude.HasValue);
+        RuleFor(x => x.Longitude).InclusiveBetween(-180m, 180m).When(x => x.Longitude.HasValue);
+        RuleFor(x => x.Longitude).NotNull().When(x => x.Latitude.HasValue)
+            .WithMessage("حدّد خط العرض وخط الطول معًا.");
+        RuleFor(x => x.Latitude).NotNull().When(x => x.Longitude.HasValue)
+            .WithMessage("حدّد خط العرض وخط الطول معًا.");
+        // 0,0 is what a client sends when it has no location; it is a point in the Atlantic.
+        RuleFor(x => x.Latitude).Must((x, _) => !(x.Latitude == 0m && x.Longitude == 0m))
+            .WithMessage("حدّد موقع الإعلان على الخريطة.");
+        RuleFor(x => x.City).MaximumLength(100);
+        RuleFor(x => x.LocationVisibility)
+            .Must(v => Enum.TryParse<LocationVisibility>(v, ignoreCase: true, out _))
+            .WithMessage("قيمة LocationVisibility غير معروفة.")
+            .When(x => x.LocationVisibility is not null);
     }
 }

@@ -38,8 +38,12 @@ public sealed class SearchShortStayListingsQueryHandler
                 FromPricePerNight: cheapestRoomType?.BasePricePerNight,
                 CurrencyCode: listing.CurrencyCode,
                 City: listing.City,
-                Latitude: listing.LocationVisibility == Domain.ShortStay.Enums.LocationVisibility.Exact ? listing.Latitude : null,
-                Longitude: listing.LocationVisibility == Domain.ShortStay.Enums.LocationVisibility.Exact ? listing.Longitude : null,
+                Latitude: listing.LocationVisibility == Domain.ShortStay.Enums.LocationVisibility.Exact
+                    ? listing.Latitude
+                    : Domain.ShortStay.Entities.ShortStayListing.ApproximateCoordinate(listing.Latitude),
+                Longitude: listing.LocationVisibility == Domain.ShortStay.Enums.LocationVisibility.Exact
+                    ? listing.Longitude
+                    : Domain.ShortStay.Entities.ShortStayListing.ApproximateCoordinate(listing.Longitude),
                 IsPublished: listing.IsPublished,
                 MainPhotoUrl: listing.Photos.OrderBy(p => p.SortOrder).FirstOrDefault()?.Url,
                 AverageRating: null, // wired once ShortStayReview aggregation is added (see plan follow-ups)

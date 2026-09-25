@@ -47,8 +47,9 @@ public sealed class ShortStayListing : AuditableEntity
     public bool RequestBookingEnabled { get; private set; } = true;
 
     // ── Location ──────────────────────────────────────────────────
-    public decimal Latitude { get; private set; }
-    public decimal Longitude { get; private set; }
+    /// <summary>Null until the host pins the listing on the map — never a fake 0,0 "null island".</summary>
+    public decimal? Latitude { get; private set; }
+    public decimal? Longitude { get; private set; }
     public int? GovernorateId { get; private set; }
     public int? DistrictId { get; private set; }
     public int? NeighborhoodId { get; private set; }
@@ -101,8 +102,8 @@ public sealed class ShortStayListing : AuditableEntity
         int bathrooms,
         TimeOnly checkInTime,
         TimeOnly checkOutTime,
-        decimal latitude,
-        decimal longitude,
+        decimal? latitude,
+        decimal? longitude,
         Guid? propertyId = null,
         string currencyCode = DefaultCurrencyCode)
     {
@@ -114,6 +115,8 @@ public sealed class ShortStayListing : AuditableEntity
 
         if (string.IsNullOrWhiteSpace(currencyCode) || !SupportedCurrencyCodes.Contains(currencyCode.Trim()))
             throw new DomainException("رمز العملة غير مدعوم.");
+
+        var (lat, lng) = NormalizeCoordinates(latitude, longitude);
 
         return new ShortStayListing
         {
@@ -128,10 +131,41 @@ public sealed class ShortStayListing : AuditableEntity
             Bathrooms = bathrooms,
             CheckInTime = checkInTime,
             CheckOutTime = checkOutTime,
-            Latitude = latitude,
-            Longitude = longitude,
+            Latitude = lat,
+            Longitude = lng,
         };
     }
+
+    /// <summary>
+    /// A pin is both coordinates or neither, inside the valid range, and never the 0,0 default a
+    /// client sends when it has no location — that point is in the Atlantic and would be shown to
+    /// guests as if it were the property.
+    /// </summary>
+    public static (decimal? Latitude, decimal? Longitude) NormalizeCoordinates(decimal? latitude, decimal? longitude)
+    {
+        if (latitude is null && longitude is null)
+            return (null, null);
+
+        if (latitude is null || longitude is null)
+            throw new DomainException("حدّد خط العرض وخط الطول معًا، أو اتركهما فارغين.");
+
+        if (latitude is < -90m or > 90m || longitude is < -180m or > 180m)
+            throw new DomainException("إحداثيات الموقع خارج النطاق المسموح.");
+
+        if (latitude == 0m && longitude == 0m)
+            throw new DomainException("حدّد موقع الإعلان على الخريطة.");
+
+        return (latitude, longitude);
+    }
+
+    /// <summary>Enough location for a guest to find and place the listing: a city and a map pin.</summary>
+    public bool HasLocation => !string.IsNullOrWhiteSpace(City) && Latitude.HasValue && Longitude.HasValue;
+
+    /// <summary>
+    /// What a non-owner may see for <see cref="LocationVisibility.Approximate"/>: the pin snapped to a
+    /// ~1 km grid (2 decimals), so guests see the area but cannot read the exact address off the map.
+    /// </summary>
+    public static decimal? ApproximateCoordinate(decimal? value) => value.HasValue ? Math.Round(value.Value, 2) : null;
 
     // ── Domain update methods ─────────────────────────────────────
     public void UpdateBasicInfo(string title, string description, int capacity, int bedrooms, int bathrooms,
@@ -161,11 +195,17 @@ public sealed class ShortStayListing : AuditableEntity
         RequestBookingEnabled = requestBookingEnabled;
     }
 
-    public void UpdateLocation(decimal latitude, decimal longitude, int? governorateId, int? districtId,
+    public void UpdateLocation(decimal? latitude, decimal? longitude, int? governorateId, int? districtId,
         int? neighborhoodId, string? city, LocationVisibility locationVisibility)
     {
-        Latitude = latitude;
-        Longitude = longitude;
+        var (lat, lng) = NormalizeCoordinates(latitude, longitude);
+
+        // A live listing must stay findable: clearing its location would leave it published but invisible.
+        if (IsPublished && (lat is null || lng is null || string.IsNullOrWhiteSpace(city)))
+            throw new DomainException("لا يمكن إزالة موقع إعلان منشور. ألغِ النشر أولًا أو عدّل الموقع.");
+
+        Latitude = lat;
+        Longitude = lng;
         GovernorateId = governorateId;
         DistrictId = districtId;
         NeighborhoodId = neighborhoodId;
@@ -253,6 +293,9 @@ public sealed class ShortStayListing : AuditableEntity
     {
         if (RoomTypes.Count == 0)
             throw new DomainException("لا يمكن نشر إعلان بلا أي نوع غرفة/وحدة قابلة للحجز.");
+
+        if (!HasLocation)
+            throw new DomainException("حدّد موقع الإعلان (المحافظة ونقطة على الخريطة) قبل نشره.");
 
         IsPublished = true;
         PublishedAt = DateTime.UtcNow;

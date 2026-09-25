@@ -19,8 +19,13 @@ public sealed record CreateShortStayListingCommand(
     int Bathrooms,
     TimeOnly CheckInTime,
     TimeOnly CheckOutTime,
-    decimal Latitude,
-    decimal Longitude,
+    decimal? Latitude,
+    decimal? Longitude,
     decimal DefaultBasePricePerNight,
     Guid? PropertyId,
-    string? CurrencyCode = null) : IRequest<ShortStayListingDto>;
+    string? CurrencyCode = null,
+    int? GovernorateId = null,
+    int? DistrictId = null,
+    int? NeighborhoodId = null,
+    string? City = null,
+    string? LocationVisibility = null) : IRequest<ShortStayListingDto>;

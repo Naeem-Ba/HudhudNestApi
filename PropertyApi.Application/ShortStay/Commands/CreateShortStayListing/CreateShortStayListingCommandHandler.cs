@@ -10,6 +10,7 @@ using PropertyApi.Application.ShortStay.DTOs;
 using PropertyApi.Application.ShortStay.Interfaces;
 using PropertyApi.Application.ShortStay.Mapping;
 using PropertyApi.Domain.ShortStay.Entities;
+using PropertyApi.Domain.ShortStay.Enums;
 using PropertyApi.Domain.Users.Entities;
 
 namespace PropertyApi.Application.ShortStay.Commands.CreateShortStayListing;
@@ -35,6 +36,7 @@ public sealed class CreateShortStayListingCommandHandler
     private readonly IActiveListingCounter _activeListingCounter;
     private readonly IListingQuotaPolicy _quotaPolicy;
     private readonly IPropertyOwnershipService _propertyOwnership;
+    private readonly IShortStayLocationResolver _locationResolver;
     private readonly IUnitOfWork _uow;
     private readonly ILogger<CreateShortStayListingCommandHandler> _logger;
 
@@ -46,6 +48,7 @@ public sealed class CreateShortStayListingCommandHandler
         IActiveListingCounter activeListingCounter,
         IListingQuotaPolicy quotaPolicy,
         IPropertyOwnershipService propertyOwnership,
+        IShortStayLocationResolver locationResolver,
         IUnitOfWork uow,
         ILogger<CreateShortStayListingCommandHandler> logger)
     {
@@ -56,6 +59,7 @@ public sealed class CreateShortStayListingCommandHandler
         _activeListingCounter = activeListingCounter;
         _quotaPolicy = quotaPolicy;
         _propertyOwnership = propertyOwnership;
+        _locationResolver = locationResolver;
         _uow = uow;
         _logger = logger;
     }
@@ -74,6 +78,11 @@ public sealed class CreateShortStayListingCommandHandler
         if (request.PropertyId is { } propertyId)
             await _propertyOwnership.EnsureOwnerAsync(propertyId, request.OwnerId, "link", ct);
 
+        // Cheap and side-effect free, so it runs before any gate opens a transaction: a bad
+        // governorate/district pairing is a 422 on the field, not a rolled-back create.
+        var city = await _locationResolver.ResolveCityAsync(
+            request.GovernorateId, request.DistrictId, request.NeighborhoodId, request.City, ct);
+
         // Same two gates CreatePropertyCommandHandler enforces before its first listing —
         // see that handler's doc comments for why both apply regardless of role. Checked
         // before the quota's transaction/advisory lock even opens: cheap checks first.
@@ -81,7 +90,7 @@ public sealed class CreateShortStayListingCommandHandler
         await EnsureContactConfirmedAsync(request.OwnerId, ct);
         var verifiedAccount = EnsurePlanSelected(ownerAccount);
 
-        var listing = await CreateWithQuotaEnforcedAsync(request, verifiedAccount, ct);
+        var listing = await CreateWithQuotaEnforcedAsync(request, verifiedAccount, city, ct);
 
         return listing.ToDto(accommodationType);
     }
@@ -94,6 +103,7 @@ public sealed class CreateShortStayListingCommandHandler
     private async Task<ShortStayListing> CreateWithQuotaEnforcedAsync(
         CreateShortStayListingCommand request,
         UserAccount ownerAccount,
+        string? city,
         CancellationToken ct)
     {
         await _uow.BeginTransactionAsync(ct);
@@ -123,6 +133,12 @@ public sealed class CreateShortStayListingCommandHandler
                 request.Longitude,
                 request.PropertyId,
                 request.CurrencyCode ?? ShortStayListing.DefaultCurrencyCode);
+
+            var visibility = request.LocationVisibility is null
+                ? listing.LocationVisibility
+                : Enum.Parse<LocationVisibility>(request.LocationVisibility, ignoreCase: true);
+            listing.UpdateLocation(request.Latitude, request.Longitude, request.GovernorateId,
+                request.DistrictId, request.NeighborhoodId, city, visibility);
 
             var defaultRoomType = new RoomType
             {
