@@ -28,8 +28,9 @@ public static class ShortStayListingMappingExtensions
 
     /// <summary>
     /// Maps for a non-owner viewer — enforces LocationVisibility.Approximate server-side by
-    /// nulling out Latitude/Longitude rather than relying on the frontend to hide them
-    /// (spec §6: exact location must stay unavailable to unauthorized viewers at the API level).
+    /// snapping Latitude/Longitude to a ~1 km grid (guests see the area, not the address) rather
+    /// than relying on the frontend to hide them (spec §6: the exact location must stay
+    /// unavailable to unauthorized viewers at the API level).
     /// </summary>
     public static ShortStayListingDto ToPublicDto(this ShortStayListing listing, AccommodationType accommodationType) =>
         BuildDto(listing, accommodationType, exposeExactLocation: listing.LocationVisibility == LocationVisibility.Exact);
@@ -51,8 +52,8 @@ public static class ShortStayListingMappingExtensions
         SelfCheckInEnabled: listing.SelfCheckInEnabled,
         InstantBookingEnabled: listing.InstantBookingEnabled,
         RequestBookingEnabled: listing.RequestBookingEnabled,
-        Latitude: exposeExactLocation ? listing.Latitude : null,
-        Longitude: exposeExactLocation ? listing.Longitude : null,
+        Latitude: exposeExactLocation ? listing.Latitude : ShortStayListing.ApproximateCoordinate(listing.Latitude),
+        Longitude: exposeExactLocation ? listing.Longitude : ShortStayListing.ApproximateCoordinate(listing.Longitude),
         GovernorateId: listing.GovernorateId,
         DistrictId: listing.DistrictId,
         NeighborhoodId: listing.NeighborhoodId,

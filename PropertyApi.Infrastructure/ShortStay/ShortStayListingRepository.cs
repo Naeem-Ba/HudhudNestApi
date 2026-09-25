@@ -68,7 +68,16 @@ public sealed class ShortStayListingRepository : IShortStayListingRepository
         var query = WithDetails().Where(l => l.IsPublished);
 
         if (!string.IsNullOrWhiteSpace(filter.City))
-            query = query.Where(l => l.City != null && EF.Functions.ILike(l.City, $"%{filter.City}%"));
+        {
+            var pattern = $"%{filter.City.Trim()}%";
+            // City is the catalog's Arabic governorate name, so also match the governorate's
+            // English name: "Damascus" finds a listing stored as "دمشق".
+            query = query.Where(l =>
+                (l.City != null && EF.Functions.ILike(l.City, pattern))
+                || (l.GovernorateId != null && _db.Governorates.Any(g =>
+                    g.Id == l.GovernorateId
+                    && (EF.Functions.ILike(g.NameEn, pattern) || EF.Functions.ILike(g.NameAr, pattern)))));
+        }
 
         if (filter.AccommodationTypeId.HasValue)
             query = query.Where(l => l.AccommodationTypeId == filter.AccommodationTypeId.Value);

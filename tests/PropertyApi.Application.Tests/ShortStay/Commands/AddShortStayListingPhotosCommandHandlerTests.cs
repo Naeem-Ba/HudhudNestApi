@@ -19,7 +19,7 @@ public sealed class AddShortStayListingPhotosCommandHandlerTests
 
     private static ShortStayListing CreateListing(Guid ownerId) =>
         ShortStayListing.Create(ownerId, 1, "شاليه", "desc", 4, 2, 1,
-            new TimeOnly(14, 0), new TimeOnly(11, 0), 0m, 0m);
+            new TimeOnly(14, 0), new TimeOnly(11, 0), 33.5m, 36.3m);
 
     private static UploadPropertyImageFileDto ValidFile(string name = "photo.png") =>
         new(new MemoryStream(ValidPngBytes), name, "image/png", ValidPngBytes.Length);
