@@ -142,6 +142,9 @@ builder.Services
         // are now redundant (kept for clarity, not correctness) and the adapter is deleted.
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        // Short-stay check-in/out and quiet hours arrive as "HH:mm" from <input type="time">;
+        // the built-in TimeOnly converter rejects that (it requires seconds).
+        options.JsonSerializerOptions.Converters.Add(new PropertyApi.Configuration.LenientTimeOnlyJsonConverter());
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
 
