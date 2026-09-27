@@ -2,6 +2,7 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Listings.Events;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Domain.Audit.Constants;
 
@@ -16,6 +17,7 @@ public sealed class DeletePropertyCommandHandler
     private readonly IMediaStorageService _storage;
     private readonly IUnitOfWork _uow;
     private readonly IAuditLogService _auditLogs;
+    private readonly IPublisher _publisher;
     private readonly ILogger<DeletePropertyCommandHandler> _logger;
 
     public DeletePropertyCommandHandler(
@@ -25,6 +27,7 @@ public sealed class DeletePropertyCommandHandler
         IMediaStorageService storage,
         IUnitOfWork uow,
         IAuditLogService auditLogs,
+        IPublisher publisher,
         ILogger<DeletePropertyCommandHandler> logger)
     {
         _repo = repo;
@@ -33,6 +36,7 @@ public sealed class DeletePropertyCommandHandler
         _storage = storage;
         _uow = uow;
         _auditLogs = auditLogs;
+        _publisher = publisher;
         _logger = logger;
     }
 
@@ -70,10 +74,27 @@ public sealed class DeletePropertyCommandHandler
             .ToList()
             ?? new List<string>();
 
+        var statusAtDeletion = property.Status;
         property.MarkAsDeleted(request.RequestingUserId);
 
         _repo.Remove(property);
         await _uow.SaveChangesAsync(cancellationToken);
+
+        // Phase 1 audit F-10: Status never changes here (a live Available listing can be deleted
+        // directly), so SocialPublicationLifecyclePolicy's status-transition map can never see
+        // this — a dedicated event instead of PropertyStatusChangedEvent (see its own remarks).
+        // Fire-and-notify: a broken subscriber must never turn an already-committed delete into a
+        // failed request.
+        try
+        {
+            await _publisher.Publish(
+                new PropertyDeletedEvent(property.Id, statusAtDeletion, property.DeletedAt ?? DateTime.UtcNow, request.RequestingUserId),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to publish PropertyDeletedEvent after deleting property {PropertyId}.", property.Id);
+        }
 
         // Best-effort, deliberately outside the transaction above: the property row is
         // already gone from every consumer's point of view (soft-delete query filter),

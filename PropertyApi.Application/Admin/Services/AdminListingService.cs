@@ -1,8 +1,10 @@
 using System.Text.Json;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Admin.DTOs;
 using PropertyApi.Application.Admin.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Listings.Events;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Domain.Audit.Constants;
@@ -26,17 +28,20 @@ public sealed class AdminListingService : IAdminListingService
     private readonly IPropertyRepository _properties;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAuditLogService _auditLogs;
+    private readonly IPublisher _publisher;
     private readonly ILogger<AdminListingService> _logger;
 
     public AdminListingService(
         IPropertyRepository properties,
         IUnitOfWork unitOfWork,
         IAuditLogService auditLogs,
+        IPublisher publisher,
         ILogger<AdminListingService> logger)
     {
         _properties = properties;
         _unitOfWork = unitOfWork;
         _auditLogs = auditLogs;
+        _publisher = publisher;
         _logger = logger;
     }
 
@@ -216,6 +221,20 @@ public sealed class AdminListingService : IAdminListingService
         _logger.LogInformation(
             "Listing extended by admin. PropertyId={PropertyId}, Days={Days}, NewExpiresAt={ExpiresAt}, By={By}",
             propertyId, days, property.ExpiresAt, performedByUserId);
+
+        // Same "listing is live again" moment as a paid extension (ExtendPublication always
+        // republishes) — best-effort, must never turn a successfully granted admin extension
+        // into a failed request.
+        try
+        {
+            await _publisher.Publish(
+                new PropertyPublishedEvent(property.Id, property.PublishedAt ?? DateTime.UtcNow, property.OwnerId),
+                ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to publish PropertyPublishedEvent after an admin listing extension. PropertyId={PropertyId}", propertyId);
+        }
 
         return AdminOperationResult.Ok($"Listing extended to {property.ExpiresAt:O}.");
     }

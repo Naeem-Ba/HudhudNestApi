@@ -56,6 +56,16 @@ public sealed class SocialPublication : AuditableEntity
 
     public DateTime? NextRetryAt { get; private set; }
 
+    /// <summary>
+    /// Set only while <see cref="Status"/> is <see cref="SocialPublicationStatus.Publishing"/> —
+    /// the deadline by which the worker holding this row must have recorded an outcome
+    /// (<see cref="MarkPublished"/>/<see cref="MarkFailed"/>). A row still Publishing past this
+    /// deadline means the process that started it never got to record what happened (crash,
+    /// restart, killed container) — <see cref="ReleaseExpiredLease"/> is how that gets resolved
+    /// without ever risking a duplicate post. Cleared whenever the row leaves Publishing.
+    /// </summary>
+    public DateTime? LeaseUntil { get; private set; }
+
     // ── UTM / Attribution (spec §19) — set once at creation, immutable afterwards ──────────
     public string UtmSource { get; private set; } = string.Empty;
     public string UtmMedium { get; private set; } = string.Empty;
@@ -194,13 +204,21 @@ public sealed class SocialPublication : AuditableEntity
         ScheduledAt = newScheduledAt;
     }
 
+    /// <summary>Safety margin for <see cref="ReleaseExpiredLease"/> — comfortably longer than any real publish call, including retries/timeouts inside a single ISocialPublisher call.</summary>
+    public static readonly TimeSpan DefaultLeaseDuration = TimeSpan.FromMinutes(5);
+
     /// <summary>
     /// Queued|Retrying → Publishing. This is the ONLY entry point the worker/manual-publish use
     /// case may call before actually invoking an ISocialPublisher — it is what makes a second,
     /// concurrent execution of the same publication a state-transition error instead of a
     /// duplicate external post (spec §9.11/§9.12 idempotency).
+    ///
+    /// The caller MUST persist this transition (a real SaveChangesAsync) before making the actual
+    /// external call — seeing this row committed as Publishing+LeaseUntil is what lets a crash
+    /// mid-call be recovered safely by <see cref="ReleaseExpiredLease"/> instead of the next sweep
+    /// silently re-selecting a row that is still, at rest, Queued.
     /// </summary>
-    public void StartPublishing(DateTime utcNow)
+    public void StartPublishing(DateTime utcNow, TimeSpan? leaseDuration = null)
     {
         if (Status is not (SocialPublicationStatus.Queued or SocialPublicationStatus.Retrying))
         {
@@ -210,6 +228,7 @@ public sealed class SocialPublication : AuditableEntity
 
         Status = SocialPublicationStatus.Publishing;
         StartedAt = utcNow;
+        LeaseUntil = utcNow.Add(leaseDuration ?? DefaultLeaseDuration);
     }
 
     public void MarkPublished(string externalPostId, string? externalPostUrl, DateTime utcNow)
@@ -225,6 +244,7 @@ public sealed class SocialPublication : AuditableEntity
         PublishedAt = utcNow;
         ErrorCode = null;
         ErrorMessage = null;
+        LeaseUntil = null;
     }
 
     /// <summary>
@@ -238,6 +258,7 @@ public sealed class SocialPublication : AuditableEntity
         ErrorCode = errorCode;
         ErrorMessage = Truncate(errorMessage, MaxErrorMessageLength);
         FailedAt = utcNow;
+        LeaseUntil = null;
 
         if (errorCode.IsRetryable() && RetryCount < MaxRetryCount)
         {
@@ -251,6 +272,30 @@ public sealed class SocialPublication : AuditableEntity
             Status = SocialPublicationStatus.Failed;
             NextRetryAt = null;
         }
+    }
+
+    /// <summary>
+    /// Recovers a publication whose worker never came back to record an outcome (crash/restart
+    /// mid-publish) — see <see cref="LeaseUntil"/>. Deliberately always terminal
+    /// (<see cref="SocialPublicationErrorCode.AmbiguousOutcome"/>, never retryable): we cannot
+    /// tell whether the interrupted attempt actually reached the platform, and auto-retrying an
+    /// unknown outcome risks a genuine duplicate post — a human resolves it via the existing
+    /// dead-letter workflow instead. A no-op if the lease has not actually expired, or the row
+    /// already left Publishing by some other path (nothing to release).
+    /// </summary>
+    public void ReleaseExpiredLease(DateTime utcNow)
+    {
+        if (Status != SocialPublicationStatus.Publishing)
+            return;
+
+        if (LeaseUntil is null || LeaseUntil > utcNow)
+            return;
+
+        MarkFailed(
+            SocialPublicationErrorCode.AmbiguousOutcome,
+            "تعطّل العامل الخلفي أثناء محاولة النشر ولم يُعرف ما إذا تم النشر فعلياً على المنصة — يتطلب تحققاً يدوياً.",
+            utcNow,
+            TimeSpan.Zero);
     }
 
     /// <summary>

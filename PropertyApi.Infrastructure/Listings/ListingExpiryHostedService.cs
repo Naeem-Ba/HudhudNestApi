@@ -1,8 +1,10 @@
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Listings.Events;
 using PropertyApi.Application.Notifications.Interfaces;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Listings;
@@ -95,6 +97,7 @@ public sealed class ListingExpiryHostedService : BackgroundService
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var notifications = scope.ServiceProvider.GetRequiredService<INotificationService>();
         var mediaStorage = scope.ServiceProvider.GetRequiredService<IMediaStorageService>();
+        var publisher = scope.ServiceProvider.GetRequiredService<IPublisher>();
 
         await db.Database.OpenConnectionAsync(ct);
         try
@@ -112,7 +115,7 @@ public sealed class ListingExpiryHostedService : BackgroundService
                     // listing cannot cross two boundaries in one sweep without its owner
                     // hearing about the first one.
                     var warned = await WarnExpiringSoonAsync(db, notifications, now, ct);
-                    var expired = await ExpireElapsedAsync(db, notifications, now, ct);
+                    var expired = await ExpireElapsedAsync(db, notifications, publisher, now, ct);
                     var deleted = await DeleteAfterGraceAsync(db, mediaStorage, now, ct);
 
                     // Independent of the three phases above and ordered last only because it
@@ -185,9 +188,10 @@ public sealed class ListingExpiryHostedService : BackgroundService
     /// Phase 2 — take elapsed listings out of publication and tell the owner, including how
     /// long they have to recover it.
     /// </summary>
-    private static async Task<int> ExpireElapsedAsync(
+    private async Task<int> ExpireElapsedAsync(
         AppDbContext db,
         INotificationService notifications,
+        IPublisher publisher,
         DateTime now,
         CancellationToken ct)
     {
@@ -199,6 +203,11 @@ public sealed class ListingExpiryHostedService : BackgroundService
             .OrderBy(p => p.ExpiresAt)
             .Take(MaxItemsPerPhase)
             .ToListAsync(ct);
+
+        // Captured before MarkExpired() overwrites Status — SocialDistribution needs the actual
+        // FROM status (Available/Reserved/...) to decide what a live publication should do (Phase
+        // 1 audit F-10: this sweep never told it a listing expired at all).
+        var statusBeforeExpiry = candidates.ToDictionary(p => p.Id, p => p.Status);
 
         foreach (var property in candidates)
         {
@@ -216,6 +225,24 @@ public sealed class ListingExpiryHostedService : BackgroundService
         }
 
         await db.SaveChangesAsync(ct);
+
+        // Fire-and-notify, same contract as every other PropertyStatusChangedEvent publisher: a
+        // broken subscriber must never fail (or slow down) this sweep — already-committed expiry
+        // must not be undone by a downstream failure.
+        foreach (var property in candidates)
+        {
+            try
+            {
+                await publisher.Publish(
+                    new PropertyStatusChangedEvent(property.Id, statusBeforeExpiry[property.Id], PropertyStatus.Expired, now),
+                    ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to publish PropertyStatusChangedEvent after expiring listing {PropertyId}.", property.Id);
+            }
+        }
+
         return candidates.Count;
     }
 

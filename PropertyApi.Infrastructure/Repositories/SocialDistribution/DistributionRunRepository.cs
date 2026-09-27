@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PropertyApi.Application.Properties.DTOs;
 using PropertyApi.Application.SocialDistribution.Interfaces;
+using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.SocialDistribution.Entities;
 using PropertyApi.Infrastructure.Persistence;
 
@@ -39,6 +40,28 @@ public sealed class DistributionRunRepository : IDistributionRunRepository
             Page = safePage,
             PageSize = safePageSize,
         };
+    }
+
+    public async Task<IReadOnlyList<Guid>> GetPublishedPropertyIdsWithoutRunAsync(
+        DateTime publishedSinceUtc, DateTime publishedBeforeUtc, int take, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+
+        // Soft-deleted listings are already excluded by Property's global query filter.
+        return await _db.Properties
+            .AsNoTracking()
+            .Where(property =>
+                property.IsPublished &&
+                property.Status == PropertyStatus.Available &&
+                property.PublishedAt != null &&
+                property.PublishedAt >= publishedSinceUtc &&
+                property.PublishedAt <= publishedBeforeUtc &&
+                (property.ExpiresAt == null || property.ExpiresAt > now) &&
+                !_db.DistributionRuns.Any(run => run.PropertyId == property.Id && run.PublicationsCreatedCount > 0))
+            .OrderBy(property => property.PublishedAt)
+            .Select(property => property.Id)
+            .Take(Math.Clamp(take, 1, 100))
+            .ToListAsync(ct);
     }
 
     public void Update(DistributionRun run) => _db.DistributionRuns.Update(run);

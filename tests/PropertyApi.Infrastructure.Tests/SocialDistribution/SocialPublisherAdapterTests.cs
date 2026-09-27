@@ -78,6 +78,43 @@ public sealed class SocialPublisherAdapterTests
         Assert.False(result.IsValid);
     }
 
+    // Phase 1 audit F-9: Telegram's real sendPhoto caption limit (1024) is stricter than
+    // sendMessage's 4096 (SocialContentPolicy.MaxBodyLength for this platform) — every automatic
+    // publication attaches an image, so a body that fits the generic limit but not the
+    // photo-caption one must still fail local validation instead of being rejected by Telegram
+    // itself after this system already believed the content was valid.
+    [Fact]
+    public void Telegram_WithImage_BodyOverCaptionLimitButUnderGenericBodyLimit_Fails()
+    {
+        var publisher = new TelegramPublisher(NullLogger<TelegramPublisher>.Instance);
+        var body = new string('a', 1500); // over the 1024 caption limit, well under the 4096 body limit
+        var result = publisher.ValidateContent(MakeRequest(SocialPlatform.Telegram, body: body));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("صورة"));
+    }
+
+    [Fact]
+    public void Telegram_WithoutImage_BodyOverCaptionLimitButUnderGenericBodyLimit_Succeeds()
+    {
+        // sendMessage (no photo) is not subject to the caption ceiling at all.
+        var publisher = new TelegramPublisher(NullLogger<TelegramPublisher>.Instance);
+        var body = new string('a', 1500);
+        var result = publisher.ValidateContent(MakeRequest(SocialPlatform.Telegram, imageUrl: null, body: body));
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void Telegram_WithImage_BodyWithinCaptionLimit_Succeeds()
+    {
+        var publisher = new TelegramPublisher(NullLogger<TelegramPublisher>.Instance);
+        var body = new string('a', 1024);
+        var result = publisher.ValidateContent(MakeRequest(SocialPlatform.Telegram, body: body));
+
+        Assert.True(result.IsValid);
+    }
+
     [Fact]
     public void ValidateContent_InvalidImageUrl_Fails()
     {
