@@ -163,6 +163,17 @@ public sealed class UpdatePropertyCommandHandler
                 cancellationToken);
         }
 
+        // A draft flipped to published through an edit is the same "listing went live" moment as
+        // PATCH /publish — without this the owner's choice of route decided whether the listing
+        // was ever auto-distributed. Same fire-and-notify contract: the subscribing handler
+        // swallows its own exceptions (see PropertyPublishedDistributionHandler).
+        if (property.IsPublished && !oldIsPublished)
+        {
+            await _publisher.Publish(
+                new PropertyPublishedEvent(property.Id, property.PublishedAt ?? DateTime.UtcNow, request.RequestingUserId),
+                cancellationToken);
+        }
+
         try
         {
             await NotifyChangesAsync(

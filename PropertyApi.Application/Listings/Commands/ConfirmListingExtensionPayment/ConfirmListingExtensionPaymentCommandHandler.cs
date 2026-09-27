@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
+using PropertyApi.Application.Listings.Events;
 using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Domain.Listings;
 using PropertyApi.Domain.Transactions.Enums;
@@ -21,17 +22,20 @@ public sealed class ConfirmListingExtensionPaymentCommandHandler
     private readonly IListingFeeRepository _extensions;
     private readonly IPropertyRepository _properties;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IPublisher _publisher;
     private readonly ILogger<ConfirmListingExtensionPaymentCommandHandler> _logger;
 
     public ConfirmListingExtensionPaymentCommandHandler(
         IListingFeeRepository extensions,
         IPropertyRepository properties,
         IUnitOfWork unitOfWork,
+        IPublisher publisher,
         ILogger<ConfirmListingExtensionPaymentCommandHandler> logger)
     {
         _extensions = extensions;
         _properties = properties;
         _unitOfWork = unitOfWork;
+        _publisher = publisher;
         _logger = logger;
     }
 
@@ -93,6 +97,22 @@ public sealed class ConfirmListingExtensionPaymentCommandHandler
             fee.Id,
             request.ConfirmingUserId,
             property.ExpiresAt);
+
+        // ExtendPublication republishes an expired/unpublished listing (see its own doc comment)
+        // — the same "listing is live again" moment PATCH /publish raises for a fresh draft, so
+        // SocialDistribution must hear about it too. Best-effort, same fire-and-notify contract as
+        // PublishPropertyCommandHandler: the paid extension itself must never fail over a broken
+        // subscriber.
+        try
+        {
+            await _publisher.Publish(
+                new PropertyPublishedEvent(property.Id, property.PublishedAt ?? DateTime.UtcNow, property.OwnerId),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to publish PropertyPublishedEvent after a paid listing extension. PropertyId={PropertyId}", property.Id);
+        }
 
         return property.ExpiresAt!.Value;
     }

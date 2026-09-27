@@ -52,6 +52,9 @@ public static class SocialDistributionInfrastructureRegistration
         services.AddOptions<PropertyApi.Application.SocialDistribution.Options.SocialDistributionRetryOptions>()
             .Bind(configuration.GetSection(PropertyApi.Application.SocialDistribution.Options.SocialDistributionRetryOptions.SectionName));
 
+        services.AddOptions<PropertyApi.Application.SocialDistribution.Options.SocialDistributionReconciliationOptions>()
+            .Bind(configuration.GetSection(PropertyApi.Application.SocialDistribution.Options.SocialDistributionReconciliationOptions.SectionName));
+
         // Phase 7: Social Media Asset Generation
         services.AddOptions<BrandOptions>().Bind(configuration.GetSection(BrandOptions.SectionName));
         services.AddScoped<IBrandIdentityProvider, ConfiguredBrandIdentityProvider>();

@@ -3,9 +3,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.SocialDistribution.Commands.PublishSocialPublication;
 using PropertyApi.Application.SocialDistribution.Interfaces;
+using PropertyApi.Application.SocialDistribution.Options;
+using PropertyApi.Application.SocialDistribution.Services;
 using PropertyApi.Domain.SocialDistribution.Entities;
 using PropertyApi.Domain.SocialDistribution.Enums;
 using PropertyApi.Infrastructure.Persistence;
@@ -95,6 +98,10 @@ public sealed class SocialPublicationDispatchHostedService : BackgroundService
                     var deadLetters = scope.ServiceProvider.GetRequiredService<ISocialPublicationDeadLetterRepository>();
                     var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
                     var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
+                    // Before dequeuing, so a listing the sweep just distributed is dispatched in
+                    // this same pass instead of waiting another interval.
+                    await ReconcileAsync(scope.ServiceProvider, ct);
+
                     var now = DateTime.UtcNow;
 
                     var jobs = await jobQueue.DequeueDueBatchAsync(MaxItemsPerSweep, now, ct);
@@ -133,6 +140,57 @@ public sealed class SocialPublicationDispatchHostedService : BackgroundService
         finally
         {
             await db.Database.CloseConnectionAsync();
+        }
+    }
+
+    /// <summary>
+    /// Safety net behind <c>PropertyPublishedEvent</c> (see SocialDistributionReconciliationOptions
+    /// for why it only looks back a few days): distributes any recently published listing that no
+    /// <c>DistributionRun</c> has ever evaluated. Each listing runs in its own scope so one
+    /// failure (or a half-tracked EF state after it) can never poison the next listing or the
+    /// dispatch pass that follows — and a failure here never blocks publishing queued work.
+    /// </summary>
+    private async Task ReconcileAsync(IServiceProvider services, CancellationToken ct)
+    {
+        var options = services.GetService<IOptions<SocialDistributionReconciliationOptions>>()?.Value
+            ?? new SocialDistributionReconciliationOptions();
+
+        if (!options.Enabled)
+            return;
+
+        IReadOnlyList<Guid> propertyIds;
+        try
+        {
+            var now = DateTime.UtcNow;
+            propertyIds = await services.GetRequiredService<IDistributionRunRepository>()
+                .GetPublishedPropertyIdsWithoutRunAsync(
+                    publishedSinceUtc: now.AddDays(-Math.Max(options.LookbackDays, 1)),
+                    publishedBeforeUtc: now - options.MinAge,
+                    take: options.BatchSize,
+                    ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Social distribution reconciliation could not list candidate listings.");
+            return;
+        }
+
+        foreach (var propertyId in propertyIds)
+        {
+            try
+            {
+                using var propertyScope = _scopeFactory.CreateScope();
+                var engine = propertyScope.ServiceProvider.GetRequiredService<IDistributionEngine>();
+                var run = await engine.RunAsync(propertyId, DistributionRunTriggerType.Reconciliation, triggeredByUserId: null, ct);
+
+                _logger.LogInformation(
+                    "Reconciliation distributed listing {PropertyId}: {MatchedRuleCount} matching rule(s), {PublicationsCreatedCount} publication(s) created, {SkippedCount} skipped.",
+                    propertyId, run.MatchedRuleCount, run.PublicationsCreatedCount, run.SkippedCount);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "Reconciliation failed to distribute listing {PropertyId}.", propertyId);
+            }
         }
     }
 
