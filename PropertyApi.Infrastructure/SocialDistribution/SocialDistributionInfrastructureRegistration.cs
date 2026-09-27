@@ -42,6 +42,22 @@ public static class SocialDistributionInfrastructureRegistration
         services.AddSingleton<ISocialPublisher, TikTokPublisher>();
         services.AddSingleton<ISocialPublisher, YouTubePublisher>();
         services.AddSingleton<ISocialPublisher, LinkedInPublisher>();
+
+        // Phase 2: the first REAL platform integration — registered AFTER the placeholder above,
+        // last-registration-wins, and only when a bot token is actually configured. Without one,
+        // Telegram distribution keeps today's exact behavior (deterministic PlatformNotConfigured,
+        // zero network calls) instead of every attempt burning a real HTTP call that can only ever
+        // fail with a misconfiguration error — same "off until deliberately configured" posture as
+        // every other new Phase 1/2 option in this file.
+        var telegramBotToken = configuration[$"{TelegramBotOptions.SectionName}:BotToken"];
+        if (!string.IsNullOrWhiteSpace(telegramBotToken))
+        {
+            services.AddHttpClient(TelegramBotPublisher.HttpClientName);
+            services.AddSingleton<ISocialPublisher, TelegramBotPublisher>();
+        }
+
+        services.AddOptions<TelegramBotOptions>().Bind(configuration.GetSection(TelegramBotOptions.SectionName));
+
         services.AddSingleton<ISocialPublisherRegistry, SocialPublisherRegistry>();
 
         // Phase 6: Queue Port — production adapter wraps the existing SocialPublication
