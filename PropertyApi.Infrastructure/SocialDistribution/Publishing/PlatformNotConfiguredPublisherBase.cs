@@ -57,6 +57,16 @@ public abstract class PlatformNotConfiguredPublisherBase : ISocialPublisher
         if (request.Body.Length > limits.MaxBodyLength)
             errors.Add($"نص المنشور يتجاوز الحد المسموح لمنصة {Platform} ({limits.MaxBodyLength} حرفاً).");
 
+        // A photo message's caption is a stricter, separate ceiling from a plain text message's
+        // body on some platforms (Telegram: sendPhoto's caption ≤ 1024 vs. sendMessage's 4096) —
+        // see SocialPublisherCapabilities.MaxCaptionLengthWithImage's remarks.
+        if (!string.IsNullOrEmpty(request.ImageUrl) &&
+            capabilities.MaxCaptionLengthWithImage is { } maxCaption &&
+            request.Body.Length > maxCaption)
+        {
+            errors.Add($"نص المنشور مع وجود صورة يتجاوز الحد المسموح لمنصة {Platform} ({maxCaption} حرفاً).");
+        }
+
         if (capabilities.MaxTextLength is { } maxText && request.Title.Length > maxText)
             errors.Add($"عنوان المنشور يتجاوز الحد الأقصى المدعوم من هذه المنصة ({maxText} حرفاً).");
 

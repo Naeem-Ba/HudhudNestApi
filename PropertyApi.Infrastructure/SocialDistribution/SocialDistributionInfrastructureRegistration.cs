@@ -51,6 +51,12 @@ public static class SocialDistributionInfrastructureRegistration
         services.AddScoped<ISocialPublicationDeadLetterRepository, SocialPublicationDeadLetterRepository>();
         services.AddOptions<PropertyApi.Application.SocialDistribution.Options.SocialDistributionRetryOptions>()
             .Bind(configuration.GetSection(PropertyApi.Application.SocialDistribution.Options.SocialDistributionRetryOptions.SectionName));
+        services.AddOptions<PropertyApi.Application.SocialDistribution.Options.SocialDistributionAssetGenerationOptions>()
+            .Bind(configuration.GetSection(PropertyApi.Application.SocialDistribution.Options.SocialDistributionAssetGenerationOptions.SectionName));
+        services.AddOptions<PropertyApi.Application.SocialDistribution.Options.SocialDistributionEligibilityOptions>()
+            .Bind(configuration.GetSection(PropertyApi.Application.SocialDistribution.Options.SocialDistributionEligibilityOptions.SectionName));
+        services.AddOptions<PropertyApi.Application.SocialDistribution.Options.SocialDistributionContentReviewOptions>()
+            .Bind(configuration.GetSection(PropertyApi.Application.SocialDistribution.Options.SocialDistributionContentReviewOptions.SectionName));
 
         services.AddOptions<PropertyApi.Application.SocialDistribution.Options.SocialDistributionReconciliationOptions>()
             .Bind(configuration.GetSection(PropertyApi.Application.SocialDistribution.Options.SocialDistributionReconciliationOptions.SectionName));

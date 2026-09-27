@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
@@ -6,6 +7,7 @@ using PropertyApi.Application.Listings.Interfaces;
 using PropertyApi.Application.SocialDistribution.Commands.PublishSocialPublication;
 using PropertyApi.Application.SocialDistribution.DTOs;
 using PropertyApi.Application.SocialDistribution.Interfaces;
+using PropertyApi.Application.SocialDistribution.Options;
 using PropertyApi.Application.SocialDistribution.Services;
 using PropertyApi.Domain.Common.Exceptions;
 using PropertyApi.Domain.SocialDistribution.Entities;
@@ -26,10 +28,15 @@ public sealed class PublishSocialPublicationCommandHandlerTests
         public Mock<ISocialMediaAssetGenerator> AssetGenerator { get; } = new();
         public Mock<IUnitOfWork> UnitOfWork { get; } = new();
 
-        public PublishSocialPublicationCommandHandler BuildHandler() => new(
+        public PublishSocialPublicationCommandHandler BuildHandler(bool attachGeneratedAssetToAutomaticPublications = false) => new(
             Publications.Object, History.Object, Accounts.Object, Properties.Object,
             Registry.Object, AssetGenerator.Object, UnitOfWork.Object,
-            NullLogger<PublishSocialPublicationCommandHandler>.Instance);
+            NullLogger<PublishSocialPublicationCommandHandler>.Instance,
+            retryOptions: null,
+            assetGenerationOptions: Options.Create(new SocialDistributionAssetGenerationOptions
+            {
+                AttachGeneratedAssetToAutomaticPublications = attachGeneratedAssetToAutomaticPublications,
+            }));
 
         public void RegisterPublisher(ISocialPublisher publisher) =>
             Registry.Setup(x => x.TryGetPublisher(publisher.Platform)).Returns(publisher);
@@ -274,7 +281,36 @@ public sealed class PublishSocialPublicationCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_RuleEngineCreatedPublication_GeneratesAndAttachesAsset_BeforePublishing()
+    public async Task Handle_ByDefault_RuleEngineCreatedPublication_NeverGeneratesAnAsset_PublishesWithThePropertysOwnPhoto()
+    {
+        // Phase 1 audit F-4: the generator only ever produces image/svg+xml, which no real target
+        // platform accepts — with AttachGeneratedAssetToAutomaticPublications left at its default
+        // (false), an automatic publication must publish with the real property photo its content
+        // already carries (MakeQueuedPublication's content), never call the asset generator at all.
+        var fixture = new Fixture();
+        var (publication, account) = MakeQueuedPublication(distributionRuleId: Guid.NewGuid());
+        var originalImageUrl = publication.Content!.ImageUrl;
+
+        fixture.Publications.Setup(x => x.GetByIdAsync(publication.Id, It.IsAny<CancellationToken>())).ReturnsAsync(publication);
+        fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+        fixture.Properties.Setup(x => x.IsPubliclyVisibleAsync(publication.PropertyId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+
+        SocialPublishRequest? capturedRequest = null;
+        fixture.RegisterPublisher(new FakePublisher(SocialPlatform.Facebook, req =>
+        {
+            capturedRequest = req;
+            return SocialPublishResult.Success("ext-1");
+        }));
+
+        var result = await fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
+
+        Assert.Equal(SocialPublicationStatus.Published, result.Status);
+        Assert.Equal(originalImageUrl, capturedRequest!.ImageUrl);
+        fixture.AssetGenerator.Verify(x => x.GenerateAsync(It.IsAny<GenerateSocialAssetRequest>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_AssetGenerationEnabled_RuleEngineCreatedPublication_GeneratesAndAttachesAsset_BeforePublishing()
     {
         var fixture = new Fixture();
         var (publication, account) = MakeQueuedPublication(distributionRuleId: Guid.NewGuid());
@@ -296,7 +332,8 @@ public sealed class PublishSocialPublicationCommandHandlerTests
             return SocialPublishResult.Success("ext-1");
         }));
 
-        var result = await fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
+        var result = await fixture.BuildHandler(attachGeneratedAssetToAutomaticPublications: true)
+            .Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
 
         Assert.Equal(SocialPublicationStatus.Published, result.Status);
         Assert.NotNull(capturedRequest);
@@ -305,7 +342,7 @@ public sealed class PublishSocialPublicationCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_AssetGenerationFailsRetryable_MovesToRetrying_WithoutCallingPublisher()
+    public async Task Handle_AssetGenerationEnabled_AssetGenerationFailsRetryable_MovesToRetrying_WithoutCallingPublisher()
     {
         var fixture = new Fixture();
         var (publication, account) = MakeQueuedPublication(distributionRuleId: Guid.NewGuid());
@@ -319,7 +356,8 @@ public sealed class PublishSocialPublicationCommandHandlerTests
             .ThrowsAsync(new SocialAssetGenerationException("تعذّر الرفع.", retryable: true));
         fixture.RegisterPublisher(new FakePublisher(SocialPlatform.Facebook, _ => { publisherCalled = true; return SocialPublishResult.Success("x"); }));
 
-        var result = await fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
+        var result = await fixture.BuildHandler(attachGeneratedAssetToAutomaticPublications: true)
+            .Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
 
         Assert.Equal(SocialPublicationStatus.Retrying, result.Status);
         Assert.False(publisherCalled);
@@ -336,7 +374,10 @@ public sealed class PublishSocialPublicationCommandHandlerTests
         fixture.Properties.Setup(x => x.IsPubliclyVisibleAsync(publication.PropertyId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
         fixture.RegisterPublisher(new FakePublisher(SocialPlatform.Facebook, _ => SocialPublishResult.Success("ext-1")));
 
-        await fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
+        // Even with the flag enabled, a manually-created publication (no DistributionRuleId) must
+        // never trigger asset generation — see the handler's own remarks.
+        await fixture.BuildHandler(attachGeneratedAssetToAutomaticPublications: true)
+            .Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
 
         fixture.AssetGenerator.Verify(x => x.GenerateAsync(It.IsAny<GenerateSocialAssetRequest>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
     }

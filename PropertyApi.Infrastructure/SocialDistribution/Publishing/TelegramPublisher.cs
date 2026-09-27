@@ -27,5 +27,10 @@ public sealed class TelegramPublisher : PlatformNotConfiguredPublisherBase
         SupportsDelete: true,
         MaxTextLength: 100,
         MaxImages: 10,
-        RequiresImage: false);
+        RequiresImage: false,
+        // Real Telegram Bot API constraint: sendPhoto's caption tops out at 1024 characters, well
+        // under sendMessage's 4096 (SocialContentPolicy's generic MaxBodyLength for this
+        // platform) — every automatic publication attaches an image, so this is the limit that
+        // actually governs in practice.
+        MaxCaptionLengthWithImage: 1024);
 }

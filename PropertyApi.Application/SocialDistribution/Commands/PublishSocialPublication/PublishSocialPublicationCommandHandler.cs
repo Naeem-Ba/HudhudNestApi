@@ -57,6 +57,7 @@ public sealed class PublishSocialPublicationCommandHandler
     private readonly IUnitOfWork _uow;
     private readonly ILogger<PublishSocialPublicationCommandHandler> _logger;
     private readonly SocialDistributionRetryOptions _retryOptions;
+    private readonly SocialDistributionAssetGenerationOptions _assetGenerationOptions;
 
     public PublishSocialPublicationCommandHandler(
         ISocialPublicationRepository publications,
@@ -67,7 +68,8 @@ public sealed class PublishSocialPublicationCommandHandler
         ISocialMediaAssetGenerator assetGenerator,
         IUnitOfWork uow,
         ILogger<PublishSocialPublicationCommandHandler> logger,
-        IOptions<SocialDistributionRetryOptions>? retryOptions = null)
+        IOptions<SocialDistributionRetryOptions>? retryOptions = null,
+        IOptions<SocialDistributionAssetGenerationOptions>? assetGenerationOptions = null)
     {
         _publications = publications;
         _history = history;
@@ -81,6 +83,7 @@ public sealed class PublishSocialPublicationCommandHandler
         // argument) keeps working unchanged — falls back to SocialPublicationRetryPolicy's own
         // hardcoded defaults exactly like before this option existed.
         _retryOptions = retryOptions?.Value ?? new SocialDistributionRetryOptions();
+        _assetGenerationOptions = assetGenerationOptions?.Value ?? new SocialDistributionAssetGenerationOptions();
     }
 
     public async Task<SocialPublicationDto> Handle(PublishSocialPublicationCommand request, CancellationToken ct)
@@ -141,8 +144,12 @@ public sealed class PublishSocialPublicationCommandHandler
                 // whatever ImageUrl its caller explicitly supplied (spec: never override an
                 // admin's own choice of image). A publication whose content already carries a
                 // generated asset (e.g. a retry after a transient publish failure) reuses it —
-                // asset generation never re-runs for an already-valid asset.
-                var assetOutcome = publication.DistributionRuleId is not null && publication.Content.SocialMediaAssetId is null
+                // asset generation never re-runs for an already-valid asset. Gated by
+                // SocialDistributionAssetGenerationOptions (Phase 1 audit F-4, off by default —
+                // see that option's remarks for why): the generator only ever produces SVG today,
+                // which no real target platform accepts as a post image.
+                var assetOutcome = _assetGenerationOptions.AttachGeneratedAssetToAutomaticPublications &&
+                    publication.DistributionRuleId is not null && publication.Content.SocialMediaAssetId is null
                     ? await TryAttachGeneratedAssetAsync(publication, ct)
                     : AssetOutcome.NotNeeded;
 
