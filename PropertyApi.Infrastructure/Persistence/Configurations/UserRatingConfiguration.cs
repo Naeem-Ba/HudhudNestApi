@@ -15,6 +15,11 @@ public sealed class UserRatingConfiguration : IEntityTypeConfiguration<UserRatin
         builder.Property(r => r.Safety).IsRequired();
         builder.Property(r => r.ResponseSpeed).IsRequired();
         builder.Property(r => r.Transparency).IsRequired();
+        // Optional criteria — nullable so ratings created before they existed stay valid.
+        builder.Property(r => r.InformationAccuracy);
+        builder.Property(r => r.Conduct);
+        // Computed in C# from the stored criteria, never persisted.
+        builder.Ignore(r => r.OverallScore);
         builder.Property(r => r.Comment).HasMaxLength(1000);
 
         // Relations — both point at UserAccount, so both must be Restrict

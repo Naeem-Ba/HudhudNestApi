@@ -10,5 +10,7 @@ public sealed record RateUserCommand(
     int Safety,
     int ResponseSpeed,
     int Transparency,
-    string? Comment
+    string? Comment,
+    int? InformationAccuracy = null,
+    int? Conduct = null
 ) : IRequest<UserRatingDto>;

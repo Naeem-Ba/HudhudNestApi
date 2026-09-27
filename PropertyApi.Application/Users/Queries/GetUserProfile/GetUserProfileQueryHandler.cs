@@ -76,6 +76,12 @@ public sealed class GetUserProfileQueryHandler
             AverageSafety = Math.Round(averages.Safety, 1),
             AverageResponseSpeed = Math.Round(averages.ResponseSpeed, 1),
             AverageTransparency = Math.Round(averages.Transparency, 1),
+            AverageInformationAccuracy = averages.InformationAccuracy.HasValue
+                ? Math.Round(averages.InformationAccuracy.Value, 1)
+                : null,
+            AverageConduct = averages.Conduct.HasValue
+                ? Math.Round(averages.Conduct.Value, 1)
+                : null,
             AverageOverall = Math.Round(averages.Overall, 1),
             RatingsCount = averages.TotalCount
         };

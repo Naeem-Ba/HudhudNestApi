@@ -1,4 +1,5 @@
 ﻿using PropertyApi.Application.Properties.DTOs;
+using PropertyApi.Application.Users.Messaging.DTOs;
 using PropertyApi.Domain.Messaging.Entities;
 
 namespace PropertyApi.Application.Users.Messaging.Interfaces;
@@ -48,6 +49,28 @@ public interface IMessageRepository
     Task<bool> HasAnyConversationAsync(
         Guid userId1,
         Guid userId2,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// The user's inbox: one row per (property, other participant) pair the user
+    /// has exchanged messages about, newest activity first, paged in the database.
+    /// Only messages where the user is sender or receiver are considered.
+    /// </summary>
+    Task<PagedResult<ConversationSummaryDto>> GetConversationSummariesAsync(
+        Guid userId,
+        Guid? propertyId,
+        int page,
+        int pageSize,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Tracked unread messages sent by <paramref name="senderId"/> to
+    /// <paramref name="receiverId"/> about a property (for mark-as-read).
+    /// </summary>
+    Task<IReadOnlyList<Message>> GetUnreadInConversationAsync(
+        Guid propertyId,
+        Guid receiverId,
+        Guid senderId,
         CancellationToken ct = default);
 
     /// <summary>

@@ -57,6 +57,8 @@ public sealed class GetRatingEligibilityQueryHandler
                 Safety: existing.Safety,
                 ResponseSpeed: existing.ResponseSpeed,
                 Transparency: existing.Transparency,
+                InformationAccuracy: existing.InformationAccuracy,
+                Conduct: existing.Conduct,
                 OverallScore: existing.OverallScore,
                 Comment: existing.Comment,
                 CreatedAt: existing.CreatedAt);
