@@ -22,7 +22,8 @@ namespace PropertyApi.Application.SocialDistribution.EventHandlers;
 /// exception is caught and logged here, never rethrown — a broken publisher/registry entry must
 /// never turn into a failed property status update.
 /// </summary>
-public sealed class PropertyStatusChangedDistributionHandler : INotificationHandler<PropertyStatusChangedEvent>
+public sealed class PropertyStatusChangedDistributionHandler :
+    INotificationHandler<PropertyStatusChangedEvent>, INotificationHandler<PropertyDeletedEvent>
 {
     private readonly ISocialPublicationRepository _publications;
     private readonly ISocialAccountRepository _accounts;
@@ -67,6 +68,31 @@ public sealed class PropertyStatusChangedDistributionHandler : INotificationHand
                 ex,
                 "فشلت معالجة تغيّر حالة العقار {PropertyId} ({Previous} → {New}) على مستوى التوزيع الاجتماعي. لن يؤثر ذلك على تحديث حالة العقار نفسه.",
                 notification.PropertyId, notification.PreviousStatus, notification.NewStatus);
+        }
+    }
+
+    /// <summary>
+    /// Phase 1 audit F-10: a deleted listing never went through a Status transition
+    /// <see cref="SocialPublicationLifecyclePolicy"/> could key off (see
+    /// <see cref="PropertyDeletedEvent"/>'s own remarks for why) — this always means Delete,
+    /// unconditionally, for every currently-live publication of the property.
+    /// </summary>
+    public async Task Handle(PropertyDeletedEvent notification, CancellationToken ct)
+    {
+        try
+        {
+            var transitionTag = $"PropertyDeleted:{notification.PropertyId}";
+            var publications = await _publications.GetActiveForPropertyAsync(notification.PropertyId, ct);
+
+            foreach (var publication in publications)
+                await ApplyToOnePublicationAsync(publication, SocialPublicationLifecycleAction.Delete, transitionTag, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "فشلت معالجة حذف العقار {PropertyId} على مستوى التوزيع الاجتماعي. لن يؤثر ذلك على حذف العقار نفسه.",
+                notification.PropertyId);
         }
     }
 
