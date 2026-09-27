@@ -254,8 +254,13 @@ public sealed class OwnerMessagingAndRatingE2ETests : IClassFixture<MessagingApi
         // A: all six axes. Overall of this single rating = (5+4+3+4+5+3)/6 = 4.0
         var first = await clientA.PostAsJsonAsync($"/api/Users/{owner.Id}/ratings", new
         {
-            credibility = 5, safety = 4, responseSpeed = 3, transparency = 4,
-            informationAccuracy = 5, conduct = 3, comment = "  تعامل جيد  "
+            credibility = 5,
+            safety = 4,
+            responseSpeed = 3,
+            transparency = 4,
+            informationAccuracy = 5,
+            conduct = 3,
+            comment = "  تعامل جيد  "
         });
         await AssertStatus(HttpStatusCode.Created, first);
         var firstJson = await ReadJson(first);
@@ -315,8 +320,12 @@ public sealed class OwnerMessagingAndRatingE2ETests : IClassFixture<MessagingApi
 
     private static object FullRating(int score) => new
     {
-        credibility = score, safety = score, responseSpeed = score, transparency = score,
-        informationAccuracy = score, conduct = score
+        credibility = score,
+        safety = score,
+        responseSpeed = score,
+        transparency = score,
+        informationAccuracy = score,
+        conduct = score
     };
 
     private static async Task Send(HttpClient client, Guid propertyId, string content)
