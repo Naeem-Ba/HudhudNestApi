@@ -57,7 +57,7 @@ public sealed class DistributionRunRepository : IDistributionRunRepository
                 property.PublishedAt >= publishedSinceUtc &&
                 property.PublishedAt <= publishedBeforeUtc &&
                 (property.ExpiresAt == null || property.ExpiresAt > now) &&
-                !_db.DistributionRuns.Any(run => run.PropertyId == property.Id))
+                !_db.DistributionRuns.Any(run => run.PropertyId == property.Id && run.PublicationsCreatedCount > 0))
             .OrderBy(property => property.PublishedAt)
             .Select(property => property.Id)
             .Take(Math.Clamp(take, 1, 100))
