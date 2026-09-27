@@ -12,12 +12,18 @@ namespace PropertyApi.Domain.SocialDistribution.Entities;
 /// Google/Facebook identity; this is AqarTech posting content to an account it operates. Same
 /// English words, disjoint bounded contexts, never referenced from one another.
 ///
-/// Never stores a raw access/refresh token. <see cref="CredentialReference"/> is an opaque
-/// string (in practice: a secret-manager key name a future real OAuth integration would look
-/// the actual token up by) and is encrypted at rest regardless, via the same ASP.NET Core
+/// <see cref="CredentialReference"/> is always encrypted at rest, via the same ASP.NET Core
 /// Data-Protection column converter already used for WhatsAppNumber/TaxNumber
-/// (see AppDbContext.ConfigureEncryptedSocialAccountFields) — defense in depth in case an
-/// operator ever pastes something more sensitive than a reference into it by mistake.
+/// (see AppDbContext.ConfigureEncryptedSocialAccountFields) — an opaque string from this bounded
+/// context's own point of view, but in practice (Phase 3), for every platform with a real
+/// <c>ISocialPublisher</c> (Telegram/Facebook/Instagram), it IS the actual bot/page/account access
+/// token that publisher uses for this specific account, connected via
+/// <c>POST accounts/{id}/connect</c> and never seen again once written. There is still no real
+/// OAuth handshake (spec §17: no unofficial APIs, no fabricated flows) — an operator provisions the
+/// token out-of-band (e.g. via @BotFather or Meta for Developers) and pastes it here once; a future
+/// external secret-manager reference would fit the same field without a schema change, which is
+/// exactly why this stayed encrypted-at-rest from Phase 1 even before any real value was ever
+/// stored in it.
 /// </summary>
 public sealed class SocialAccount : AuditableEntity
 {

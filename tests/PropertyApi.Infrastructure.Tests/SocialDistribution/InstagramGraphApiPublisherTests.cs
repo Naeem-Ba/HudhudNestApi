@@ -26,12 +26,13 @@ public sealed class InstagramGraphApiPublisherTests
             NullLogger<InstagramGraphApiPublisher>.Instance);
 
     private static SocialPublishRequest MakeRequest(
-        string? imageUrl = "https://cdn.example.test/p.jpg", string body = "شقة رائعة للبيع", string igUserId = "17841400000000000", IReadOnlyList<string>? hashtags = null) => new()
+        string? imageUrl = "https://cdn.example.test/p.jpg", string body = "شقة رائعة للبيع", string igUserId = "17841400000000000",
+        IReadOnlyList<string>? hashtags = null, string? credentialReference = null) => new()
         {
             PublicationId = Guid.NewGuid(),
             Platform = SocialPlatform.Instagram,
             ExternalAccountId = igUserId,
-            CredentialReference = null,
+            CredentialReference = credentialReference,
             Title = "عنوان",
             Body = body,
             ImageUrl = imageUrl ?? string.Empty,
@@ -259,6 +260,29 @@ public sealed class InstagramGraphApiPublisherTests
 
         Assert.False(result.IsSuccess);
         Assert.Empty(handler.Calls);
+    }
+
+    // ───────────── Phase 3: per-account credential resolution ─────────────
+
+    [Fact]
+    public async Task PublishAsync_AccountHasItsOwnCredential_UsesThatToken_ForBothContainerAndPublishCalls()
+    {
+        const string accountToken = "IGAAH_own_account_token_not_the_shared_one";
+        var handler = new SequencedHandler(new ScriptedResponse(HttpStatusCode.OK, """{"id":"c"}"""), new ScriptedResponse(HttpStatusCode.OK, """{"id":"m"}"""));
+
+        await Publisher(handler).PublishAsync(MakeRequest(credentialReference: accountToken));
+
+        Assert.All(handler.Calls, call => Assert.Equal(accountToken, ParseForm(call.Body)["access_token"]));
+    }
+
+    [Fact]
+    public async Task PublishAsync_AccountHasNoCredential_FallsBackToTheSharedOptionsToken()
+    {
+        var handler = new SequencedHandler(new ScriptedResponse(HttpStatusCode.OK, """{"id":"c"}"""), new ScriptedResponse(HttpStatusCode.OK, """{"id":"m"}"""));
+
+        await Publisher(handler).PublishAsync(MakeRequest(credentialReference: null));
+
+        Assert.All(handler.Calls, call => Assert.Equal(Token, ParseForm(call.Body)["access_token"]));
     }
 
     // ───────────── ValidateContent / GetCapabilities ─────────────

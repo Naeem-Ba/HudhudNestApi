@@ -21,9 +21,12 @@ namespace PropertyApi.Infrastructure.SocialDistribution.Publishing;
 ///
 /// <see cref="Domain.SocialDistribution.Entities.SocialAccount.ExternalAccountId"/> is the Page id
 /// the Graph API expects. <see cref="Domain.SocialDistribution.Entities.SocialAccount.CredentialReference"/>
-/// is NOT used yet — same "one shared credential for every account on this platform" limitation as
-/// <see cref="TelegramBotPublisher"/>, tracked as the same Phase 3 follow-up (a real per-Page token
-/// store, since a Page access token is scoped to exactly one Page).
+/// (Phase 3 — per-account credential store) is now the real Page access token for that specific
+/// Page when the operator has connected one — see <see cref="ResolveToken"/>. This matters more
+/// here than for Telegram: a Page access token is scoped to exactly one Page, so more than one
+/// connected Facebook account genuinely cannot share a single token the way one Telegram bot can
+/// front several channels. <see cref="FacebookGraphApiOptions.PageAccessToken"/> is only the
+/// FALLBACK used when an account has no credential of its own.
 ///
 /// Unlike the Bot API, the Graph API has no scheme-collision risk in its own endpoint path (the
 /// token is never part of the URL here — see <see cref="CallAsync"/>), but it has the opposite
@@ -86,16 +89,17 @@ public sealed class FacebookGraphApiPublisher : ISocialPublisher
     {
         var text = BuildMessageText(request);
 
+        var accessToken = ResolveToken(request);
         FacebookCallOutcome outcome;
         if (string.IsNullOrEmpty(request.ImageUrl))
         {
             outcome = await CallAsync($"{request.ExternalAccountId}/feed",
-                new Dictionary<string, string> { ["message"] = text, ["link"] = request.TargetUrl }, ct);
+                new Dictionary<string, string> { ["message"] = text, ["link"] = request.TargetUrl }, accessToken, ct);
         }
         else
         {
             outcome = await CallAsync($"{request.ExternalAccountId}/photos",
-                new Dictionary<string, string> { ["url"] = request.ImageUrl, ["caption"] = text }, ct);
+                new Dictionary<string, string> { ["url"] = request.ImageUrl, ["caption"] = text }, accessToken, ct);
         }
 
         if (!outcome.IsOk)
@@ -114,14 +118,14 @@ public sealed class FacebookGraphApiPublisher : ISocialPublisher
 
     public async Task<SocialPublishResult> UpdateAsync(SocialPublishRequest request, string externalPostId, CancellationToken ct = default)
     {
-        var outcome = await CallAsync(externalPostId, new Dictionary<string, string> { ["message"] = BuildMessageText(request) }, ct);
+        var outcome = await CallAsync(externalPostId, new Dictionary<string, string> { ["message"] = BuildMessageText(request) }, ResolveToken(request), ct);
         return outcome.IsOk ? SocialPublishResult.Success(externalPostId) : ToFailure(outcome, "تعديل المنشور");
     }
 
     public async Task<SocialPublishResult> CommentAsync(SocialPublishRequest request, string externalPostId, string commentBody, CancellationToken ct = default)
     {
         var outcome = await CallAsync($"{externalPostId}/comments",
-            new Dictionary<string, string> { ["message"] = SocialContentPolicy.SanitizePlainText(commentBody) }, ct);
+            new Dictionary<string, string> { ["message"] = SocialContentPolicy.SanitizePlainText(commentBody) }, ResolveToken(request), ct);
 
         if (!outcome.IsOk)
             return ToFailure(outcome, "التعليق على المنشور");
@@ -134,9 +138,13 @@ public sealed class FacebookGraphApiPublisher : ISocialPublisher
         // Method-override (Graph API's own documented approach for DELETE via a POST body) rather
         // than an actual HTTP DELETE, purely so the access token can travel in the form body —
         // same "never in a URL/query string" rule CallAsync already follows for every other call.
-        var outcome = await CallAsync(externalPostId, new Dictionary<string, string> { ["method"] = "delete" }, ct);
+        var outcome = await CallAsync(externalPostId, new Dictionary<string, string> { ["method"] = "delete" }, ResolveToken(request), ct);
         return outcome.IsOk ? SocialPublishResult.Success(externalPostId) : ToFailure(outcome, "حذف المنشور");
     }
+
+    /// <summary>Phase 3: prefer the account's own connected credential over the shared fallback — see class remarks.</summary>
+    private string ResolveToken(SocialPublishRequest request) =>
+        string.IsNullOrWhiteSpace(request.CredentialReference) ? _options.PageAccessToken : request.CredentialReference;
 
     /// <summary>Caption/message = body, plus hashtags appended only when there is room left under the platform's body limit — never truncates the body itself to make room.</summary>
     private string BuildMessageText(SocialPublishRequest request)
@@ -191,7 +199,7 @@ public sealed class FacebookGraphApiPublisher : ISocialPublisher
         };
     }
 
-    private async Task<FacebookCallOutcome> CallAsync(string path, Dictionary<string, string> fields, CancellationToken ct)
+    private async Task<FacebookCallOutcome> CallAsync(string path, Dictionary<string, string> fields, string accessToken, CancellationToken ct)
     {
         var client = _httpClientFactory.CreateClient(HttpClientName);
         var endpoint = new Uri($"{_options.BaseUrl.TrimEnd('/')}/{_options.ApiVersion}/{path}");
@@ -200,7 +208,7 @@ public sealed class FacebookGraphApiPublisher : ISocialPublisher
         // common Graph API sample code that appends it as a query param) — same rule this
         // codebase applies everywhere else to secrets, and Graph API accepts it in the body for
         // every verb used here (POST, and the delete-by-POST method-override).
-        fields["access_token"] = _options.PageAccessToken;
+        fields["access_token"] = accessToken;
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = new FormUrlEncodedContent(fields) };
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(_timeout);

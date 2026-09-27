@@ -24,12 +24,13 @@ public sealed class TelegramBotPublisherTests
         new(new FakeHttpClientFactory(handler), Options.Create(new TelegramBotOptions { BotToken = Token, TimeoutSeconds = timeoutSeconds }), NullLogger<TelegramBotPublisher>.Instance);
 
     private static SocialPublishRequest MakeRequest(
-        string? imageUrl = "https://cdn.example.test/p.jpg", string body = "شقة رائعة للبيع", string chatId = "-1001234567890", IReadOnlyList<string>? hashtags = null) => new()
+        string? imageUrl = "https://cdn.example.test/p.jpg", string body = "شقة رائعة للبيع", string chatId = "-1001234567890",
+        IReadOnlyList<string>? hashtags = null, string? credentialReference = null) => new()
         {
             PublicationId = Guid.NewGuid(),
             Platform = SocialPlatform.Telegram,
             ExternalAccountId = chatId,
-            CredentialReference = null,
+            CredentialReference = credentialReference,
             Title = "عنوان",
             Body = body,
             ImageUrl = imageUrl ?? string.Empty,
@@ -287,6 +288,41 @@ public sealed class TelegramBotPublisherTests
         Assert.False(commentResult.IsSuccess);
         Assert.False(deleteResult.IsSuccess);
         Assert.Equal("", handler.Uri); // never actually called
+    }
+
+    // ───────────── Phase 3: per-account credential resolution ─────────────
+
+    [Fact]
+    public async Task PublishAsync_AccountHasItsOwnCredential_UsesThatToken_NotTheSharedFallback()
+    {
+        const string accountToken = "999999:own-account-token-not-the-shared-one";
+        var handler = new RecordingHandler(HttpStatusCode.OK, """{"ok":true,"result":{"message_id":1}}""");
+
+        await Publisher(handler).PublishAsync(MakeRequest(credentialReference: accountToken));
+
+        Assert.Equal($"https://api.telegram.org/bot{accountToken}/sendPhoto", handler.Uri);
+        Assert.DoesNotContain(Token, handler.Uri);
+    }
+
+    [Fact]
+    public async Task PublishAsync_AccountHasNoCredential_FallsBackToTheSharedOptionsToken()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, """{"ok":true,"result":{"message_id":1}}""");
+
+        await Publisher(handler).PublishAsync(MakeRequest(credentialReference: null));
+
+        Assert.Equal($"https://api.telegram.org/bot{Token}/sendPhoto", handler.Uri);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_AlsoUsesTheAccountsOwnCredential()
+    {
+        const string accountToken = "999999:own-account-token";
+        var handler = new RecordingHandler(HttpStatusCode.OK, """{"ok":true,"result":{"message_id":555}}""");
+
+        await Publisher(handler).UpdateAsync(MakeRequest(credentialReference: accountToken), "555");
+
+        Assert.Equal($"https://api.telegram.org/bot{accountToken}/editMessageCaption", handler.Uri);
     }
 
     // ───────────── ValidateContent (shared policy, unchanged behavior) ─────────────

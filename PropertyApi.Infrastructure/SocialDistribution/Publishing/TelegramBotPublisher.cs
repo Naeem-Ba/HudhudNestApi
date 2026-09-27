@@ -22,10 +22,11 @@ namespace PropertyApi.Infrastructure.SocialDistribution.Publishing;
 /// <see cref="Domain.SocialDistribution.Entities.SocialAccount.ExternalAccountId"/> is the chat_id
 /// the Bot API expects — either the channel's numeric id (e.g. "-1001234567890") or, for a public
 /// channel, "@handle". <see cref="Domain.SocialDistribution.Entities.SocialAccount.CredentialReference"/>
-/// is NOT used yet: there is no per-account credential store until Phase 3 (spec §D3), so this MVP
-/// uses one shared bot token from <see cref="TelegramBotOptions"/> for every Telegram account —
-/// correct for "one bot, one channel" today, a real limitation once a second Telegram account with
-/// a different bot is ever configured (tracked as a Phase 3 follow-up, not silently assumed away).
+/// (Phase 3 — per-account credential store, spec §D3) is now the real bot token for that specific
+/// account when the operator has connected one via <c>POST accounts/{id}/connect</c> — see
+/// <see cref="ResolveToken"/>. <see cref="TelegramBotOptions.BotToken"/> is only the FALLBACK used
+/// when an account has no credential of its own, preserving the original "one shared bot for every
+/// account" MVP behavior for any account that was never individually connected.
 ///
 /// Idempotency limitation (spec/§F-8 follow-up, inherent to the Bot API, which has no
 /// idempotency-key concept): if our own client times out AFTER Telegram already processed the
@@ -90,7 +91,7 @@ public sealed class TelegramBotPublisher : ISocialPublisher
             ? new { chat_id = request.ExternalAccountId, text }
             : new { chat_id = request.ExternalAccountId, photo = request.ImageUrl, caption = text };
 
-        var outcome = await CallAsync(method, payload, ct);
+        var outcome = await CallAsync(method, payload, ResolveToken(request), ct);
         if (!outcome.IsOk)
             return ToFailure(outcome, "نشر المنشور");
 
@@ -109,7 +110,7 @@ public sealed class TelegramBotPublisher : ISocialPublisher
         // ("message can't be edited"), classified like any other InvalidContent below.
         var payload = new { chat_id = request.ExternalAccountId, message_id = messageId, caption = BuildMessageText(request) };
 
-        var outcome = await CallAsync("editMessageCaption", payload, ct);
+        var outcome = await CallAsync("editMessageCaption", payload, ResolveToken(request), ct);
         return outcome.IsOk ? SocialPublishResult.Success(externalPostId) : ToFailure(outcome, "تعديل المنشور");
     }
 
@@ -125,7 +126,7 @@ public sealed class TelegramBotPublisher : ISocialPublisher
             reply_parameters = new { message_id = replyToMessageId },
         };
 
-        var outcome = await CallAsync("sendMessage", payload, ct);
+        var outcome = await CallAsync("sendMessage", payload, ResolveToken(request), ct);
         if (!outcome.IsOk)
             return ToFailure(outcome, "التعليق على المنشور");
 
@@ -139,7 +140,7 @@ public sealed class TelegramBotPublisher : ISocialPublisher
 
         var payload = new { chat_id = request.ExternalAccountId, message_id = messageId };
 
-        var outcome = await CallAsync("deleteMessage", payload, ct);
+        var outcome = await CallAsync("deleteMessage", payload, ResolveToken(request), ct);
         return outcome.IsOk ? SocialPublishResult.Success(externalPostId) : ToFailure(outcome, "حذف المنشور");
     }
 
@@ -208,7 +209,11 @@ public sealed class TelegramBotPublisher : ISocialPublisher
             ? $"تجاوز حد معدّل الطلبات لتيليغرام أثناء {actionAr} — أعد المحاولة بعد {seconds} ثانية: {description}"
             : $"تجاوز حد معدّل الطلبات لتيليغرام أثناء {actionAr}: {description}";
 
-    private async Task<TelegramCallOutcome> CallAsync(string method, object payload, CancellationToken ct)
+    /// <summary>Phase 3: prefer the account's own connected credential over the shared fallback — see class remarks.</summary>
+    private string ResolveToken(SocialPublishRequest request) =>
+        string.IsNullOrWhiteSpace(request.CredentialReference) ? _options.BotToken : request.CredentialReference;
+
+    private async Task<TelegramCallOutcome> CallAsync(string method, object payload, string botToken, CancellationToken ct)
     {
         var client = _httpClientFactory.CreateClient(HttpClientName);
         // NOT the two-argument Uri(baseUri, relative) combinator: a real bot token is
@@ -217,7 +222,7 @@ public sealed class TelegramBotPublisher : ISocialPublisher
         // string "bot123456:ABC.../sendPhoto" as its OWN absolute URI with scheme "bot123456",
         // silently discarding the base entirely. Building the full absolute string once and
         // parsing it in a single pass avoids that reinterpretation.
-        var endpoint = new Uri($"{_options.BaseUrl.TrimEnd('/')}/bot{_options.BotToken}/{method}");
+        var endpoint = new Uri($"{_options.BaseUrl.TrimEnd('/')}/bot{botToken}/{method}");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = JsonContent.Create(payload) };
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);

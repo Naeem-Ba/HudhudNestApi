@@ -20,7 +20,11 @@ namespace PropertyApi.Infrastructure.SocialDistribution.Publishing;
 ///
 /// <see cref="Domain.SocialDistribution.Entities.SocialAccount.ExternalAccountId"/> is the
 /// Instagram professional (Business/Creator) account id — NOT the linked Facebook Page id (see
-/// <see cref="InstagramGraphApiOptions"/>'s remarks).
+/// <see cref="InstagramGraphApiOptions"/>'s remarks). <see cref="Domain.SocialDistribution.Entities.SocialAccount.CredentialReference"/>
+/// (Phase 3 — per-account credential store) is now the real access token for that specific
+/// Instagram account when the operator has connected one — see <see cref="ResolveToken"/>.
+/// <see cref="InstagramGraphApiOptions.AccessToken"/> is only the FALLBACK used when an account
+/// has no credential of its own.
 ///
 /// **Two-step publish, not one call**: Instagram has no single "create a post" endpoint. A post is
 /// first created as a media *container* (<c>POST /{ig-user-id}/media</c>, returns a container id),
@@ -91,15 +95,16 @@ public sealed class InstagramGraphApiPublisher : ISocialPublisher
 
     public async Task<SocialPublishResult> PublishAsync(SocialPublishRequest request, CancellationToken ct = default)
     {
+        var accessToken = ResolveToken(request);
         var containerOutcome = await CallAsync($"{request.ExternalAccountId}/media",
-            new Dictionary<string, string> { ["image_url"] = request.ImageUrl, ["caption"] = BuildCaptionText(request) }, ct);
+            new Dictionary<string, string> { ["image_url"] = request.ImageUrl, ["caption"] = BuildCaptionText(request) }, accessToken, ct);
 
         if (!containerOutcome.IsOk)
             return ToFailure(containerOutcome, "إنشاء حاوية الوسائط قبل النشر");
 
         var containerId = containerOutcome.Result.GetProperty("id").GetString()!;
 
-        var publishOutcome = await PublishContainerWithRetryAsync(request.ExternalAccountId, containerId, ct);
+        var publishOutcome = await PublishContainerWithRetryAsync(request.ExternalAccountId, containerId, accessToken, ct);
         if (!publishOutcome.IsOk)
             return ToFailure(publishOutcome, "نشر المنشور");
 
@@ -123,7 +128,7 @@ public sealed class InstagramGraphApiPublisher : ISocialPublisher
     public async Task<SocialPublishResult> CommentAsync(SocialPublishRequest request, string externalPostId, string commentBody, CancellationToken ct = default)
     {
         var outcome = await CallAsync($"{externalPostId}/comments",
-            new Dictionary<string, string> { ["message"] = SocialContentPolicy.SanitizePlainText(commentBody) }, ct);
+            new Dictionary<string, string> { ["message"] = SocialContentPolicy.SanitizePlainText(commentBody) }, ResolveToken(request), ct);
 
         if (!outcome.IsOk)
             return ToFailure(outcome, "التعليق على المنشور");
@@ -152,12 +157,12 @@ public sealed class InstagramGraphApiPublisher : ISocialPublisher
         return withHashtags.Length <= limit ? withHashtags : request.Body;
     }
 
-    private async Task<InstagramCallOutcome> PublishContainerWithRetryAsync(string igUserId, string containerId, CancellationToken ct)
+    private async Task<InstagramCallOutcome> PublishContainerWithRetryAsync(string igUserId, string containerId, string accessToken, CancellationToken ct)
     {
         var attempts = Math.Max(1, _options.ContainerPublishMaxAttempts);
         for (var attempt = 1; attempt <= attempts; attempt++)
         {
-            var outcome = await CallAsync($"{igUserId}/media_publish", new Dictionary<string, string> { ["creation_id"] = containerId }, ct);
+            var outcome = await CallAsync($"{igUserId}/media_publish", new Dictionary<string, string> { ["creation_id"] = containerId }, accessToken, ct);
 
             var isContainerNotReady = outcome is { IsOk: false, Kind: InstagramFailureKind.ApiError, ErrorCode: ContainerNotReadyErrorCode };
             if (!isContainerNotReady || attempt == attempts)
@@ -204,14 +209,18 @@ public sealed class InstagramGraphApiPublisher : ISocialPublisher
         };
     }
 
-    private async Task<InstagramCallOutcome> CallAsync(string path, Dictionary<string, string> fields, CancellationToken ct)
+    /// <summary>Phase 3: prefer the account's own connected credential over the shared fallback — see class remarks.</summary>
+    private string ResolveToken(SocialPublishRequest request) =>
+        string.IsNullOrWhiteSpace(request.CredentialReference) ? _options.AccessToken : request.CredentialReference;
+
+    private async Task<InstagramCallOutcome> CallAsync(string path, Dictionary<string, string> fields, string accessToken, CancellationToken ct)
     {
         var client = _httpClientFactory.CreateClient(HttpClientName);
         var endpoint = new Uri($"{_options.BaseUrl.TrimEnd('/')}/{_options.ApiVersion}/{path}");
 
         // Same rule as FacebookGraphApiPublisher.CallAsync: the token travels only in the form
         // body, never the URL/query string.
-        fields["access_token"] = _options.AccessToken;
+        fields["access_token"] = accessToken;
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = new FormUrlEncodedContent(fields) };
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(_timeout);

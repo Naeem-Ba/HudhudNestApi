@@ -23,12 +23,13 @@ public sealed class FacebookGraphApiPublisherTests
         new(new FakeHttpClientFactory(handler), Options.Create(new FacebookGraphApiOptions { PageAccessToken = Token, TimeoutSeconds = timeoutSeconds }), NullLogger<FacebookGraphApiPublisher>.Instance);
 
     private static SocialPublishRequest MakeRequest(
-        string? imageUrl = "https://cdn.example.test/p.jpg", string body = "شقة رائعة للبيع", string pageId = "1234567890", IReadOnlyList<string>? hashtags = null) => new()
+        string? imageUrl = "https://cdn.example.test/p.jpg", string body = "شقة رائعة للبيع", string pageId = "1234567890",
+        IReadOnlyList<string>? hashtags = null, string? credentialReference = null) => new()
         {
             PublicationId = Guid.NewGuid(),
             Platform = SocialPlatform.Facebook,
             ExternalAccountId = pageId,
-            CredentialReference = null,
+            CredentialReference = credentialReference,
             Title = "عنوان",
             Body = body,
             ImageUrl = imageUrl ?? string.Empty,
@@ -279,6 +280,31 @@ public sealed class FacebookGraphApiPublisherTests
         Assert.Equal($"https://graph.facebook.com/v21.0/1234567890_999", handler.Uri);
         var form = ParseForm(handler.Body);
         Assert.Equal("delete", form["method"]);
+        Assert.Equal(Token, form["access_token"]);
+    }
+
+    // ───────────── Phase 3: per-account credential resolution ─────────────
+
+    [Fact]
+    public async Task PublishAsync_AccountHasItsOwnCredential_UsesThatToken_NotTheSharedFallback()
+    {
+        const string accountToken = "EAAH_own_page_token_not_the_shared_one";
+        var handler = new RecordingHandler(HttpStatusCode.OK, """{"id":"1_1"}""");
+
+        await Publisher(handler).PublishAsync(MakeRequest(imageUrl: null, credentialReference: accountToken));
+
+        var form = ParseForm(handler.Body);
+        Assert.Equal(accountToken, form["access_token"]);
+    }
+
+    [Fact]
+    public async Task PublishAsync_AccountHasNoCredential_FallsBackToTheSharedOptionsToken()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, """{"id":"1_1"}""");
+
+        await Publisher(handler).PublishAsync(MakeRequest(imageUrl: null, credentialReference: null));
+
+        var form = ParseForm(handler.Body);
         Assert.Equal(Token, form["access_token"]);
     }
 
