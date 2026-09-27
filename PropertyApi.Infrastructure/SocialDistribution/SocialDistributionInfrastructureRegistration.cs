@@ -69,6 +69,17 @@ public static class SocialDistributionInfrastructureRegistration
 
         services.AddOptions<FacebookGraphApiOptions>().Bind(configuration.GetSection(FacebookGraphApiOptions.SectionName));
 
+        // Phase 2c: the third real platform integration — same "off until deliberately
+        // configured" posture as Telegram/Facebook above.
+        var instagramAccessToken = configuration[$"{InstagramGraphApiOptions.SectionName}:AccessToken"];
+        if (!string.IsNullOrWhiteSpace(instagramAccessToken))
+        {
+            services.AddHttpClient(InstagramGraphApiPublisher.HttpClientName);
+            services.AddSingleton<ISocialPublisher, InstagramGraphApiPublisher>();
+        }
+
+        services.AddOptions<InstagramGraphApiOptions>().Bind(configuration.GetSection(InstagramGraphApiOptions.SectionName));
+
         services.AddSingleton<ISocialPublisherRegistry, SocialPublisherRegistry>();
 
         // Phase 6: Queue Port — production adapter wraps the existing SocialPublication
