@@ -138,13 +138,18 @@ public sealed class PropertyStatusChangedDistributionHandler :
             return;
         }
 
+        // Comment/Delete need the same "which account/chat" context Update always did — a real
+        // adapter cannot act on a bare externalPostId alone (Phase 2 finding: the interface used
+        // to only pass the id, which no genuine Telegram/Facebook/... implementation could work
+        // with). BuildLifecycleRequest is the one place that context is assembled.
         var result = effectiveAction switch
         {
             SocialPublicationLifecycleAction.Update => await publisher.UpdateAsync(
-                BuildUpdateRequest(publication, account!), publication.ExternalPostId!, ct),
+                BuildLifecycleRequest(publication, account!), publication.ExternalPostId!, ct),
             SocialPublicationLifecycleAction.Comment => await publisher.CommentAsync(
-                publication.ExternalPostId!, BuildStatusComment(publication), ct),
-            SocialPublicationLifecycleAction.Delete => await publisher.DeleteAsync(publication.ExternalPostId!, ct),
+                BuildLifecycleRequest(publication, account!), publication.ExternalPostId!, BuildStatusComment(publication), ct),
+            SocialPublicationLifecycleAction.Delete => await publisher.DeleteAsync(
+                BuildLifecycleRequest(publication, account!), publication.ExternalPostId!, ct),
             _ => SocialPublishResult.Failure(SocialPublicationErrorCode.PlatformNotConfigured, "no-op"),
         };
 
@@ -154,7 +159,7 @@ public sealed class PropertyStatusChangedDistributionHandler :
         await RecordAsync(publication, $"{transitionTag}: تم تنفيذ {effectiveAction} — {outcome}.", ct);
     }
 
-    private static SocialPublishRequest BuildUpdateRequest(SocialPublication publication, SocialAccount account) => new()
+    private static SocialPublishRequest BuildLifecycleRequest(SocialPublication publication, SocialAccount account) => new()
     {
         PublicationId = publication.Id,
         Platform = account.Platform,

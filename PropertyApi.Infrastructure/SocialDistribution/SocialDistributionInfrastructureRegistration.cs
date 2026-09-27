@@ -42,6 +42,44 @@ public static class SocialDistributionInfrastructureRegistration
         services.AddSingleton<ISocialPublisher, TikTokPublisher>();
         services.AddSingleton<ISocialPublisher, YouTubePublisher>();
         services.AddSingleton<ISocialPublisher, LinkedInPublisher>();
+
+        // Phase 2: the first REAL platform integration — registered AFTER the placeholder above,
+        // last-registration-wins, and only when a bot token is actually configured. Without one,
+        // Telegram distribution keeps today's exact behavior (deterministic PlatformNotConfigured,
+        // zero network calls) instead of every attempt burning a real HTTP call that can only ever
+        // fail with a misconfiguration error — same "off until deliberately configured" posture as
+        // every other new Phase 1/2 option in this file.
+        var telegramBotToken = configuration[$"{TelegramBotOptions.SectionName}:BotToken"];
+        if (!string.IsNullOrWhiteSpace(telegramBotToken))
+        {
+            services.AddHttpClient(TelegramBotPublisher.HttpClientName);
+            services.AddSingleton<ISocialPublisher, TelegramBotPublisher>();
+        }
+
+        services.AddOptions<TelegramBotOptions>().Bind(configuration.GetSection(TelegramBotOptions.SectionName));
+
+        // Phase 2b: the second real platform integration — same "off until deliberately
+        // configured" posture as Telegram above.
+        var facebookPageAccessToken = configuration[$"{FacebookGraphApiOptions.SectionName}:PageAccessToken"];
+        if (!string.IsNullOrWhiteSpace(facebookPageAccessToken))
+        {
+            services.AddHttpClient(FacebookGraphApiPublisher.HttpClientName);
+            services.AddSingleton<ISocialPublisher, FacebookGraphApiPublisher>();
+        }
+
+        services.AddOptions<FacebookGraphApiOptions>().Bind(configuration.GetSection(FacebookGraphApiOptions.SectionName));
+
+        // Phase 2c: the third real platform integration — same "off until deliberately
+        // configured" posture as Telegram/Facebook above.
+        var instagramAccessToken = configuration[$"{InstagramGraphApiOptions.SectionName}:AccessToken"];
+        if (!string.IsNullOrWhiteSpace(instagramAccessToken))
+        {
+            services.AddHttpClient(InstagramGraphApiPublisher.HttpClientName);
+            services.AddSingleton<ISocialPublisher, InstagramGraphApiPublisher>();
+        }
+
+        services.AddOptions<InstagramGraphApiOptions>().Bind(configuration.GetSection(InstagramGraphApiOptions.SectionName));
+
         services.AddSingleton<ISocialPublisherRegistry, SocialPublisherRegistry>();
 
         // Phase 6: Queue Port — production adapter wraps the existing SocialPublication
