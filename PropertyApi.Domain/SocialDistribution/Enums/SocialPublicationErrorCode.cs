@@ -24,6 +24,15 @@ public enum SocialPublicationErrorCode
     UnsupportedMedia = 11,
     PropertyNotPublic = 12,
     PlatformNotConfigured = 13,
+
+    /// <summary>
+    /// The worker process was interrupted (crash/restart) while a publish attempt was in flight —
+    /// whether the platform actually received the post is unknown. Never auto-retried: retrying a
+    /// call that may have already succeeded risks a real duplicate post, which this system must
+    /// never do (spec: never fabricate success, and symmetrically, never risk a silent double
+    /// post). Surfaced as a dead letter for a human to check the platform and resolve manually.
+    /// </summary>
+    AmbiguousOutcome = 14,
 }
 
 public static class SocialPublicationErrorCodeExtensions

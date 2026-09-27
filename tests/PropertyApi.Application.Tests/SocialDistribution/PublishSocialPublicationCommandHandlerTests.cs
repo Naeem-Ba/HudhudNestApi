@@ -104,7 +104,9 @@ public sealed class PublishSocialPublicationCommandHandlerTests
 
         Assert.Equal(SocialPublicationStatus.Published, result.Status);
         Assert.Equal("ext-post-1", result.ExternalPostId);
-        fixture.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        // Twice, deliberately (Phase 1 audit F-8): once to persist StartPublishing's
+        // Publishing+LeaseUntil transition BEFORE the external call, once for the final outcome.
+        fixture.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
         fixture.AssetGenerator.Verify(x => x.GenerateAsync(It.IsAny<GenerateSocialAssetRequest>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 

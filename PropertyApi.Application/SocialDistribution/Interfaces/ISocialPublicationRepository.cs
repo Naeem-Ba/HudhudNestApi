@@ -20,6 +20,14 @@ public interface ISocialPublicationRepository
     Task<IReadOnlyList<SocialPublication>> GetDueForRetryAsync(DateTime utcNow, int take, CancellationToken ct = default);
 
     /// <summary>
+    /// Publications stuck in <see cref="Domain.SocialDistribution.Enums.SocialPublicationStatus.Publishing"/>
+    /// past their <see cref="SocialPublication.LeaseUntil"/> — the lease reaper's work list (see
+    /// <see cref="SocialPublication.ReleaseExpiredLease"/>). Always a tiny set in a healthy system;
+    /// non-empty only after a worker crash/restart interrupted an in-flight publish attempt.
+    /// </summary>
+    Task<IReadOnlyList<SocialPublication>> GetPublishingWithExpiredLeaseAsync(DateTime utcNow, int take, CancellationToken ct = default);
+
+    /// <summary>
     /// Phase 4 idempotency guard (spec §12): true when a rule-engine-created (i.e.
     /// DistributionRuleId is not null), non-Cancelled publication already exists for this exact
     /// (property, account) pair. <see cref="Services.DistributionEngine"/> checks this before

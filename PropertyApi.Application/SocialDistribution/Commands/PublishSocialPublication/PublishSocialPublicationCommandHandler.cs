@@ -100,6 +100,14 @@ public sealed class PublishSocialPublicationCommandHandler
         publication.StartPublishing(now);
         _publications.Update(publication);
 
+        // Persisted BEFORE the external call, deliberately as its own SaveChanges (Phase 1 audit
+        // F-8): this is what lets a crash between here and the final SaveChanges below be
+        // recovered safely — the row is durably Publishing+LeaseUntil at rest, so the next sweep
+        // never re-selects it as still-Queued and calls the platform a second time. The lease
+        // reaper (SocialPublicationDispatchHostedService) is what eventually resolves it if this
+        // process never comes back to finish the job.
+        await _uow.SaveChangesAsync(ct);
+
         var account = await _accounts.GetByIdAsync(publication.SocialAccountId, ct);
         var propertyStillPublic = await _properties.IsPubliclyVisibleAsync(publication.PropertyId, ct);
 

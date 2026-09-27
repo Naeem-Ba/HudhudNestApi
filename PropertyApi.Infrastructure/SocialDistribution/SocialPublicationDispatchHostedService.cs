@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.SocialDistribution.Commands.PublishSocialPublication;
 using PropertyApi.Application.SocialDistribution.Interfaces;
+using PropertyApi.Application.SocialDistribution.Mapping;
 using PropertyApi.Application.SocialDistribution.Options;
 using PropertyApi.Application.SocialDistribution.Services;
 using PropertyApi.Domain.SocialDistribution.Entities;
@@ -98,6 +99,13 @@ public sealed class SocialPublicationDispatchHostedService : BackgroundService
                     var deadLetters = scope.ServiceProvider.GetRequiredService<ISocialPublicationDeadLetterRepository>();
                     var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
                     var mediator = scope.ServiceProvider.GetRequiredService<ISender>();
+
+                    // Before anything else: recover any publication a crashed/restarted worker
+                    // left stuck in Publishing past its lease (Phase 1 audit F-8) — must run
+                    // before dequeuing so a reaped row's dead letter is recorded up front, not
+                    // racing this same sweep's own dispatch pass.
+                    await ReapExpiredLeasesAsync(scope.ServiceProvider, uow, deadLetters, ct);
+
                     // Before dequeuing, so a listing the sweep just distributed is dispatched in
                     // this same pass instead of waiting another interval.
                     await ReconcileAsync(scope.ServiceProvider, ct);
@@ -190,6 +198,64 @@ public sealed class SocialPublicationDispatchHostedService : BackgroundService
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogError(ex, "Reconciliation failed to distribute listing {PropertyId}.", propertyId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Recovers every publication stuck in Publishing past its lease (Phase 1 audit F-8) — always
+    /// terminal (never re-queued: see <see cref="SocialPublication.ReleaseExpiredLease"/> for why
+    /// auto-retrying an unconfirmed outcome is never safe here), and always recorded as a dead
+    /// letter so an admin is the one who decides whether the platform actually received the post.
+    /// </summary>
+    private async Task ReapExpiredLeasesAsync(
+        IServiceProvider services, IUnitOfWork uow, ISocialPublicationDeadLetterRepository deadLetters, CancellationToken ct)
+    {
+        var publications = services.GetRequiredService<ISocialPublicationRepository>();
+        var now = DateTime.UtcNow;
+
+        IReadOnlyList<SocialPublication> stuck;
+        try
+        {
+            stuck = await publications.GetPublishingWithExpiredLeaseAsync(now, MaxItemsPerSweep, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Social distribution lease reaper could not list expired-lease publications.");
+            return;
+        }
+
+        foreach (var publication in stuck)
+        {
+            try
+            {
+                var fromStatus = publication.Status;
+                publication.ReleaseExpiredLease(now);
+
+                if (publication.Status == fromStatus)
+                    continue; // lease had not actually expired by the time this row was read — leave it alone.
+
+                publications.Update(publication);
+
+                var history = services.GetRequiredService<ISocialPublicationStatusHistoryRepository>();
+                await history.AddAsync(
+                    SocialPublicationStatusHistory.Record(
+                        publication.Id, fromStatus, publication.Status, changedByUserId: null,
+                        "تم تحرير قفل النشر بعد انتهاء مهلته — يُشتبه بتعطل العامل الخلفي أثناء محاولة سابقة.", now),
+                    ct);
+                await uow.SaveChangesAsync(ct);
+
+                _logger.LogWarning(
+                    "Released expired publish lease for SocialPublication {PublicationId} — recorded as {ErrorCode}.",
+                    publication.Id, publication.ErrorCode);
+
+                await RecordDeadLetterIfNeededAsync(
+                    deadLetters, uow, publication.Content!.Platform,
+                    SocialDistributionMapper.ToDto(publication), ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "Failed to release expired publish lease for SocialPublication {PublicationId}.", publication.Id);
             }
         }
     }
