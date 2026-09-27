@@ -73,13 +73,13 @@ public sealed class PropertyStatusChangedDistributionHandlerTests
             return Task.FromResult(SocialPublishResult.Success(externalPostId));
         }
 
-        public Task<SocialPublishResult> CommentAsync(string externalPostId, string commentBody, CancellationToken ct = default)
+        public Task<SocialPublishResult> CommentAsync(SocialPublishRequest request, string externalPostId, string commentBody, CancellationToken ct = default)
         {
             CommentCalled = true;
             return Task.FromResult(SocialPublishResult.Success(externalPostId));
         }
 
-        public Task<SocialPublishResult> DeleteAsync(string externalPostId, CancellationToken ct = default)
+        public Task<SocialPublishResult> DeleteAsync(SocialPublishRequest request, string externalPostId, CancellationToken ct = default)
         {
             DeleteCalled = true;
             return Task.FromResult(SocialPublishResult.Success(externalPostId));
