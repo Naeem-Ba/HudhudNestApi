@@ -39,6 +39,8 @@ public sealed class GetUserRatingsQueryHandler
                 Safety: r.Safety,
                 ResponseSpeed: r.ResponseSpeed,
                 Transparency: r.Transparency,
+                InformationAccuracy: r.InformationAccuracy,
+                Conduct: r.Conduct,
                 OverallScore: r.OverallScore,
                 Comment: r.Comment,
                 CreatedAt: r.CreatedAt))
@@ -50,10 +52,15 @@ public sealed class GetUserRatingsQueryHandler
             AverageSafety: Math.Round(averages.Safety, 1),
             AverageResponseSpeed: Math.Round(averages.ResponseSpeed, 1),
             AverageTransparency: Math.Round(averages.Transparency, 1),
+            AverageInformationAccuracy: RoundOrNull(averages.InformationAccuracy),
+            AverageConduct: RoundOrNull(averages.Conduct),
             AverageOverall: Math.Round(averages.Overall, 1),
             TotalCount: totalCount,
             Page: page,
             PageSize: pageSize,
             Ratings: mapped);
     }
+
+    private static double? RoundOrNull(double? value)
+        => value.HasValue ? Math.Round(value.Value, 1) : null;
 }

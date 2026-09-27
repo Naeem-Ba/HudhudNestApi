@@ -86,7 +86,9 @@ public sealed class RateUserCommandHandler
                 request.Safety,
                 request.ResponseSpeed,
                 request.Transparency,
-                request.Comment);
+                request.Comment,
+                request.InformationAccuracy,
+                request.Conduct);
 
             await _ratings.AddAsync(rating, ct);
         }
@@ -98,7 +100,9 @@ public sealed class RateUserCommandHandler
                 request.ResponseSpeed,
                 request.Transparency,
                 request.Comment,
-                DateTime.UtcNow);
+                DateTime.UtcNow,
+                request.InformationAccuracy,
+                request.Conduct);
 
             _ratings.Update(existingRating);
             rating = existingRating;
@@ -151,6 +155,8 @@ public sealed class RateUserCommandHandler
             Safety: rating.Safety,
             ResponseSpeed: rating.ResponseSpeed,
             Transparency: rating.Transparency,
+            InformationAccuracy: rating.InformationAccuracy,
+            Conduct: rating.Conduct,
             OverallScore: rating.OverallScore,
             Comment: rating.Comment,
             CreatedAt: rating.CreatedAt);

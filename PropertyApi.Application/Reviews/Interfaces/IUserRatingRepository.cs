@@ -6,13 +6,16 @@ namespace PropertyApi.Application.Reviews.Interfaces;
 /// Aggregated per-criterion averages for a rated user's profile page.
 /// All averages are on the 1..5 scale; 0 when the user has no ratings yet
 /// (callers should treat TotalCount == 0 as "not yet rated" rather than
-/// showing a literal 0/5 badge).
+/// showing a literal 0/5 badge). The optional criteria are null when no rating
+/// has scored them yet. Overall is the mean of each rating's own OverallScore.
 /// </summary>
 public sealed record UserRatingAverages(
     double Credibility,
     double Safety,
     double ResponseSpeed,
     double Transparency,
+    double? InformationAccuracy,
+    double? Conduct,
     double Overall,
     int TotalCount);
 
