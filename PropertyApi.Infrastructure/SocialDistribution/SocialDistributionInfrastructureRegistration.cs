@@ -58,6 +58,17 @@ public static class SocialDistributionInfrastructureRegistration
 
         services.AddOptions<TelegramBotOptions>().Bind(configuration.GetSection(TelegramBotOptions.SectionName));
 
+        // Phase 2b: the second real platform integration — same "off until deliberately
+        // configured" posture as Telegram above.
+        var facebookPageAccessToken = configuration[$"{FacebookGraphApiOptions.SectionName}:PageAccessToken"];
+        if (!string.IsNullOrWhiteSpace(facebookPageAccessToken))
+        {
+            services.AddHttpClient(FacebookGraphApiPublisher.HttpClientName);
+            services.AddSingleton<ISocialPublisher, FacebookGraphApiPublisher>();
+        }
+
+        services.AddOptions<FacebookGraphApiOptions>().Bind(configuration.GetSection(FacebookGraphApiOptions.SectionName));
+
         services.AddSingleton<ISocialPublisherRegistry, SocialPublisherRegistry>();
 
         // Phase 6: Queue Port — production adapter wraps the existing SocialPublication
