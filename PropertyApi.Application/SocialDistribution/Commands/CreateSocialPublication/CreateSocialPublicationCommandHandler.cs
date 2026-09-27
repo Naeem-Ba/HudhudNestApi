@@ -1,6 +1,7 @@
 using System.Globalization;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
@@ -8,8 +9,10 @@ using PropertyApi.Application.SocialDistribution.AiContent;
 using PropertyApi.Application.SocialDistribution.DTOs;
 using PropertyApi.Application.SocialDistribution.Interfaces;
 using PropertyApi.Application.SocialDistribution.Mapping;
+using PropertyApi.Application.SocialDistribution.Options;
 using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.SocialDistribution.Entities;
+using PropertyApi.Domain.SocialDistribution.Templates;
 
 namespace PropertyApi.Application.SocialDistribution.Commands.CreateSocialPublication;
 
@@ -31,6 +34,7 @@ public sealed class CreateSocialPublicationCommandHandler
     private readonly ISocialContentGenerator _contentGenerator;
     private readonly IUnitOfWork _uow;
     private readonly ILogger<CreateSocialPublicationCommandHandler>? _logger;
+    private readonly SocialDistributionContentReviewOptions _contentReview;
 
     public CreateSocialPublicationCommandHandler(
         IPropertyRepository properties,
@@ -41,7 +45,8 @@ public sealed class CreateSocialPublicationCommandHandler
         ISocialDistributionTargetUrlBuilder urlBuilder,
         ISocialContentGenerator contentGenerator,
         IUnitOfWork uow,
-        ILogger<CreateSocialPublicationCommandHandler>? logger = null)
+        ILogger<CreateSocialPublicationCommandHandler>? logger = null,
+        IOptions<SocialDistributionContentReviewOptions>? contentReviewOptions = null)
     {
         _properties = properties;
         _accounts = accounts;
@@ -52,6 +57,9 @@ public sealed class CreateSocialPublicationCommandHandler
         _contentGenerator = contentGenerator;
         _uow = uow;
         _logger = logger;
+        // Optional, same pattern as PublishSocialPublicationCommandHandler's retry options — every
+        // existing test double keeps working unchanged and falls back to "off" (today's behavior).
+        _contentReview = contentReviewOptions?.Value ?? new SocialDistributionContentReviewOptions();
     }
 
     public async Task<SocialPublicationDto> Handle(CreateSocialPublicationCommand request, CancellationToken ct)
@@ -127,6 +135,13 @@ public sealed class CreateSocialPublicationCommandHandler
             hashtags,
             request.Language);
 
+        // The content-review policy only ever holds back an UNattended, rule-created publication
+        // (spec F-11 / SocialDistributionContentReviewOptions) — an admin explicitly calling this
+        // endpoint by hand (DistributionRuleId == null) has already made the deliberate decision
+        // this gate exists to add for the automatic path.
+        if (_contentReview.RequireReviewForAutomaticPublications && request.DistributionRuleId is not null)
+            content.RequireReview("توزيع آلي — بانتظار موافقة المشرف قبل إضافته لقائمة النشر (سياسة مفعّلة).");
+
         publication.AttachContent(content);
 
         await _publications.AddAsync(publication, ct);
@@ -187,10 +202,7 @@ public sealed class CreateSocialPublicationCommandHandler
 
     /// <summary>
     /// The only place Property fields are copied into <see cref="PropertySocialFacts"/> — never
-    /// widen this beyond what a generator is allowed to see/use (spec §3). NOTE: PropertyType/
-    /// Governorate navigation properties are not <c>.Include()</c>d by
-    /// <see cref="IPropertyRepository.GetPublishedByIdWithDetailsAsync"/>, so PropertyType/Province
-    /// stay null here — the same documented limitation as Phase 7's asset generator.
+    /// widen this beyond what a generator is allowed to see/use (spec §3).
     /// </summary>
     private static PropertySocialFacts BuildFacts(Property property, string canonicalUrl) => new(
         PropertyId: property.Id,
@@ -238,7 +250,13 @@ public sealed class CreateSocialPublicationCommandHandler
 
         var price = property.PurchasePrice ?? property.ColdRent ?? property.WarmRent;
         if (price is > 0)
-            facts.Add(string.Format(CultureInfo.InvariantCulture, "{0} {1}", price, property.CurrencyCode));
+        {
+            // Reuses the same whole-number formatter as the generated asset image
+            // (SocialAssetTemplateRenderer.FormatPrice) so this fallback never prints a raw
+            // decimal(18,4) column's trailing zeros (e.g. "500.0000 SYP").
+            var formatted = SocialAssetTemplateRenderer.FormatPrice(price.Value, property.CurrencyCode);
+            facts.Add(property.ListingType == Domain.Enums.ListingType.ForRent ? $"{formatted} شهرياً" : formatted);
+        }
 
         return facts.Count == 0 ? property.Title : string.Join(" - ", facts);
     }

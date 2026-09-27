@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Listings.Interfaces;
@@ -8,7 +9,9 @@ using PropertyApi.Application.SocialDistribution.Commands.QueueSocialPublication
 using PropertyApi.Application.SocialDistribution.DTOs;
 using PropertyApi.Application.SocialDistribution.Interfaces;
 using PropertyApi.Application.SocialDistribution.Mapping;
+using PropertyApi.Application.SocialDistribution.Options;
 using PropertyApi.Domain.Common.Exceptions;
+using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.SocialDistribution.Entities;
 using PropertyApi.Domain.SocialDistribution.Enums;
 using PropertyApi.Domain.SocialDistribution.Models;
@@ -42,6 +45,7 @@ public sealed class DistributionEngine : IDistributionEngine
     private readonly ISender _sender;
     private readonly IUnitOfWork _uow;
     private readonly ILogger<DistributionEngine> _logger;
+    private readonly SocialDistributionEligibilityOptions _eligibility;
 
     public DistributionEngine(
         IPropertyRepository properties,
@@ -52,7 +56,8 @@ public sealed class DistributionEngine : IDistributionEngine
         ISocialPublicationRepository publications,
         ISender sender,
         IUnitOfWork uow,
-        ILogger<DistributionEngine> logger)
+        ILogger<DistributionEngine> logger,
+        IOptions<SocialDistributionEligibilityOptions>? eligibilityOptions = null)
     {
         _properties = properties;
         _rules = rules;
@@ -63,6 +68,10 @@ public sealed class DistributionEngine : IDistributionEngine
         _sender = sender;
         _uow = uow;
         _logger = logger;
+        // Optional so every existing test double keeps working unchanged — falls back to this
+        // options class's own conservative defaults exactly like SocialDistributionRetryOptions
+        // does for PublishSocialPublicationCommandHandler.
+        _eligibility = eligibilityOptions?.Value ?? new SocialDistributionEligibilityOptions();
     }
 
     public async Task<DistributionRunDto> RunAsync(
@@ -78,6 +87,20 @@ public sealed class DistributionEngine : IDistributionEngine
         run.MarkEvaluating(DateTime.UtcNow);
         _runs.Update(run);
         await _uow.SaveChangesAsync(ct);
+
+        // The automatic quality gate (spec Phase 1 audit F-11): an ineligible listing never
+        // reaches rule evaluation at all. The run still completes (never left stuck Evaluating),
+        // so the reconciliation sweep's "published listing with no run yet" query never picks
+        // this property up again on every single pass.
+        if (EligibilityGapReason(property) is { } ineligibleReason)
+        {
+            run.Complete(matchedRuleCount: 0, publicationsCreatedCount: 0, skippedCount: 0, DateTime.UtcNow, resultReason: $"PropertyIneligible: {ineligibleReason}");
+            _runs.Update(run);
+            await _uow.SaveChangesAsync(ct);
+
+            _logger.LogInformation("العقار {PropertyId} غير مؤهل للتوزيع الآلي: {Reason}", propertyId, ineligibleReason);
+            return DistributionMapper.ToDto(run);
+        }
 
         var candidate = new DistributionCandidateProperty(property.Id, property.GovernorateId, property.PropertyTypeId, property.ListingType);
         var utcNow = DateTime.UtcNow;
@@ -201,6 +224,24 @@ public sealed class DistributionEngine : IDistributionEngine
         }
 
         return new DistributionPreviewDto(propertyId, matchingRules.Select(r => r.Id).Distinct().Count(), targets);
+    }
+
+    /// <summary>
+    /// Property-level quality gate (<see cref="SocialDistributionEligibilityOptions"/>) — checked
+    /// once per run, before any rule/account is even looked at. Returns a short reason when the
+    /// listing must not be distributed at all, or null when it clears the gate.
+    /// </summary>
+    private string? EligibilityGapReason(Property property)
+    {
+        var imageCount = property.Images.Count(image => !image.IsDeleted);
+        if (imageCount < _eligibility.MinImageCount)
+            return $"عدد الصور ({imageCount}) أقل من الحد الأدنى ({_eligibility.MinImageCount}).";
+
+        var descriptionLength = property.Description?.Trim().Length ?? 0;
+        if (descriptionLength < _eligibility.MinDescriptionLength)
+            return $"طول الوصف ({descriptionLength} حرفاً) أقل من الحد الأدنى ({_eligibility.MinDescriptionLength}).";
+
+        return null;
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using Moq;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
@@ -7,6 +8,7 @@ using PropertyApi.Application.SocialDistribution.AiContent;
 using PropertyApi.Application.SocialDistribution.Commands.CreateSocialPublication;
 using PropertyApi.Application.SocialDistribution.DTOs;
 using PropertyApi.Application.SocialDistribution.Interfaces;
+using PropertyApi.Application.SocialDistribution.Options;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Listings.Entities;
 using PropertyApi.Domain.SocialDistribution.Entities;
@@ -35,8 +37,10 @@ public sealed class CreateSocialPublicationCommandHandlerTests
         public ISocialContentGenerator ContentGenerator { get; } = new TemplateSocialContentGenerator();
         public Mock<IUnitOfWork> UnitOfWork { get; } = new();
 
-        public CreateSocialPublicationCommandHandler BuildHandler() => new(
-            Properties.Object, Accounts.Object, Channels.Object, Publications.Object, History.Object, UrlBuilder.Object, ContentGenerator, UnitOfWork.Object);
+        public CreateSocialPublicationCommandHandler BuildHandler(SocialDistributionContentReviewOptions? contentReview = null) => new(
+            Properties.Object, Accounts.Object, Channels.Object, Publications.Object, History.Object, UrlBuilder.Object, ContentGenerator, UnitOfWork.Object,
+            logger: null,
+            contentReviewOptions: contentReview is null ? null : Options.Create(contentReview));
     }
 
     private static SocialAccount MakeActiveAccount(Guid channelId, SocialPlatform platform = SocialPlatform.Facebook)
@@ -195,5 +199,84 @@ public sealed class CreateSocialPublicationCommandHandlerTests
             CancellationToken.None);
 
         Assert.Equal("https://cdn.example.com/override.jpg", result.Content!.ImageUrl);
+    }
+
+    // ── Content review policy (Phase 1 audit F-11 / SocialDistributionContentReviewOptions) ──
+
+    [Fact]
+    public async Task Handle_ReviewPolicyEnabled_AutomaticPublication_ContentIsPendingReview()
+    {
+        var fixture = new Fixture();
+        var property = MakePublishedPropertyWithImage();
+        var channel = SocialChannel.Create(SocialPlatform.Facebook, "Facebook");
+        var account = MakeActiveAccount(channel.Id);
+
+        fixture.Properties.Setup(x => x.GetPublishedByIdWithDetailsAsync(property.Id, It.IsAny<CancellationToken>())).ReturnsAsync(property);
+        fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+        fixture.Channels.Setup(x => x.GetByIdAsync(channel.Id, It.IsAny<CancellationToken>())).ReturnsAsync(channel);
+        fixture.UrlBuilder
+            .Setup(x => x.BuildAttributedTargetUrl(property.Id, "facebook", "social", "social_distribution", It.IsAny<string>()))
+            .Returns("https://realestateworld.world/properties/p1?utm_source=facebook");
+
+        var handler = fixture.BuildHandler(new SocialDistributionContentReviewOptions { RequireReviewForAutomaticPublications = true });
+
+        var result = await handler.Handle(
+            // DistributionRuleId set — this is what marks it "automatic" (rule-engine-created).
+            new CreateSocialPublicationCommand(property.Id, account.Id, Guid.NewGuid(), null, null, null, null, "ar", DistributionRuleId: Guid.NewGuid()),
+            CancellationToken.None);
+
+        Assert.Equal(ContentReviewStatus.PendingReview, result.Content!.ReviewStatus);
+    }
+
+    [Fact]
+    public async Task Handle_ReviewPolicyEnabled_ManualPublication_ContentStaysApproved()
+    {
+        // An admin explicitly calling this endpoint by hand (no DistributionRuleId) is already
+        // the deliberate action the review gate exists to add for the unattended path — it must
+        // never re-gate a manual creation.
+        var fixture = new Fixture();
+        var property = MakePublishedPropertyWithImage();
+        var channel = SocialChannel.Create(SocialPlatform.Facebook, "Facebook");
+        var account = MakeActiveAccount(channel.Id);
+
+        fixture.Properties.Setup(x => x.GetPublishedByIdWithDetailsAsync(property.Id, It.IsAny<CancellationToken>())).ReturnsAsync(property);
+        fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+        fixture.Channels.Setup(x => x.GetByIdAsync(channel.Id, It.IsAny<CancellationToken>())).ReturnsAsync(channel);
+        fixture.UrlBuilder
+            .Setup(x => x.BuildAttributedTargetUrl(property.Id, "facebook", "social", "social_distribution", It.IsAny<string>()))
+            .Returns("https://realestateworld.world/properties/p1?utm_source=facebook");
+
+        var handler = fixture.BuildHandler(new SocialDistributionContentReviewOptions { RequireReviewForAutomaticPublications = true });
+
+        var result = await handler.Handle(
+            new CreateSocialPublicationCommand(property.Id, account.Id, Guid.NewGuid(), null, null, null, null, "ar"),
+            CancellationToken.None);
+
+        Assert.Equal(ContentReviewStatus.Approved, result.Content!.ReviewStatus);
+    }
+
+    [Fact]
+    public async Task Handle_ReviewPolicyDisabled_AutomaticPublication_ContentStaysApproved()
+    {
+        // Default/off — today's behavior, unchanged.
+        var fixture = new Fixture();
+        var property = MakePublishedPropertyWithImage();
+        var channel = SocialChannel.Create(SocialPlatform.Facebook, "Facebook");
+        var account = MakeActiveAccount(channel.Id);
+
+        fixture.Properties.Setup(x => x.GetPublishedByIdWithDetailsAsync(property.Id, It.IsAny<CancellationToken>())).ReturnsAsync(property);
+        fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+        fixture.Channels.Setup(x => x.GetByIdAsync(channel.Id, It.IsAny<CancellationToken>())).ReturnsAsync(channel);
+        fixture.UrlBuilder
+            .Setup(x => x.BuildAttributedTargetUrl(property.Id, "facebook", "social", "social_distribution", It.IsAny<string>()))
+            .Returns("https://realestateworld.world/properties/p1?utm_source=facebook");
+
+        var handler = fixture.BuildHandler();
+
+        var result = await handler.Handle(
+            new CreateSocialPublicationCommand(property.Id, account.Id, Guid.NewGuid(), null, null, null, null, "ar", DistributionRuleId: Guid.NewGuid()),
+            CancellationToken.None);
+
+        Assert.Equal(ContentReviewStatus.Approved, result.Content!.ReviewStatus);
     }
 }

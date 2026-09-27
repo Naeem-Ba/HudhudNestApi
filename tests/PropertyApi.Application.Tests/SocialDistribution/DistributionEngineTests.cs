@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 using PropertyApi.Application.Common.Exceptions;
 using PropertyApi.Application.Common.Interfaces;
@@ -8,6 +9,7 @@ using PropertyApi.Application.SocialDistribution.Commands.CreateSocialPublicatio
 using PropertyApi.Application.SocialDistribution.Commands.QueueSocialPublication;
 using PropertyApi.Application.SocialDistribution.DTOs;
 using PropertyApi.Application.SocialDistribution.Interfaces;
+using PropertyApi.Application.SocialDistribution.Options;
 using PropertyApi.Application.SocialDistribution.Services;
 using PropertyApi.Domain.Enums;
 using PropertyApi.Domain.Listings.Entities;
@@ -37,16 +39,22 @@ public sealed class DistributionEngineTests
                 .ReturnsAsync(false);
         }
 
-        public DistributionEngine BuildEngine() => new(
+        public DistributionEngine BuildEngine(SocialDistributionEligibilityOptions? eligibility = null) => new(
             Properties.Object, Rules.Object, Runs.Object, Accounts.Object, Channels.Object, Publications.Object,
-            Sender.Object, UnitOfWork.Object, NullLogger<DistributionEngine>.Instance);
+            Sender.Object, UnitOfWork.Object, NullLogger<DistributionEngine>.Instance,
+            eligibility is null ? null : Options.Create(eligibility));
     }
 
     private static Property MakePublishedProperty(int? governorateId = 1, int? propertyTypeId = 2, ListingType listingType = ListingType.ForSale)
     {
-        var property = Property.Create("عقار", "وصف العقار", Guid.NewGuid(), listingType);
+        // A real published property always clears the eligibility gate
+        // (SocialDistributionEligibilityOptions' defaults) — PublishPropertyCommandHandler itself
+        // already refuses to publish a listing with zero images, so a fixture with none was never
+        // a realistic "published" property to begin with.
+        var property = Property.Create("عقار للبيع في دمشق", "وصف كامل وتفصيلي لهذا العقار يشرح مساحته وموقعه", Guid.NewGuid(), listingType);
         property.GovernorateId = governorateId;
         property.PropertyTypeId = propertyTypeId;
+        property.Images.Add(new PropertyImage { Url = "https://cdn.example.test/main.jpg", IsMain = true });
         return property;
     }
 
@@ -288,5 +296,63 @@ public sealed class DistributionEngineTests
             .ReturnsAsync((Property?)null);
 
         await Assert.ThrowsAsync<ConflictException>(() => fixture.BuildEngine().PreviewAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    // ── Eligibility gate (Phase 1 audit F-11 / SocialDistributionEligibilityOptions) ─────────
+
+    [Fact]
+    public async Task RunAsync_PropertyWithNoImages_IsIneligible_CompletesTheRunWithoutEvaluatingRules()
+    {
+        var fixture = new Fixture();
+        var property = MakePublishedProperty();
+        property.Images.Clear();
+
+        fixture.Properties.Setup(x => x.GetPublishedByIdWithDetailsAsync(property.Id, It.IsAny<CancellationToken>())).ReturnsAsync(property);
+
+        var run = await fixture.BuildEngine().RunAsync(property.Id, DistributionRunTriggerType.PropertyPublished, null, CancellationToken.None);
+
+        Assert.Equal(0, run.MatchedRuleCount);
+        Assert.Equal(0, run.PublicationsCreatedCount);
+        Assert.Contains("PropertyIneligible", run.ResultReason);
+        // The gate runs BEFORE rule evaluation — an ineligible listing must never even query rules.
+        fixture.Rules.Verify(x => x.GetActiveCandidatesAsync(
+            It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<ListingType>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RunAsync_DescriptionShorterThanConfiguredMinimum_IsIneligible()
+    {
+        var fixture = new Fixture();
+        var property = MakePublishedProperty();
+        property.UpdateDescription("قصير");
+
+        fixture.Properties.Setup(x => x.GetPublishedByIdWithDetailsAsync(property.Id, It.IsAny<CancellationToken>())).ReturnsAsync(property);
+
+        var run = await fixture.BuildEngine(new SocialDistributionEligibilityOptions { MinDescriptionLength = 50 })
+            .RunAsync(property.Id, DistributionRunTriggerType.PropertyPublished, null, CancellationToken.None);
+
+        Assert.Contains("PropertyIneligible", run.ResultReason);
+    }
+
+    [Fact]
+    public async Task RunAsync_ConfiguredZeroMinimums_NeverBlocksAnEligibleProperty()
+    {
+        // The gate is entirely opt-out via configuration — an owner who disagrees with the
+        // defaults sets both to 0 and gets today's unconditional behavior back.
+        var fixture = new Fixture();
+        var property = MakePublishedProperty();
+        property.Images.Clear();
+        property.UpdateDescription("قصير جداً");
+
+        fixture.Properties.Setup(x => x.GetPublishedByIdWithDetailsAsync(property.Id, It.IsAny<CancellationToken>())).ReturnsAsync(property);
+        fixture.Rules.Setup(x => x.GetActiveCandidatesAsync(1, 2, ListingType.ForSale, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var run = await fixture.BuildEngine(new SocialDistributionEligibilityOptions { MinImageCount = 0, MinDescriptionLength = 0 })
+            .RunAsync(property.Id, DistributionRunTriggerType.PropertyPublished, null, CancellationToken.None);
+
+        Assert.DoesNotContain("PropertyIneligible", run.ResultReason ?? string.Empty);
+        fixture.Rules.Verify(x => x.GetActiveCandidatesAsync(
+            It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<ListingType>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 }
