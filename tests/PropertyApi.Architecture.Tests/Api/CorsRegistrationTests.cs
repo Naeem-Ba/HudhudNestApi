@@ -50,7 +50,21 @@ public sealed class CorsRegistrationTests
         Assert.False(policy.IsOriginAllowed("https://deploy-preview-101--hudhudnest.netlify.app"));
     }
 
-    private static CorsPolicy BuildDefaultPolicy(string[] allowedOrigins, string[] allowedOriginPatterns)
+    [Fact(DisplayName = "With neither AllowedOrigins nor AllowedOriginPatterns configured, falls back to AllowAnyOrigin in Testing/CI")]
+    public void NoOriginsAndNoPatternsConfigured_FallsBackToAllowAnyOrigin()
+    {
+        var policy = BuildDefaultPolicy(
+            allowedOrigins: Array.Empty<string>(),
+            allowedOriginPatterns: Array.Empty<string>(),
+            isTestingOrCi: true);
+
+        Assert.True(policy.AllowAnyOrigin);
+    }
+
+    private static CorsPolicy BuildDefaultPolicy(
+        string[] allowedOrigins,
+        string[] allowedOriginPatterns,
+        bool isTestingOrCi = false)
     {
         var settings = new Dictionary<string, string?>();
         for (var i = 0; i < allowedOrigins.Length; i++)
@@ -68,7 +82,7 @@ public sealed class CorsRegistrationTests
             .Build();
 
         var services = new ServiceCollection();
-        services.AddPropertyApiCors(configuration, new TestHostEnvironment(), isTestingOrCi: false);
+        services.AddPropertyApiCors(configuration, new TestHostEnvironment(), isTestingOrCi);
 
         using var provider = services.BuildServiceProvider();
         var policy = provider.GetRequiredService<IOptions<CorsOptions>>().Value.GetPolicy("DefaultCors");
