@@ -5,8 +5,8 @@ A checked repository-control item is not proof that its external configuration o
 ## Backup and storage
 
 - [x] Native PostgreSQL custom-format backup implemented.
-- [x] Hourly schedule declared for the 60-minute RPO.
-- [ ] Hourly schedule and independent missed-run monitor proven in production.
+- [x] Daily schedule declared for the 24-hour RPO.
+- [ ] Daily schedule and independent missed-run monitor proven in production.
 - [ ] Private durable object storage provisioned and upload proven.
 - [x] Client-side encryption and storage SSE/KMS support implemented.
 - [x] SHA-256 and archive TOC verification implemented.
