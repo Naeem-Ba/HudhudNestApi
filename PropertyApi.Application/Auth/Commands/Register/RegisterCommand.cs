@@ -199,6 +199,14 @@ public sealed class RegisterCommandHandler
                 await _unitOfWork
                     .RollbackTransactionAsync(ct);
 
+                // Lost the race to a concurrent registration of the same address: the
+                // unique index decided it. Same answer as the fast check above.
+                if (createResult.Errors.Contains(
+                        IdentityOperationResult.DuplicateEmailCode))
+                {
+                    return RegisterResult.EmailConflict();
+                }
+
                 _logger.LogWarning(
                     "Registration failed for email {Email}. Errors: {Errors}",
                     PiiMasking.MaskEmail(email),

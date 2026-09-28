@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using PropertyApi.Application.Auth.Interfaces;
 using PropertyApi.Application.Common.Interfaces;
 using PropertyApi.Application.Common.Models;
+using PropertyApi.Application.Common.Security;
 using PropertyApi.Infrastructure.Email.Templates;
 using PropertyApi.Infrastructure.Identity.Entities;
 
@@ -44,7 +45,7 @@ public sealed class EmailVerificationService : IEmailVerificationService
         {
             _logger.LogWarning(
                 "Email verification requested for unknown email {Email}.",
-                email);
+                PiiMasking.MaskEmail(email));
 
             return;
         }
