@@ -375,6 +375,12 @@ internal static class AuthInfrastructureRegistration
             .Validate(
                 options => !string.IsNullOrWhiteSpace(options.From),
                 "Email:From is required when Email:Provider is Resend.")
+            .Validate(
+                options =>
+                    string.IsNullOrWhiteSpace(options.From) ||
+                    EmailOptions.IsBareEmailAddress(options.From),
+                "Email:From must be a single plain email address such as no-reply@example.com " +
+                "(no display name, spaces or angle brackets; use Email:FromName for the name).")
             .ValidateOnStart();
 
         var resendOptions =

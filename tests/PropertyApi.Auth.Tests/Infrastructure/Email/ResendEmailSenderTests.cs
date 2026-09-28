@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq.Protected;
@@ -133,11 +134,97 @@ public sealed class ResendEmailSenderTests
             payload.RootElement.GetProperty("from").GetString());
     }
 
+    [Fact]
+    public async Task SendEmailAsync_LogsTheResendMessageId_AndNeverTheApiKey()
+    {
+        var logger = new CapturingLogger();
+        var context = CreateSender(
+            HttpStatusCode.OK,
+            """{"id":"49a3999c-0ce1-4ea6-ab68-afcd6dc2e794"}""",
+            logger: logger);
+
+        await context.Sender.SendEmailAsync(
+            new EmailMessage("someone@example.com", "Subject", "<p>html</p>"),
+            CancellationToken.None);
+
+        var logged = string.Join('\n', logger.Lines);
+
+        Assert.Contains("49a3999c-0ce1-4ea6-ab68-afcd6dc2e794", logged, StringComparison.Ordinal);
+        Assert.DoesNotContain(ApiKey, logged, StringComparison.Ordinal);
+        Assert.DoesNotContain("someone@example.com", logged, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SendEmailAsync_StillSucceeds_WhenTheResponseHasNoId()
+    {
+        var context = CreateSender(HttpStatusCode.OK, "not json");
+
+        await context.Sender.SendEmailAsync(
+            new EmailMessage("someone@example.com", "Subject", "<p>html</p>"),
+            CancellationToken.None);
+
+        Assert.Equal(HttpMethod.Post, context.Method);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized, "Email:Resend:ApiKey")]
+    [InlineData(HttpStatusCode.Forbidden, "Email:From")]
+    public async Task SendEmailAsync_NamesTheSettingAtFault_WhenResendRejectsTheConfiguration(
+        HttpStatusCode status,
+        string expectedSetting)
+    {
+        var logger = new CapturingLogger();
+        var context = CreateSender(
+            status,
+            """{"name":"error","message":"rejected"}""",
+            logger: logger);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => context.Sender.SendEmailAsync(
+                new EmailMessage("someone@example.com", "Subject", "<p>html</p>"),
+                CancellationToken.None));
+
+        Assert.Contains(expectedSetting, exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("someone@example.com", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(ApiKey, exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(ApiKey, string.Join('\n', logger.Lines), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("no-reply@example.com", true)]
+    [InlineData("PropertyApi <no-reply@example.com>", false)]
+    [InlineData(" no-reply@example.com", false)]
+    [InlineData("no-reply@example.com ", false)]
+    [InlineData("no-reply", false)]
+    [InlineData("a@b.com, c@d.com", false)]
+    public void IsBareEmailAddress_AcceptsOnlyOnePlainAddress(string value, bool expected)
+        => Assert.Equal(expected, EmailOptions.IsBareEmailAddress(value));
+
+    private sealed class CapturingLogger : ILogger<ResendEmailSender>
+    {
+        public List<string> Lines { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull
+            => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Lines.Add(formatter(state, exception));
+    }
+
     private static SenderContext CreateSender(
         HttpStatusCode statusCode,
         string responseBody,
         string apiKey = ApiKey,
-        string fromName = "PropertyApi")
+        string fromName = "PropertyApi",
+        ILogger<ResendEmailSender>? logger = null)
     {
         var context = new SenderContext();
         var handler = new Mock<HttpMessageHandler>();
@@ -180,7 +267,7 @@ public sealed class ResendEmailSenderTests
                 ApiKey = apiKey,
                 BaseUrl = "https://api.resend.test"
             }),
-            NullLogger<ResendEmailSender>.Instance);
+            logger ?? NullLogger<ResendEmailSender>.Instance);
 
         return context;
     }
