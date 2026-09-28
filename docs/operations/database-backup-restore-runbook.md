@@ -8,7 +8,7 @@ Never point a restore command at production. Never upload `.dump`, `.dump.gpg`, 
 
 ## Architecture
 
-`database-backup.yml` runs hourly, invokes a PostgreSQL 16 toolbox, creates a custom archive and separate globals file, validates it, encrypts both with GPG AES-256, uploads to private S3-compatible storage with SSE/KMS, and applies tiered retention. `database-restore-drill.yml` downloads or creates a valid backup, restores it into a disposable PostgreSQL 16/PostGIS 3.4 service, validates SQL and the real `AppDbContext`, starts the API in `RecoveryDrill`, performs read-only checks, measures objectives, and destroys the environment.
+`database-backup.yml` runs daily (03:17 UTC), invokes a PostgreSQL 16 toolbox, creates a custom archive and separate globals file, validates it, encrypts both with GPG AES-256, uploads to private S3-compatible storage with SSE/KMS, and applies tiered retention. `database-restore-drill.yml` downloads or creates a valid backup, restores it into a disposable PostgreSQL 16/PostGIS 3.4 service, validates SQL and the real `AppDbContext`, starts the API in `RecoveryDrill`, performs read-only checks, measures objectives, and destroys the environment.
 
 Globals are separate and omit role passwords. Managed PostgreSQL often forbids role creation; restore them only with a reviewed privileged procedure. Database restore does not depend on globals in the drill.
 
@@ -110,7 +110,7 @@ This creates a representative migrated/seeded source, performs a real encrypted 
 
 `apply-retention.sh` keeps all recovery points for 48 hours, then the newest daily point for 30 days, weekly point for 12 weeks, and monthly point for 12 months. It is a dry run unless `RETENTION_APPLY=true`. Bucket version lifecycle/object lock can delay physical deletion and must be audited separately.
 
-Respond immediately to missing/empty backup, checksum/TOC failure, upload failure, age over 60 minutes, restore/schema/data/smoke failure, RTO over 120 minutes, or cleanup failure. Preserve sanitized JSON/log evidence and use the optional secure webhook or GitHub notifications. Escalate to the incident commander and database owner on any potential data loss, production-host guard, partial migration, key-loss risk, or target cleanup failure.
+Respond immediately to missing/empty backup, checksum/TOC failure, upload failure, age over 25 hours, restore/schema/data/smoke failure, RTO over 120 minutes, or cleanup failure. Preserve sanitized JSON/log evidence and use the optional secure webhook or GitHub notifications. Escalate to the incident commander and database owner on any potential data loss, production-host guard, partial migration, key-loss risk, or target cleanup failure.
 
 ## Troubleshooting
 
