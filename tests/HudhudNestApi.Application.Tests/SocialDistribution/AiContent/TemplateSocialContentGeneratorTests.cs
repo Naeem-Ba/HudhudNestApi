@@ -20,7 +20,7 @@ public sealed class TemplateSocialContentGeneratorTests
         Rooms: rooms,
         Bathrooms: null,
         Status: "Available",
-        CanonicalUrl: "https://realestateworld.world/properties/p1?utm_source=facebook&utm_medium=social&utm_campaign=social_distribution");
+        CanonicalUrl: "https://hudhudnest.com/properties/p1?utm_source=facebook&utm_medium=social&utm_campaign=social_distribution");
 
     private readonly TemplateSocialContentGenerator _generator = new();
 
@@ -108,7 +108,7 @@ public sealed class SocialContentFactValidatorTests
 {
     private static PropertySocialFacts MakeFacts() => new(
         Guid.NewGuid(), "شقة للبيع", "شقة", "ForSale", "طرطوس", "طرطوس", null,
-        75000m, "USD", 120m, 3, null, "Available", "https://realestateworld.world/properties/p1");
+        75000m, "USD", 120m, 3, null, "Available", "https://hudhudnest.com/properties/p1");
 
     private static GeneratedSocialContent MakeContent(string body, SocialPlatform platform = SocialPlatform.Facebook) => new(
         platform, "شقة للبيع", body, null, Array.Empty<string>(), null, "ar", "hash", false);
@@ -184,7 +184,7 @@ public sealed class SocialContentFactValidatorTests
     // (Regression: Facebook/Telegram bodies, which include the link line, were rejected for any
     // GUID containing 4+ consecutive digits and silently fell back to the raw default body.)
     private const string RealisticCanonicalUrl =
-        "https://realestateworld.world/properties/979a8254-fff2-4d78-bf31-b4331ddea0ad" +
+        "https://hudhudnest.com/properties/979a8254-fff2-4d78-bf31-b4331ddea0ad" +
         "?utm_source=facebook&utm_medium=social&utm_campaign=social_distribution&utm_content=publication_5d642dce-5ab1-40fe-92bf-b5421ee70064";
 
     [Theory]

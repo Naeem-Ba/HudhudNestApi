@@ -337,7 +337,7 @@ public sealed class UsersController : ControllerBase
             return Unauthorized();
 
         Response.Headers.ContentDisposition =
-            $"attachment; filename=\"propertyapi-account-export-{DateTime.UtcNow:yyyyMMdd}.json\"";
+            $"attachment; filename=\"hudhudnest-account-export-{DateTime.UtcNow:yyyyMMdd}.json\"";
 
         return Ok(export);
     }

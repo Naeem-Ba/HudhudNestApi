@@ -7,7 +7,7 @@ and container image fit GitHub Actions without installing a global host tool. NB
 add another compiled orchestration project while the security fixtures can use the real HTTP contracts and
 authoritative PostgreSQL checks.
 
-The .NET `PropertyApi.PerformanceDataGenerator` is not a competing load framework. It exists to create domain-valid,
+The .NET `HudhudNestApi.PerformanceDataGenerator` is not a competing load framework. It exists to create domain-valid,
 deterministic data efficiently with the current EF Core model.
 
 ## Isolated topology
@@ -15,8 +15,8 @@ deterministic data efficiently with the current EF Core model.
 ```text
 k6
   -> nginx load balancer :8080
-       -> PropertyApi api-1 :8080
-       -> PropertyApi api-2 :8080
+       -> HudhudNestApi api-1 :8080
+       -> HudhudNestApi api-2 :8080
             -> PostgreSQL/PostGIS + pg_stat_statements
             -> Redis distributed rate limiter
 ```

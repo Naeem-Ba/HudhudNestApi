@@ -32,7 +32,7 @@ public sealed class QueueSocialPublicationCommandHandlerTests
         var publication = SocialPublication.Create(Guid.NewGuid(), account.Id, Guid.NewGuid(), SocialPlatform.Facebook);
         var content = SocialPostContent.Create(
             publication.Id, SocialPlatform.Facebook, "عنوان", "نص", "https://cdn.example.com/img.jpg",
-            "https://realestateworld.world/properties/p1", null, "ar");
+            "https://hudhudnest.com/properties/p1", null, "ar");
         publication.AttachContent(content);
 
         return (publication, account);

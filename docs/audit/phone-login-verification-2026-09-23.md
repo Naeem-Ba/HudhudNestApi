@@ -1,7 +1,7 @@
 # Phone Login Verification Report — 2026-09-23
 
 Scope: the phone + password login feature and its OTP-backed companions (registration, password
-reset, reverification, phone change) across the API (`PropertyApi`) and the Angular/Capacitor app
+reset, reverification, phone change) across the API (`HudhudNestApi`) and the Angular/Capacitor app
 (`HudhudNest`). Design reference: `docs/phone-password-authentication-and-reverification.md`.
 
 The audit itself changed no production code. **Update (same day): F-1, F-3 and F-4 are fixed** in the follow-up change
@@ -58,8 +58,8 @@ four medium ones should be fixed before launch; the rest are low or informationa
 |---|---|
 | New probe suite `PhoneLoginAuditTests` (real PostgreSQL 18, real OTP generator, SMS captured) | **47 tests: 38 pass, 9 fail — every failure is a confirmed defect below (B3×3→F-4, D2/D4/D5→F-1, E1/E2→F-2, F2→F-7)** |
 | Existing phone integration tests (`PhoneAuthFlowIntegrationTests`, hash backfill) | 6/6 pass |
-| `PropertyApi.Auth.Tests` | 261/261 pass |
-| `PropertyApi.Application.Tests` | 1237/1237 pass |
+| `HudhudNestApi.Auth.Tests` | 261/261 pass |
+| `HudhudNestApi.Application.Tests` | 1237/1237 pass |
 | Frontend `npm run test:ci` / `typecheck` | 386/386 pass / clean |
 | Real UI in the browser (Angular dev server → API in Development mode, OTP from the console SMS service) | Register (invalid format, weak password, success), phone login (wrong password, CSRF path) exercised; see 4.x |
 | i18n keys used by the phone pages and `phone-auth-errors.ts` (ar/en/de) | all present |
@@ -79,7 +79,7 @@ production relational paths (`ExecuteUpdate` reservations, the unique index). Th
 
 ## 4. Findings
 
-Severity: High / Medium / Low / Info. "Test" names refer to `tests/PropertyApi.Integration.Tests/Auth/PhoneLoginAuditTests.cs`.
+Severity: High / Medium / Low / Info. "Test" names refer to `tests/HudhudNestApi.Integration.Tests/Auth/PhoneLoginAuditTests.cs`.
 
 ### F-1 (High — fixed, see Fix status) Banned accounts can log in by phone, and bans do not stop existing sessions
 - Email login rejects `IsBanned` (`AuthenticationSessionIssuer`). `PhoneAuthenticationWorkflow.LoginAsync`
@@ -286,7 +286,7 @@ extensions, Node 22. Do not use real secrets. Every command below was run while 
    ```bash
    export ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=phone_try;Username=postgres;Password=<yours>"
    export ASPNETCORE_ENVIRONMENT=Development RateLimiting__Redis__Enabled=false
-   dotnet ef database update --context AppDbContext --project PropertyApi.Infrastructure --startup-project PropertyApi
+   dotnet ef database update --context AppDbContext --project HudhudNestApi.Infrastructure --startup-project HudhudNestApi
    ```
 2. **API** (Development mode prints the OTP in the console, phone masked; it also logs SQL parameters, so never reuse this
    setup for anything but local trials):
@@ -296,7 +296,7 @@ extensions, Node 22. Do not use real secrets. Every command below was run while 
    export Security__PhoneLookupHmacKey="$(openssl rand -base64 32)" Database__SeedOnStartup=true
    export SmsProvider__AllowedCountryCodes__0=+963      # optional: refuse numbers from other countries
    export PhoneVerification__EnforcementEnabled=true PhoneVerification__ReminderProcessingEnabled=true   # optional
-   dotnet run --project PropertyApi
+   dotnet run --project HudhudNestApi
    ```
    Use HTTPS (see F-11). Look for `[DEV MODE] OTP for ***1234: 123456` in the console.
 3. **Frontend**: `API_URL=https://localhost:7136/api npm start`, open `https://localhost:4200/#/auth/phone-register`
@@ -324,8 +324,8 @@ extensions, Node 22. Do not use real secrets. Every command below was run while 
 5. **Automated suites** (need the migrated database above, as in CI):
    ```bash
    export TEST_POSTGRES_CONNECTION_STRING="Host=localhost;Port=5432;Database=phone_try;Username=postgres;Password=<yours>"
-   dotnet test tests/PropertyApi.Integration.Tests --filter "FullyQualifiedName~Phone"
-   dotnet test tests/PropertyApi.Infrastructure.Tests                                       # SMS adapter contract, hosted services
+   dotnet test tests/HudhudNestApi.Integration.Tests --filter "FullyQualifiedName~Phone"
+   dotnet test tests/HudhudNestApi.Infrastructure.Tests                                       # SMS adapter contract, hosted services
    cd <frontend repo> && npm run test:ci && npm run typecheck && npm run audit:frontend && npm run build:prod
    ```
 

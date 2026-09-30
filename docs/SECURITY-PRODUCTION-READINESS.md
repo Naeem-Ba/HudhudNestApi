@@ -1,7 +1,7 @@
-# PropertyApi — Security Production Readiness (Phase 3)
+# HudhudNestApi — Security Production Readiness (Phase 3)
 
 Audit date: 2026-09-04. Scope: application security of the ASP.NET Core / Clean
-Architecture backend (`PropertyApi`), the Angular frontend only where it affects a
+Architecture backend (`HudhudNestApi`), the Angular frontend only where it affects a
 backend security decision (CSRF, XSS sinks), and the repository/CI supply chain.
 Method: full attack-surface enumeration from the actual controllers/handlers in this
 repository (no assumed features), static code review with file:line citations, a live
@@ -50,7 +50,7 @@ of them block release.
 
 ## 1. Threat Surface (actual, not assumed)
 
-Enumerated from the 34 controllers under `PropertyApi/Controllers/` — every
+Enumerated from the 34 controllers under `HudhudNestApi/Controllers/` — every
 `[Authorize]`/`[AllowAnonymous]` attribute was read, not inferred:
 
 - **Identity/Auth**: `AuthController`, `PhoneAuthController`, `PhonePasswordAuthController`,
@@ -74,7 +74,7 @@ Enumerated from the 34 controllers under `PropertyApi/Controllers/` — every
   for why this one is not a backdoor).
 - **Real-time**: `NotificationHub` (SignalR, `[Authorize]`).
 
-Roles (`PropertyApi.Domain.Users.Constants.RoleNames`): `User`, `Agent`, `Admin`,
+Roles (`HudhudNestApi.Domain.Users.Constants.RoleNames`): `User`, `Agent`, `Admin`,
 `AgencyOwner`, `AgencyAgent`. Authorization is enforced two ways, and both were verified:
 role/claim gates via `[Authorize(Roles = ...)]` on the controller, and **resource
 ownership** via server-side lookups in the MediatR handler (never a client-supplied
@@ -82,8 +82,8 @@ owner/user id) — see §IDOR/BOLA.
 
 A **default-deny fallback policy** governs every endpoint that carries neither
 `[Authorize]` nor `[AllowAnonymous]`
-([JwtAuthenticationRegistration.cs:141-143](../PropertyApi/Configuration/JwtAuthenticationRegistration.cs)):
-an unannotated action returns 401, not 200. `PropertyApi.Architecture.Tests`'
+([JwtAuthenticationRegistration.cs:141-143](../HudhudNestApi/Configuration/JwtAuthenticationRegistration.cs)):
+an unannotated action returns 401, not 200. `HudhudNestApi.Architecture.Tests`'
 `PublicEndpointPolicyTests` fails the build if a new endpoint is added without an
 explicit authorization decision — this was executed during this audit (see
 §Security Test Results) and passed, so this claim is proven, not asserted.
@@ -92,12 +92,12 @@ explicit authorization decision — this was executed during this audit (see
 
 ## 2. Authentication Audit
 
-**Register/Login/Logout/Refresh/Verify/Reset** all live under `PropertyApi.Application/Auth/Commands/*`
+**Register/Login/Logout/Refresh/Verify/Reset** all live under `HudhudNestApi.Application/Auth/Commands/*`
 as MediatR handlers behind `AuthController` / `PhoneAuthController` / `PhonePasswordAuthController`.
 
 - **Password hashing**: ASP.NET Core Identity's default `PasswordHasher<T>` (PBKDF2-HMAC-SHA256).
   No custom/reversible encryption found anywhere in the codebase.
-- **Password policy** ([PersistenceInfrastructureRegistration.cs:46-58](../PropertyApi.Infrastructure/Persistence/PersistenceInfrastructureRegistration.cs)):
+- **Password policy** ([PersistenceInfrastructureRegistration.cs:46-58](../HudhudNestApi.Infrastructure/Persistence/PersistenceInfrastructureRegistration.cs)):
   min length 8, requires digit + uppercase.
 - **Account lockout**: `MaxFailedAccessAttempts = 5`, `DefaultLockoutTimeSpan = 15 minutes`,
   `AllowedForNewUsers = true` — same file. Applies through ASP.NET Identity's own
@@ -105,24 +105,24 @@ as MediatR handlers behind `AuthController` / `PhoneAuthController` / `PhonePass
   bypassable by hitting a "different" login endpoint — email login, phone/password login,
   and OTP login all resolve to the same Identity user store and lockout counters.
 - **Rate limiting on every sensitive auth endpoint**, verified present in code
-  ([AuthController.cs](../PropertyApi/Controllers/AuthController.cs): `auth-register`,
+  ([AuthController.cs](../HudhudNestApi/Controllers/AuthController.cs): `auth-register`,
   `auth-login` ×3, `auth-password-reset` ×2, `auth-refresh`, `auth-logout`; `PhonePasswordAuthController.cs`:
   `send-otp`, `verify-otp` on every OTP endpoint) and confirmed by a live 429 response in
   `RateLimitingTests` (executed this session against a real Redis — see §Security Test Results).
 - **User enumeration**: `ForgotPasswordCommandHandler` always returns the same
   `"If the email is registered..."` response regardless of whether the account exists
-  ([ForgotPasswordCommandHandler.cs:96-137](../PropertyApi.Application/Auth/Commands/ForgotPassword/ForgotPasswordCommandHandler.cs)) —
+  ([ForgotPasswordCommandHandler.cs:96-137](../HudhudNestApi.Application/Auth/Commands/ForgotPassword/ForgotPasswordCommandHandler.cs)) —
   deliberate, commented, and correct.
 
 ## 3. JWT Security
 
-Configuration ([JwtAuthenticationRegistration.cs:35-45](../PropertyApi/Configuration/JwtAuthenticationRegistration.cs)):
+Configuration ([JwtAuthenticationRegistration.cs:35-45](../HudhudNestApi/Configuration/JwtAuthenticationRegistration.cs)):
 `ValidateIssuer/Audience/Lifetime/IssuerSigningKey` all `true`, symmetric key from
 `Jwt:Key` (fails fast at startup if unset — no default key), `ClockSkew = 30s` (tight,
 not the 5-minute default). `RequireHttpsMetadata` is true outside Development.
 
 Beyond the static config, this audit added a **new** end-to-end regression suite —
-[`tests/PropertyApi.Integration.Tests/Security/JwtValidationTests.cs`](../tests/PropertyApi.Integration.Tests/Security/JwtValidationTests.cs) —
+[`tests/HudhudNestApi.Integration.Tests/Security/JwtValidationTests.cs`](../tests/HudhudNestApi.Integration.Tests/Security/JwtValidationTests.cs) —
 because no existing test sent a real, invalid bearer token through the actual HTTP
 pipeline (see §Vulnerabilities Found, gap #1). It mints tokens with
 `System.IdentityModel.Tokens.Jwt` and asserts a real `GET /api/favorites` returns 401
@@ -140,14 +140,14 @@ Beyond token-shape validation, every token is additionally checked against a liv
 ## 4. Refresh Token Rotation, Reuse, and Revocation
 
 Refresh tokens are stored **hashed** (`RefreshToken.TokenHash`,
-[RefreshToken.cs](../PropertyApi.Infrastructure/Identity/Entities/RefreshToken.cs) —
+[RefreshToken.cs](../HudhudNestApi.Infrastructure/Identity/Entities/RefreshToken.cs) —
 see the `HashRefreshTokens` migration), delivered only via an `HttpOnly, Secure,
 SameSite=None` cookie
-([RefreshTokenCookie.cs:28-32](../PropertyApi/Security/Auth/RefreshTokenCookie.cs)), never
+([RefreshTokenCookie.cs:28-32](../HudhudNestApi/Security/Auth/RefreshTokenCookie.cs)), never
 in a JSON body a script could read.
 
 **Reuse detection** is a dedicated class,
-[`RefreshTokenReuseHandler`](../PropertyApi.Application/Auth/Commands/RefreshToken/RefreshTokenReuseHandler.cs):
+[`RefreshTokenReuseHandler`](../HudhudNestApi.Application/Auth/Commands/RefreshToken/RefreshTokenReuseHandler.cs):
 presenting an already-rotated-away token (1) revokes **every** active refresh token for
 that user, (2) rotates the Identity security stamp — which immediately invalidates every
 outstanding access token too, via the mechanism in §3 — and (3) writes an audit log
@@ -161,7 +161,7 @@ token, rotates the security stamp, and invalidates the security-stamp cache entr
 if the stamp rotation itself fails (fail-closed). `ResetPasswordCommandHandler` does the
 same after a successful reset — rotates the stamp **and** revokes all active refresh
 tokens for that user
-([ResetPasswordCommandHandler.cs:186-198](../PropertyApi.Application/Auth/Commands/ResetPassword/ResetPasswordCommandHandler.cs)) —
+([ResetPasswordCommandHandler.cs:186-198](../HudhudNestApi.Application/Auth/Commands/ResetPassword/ResetPasswordCommandHandler.cs)) —
 so a password reset actually ends every existing session, not just the one that
 requested it.
 
@@ -173,7 +173,7 @@ requested it.
 - Enumeration-safe response (see §2).
 - Reset email HTML-encodes both the display name and the reset URL before interpolating
   them into the email body
-  ([ForgotPasswordCommandHandler.cs:150-160](../PropertyApi.Application/Auth/Commands/ForgotPassword/ForgotPasswordCommandHandler.cs)) —
+  ([ForgotPasswordCommandHandler.cs:150-160](../HudhudNestApi.Application/Auth/Commands/ForgotPassword/ForgotPasswordCommandHandler.cs)) —
   no HTML-injection-via-display-name vector.
 - **INFO** (not a vulnerability): if the new password equals the current one, the handler
   returns 409 *before* calling `ResetPasswordAsync`, so that specific rejection path does
@@ -191,7 +191,7 @@ and is enforced by `CookieCsrfProtectionMiddleware` + `IAntiforgery`, requiring 
 `X-XSRF-TOKEN` header whenever the `refresh_token` cookie is present. A missing/invalid
 token throws `AntiforgeryValidationException`, caught explicitly and mapped to 403 (not
 an opaque 500) in
-[ExceptionHandlingMiddleware.cs:147-171](../PropertyApi/Middleware/ExceptionHandlingMiddleware.cs).
+[ExceptionHandlingMiddleware.cs:147-171](../HudhudNestApi/Middleware/ExceptionHandlingMiddleware.cs).
 Cookie flags on the CSRF cookies themselves match the refresh cookie's `SameSite=None`
 requirement (`CsrfExtensions.cs`), which is necessary because the SPA and API do not
 share a hostname in Staging/Production. Covered by
@@ -199,7 +199,7 @@ share a hostname in Staging/Production. Covered by
 
 ## 7. CORS
 
-[CorsRegistration.cs](../PropertyApi/Configuration/CorsRegistration.cs): a credentialed
+[CorsRegistration.cs](../HudhudNestApi/Configuration/CorsRegistration.cs): a credentialed
 policy (`AllowCredentials()`) is used **only** when `Cors:AllowedOrigins` is explicitly
 configured with real origins (`WithOrigins(...)`, never `AllowAnyOrigin()` combined with
 credentials — the spec-illegal combination browsers reject outright is never attempted).
@@ -238,12 +238,12 @@ Pattern found consistently across every resource module (`IPropertyOwnershipServ
 new ForbiddenException(...)` for Bookings/Visits, ShortStay, Reviews):
 
 - The authenticated user id **always** comes from `User.FindFirstValue(ClaimTypes.NameIdentifier)`
-  in the controller (e.g. [FavoritesController.cs:75-78](../PropertyApi/Controllers/FavoritesController.cs),
-  [PropertyImagesController.cs:141-145](../PropertyApi/Controllers/PropertyImagesController.cs)) —
+  in the controller (e.g. [FavoritesController.cs:75-78](../HudhudNestApi/Controllers/FavoritesController.cs),
+  [PropertyImagesController.cs:141-145](../HudhudNestApi/Controllers/PropertyImagesController.cs)) —
   never from a route parameter, query string, or request body. A client cannot claim to
   be a different user.
 - Concretely verified end-to-end for **image deletion**
-  ([DeletePropertyImageCommandHandler.cs](../PropertyApi.Application/Listings/Commands/DeletePropertyImage/DeletePropertyImageCommandHandler.cs)):
+  ([DeletePropertyImageCommandHandler.cs](../HudhudNestApi.Application/Listings/Commands/DeletePropertyImage/DeletePropertyImageCommandHandler.cs)):
   ownership of the *property* is checked first, and the image is then looked up **only
   within that property's own image collection** — so even guessing another property's
   `imageId` cannot delete it, because it is never in the set being searched.
@@ -264,13 +264,13 @@ Every command DTO reviewed (`UpdatePropertyCommand`, `UpdateUserCommand`, upload
 commands) is a **hand-written, explicit allowlist record** — not a direct bind of an
 EF entity or a "just add the field" DTO:
 
-- [`UpdatePropertyCommand`](../PropertyApi.Application/Listings/Commands/UpdateProperty/UpdatePropertyCommand.cs)
+- [`UpdatePropertyCommand`](../HudhudNestApi.Application/Listings/Commands/UpdateProperty/UpdatePropertyCommand.cs)
   carries only business fields (title, price, rooms, address, etc.); `RequestingUserId`
   exists solely for the ownership check and is never written back onto the entity. All
   fields are nullable and the handler applies only non-null ones through domain methods
   (`property.UpdateTitle(...)`) — there is no generic "map everything" step that could
   accidentally pick up an extra posted field.
-- [`UpdateUserCommand`](../PropertyApi.Application/Users/Commands/UpdateUser/UpdateUserCommand.cs)
+- [`UpdateUserCommand`](../HudhudNestApi.Application/Users/Commands/UpdateUser/UpdateUserCommand.cs)
   has no `Role`, `IsAdmin`, or `EmailConfirmed` field at all — those only appear on the
   **read** side when building the response DTO from already-stored Identity data.
 - Property `Publish`/`ConfirmAvailability` pass `User.IsInRole(RoleNames.Admin)` — a
@@ -307,7 +307,7 @@ in the `Search` module, which is the module most likely to need one.
 Four upload paths reviewed in full (property images, agency logo, user avatar,
 investment/service-request documents) — all share the same defense-in-depth pattern,
 read in full for
-[`UploadPropertyImagesCommandHandler`](../PropertyApi.Application/Listings/Commands/UploadPropertyImages/UploadPropertyImagesCommandHandler.cs):
+[`UploadPropertyImagesCommandHandler`](../HudhudNestApi.Application/Listings/Commands/UploadPropertyImages/UploadPropertyImagesCommandHandler.cs):
 
 1. **Ownership checked first**, server-side, before any file is even validated.
 2. **Allowlist, not denylist**: extension AND `Content-Type` both checked against a fixed
@@ -330,7 +330,7 @@ read in full for
 `StagingTestSupportController`'s anonymous-looking `media/{publicId}` and `cleanup`
 endpoints are gated by `environment.IsStaging()` **and** a config flag **and** a
 constant-time-compared shared secret
-([StagingTestSupportAuthorization.cs](../PropertyApi/Security/Staging/StagingTestSupportAuthorization.cs)) —
+([StagingTestSupportAuthorization.cs](../HudhudNestApi/Security/Staging/StagingTestSupportAuthorization.cs)) —
 they 404 outright outside Staging, so this is not a backdoor into Production.
 
 ## 14. Object Storage Authorization
@@ -343,7 +343,7 @@ public id.
 ## 15. Rate Limiting / Brute Force / Account Lockout
 
 Distributed, Redis-backed fixed-window limiter
-(`PropertyApi/Security/RateLimiting/*`), with an in-memory fallback for Testing/CI so
+(`HudhudNestApi/Security/RateLimiting/*`), with an in-memory fallback for Testing/CI so
 the rest of the suite isn't Redis-dependent. Applied via `[EnableRateLimiting(...)]` to
 every sensitive endpoint (§2). This is enforced **server-side in ASP.NET Core
 middleware**, not client-side JavaScript. Verified live this session:
@@ -355,7 +355,7 @@ one account" brute-force vectors are covered.
 
 ## 16. Security Headers
 
-[SecurityHeadersMiddleware.cs](../PropertyApi/Security/Headers/SecurityHeadersMiddleware.cs)
+[SecurityHeadersMiddleware.cs](../HudhudNestApi/Security/Headers/SecurityHeadersMiddleware.cs)
 sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy:
 no-referrer`, `X-Permitted-Cross-Domain-Policies: none`, `Cross-Origin-Opener-Policy:
 same-origin`, `Cross-Origin-Resource-Policy: same-origin`, a restrictive
@@ -365,7 +365,7 @@ one gap here.
 
 ## 17. Error Handling / Logging
 
-[ExceptionHandlingMiddleware.cs](../PropertyApi/Middleware/ExceptionHandlingMiddleware.cs)
+[ExceptionHandlingMiddleware.cs](../HudhudNestApi/Middleware/ExceptionHandlingMiddleware.cs)
 maps every known exception type to a specific, generic-message status code (422/404/409/403/400)
 and, for anything unhandled, exposes stack trace/exception type/inner exception **only**
 in `Development`, `Testing`, or `CI` — Production and Staging get a fixed
@@ -379,7 +379,7 @@ secrets, a literal `<secret>` placeholder) — no real committed credential.
 ## 18. Dependency Security
 
 - `dotnet list package --vulnerable --include-transitive` run against all four
-  production projects (`PropertyApi`, `.Application`, `.Domain`, `.Infrastructure`)
+  production projects (`HudhudNestApi`, `.Application`, `.Domain`, `.Infrastructure`)
   against the live NuGet advisory feed: **zero vulnerable packages** in all four.
 - `npm audit --omit=dev` on the Angular frontend's production dependencies: **zero**
   vulnerabilities (0 critical/high/moderate/low across 42 prod packages).
@@ -422,7 +422,7 @@ that a visit involves two different parties with different rights over the same 
 ## Vulnerabilities Fixed
 
 **SEC-GAP-1** — added
-[`tests/PropertyApi.Integration.Tests/Security/JwtValidationTests.cs`](../tests/PropertyApi.Integration.Tests/Security/JwtValidationTests.cs):
+[`tests/HudhudNestApi.Integration.Tests/Security/JwtValidationTests.cs`](../tests/HudhudNestApi.Integration.Tests/Security/JwtValidationTests.cs):
 8 new tests, each a real HTTP `GET` through `WebApplicationFactory<Program>` with a
 crafted `Authorization: Bearer` header, asserting 401 for: no token, expired token,
 malformed token, wrong issuer, wrong audience, forged signature, tampered payload, and
@@ -474,11 +474,11 @@ down afterward — no shared/pre-existing project containers were modified):
 
 | Suite | Result | Notes |
 |---|---|---|
-| `PropertyApi.Auth.Tests` | **245/245 passed** | Password hashing, OTP, phone normalization, security-alert background service, staging test-support policy |
-| `PropertyApi.Application.Tests` | **510/510 passed** | Handler-level business logic across every module |
-| `PropertyApi.Architecture.Tests` | **107/107 passed** | Includes `PublicEndpointPolicyTests` — proves the default-deny fallback policy actually covers all 107 audited endpoints |
-| `PropertyApi.Integration.Tests` (Security/Controllers/CookieCsrf/Investments filter) | **100/110 passed** | The 10 failures are a local-environment seeding artifact (`Role ADMIN does not exist` — this session's ad hoc database did not run the app's normal role-seeding step before these specific Investments admin-role tests ran) not an application defect; every Security, Controllers, and CookieCsrf test passed |
-| `PropertyApi.Integration.Tests.Security.JwtValidationTests` (**new**, this session) | **8/8 passed** | Expired, malformed, wrong issuer, wrong audience, forged signature, tampered payload, `alg:none`, missing token — all correctly 401 |
+| `HudhudNestApi.Auth.Tests` | **245/245 passed** | Password hashing, OTP, phone normalization, security-alert background service, staging test-support policy |
+| `HudhudNestApi.Application.Tests` | **510/510 passed** | Handler-level business logic across every module |
+| `HudhudNestApi.Architecture.Tests` | **107/107 passed** | Includes `PublicEndpointPolicyTests` — proves the default-deny fallback policy actually covers all 107 audited endpoints |
+| `HudhudNestApi.Integration.Tests` (Security/Controllers/CookieCsrf/Investments filter) | **100/110 passed** | The 10 failures are a local-environment seeding artifact (`Role ADMIN does not exist` — this session's ad hoc database did not run the app's normal role-seeding step before these specific Investments admin-role tests ran) not an application defect; every Security, Controllers, and CookieCsrf test passed |
+| `HudhudNestApi.Integration.Tests.Security.JwtValidationTests` (**new**, this session) | **8/8 passed** | Expired, malformed, wrong issuer, wrong audience, forged signature, tampered payload, `alg:none`, missing token — all correctly 401 |
 | `dotnet list package --vulnerable` (all 4 core projects) | **0 vulnerable packages** | Live NuGet advisory feed |
 | `npm audit --omit=dev` (Angular frontend) | **0 vulnerabilities** | 42 production dependencies |
 | Git history secret scan | **0 real credentials found** | Pattern-based `git log -p` scan; only test/fixture passwords found |

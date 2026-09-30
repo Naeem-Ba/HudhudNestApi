@@ -155,8 +155,8 @@ public sealed class CICDPipelineTests
         Assert.Contains("validate-package-governance.ps1", productionYaml);
         Assert.Contains("validate-github-actions-pinning.py", productionYaml);
         Assert.Contains("Capture API image digest", productionYaml);
-        Assert.Contains("propertyapi-dotnet.cdx.json", productionYaml);
-        Assert.Contains("propertyapi-container.spdx.json", productionYaml);
+        Assert.Contains("hudhudnest-dotnet.cdx.json", productionYaml);
+        Assert.Contains("hudhudnest-container.spdx.json", productionYaml);
         Assert.Contains("container-scan.json", productionYaml);
         Assert.Contains("container-scan.sarif", productionYaml);
         Assert.Contains("generate-release-security-manifest.py", productionYaml);
@@ -188,10 +188,10 @@ public sealed class CICDPipelineTests
             apiDockerfile);
         Assert.Contains("USER $APP_UID", apiDockerfile);
         Assert.Contains("--locked-mode", migratorDockerfile);
-        Assert.Contains("image: propertyapi-api:${PROPERTYAPI_IMAGE_TAG:-production-gate}", compose);
-        Assert.Contains("image: propertyapi-migrator:${PROPERTYAPI_IMAGE_TAG:-production-gate}", compose);
-        Assert.Contains("PROPERTYAPI_IMAGE_TAG: production-gate", workflow);
-        Assert.Contains("propertyapi-api:${PROPERTYAPI_IMAGE_TAG}", workflow);
+        Assert.Contains("image: hudhudnest-api:${HUDHUDNEST_IMAGE_TAG:-production-gate}", compose);
+        Assert.Contains("image: hudhudnest-migrator:${HUDHUDNEST_IMAGE_TAG:-production-gate}", compose);
+        Assert.Contains("HUDHUDNEST_IMAGE_TAG: production-gate", workflow);
+        Assert.Contains("hudhudnest-api:${HUDHUDNEST_IMAGE_TAG}", workflow);
     }
 
     [Fact(DisplayName = "Supply-chain security assets must be present")]
@@ -376,8 +376,8 @@ public sealed class CICDPipelineTests
             Path.Combine(repoRoot, "scripts", "test-redis-failover.sh"),
             Path.Combine(repoRoot, "scripts", "verify-redis-recovery.sh"),
             Path.Combine(repoRoot, ".github", "workflows", "redis-ha-failover.yml"),
-            Path.Combine(repoRoot, "observability", "dashboards", "property-api-redis.json"),
-            Path.Combine(repoRoot, "observability", "alerts", "property-api-redis-alerts.yml")
+            Path.Combine(repoRoot, "observability", "dashboards", "hudhudnest-redis.json"),
+            Path.Combine(repoRoot, "observability", "alerts", "hudhudnest-redis-alerts.yml")
         };
 
         foreach (var file in requiredFiles)

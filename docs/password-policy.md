@@ -2,7 +2,7 @@
 
 ## Where the rules live
 
-`PropertyApi.Application/Auth/Services/PasswordSecurityService.cs` is the only authority.
+`HudhudNestApi.Application/Auth/Services/PasswordSecurityService.cs` is the only authority.
 It runs three groups of checks, in order, and stops at the first group that fails:
 
 1. **Complexity** — length ≥ 8, at least one uppercase, lowercase, digit, and symbol.

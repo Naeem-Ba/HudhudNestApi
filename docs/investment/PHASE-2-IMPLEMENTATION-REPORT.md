@@ -71,7 +71,7 @@ field with a "look up" button against the existing public `GET /api/properties/{
 there is no admin-wide "search any property by title" endpoint in this backend yet, and building
 one was judged out of scope for this phase (see "Deferred Work").
 
-### Backend fixes/additions (`PropertyApi.Application`, `PropertyApi.Infrastructure`, `PropertyApi`)
+### Backend fixes/additions (`HudhudNestApi.Application`, `HudhudNestApi.Infrastructure`, `HudhudNestApi`)
 
 | Change | Why |
 |---|---|
@@ -100,7 +100,7 @@ ValueTuple<InvestmentProject, Property>(ti.Outer, ti.Inner).Item1.Status == 4)'
 could not be translated..."
 ```
 
-**Fix**: `PropertyApi.Infrastructure/Investments/InvestmentProjectRepository.cs` — replaced the
+**Fix**: `HudhudNestApi.Infrastructure/Investments/InvestmentProjectRepository.cs` — replaced the
 `ValueTuple` projection with a named private `ProjectWithProperty` class. Verified: the same test
 now returns 200; the full 44-test Investments integration suite passes.
 
@@ -149,18 +149,18 @@ the old spelling.
 ## Files Added
 
 **Backend**:
-- `PropertyApi.Application/Investments/Commands/SetInvestmentDocumentVisibility/{Command,Handler}.cs`
-- `tests/PropertyApi.Integration.Tests/Investments/InvestmentApiTestFactory.cs`
-- `tests/PropertyApi.Integration.Tests/Investments/InvestmentSmokeTests.cs`
-- `tests/PropertyApi.Integration.Tests/Investments/InvestmentAuthorizationMatrixTests.cs`
-- `tests/PropertyApi.Integration.Tests/Investments/InvestmentPublicPrivateBoundaryTests.cs`
-- `tests/PropertyApi.Integration.Tests/Investments/InvestmentIdorTests.cs`
-- `tests/PropertyApi.Integration.Tests/Investments/InvestmentWorkflowStateMachineTests.cs`
-- `tests/PropertyApi.Integration.Tests/Investments/InvestmentValidationTests.cs`
-- `tests/PropertyApi.Integration.Tests/Investments/InvestmentDocumentSecurityTests.cs`
+- `HudhudNestApi.Application/Investments/Commands/SetInvestmentDocumentVisibility/{Command,Handler}.cs`
+- `tests/HudhudNestApi.Integration.Tests/Investments/InvestmentApiTestFactory.cs`
+- `tests/HudhudNestApi.Integration.Tests/Investments/InvestmentSmokeTests.cs`
+- `tests/HudhudNestApi.Integration.Tests/Investments/InvestmentAuthorizationMatrixTests.cs`
+- `tests/HudhudNestApi.Integration.Tests/Investments/InvestmentPublicPrivateBoundaryTests.cs`
+- `tests/HudhudNestApi.Integration.Tests/Investments/InvestmentIdorTests.cs`
+- `tests/HudhudNestApi.Integration.Tests/Investments/InvestmentWorkflowStateMachineTests.cs`
+- `tests/HudhudNestApi.Integration.Tests/Investments/InvestmentValidationTests.cs`
+- `tests/HudhudNestApi.Integration.Tests/Investments/InvestmentDocumentSecurityTests.cs`
 - `docs/investment/PHASE-2-IMPLEMENTATION-REPORT.md` (this file)
 
-**Frontend** (`Wohnungsmieten` repo, branch `feature/investment-discovery-phase-1`):
+**Frontend** (`HudhudNest` repo, branch `feature/investment-discovery-phase-1`):
 - `src/app/core/api/admin-investment-api.service.ts`
 - `src/app/features/investments/admin/admin-investment-list/admin-investment-list.page.ts`
 - `src/app/features/investments/admin/admin-investment-form/admin-investment-form.page.ts`
@@ -169,12 +169,12 @@ the old spelling.
 ## Files Modified
 
 **Backend**:
-- `PropertyApi.Application/Investments/DTOs/InvestmentDocumentDto.cs` (+`IsPublic`)
-- `PropertyApi.Application/Investments/Commands/PublishInvestmentProject/PublishInvestmentProjectCommandHandler.cs` (Bug 2 fix)
-- `PropertyApi.Infrastructure/Investments/InvestmentDocumentRepository.cs` (project `IsPublic` in both DTO projections)
-- `PropertyApi.Infrastructure/Investments/InvestmentProjectRepository.cs` (Bug 1 fix)
-- `PropertyApi/Controllers/AdminInvestmentsController.cs` (+visibility endpoint)
-- `tests/PropertyApi.Application.Tests/Investments/PublishInvestmentProjectCommandHandlerTests.cs` (updated mock target + new test)
+- `HudhudNestApi.Application/Investments/DTOs/InvestmentDocumentDto.cs` (+`IsPublic`)
+- `HudhudNestApi.Application/Investments/Commands/PublishInvestmentProject/PublishInvestmentProjectCommandHandler.cs` (Bug 2 fix)
+- `HudhudNestApi.Infrastructure/Investments/InvestmentDocumentRepository.cs` (project `IsPublic` in both DTO projections)
+- `HudhudNestApi.Infrastructure/Investments/InvestmentProjectRepository.cs` (Bug 1 fix)
+- `HudhudNestApi/Controllers/AdminInvestmentsController.cs` (+visibility endpoint)
+- `tests/HudhudNestApi.Application.Tests/Investments/PublishInvestmentProjectCommandHandlerTests.cs` (updated mock target + new test)
 
 **Frontend**:
 - `src/app/core/models/investment.model.ts` (+admin types)
@@ -219,11 +219,11 @@ new visibility endpoint follows the same `[Authorize(Roles = "Admin")]` class-le
 
 ## Integration Test Environment
 
-- **Topology**: isolated `postgis/postgis:16-3.4` Docker container (`propertyapi-investment-testpg`),
+- **Topology**: isolated `postgis/postgis:16-3.4` Docker container (`hudhudnest-investment-testpg`),
   host port 5433 → container 5432, **never** the developer's own local Postgres instance (which
   was already running natively on port 5432 with different credentials — left untouched) and
   never any shared/production database.
-- Schema applied via the project's own `tools/PropertyApi.Migrator` tool (the same one CI uses),
+- Schema applied via the project's own `tools/HudhudNestApi.Migrator` tool (the same one CI uses),
   `ASPNETCORE_ENVIRONMENT=Testing`.
 - `postgis`/`pg_trgm` extensions created explicitly (matches `.github/workflows/ci.yml`).
 - `WebApplicationFactory<Program>` (`InvestmentApiTestFactory`) boots the real host; access
@@ -238,7 +238,7 @@ new visibility endpoint follows the same `[Authorize(Roles = "Admin")]` class-le
 
 | Area | Result | Evidence |
 |---|---|---|
-| Migration apply (clean DB) | PASS | `tools/PropertyApi.Migrator` run, 0 errors, seed roles created |
+| Migration apply (clean DB) | PASS | `tools/HudhudNestApi.Migrator` run, 0 errors, seed roles created |
 | Schema (7 tables, PK/FK/unique/indexes) | PASS | `information_schema` query, all 7 FKs + 2 unique indexes (`InvestmentWatchlistItems`/`InvestmentInterests` on `(UserId, InvestmentProjectId)`) present |
 | Decimal precision | PASS | All money columns `numeric(18,4)`; `ExpectedReturnMin/Max` deliberately `numeric(9,4)` (percentages) |
 | Enum persistence | PASS | `Status`/`RiskLevel`/`ProjectType`/`DocumentType`/`UpdateType` all `varchar` (string-converted) |
@@ -266,15 +266,15 @@ warnings from an unrelated third-party dependency, not from this module's code.)
 PASS — all four suites green, run against the isolated Postgres container described above:
 
 ```
-PropertyApi.Application.Tests    496/496 passed  (was 495 at end of Phase 1; +1 new)
-PropertyApi.Architecture.Tests   107/107 passed  (unchanged from Phase 1)
-PropertyApi.Auth.Tests           245/245 passed  (unchanged from Phase 1)
-PropertyApi.Integration.Tests     63/63  passed  (all new — Investments feature)
+HudhudNestApi.Application.Tests    496/496 passed  (was 495 at end of Phase 1; +1 new)
+HudhudNestApi.Architecture.Tests   107/107 passed  (unchanged from Phase 1)
+HudhudNestApi.Auth.Tests           245/245 passed  (unchanged from Phase 1)
+HudhudNestApi.Integration.Tests     63/63  passed  (all new — Investments feature)
 ─────────────────────────────────────────────────
 Total                            911/911 passed, 0 failures
 ```
 
-`dotnet build PropertyApi.sln`: 0 warnings, 0 errors.
+`dotnet build HudhudNestApi.sln`: 0 warnings, 0 errors.
 
 ## Known Limitations
 

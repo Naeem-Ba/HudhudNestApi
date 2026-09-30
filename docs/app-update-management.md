@@ -13,7 +13,7 @@ document only covers the backend contract those phases will build against.
 
 ## Data model
 
-`AppRelease` (`PropertyApi.Domain.AppUpdates.Entities.AppRelease`, extends `AuditableEntity`):
+`AppRelease` (`HudhudNestApi.Domain.AppUpdates.Entities.AppRelease`, extends `AuditableEntity`):
 
 | Field | Notes |
 |---|---|
@@ -126,7 +126,7 @@ regardless of which `IDistributedCache` backing store is used.
 
 ## Version comparison
 
-`PropertyApi.Domain.AppUpdates.ValueObjects.AppVersion` compares `Major`/`Minor`/`Patch` as
+`HudhudNestApi.Domain.AppUpdates.ValueObjects.AppVersion` compares `Major`/`Minor`/`Patch` as
 integers, never as a string — `"1.10.0"` must sort after `"1.9.9"` even though `'1' < '9'`
 lexicographically. Only `major.minor.patch` is accepted (no pre-release/build-metadata suffix,
 no leading zeros).

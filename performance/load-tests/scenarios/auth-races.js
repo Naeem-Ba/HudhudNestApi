@@ -96,7 +96,7 @@ export function setup() {
     const register = jsonPost(
       '/api/auth/phone/registration/verify',
       registrationPayload(challengeId, marker));
-    // BUG-30a: RefreshTokenCookie.Attach (PropertyApi/Security/Auth/RefreshTokenCookie.cs:26-36)
+    // BUG-30a: RefreshTokenCookie.Attach (HudhudNestApi/Security/Auth/RefreshTokenCookie.cs:26-36)
     // moved the refresh token out of the JSON body and into an HttpOnly `refresh_token`
     // cookie (Path=/api/auth) as a security hardening change; PhonePasswordAuthController's
     // Result() helper (Controllers/PhonePasswordAuthController.cs:53-63) now always nulls the

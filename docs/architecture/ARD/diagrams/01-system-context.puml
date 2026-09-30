@@ -3,7 +3,7 @@ skinparam backgroundColor #FFFFFF
 skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName "Segoe UI"
-title مخطط سياق النظام (System Context) — PropertyApi
+title مخطط سياق النظام (System Context) — HudhudNestApi
 
 left to right direction
 
@@ -14,11 +14,11 @@ actor "مسؤول النظام\n(Admin)" as Admin
 actor "مزوّد خدمات\n(Service Provider)" as ServiceProvider
 
 package "أنظمة العميل (Client Applications)" {
-  [تطبيق الويب Angular SPA\n(Wohnungsmieten repo)\nNetlify: realestateworld.world] as WebApp
+  [تطبيق الويب Angular SPA\n(HudhudNest repo)\nNetlify: hudhudnest.com] as WebApp
   [تطبيق الجوال\n(Capacitor iOS/Android)] as MobileApp
 }
 
-node "PropertyApi\n(.NET 8 Web API)\n<<هذا النظام / this system>>" as System
+node "HudhudNestApi\n(.NET 8 Web API)\n<<هذا النظام / this system>>" as System
 
 package "أنظمة خارجية (External Systems)" {
   database "PostgreSQL + PostGIS\n(بيانات تشغيلية)" as Postgres
@@ -54,7 +54,7 @@ System --> HIBP : فحص كلمات مرور مخترقة\n(SHA-1 k-anonymity ra
 System --> Otel : OTLP/gRPC\n(traces, metrics, logs)
 
 note right of System
-  حدود النظام: PropertyApi هو الواجهة الخلفية
+  حدود النظام: HudhudNestApi هو الواجهة الخلفية
   الوحيدة. الواجهة الأمامية (Angular) مستودع
   Git منفصل تمامًا؛ لا كود مشترك، فقط عقد HTTP.
 end note

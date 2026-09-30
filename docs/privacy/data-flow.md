@@ -1,4 +1,4 @@
-# تتبّع دورة حياة البيانات (Data Flow) — PropertyApi / Wohnungsmieten
+# تتبّع دورة حياة البيانات (Data Flow) — HudhudNestApi / HudhudNest
 
 **الإصدار:** 0.1 (مسودة) | **التاريخ:** 2026-09-04 | مرتبط بـ [`data-inventory.md`](./data-inventory.md)
 
@@ -10,7 +10,7 @@
 flowchart LR
     User["المستخدم<br/>(متصفح / تطبيق جوال)"]
     Angular["Angular SPA<br/>(ويب + Capacitor)"]
-    API["ASP.NET Core API<br/>(PropertyApi)"]
+    API["ASP.NET Core API<br/>(HudhudNestApi)"]
     DB[("PostgreSQL / PostGIS<br/>Users, Properties, ...")]
     Redis[("Redis<br/>rate-limit counters, cache")]
     Cloudinary["Cloudinary<br/>صور الملف الشخصي والإعلانات"]

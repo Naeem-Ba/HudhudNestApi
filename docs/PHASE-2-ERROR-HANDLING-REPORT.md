@@ -1,8 +1,8 @@
 # PHASE 2 — Error Handling, Validation & Consistent Error UX
 
 Date: 2026-09-17
-Scope: `PropertyApi` (this repo) + `Wohnungsmieten` (Angular frontend, separate repo at
-`C:\Users\naeem\OneDrive\Desktop\Notiz\WohnungsApp\Wohnungsmieten`).
+Scope: `HudhudNestApi` (this repo) + `HudhudNest` (Angular frontend, separate repo at
+`C:\Users\naeem\OneDrive\Desktop\Notiz\HudhudNest\Wohnungsmieten`).
 Covers spec items 8–12 only (Login messages, Password Validation, OTP/Phone Errors, Session
 Errors, unified error display) — Search/Filters/Favorites/Sharing/Dashboard are explicitly out
 of scope and were not touched.
@@ -47,7 +47,7 @@ wrong code, expired code, already-used code, and 3-attempts-exceeded alike, so
 `RegisterAsync`/`VerifyReverificationAsync`/`VerifyPhoneChangeAsync` all answered `OTP_INVALID`
 and `VerifyPasswordResetAsync` answered `PASSWORD_RESET_INVALID` regardless of the real reason.
 **Root cause:** The reservation/consumption guard clauses shared one early-return path.
-**Affected layer:** Backend (`PropertyApi.Infrastructure/Auth/Services/PhoneAuthenticationWorkflow.cs`).
+**Affected layer:** Backend (`HudhudNestApi.Infrastructure/Auth/Services/PhoneAuthenticationWorkflow.cs`).
 **Risk:** Directly violates spec §8's explicit requirement to distinguish wrong/expired/used/rate-
 limited OTP; a user who mistyped a code and a user whose code expired 4 minutes ago see an
 identical, unhelpful message.
@@ -107,19 +107,19 @@ duplicated this same anti-pattern with its own contradictory string table.
 
 ## C. Changes Made
 
-### Backend (`PropertyApi`)
+### Backend (`HudhudNestApi`)
 
 | File | Change | Reason |
 |---|---|---|
-| [`PhoneAuthenticationWorkflow.cs`](PropertyApi.Infrastructure/Auth/Services/PhoneAuthenticationWorkflow.cs) | `ValidateAndReserveAsync` now returns an `OtpValidationOutcome` (`Challenge` + typed `OtpFailureReason?`) instead of a bare nullable challenge. New codes: `OTP_EXPIRED`, `OTP_ALREADY_USED`, `OTP_WRONG`, `OTP_RATE_LIMITED` (registration/reverification/phone-change); `PASSWORD_RESET_EXPIRED`, `PASSWORD_RESET_ALREADY_USED`, `PASSWORD_RESET_RATE_LIMITED` (password reset, additive — `PASSWORD_RESET_INVALID` keeps its original meaning for wrong-code/not-found). `NotFound` (purpose/user mismatch, concurrent-reservation race) deliberately stays generic — not a legitimate user's error, and distinguishing it would help an attacker probing challenge IDs. | Finding 2 |
-| [`RefreshTokenCommand.cs`](PropertyApi.Application/Auth/Commands/RefreshToken/RefreshTokenCommand.cs) | `RefreshTokenResult` gains `ErrorCode`; new `RefreshTokenErrorCodes` (`REFRESH_TOKEN_EXPIRED`, `REFRESH_TOKEN_REUSE_DETECTED`, `REFRESH_TOKEN_ROTATION_CONFLICT`) assigned at each of the four failure branches. | Finding 4 |
-| [`AuthController.cs`](PropertyApi/Controllers/AuthController.cs) | `POST /auth/refresh`'s 401 body now includes `errorCode`. | Finding 4 |
-| [`RefreshTokenAndLogoutCommandHandlerTests.cs`](tests/PropertyApi.Auth.Tests/Application/Commands/RefreshTokenAndLogoutCommandHandlerTests.cs) | Asserts `ErrorCode` on the reuse-detected and rotation-conflict cases; added a new test for the previously-uncovered "unknown token hash" (`Expired`) case. | Test coverage for Finding 4's fix |
+| [`PhoneAuthenticationWorkflow.cs`](HudhudNestApi.Infrastructure/Auth/Services/PhoneAuthenticationWorkflow.cs) | `ValidateAndReserveAsync` now returns an `OtpValidationOutcome` (`Challenge` + typed `OtpFailureReason?`) instead of a bare nullable challenge. New codes: `OTP_EXPIRED`, `OTP_ALREADY_USED`, `OTP_WRONG`, `OTP_RATE_LIMITED` (registration/reverification/phone-change); `PASSWORD_RESET_EXPIRED`, `PASSWORD_RESET_ALREADY_USED`, `PASSWORD_RESET_RATE_LIMITED` (password reset, additive — `PASSWORD_RESET_INVALID` keeps its original meaning for wrong-code/not-found). `NotFound` (purpose/user mismatch, concurrent-reservation race) deliberately stays generic — not a legitimate user's error, and distinguishing it would help an attacker probing challenge IDs. | Finding 2 |
+| [`RefreshTokenCommand.cs`](HudhudNestApi.Application/Auth/Commands/RefreshToken/RefreshTokenCommand.cs) | `RefreshTokenResult` gains `ErrorCode`; new `RefreshTokenErrorCodes` (`REFRESH_TOKEN_EXPIRED`, `REFRESH_TOKEN_REUSE_DETECTED`, `REFRESH_TOKEN_ROTATION_CONFLICT`) assigned at each of the four failure branches. | Finding 4 |
+| [`AuthController.cs`](HudhudNestApi/Controllers/AuthController.cs) | `POST /auth/refresh`'s 401 body now includes `errorCode`. | Finding 4 |
+| [`RefreshTokenAndLogoutCommandHandlerTests.cs`](tests/HudhudNestApi.Auth.Tests/Application/Commands/RefreshTokenAndLogoutCommandHandlerTests.cs) | Asserts `ErrorCode` on the reuse-detected and rotation-conflict cases; added a new test for the previously-uncovered "unknown token hash" (`Expired`) case. | Test coverage for Finding 4's fix |
 
 **Not changed, deliberately:** `PhoneAuthenticationWorkflow.LoginAsync`'s lockout handling (see
 Finding 3) — reverted to its original single-code behavior.
 
-### Frontend (`Wohnungsmieten`)
+### Frontend (`HudhudNest`)
 
 | File | Change | Reason |
 |---|---|---|
@@ -163,10 +163,10 @@ Finding 3) — reverted to its original single-code behavior.
 
 | Test | Result |
 |---|---|
-| Backend: `PropertyApi.Auth.Tests` (256 tests, +11 vs. pre-Phase-2 baseline of 245) | PASS |
-| Backend: `PropertyApi.Application.Tests` (1074 tests) | PASS |
-| Backend: `PropertyApi.Architecture.Tests` (164 tests) | PASS |
-| Backend: `dotnet build PropertyApi.sln` | PASS — 0 warnings, 0 errors |
+| Backend: `HudhudNestApi.Auth.Tests` (256 tests, +11 vs. pre-Phase-2 baseline of 245) | PASS |
+| Backend: `HudhudNestApi.Application.Tests` (1074 tests) | PASS |
+| Backend: `HudhudNestApi.Architecture.Tests` (164 tests) | PASS |
+| Backend: `dotnet build HudhudNestApi.sln` | PASS — 0 warnings, 0 errors |
 | Backend: `dotnet format --verify-no-changes` (changed files) | PASS |
 | Frontend: `npm run typecheck` | PASS |
 | Frontend: `npm run build` (production config) | PASS — 0 errors; confirmed no `send-otp-page`/`verify-otp-page` chunks remain |
@@ -182,7 +182,7 @@ Finding 3) — reverted to its original single-code behavior.
 | Authorization (403) | Unaffected — confirmed already correctly separate from 401 in existing code, no change needed |
 
 **Manual browser verification performed** (dev server, `ng serve --configuration staging`,
-against the real Wohnungsmieten app — screenshots/DOM inspected):
+against the real HudhudNest app — screenshots/DOM inspected):
 1. Login page renders correctly (email + phone tabs).
 2. Phone "Konto erstellen" tab shows only the "moved" notice + working link — no trace of the old
    broken Step 1/2 form.
@@ -199,15 +199,15 @@ against the real Wohnungsmieten app — screenshots/DOM inspected):
 
 | Existing test | Result | Regression found | Fix |
 |---|---|---|---|
-| `PropertyApi.Auth.Tests` full suite | PASS (256/256) | None | n/a |
-| `PropertyApi.Application.Tests` full suite | PASS (1074/1074) | None | n/a |
-| `PropertyApi.Architecture.Tests` full suite | PASS (164/164) | None | n/a |
+| `HudhudNestApi.Auth.Tests` full suite | PASS (256/256) | None | n/a |
+| `HudhudNestApi.Application.Tests` full suite | PASS (1074/1074) | None | n/a |
+| `HudhudNestApi.Architecture.Tests` full suite | PASS (164/164) | None | n/a |
 | `api-error.interceptor.spec.ts` (pre-existing 5 tests) | Initially FAILED (all 5) after adding `inject(TranslateService)` to the interceptor without updating the spec's `TestBed` providers | Yes — `NG0201: No provider for TranslateService!` thrown synchronously inside the interceptor, so every HTTP call in the spec never reached `HttpTestingController` | Added `TranslateModule.forRoot()` to the spec's `imports`; re-ran, all 5 pass |
 | `login.component.spec.ts` (pre-existing tests referencing the removed OTP flow) | Would have failed to compile (`TS2554`, `TS2339` on deleted members) | Yes — direct consequence of Finding 1's fix | Removed the two obsolete OTP tests, fixed the constructor argument count |
 | Full frontend suite (`ng test`) | PASS (299/299) after the two fixes above | — | — |
 
-No other regressions found. `PropertyApi.Concurrency.Tests`, `PropertyApi.Integration.Tests`,
-`PropertyApi.StagingSmokeTests`, `PropertyApi.Performance.Tests` were not run this session (see
+No other regressions found. `HudhudNestApi.Concurrency.Tests`, `HudhudNestApi.Integration.Tests`,
+`HudhudNestApi.StagingSmokeTests`, `HudhudNestApi.Performance.Tests` were not run this session (see
 Remaining Issues — same limitation the Investment Phase 1/2 work in this repo already documented).
 
 ## G. Remaining Issues

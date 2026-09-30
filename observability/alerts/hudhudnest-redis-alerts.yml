@@ -1,7 +1,7 @@
 groups:
-  - name: property-api-redis
+  - name: hudhudnest-redis
     rules:
-      - alert: PropertyApiRedisHighTimeoutRate
+      - alert: HudhudNestApiRedisHighTimeoutRate
         expr: increase(redis_timeouts_total[5m]) > 10
         for: 5m
         labels:
@@ -9,9 +9,9 @@ groups:
           service: propertyapi
         annotations:
           summary: Redis timeout rate is elevated.
-          description: Redis command timeouts exceeded the accepted threshold for PropertyApi.
+          description: Redis command timeouts exceeded the accepted threshold for HudhudNestApi.
 
-      - alert: PropertyApiRedisReconnectStorm
+      - alert: HudhudNestApiRedisReconnectStorm
         expr: increase(redis_reconnects_total[5m]) > 5
         for: 5m
         labels:
@@ -21,7 +21,7 @@ groups:
           summary: Redis reconnects are elevated.
           description: Application Redis clients are reconnecting frequently; check failover or network stability.
 
-      - alert: PropertyApiRedisFeatureDegraded
+      - alert: HudhudNestApiRedisFeatureDegraded
         expr: increase(propertyapi_redis_feature_degraded_total[5m]) > 0
         for: 2m
         labels:
@@ -31,7 +31,7 @@ groups:
           summary: A Redis-dependent feature is degraded.
           description: Inspect feature label and verify degradation matches the failure policy.
 
-      - alert: PropertyApiRateLimiterFailClosed
+      - alert: HudhudNestApiRateLimiterFailClosed
         expr: increase(propertyapi_rate_limiter_fail_closed_total[5m]) > 0
         for: 1m
         labels:
@@ -41,7 +41,7 @@ groups:
           summary: Security-sensitive rate limiting failed closed.
           description: Authentication or OTP traffic may be blocked because Redis-backed abuse protection is unavailable.
 
-      - alert: PropertyApiRedisReplicationLag
+      - alert: HudhudNestApiRedisReplicationLag
         expr: redis_replica_lag_seconds > 10
         for: 5m
         labels:
@@ -51,7 +51,7 @@ groups:
           summary: Redis replica lag is above target.
           description: Replica lag may increase data loss or failover recovery risk.
 
-      - alert: PropertyApiRedisPrimaryRoleChanged
+      - alert: HudhudNestApiRedisPrimaryRoleChanged
         expr: increase(redis_primary_role_changes_total[10m]) > 0
         for: 0m
         labels:

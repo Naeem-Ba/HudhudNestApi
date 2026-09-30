@@ -78,7 +78,7 @@ public static class HudhudNestApiObservabilityExtensions
                         {
                             if (request.HttpContext.Items.TryGetValue("CorrelationId", out var correlationId))
                             {
-                                activity.SetTag("propertyapi.correlation_id", correlationId?.ToString());
+                                activity.SetTag("hudhudnest.correlation_id", correlationId?.ToString());
                             }
                         };
                     })

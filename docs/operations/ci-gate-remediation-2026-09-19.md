@@ -28,7 +28,7 @@ timeouts and transport errors are real. No 5xx or timeout occurred. The misleadi
 |---|---|---|
 | Performance | `scripts/run-performance-tests.sh` | First aggregate pass runs with `PERF_REQUIRE_BASELINE=false` (every other check still enforced); the final pass is unchanged and strict. |
 | Performance reporting | `performance/load-tests/lib/reporting.js`, `performance/reporting/aggregate.py` | Report `unexpectedErrorRate` (5xx/transport) next to the non-2xx rate in markdown and CSV. Thresholds untouched. |
-| Recovery | `tools/PropertyApi.DatabaseRecoveryVerifier/Program.cs`, `database-restore-drill.yml`, `run-local-restore-drill.sh` | Fail on unknown applied migrations; rehearse pending migrations on the disposable copy (opt-in `RECOVERY_APPLY_PENDING_MIGRATIONS=true`, loopback host only); then require zero pending. Report records before/after. |
+| Recovery | `tools/HudhudNestApi.DatabaseRecoveryVerifier/Program.cs`, `database-restore-drill.yml`, `run-local-restore-drill.sh` | Fail on unknown applied migrations; rehearse pending migrations on the disposable copy (opt-in `RECOVERY_APPLY_PENDING_MIGRATIONS=true`, loopback host only); then require zero pending. Report records before/after. |
 | Staging | `production-gate.yml` | New step applies migrations to Staging before the deploy hook (secret `STAGING_DATABASE_URL`, refuses DB names without `staging`, masks the value). |
 | Staging evidence | `production-gate.yml` | `staging-release-verification.json` (expected vs deployed SHA, branch, migration state, readiness, timestamps). Failure message now separates SHA mismatch from unapplied migrations. |
 | Artifacts | `production-gate.yml`, `scripts/verify-observability.sh` | `if: always()` step writes failure-status smoke and observability reports when missing; observability script leaves a failure report on early abort. |
@@ -40,11 +40,11 @@ Thresholds, scenarios, `continue-on-error` and exit-code handling were not weake
 
 - Recovery verifier on a local PostgreSQL 18 scratch database (AppReleases dropped to mimic a pre-deploy backup):
   without the opt-in, `FAIL`; with it, `PASS` (`pendingMigrationsBeforeRehearsal=[AddAppReleases]`, `ran=true`, pending `[]`).
-- Staging database was at 57 migrations (latest `20260912130714_…`); `tools/PropertyApi.Migrator` applied exactly
+- Staging database was at 57 migrations (latest `20260912130714_…`); `tools/HudhudNestApi.Migrator` applied exactly
   `20260918114442_AddAppReleases` (now 58). `GET /health/ready` on Staging returned 200.
 - Evidence step, verification-JSON writer and the observability abort trap were run locally.
-- `bash -n` on every `run:` block of the `staging-smoke` job; `PropertyApi.Architecture.Tests` (164) and
-  `PropertyApi.Performance.Tests` (10) pass.
+- `bash -n` on every `run:` block of the `staging-smoke` job; `HudhudNestApi.Architecture.Tests` (164) and
+  `HudhudNestApi.Performance.Tests` (10) pass.
 
 ## Not yet proven
 

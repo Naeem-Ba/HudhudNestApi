@@ -34,7 +34,7 @@ public sealed class TelegramBotPublisherTests
             Title = "عنوان",
             Body = body,
             ImageUrl = imageUrl ?? string.Empty,
-            TargetUrl = "https://realestateworld.world/properties/p1",
+            TargetUrl = "https://hudhudnest.com/properties/p1",
             Hashtags = hashtags ?? Array.Empty<string>(),
             Language = "ar",
         };
@@ -103,9 +103,9 @@ public sealed class TelegramBotPublisherTests
     {
         var handler = new RecordingHandler(HttpStatusCode.OK, """{"ok":true,"result":{"message_id":42}}""");
 
-        var result = await Publisher(handler).PublishAsync(MakeRequest(chatId: "@aqartech_damascus"));
+        var result = await Publisher(handler).PublishAsync(MakeRequest(chatId: "@hudhudnest_damascus"));
 
-        Assert.Equal("https://t.me/aqartech_damascus/42", result.ExternalPostUrl);
+        Assert.Equal("https://t.me/hudhudnest_damascus/42", result.ExternalPostUrl);
     }
 
     [Fact]

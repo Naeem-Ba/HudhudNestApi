@@ -7,14 +7,14 @@
 
 | العنصر | Staging | Production |
 |---|---|---|
-| مستودع الـ API | `Naeem-Ba/PropertyApi` — branch `master` | نفسه — branch `master` (الفصل بالـ pipeline لا بالـ branch) |
+| مستودع الـ API | `Naeem-Ba/HudhudNestApi` — branch `master` | نفسه — branch `master` (الفصل بالـ pipeline لا بالـ branch) |
 | مستودع الواجهة | `Naeem-Ba/HudhudNest` — branch `staging` | نفسه — branch `main` |
 | رابط الواجهة | `https://staging--hudhudnest.netlify.app` | `https://hudhudnest.com` |
 | رابط الـ API | `https://propertyapi-staging-api.onrender.com` | `https://wohnungen-api.onrender.com` |
 | خدمة Render | `propertyapi-staging-api` (`srv-dacpbgf40ujc73epheig`) | خدمة الإنتاج (المعرّف في سر `RENDER_SERVICE_ID`) |
 | موقع Netlify | نفس موقع `hudhudnest`، فرع `staging` (Branch deploy) | نفس الموقع، السياق `production` |
 | قاعدة البيانات | Render Postgres `propertyapi-staging-db` (الاسم يحوي `staging` — يفرضه `StagingEnvironmentGuard`) | قاعدة منفصلة عبر `DATABASE_URL`؛ يرفض `ProductionEnvironmentGuard` أي اسم يحوي `staging` |
-| Redis | Render Valkey `propertyapi-redis` | Upstash منفصل |
+| Redis | Render Valkey `hudhudnest-redis` | Upstash منفصل |
 | التخزين (Cloudinary) | **نفس الـ cloud** (الخطة المجانية = بيئة واحدة). العزل الآن بمجلد جذر `staging/` تلقائيًا في Staging | جذر `hudhudnest/` بلا بادئة |
 | `ASPNETCORE_ENVIRONMENT` | `Staging` | `Production` |
 | مشغّل النشر | خطوة `staging-smoke` في `Production Gate` عند الدمج في `master` (تهاجر القاعدة ثم Deploy Hook) | **يدوي فقط**: `workflow_dispatch` على `master` → `deploy-production` |

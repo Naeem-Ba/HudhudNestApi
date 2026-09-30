@@ -24,7 +24,7 @@ public sealed class SocialPublisherAdapterTests
             Title = "عنوان",
             Body = body,
             ImageUrl = imageUrl ?? string.Empty,
-            TargetUrl = "https://aqartech.example.com/properties/1",
+            TargetUrl = "https://hudhudnest.example.com/properties/1",
             Hashtags = hashtags ?? Array.Empty<string>(),
             Language = "ar",
         };

@@ -4,7 +4,7 @@ Status: proposed; provider implementation pending.
 
 ## Context
 
-PropertyApi uses Redis for unrelated workloads: rate limiting, output cache, distributed cache, security-stamp cache acceleration, and optional SignalR backplane. A shared Redis outage or saturation event can affect security controls and availability at the same time.
+HudhudNestApi uses Redis for unrelated workloads: rate limiting, output cache, distributed cache, security-stamp cache acceleration, and optional SignalR backplane. A shared Redis outage or saturation event can affect security controls and availability at the same time.
 
 ## Decision
 

@@ -72,7 +72,7 @@ results, because the codebase leans on provider specifics:
   `Microsoft.Extensions.*` entries in `Directory.Packages.props` → 10.0.x.
 - Regenerate every `packages.lock.json` (`dotnet restore --force-evaluate`). CI restores
   with `--locked-mode`, so stale lock files fail the build.
-- `ci/Dockerfile.migrator`, `ci/Dockerfile.database-recovery`, `PropertyApi/Dockerfile`:
+- `ci/Dockerfile.migrator`, `ci/Dockerfile.database-recovery`, `HudhudNestApi/Dockerfile`:
   base images → `10.0`.
 - `.github/workflows/*.yml`: `DOTNET_VERSION: '8.0.x'` → `'10.0.x'`.
 - `global.json`, if one is added before then.
@@ -127,4 +127,4 @@ This document is the plan. The issue tracking the work is not yet open — it ne
 maintainer's decision on the owner and on whether the schedule above fits alongside
 other commitments.
 
-Suggested issue title: **Migrate PropertyApi from .NET 8 to .NET 10 before 2026-11-10**
+Suggested issue title: **Migrate HudhudNestApi from .NET 8 to .NET 10 before 2026-11-10**

@@ -1,6 +1,6 @@
 # Staging and Production gate checklist
 
-## Live configuration status (checked 2026-09-01 via `gh api repos/Naeem-Ba/PropertyApi/environments/staging/...`)
+## Live configuration status (checked 2026-09-01 via `gh api repos/Naeem-Ba/HudhudNestApi/environments/staging/...`)
 
 The GitHub Environment `staging` **exists** (created 2026-07-12, no protection rules, no branch
 restriction) but currently has **zero Variables and zero Secrets** configured on it. A stray

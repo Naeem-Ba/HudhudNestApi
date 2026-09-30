@@ -33,7 +33,7 @@ public sealed class FacebookGraphApiPublisherTests
             Title = "عنوان",
             Body = body,
             ImageUrl = imageUrl ?? string.Empty,
-            TargetUrl = "https://realestateworld.world/properties/p1",
+            TargetUrl = "https://hudhudnest.com/properties/p1",
             Hashtags = hashtags ?? Array.Empty<string>(),
             Language = "ar",
         };
@@ -70,7 +70,7 @@ public sealed class FacebookGraphApiPublisherTests
         Assert.Equal($"https://graph.facebook.com/v21.0/1234567890/feed", handler.Uri);
         var form = ParseForm(handler.Body);
         Assert.Equal("شقة رائعة للبيع", form["message"]);
-        Assert.Equal("https://realestateworld.world/properties/p1", form["link"]);
+        Assert.Equal("https://hudhudnest.com/properties/p1", form["link"]);
         Assert.False(form.ContainsKey("photo"));
     }
 

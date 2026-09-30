@@ -44,10 +44,10 @@ double check elsewhere too):
 
 ## 1. Task 1 — Transaction stringly-typed fields → enums (tech debt)
 
-- New: `PropertyApi.Domain/Transactions/Enums/{TransactionType,TransactionStatus,TransactionPaymentMethod}.cs`
+- New: `HudhudNestApi.Domain/Transactions/Enums/{TransactionType,TransactionStatus,TransactionPaymentMethod}.cs`
 - Changed: `Transaction.cs` (properties are now the enums; factory/domain methods unchanged in shape)
 - Changed: `TransactionConfiguration.cs` (`HasConversion<string>()`, `HasMaxLength(30)`, same pattern `PropertyConfiguration` already uses for `Property`'s enums)
-- New tests: `tests/PropertyApi.Application.Tests/Transactions/TransactionTests.cs`
+- New tests: `tests/HudhudNestApi.Application.Tests/Transactions/TransactionTests.cs`
 
 `Transaction` has no callers anywhere in the codebase today (confirmed via a
 full-tree search before touching it), so this is a genuinely zero-risk-to-runtime
@@ -70,17 +70,17 @@ filtered on them — `CreatePropertyCommand`, `UpdatePropertyCommand`, and
 
 **Not done in this pass:** the Angular frontend has no UI for governorate/district/
 neighborhood/property-type selection yet (confirmed — no references to
-`governorateId` anywhere in `Wohnungsmieten/src`). The backend is ready; the
+`governorateId` anywhere in `HudhudNest/src`). The backend is ready; the
 frontend property-form and search-filter components still need cascading
 dropdowns wired to `GET /api/lookups` (already exists) and the new fields.
 
 ## 3. Task 4 — Advisory duplicate-listing check
 
-- New: `PropertyApi.Application/Listings/DTOs/DuplicateCheckResultDto.cs`
-- New: `PropertyApi.Application/Listings/Queries/CheckPotentialDuplicateProperty/` (Query + Handler)
+- New: `HudhudNestApi.Application/Listings/DTOs/DuplicateCheckResultDto.cs`
+- New: `HudhudNestApi.Application/Listings/Queries/CheckPotentialDuplicateProperty/` (Query + Handler)
 - Changed: `IPropertyRepository.cs` / `PropertyRepository.cs` — added `FindPotentialDuplicatesAsync(...)`
 - New endpoint: `GET /api/properties/check-duplicate?neighborhoodId=&area=&price=&listingType=`
-- New tests: `tests/PropertyApi.Application.Tests/Listings/CheckPotentialDuplicatePropertyQueryHandlerTests.cs`
+- New tests: `tests/HudhudNestApi.Application.Tests/Listings/CheckPotentialDuplicatePropertyQueryHandlerTests.cs`
 
 Implemented as a **Query**, never a `CreatePropertyCommandValidator` rule — see
 the XML doc on `CheckPotentialDuplicatePropertyQuery` for the reasoning
@@ -103,7 +103,7 @@ plus the non-blocking confirm dialog UI.
 
 ## 4. Task 2 — Price history + "still available?" confirmation
 
-- New entity: `PropertyApi.Domain/Listings/Entities/PropertyPriceHistory.cs` (append-only)
+- New entity: `HudhudNestApi.Domain/Listings/Entities/PropertyPriceHistory.cs` (append-only)
 - New: `PropertyPriceHistoryConfiguration.cs`, `IPropertyPriceHistoryRepository.cs` / `PropertyPriceHistoryRepository.cs`
 - Changed: `UpdatePropertyCommandHandler.cs` — writes one history row per price field that actually changed (`ColdRent`/`WarmRent`/`PurchasePrice`), in the **same `SaveChangesAsync`** as the property update itself — not inside the notification's try/catch, so history persists even if the SignalR push fails
 - New: `Property.LastConfirmedAvailableAt` + `Property.ConfirmStillAvailable()` domain method
@@ -119,14 +119,14 @@ method + endpoint when the frontend needs to display the timeline).
 
 ## 5. Task 3 — Saved searches + match alerts
 
-- New entity: `PropertyApi.Domain/Search/Entities/SavedSearch.cs` (mirrors `PropertyFilterDto`'s filterable fields)
+- New entity: `HudhudNestApi.Domain/Search/Entities/SavedSearch.cs` (mirrors `PropertyFilterDto`'s filterable fields)
 - New: `SavedSearchConfiguration.cs`, `ISavedSearchRepository.cs` / `SavedSearchRepository.cs`
-- New CQRS slice: `PropertyApi.Application/Search/{Commands/CreateSavedSearch,Commands/DeleteSavedSearch,Queries/GetMySavedSearches}` (mirrors the `Favorites` module structure)
+- New CQRS slice: `HudhudNestApi.Application/Search/{Commands/CreateSavedSearch,Commands/DeleteSavedSearch,Queries/GetMySavedSearches}` (mirrors the `Favorites` module structure)
 - New controller: `SavedSearchController.cs` (mirrors `FavoritesController.cs`)
 - New: `NotificationType.SavedSearchMatch = 12` (appended, does not renumber existing values — `Notification.Type` is stored as a plain int, not string-converted, confirmed in `NotificationConfiguration.cs`)
 - New: `INotificationService.NotifySavedSearchMatchAsync(...)` + implementation
 - New: `SavedSearchMatchHostedService : BackgroundService` (mirrors `OtpCleanupHostedService`'s scope-factory + polling-loop pattern, 15-minute interval), registered via `AddHostedService<>()`
-- New tests: `tests/PropertyApi.Application.Tests/Search/SavedSearchCommandHandlerTests.cs`
+- New tests: `tests/HudhudNestApi.Application.Tests/Search/SavedSearchCommandHandlerTests.cs`
 
 The matcher reuses `PropertyRepository.ApplyFilter` (see Task 0) so a saved
 search alert can never disagree with what a manual search for the same
@@ -154,9 +154,9 @@ dotnet build
 # 3. Generate migrations — one per schema change, so each is reviewable and
 #    revertible independently. Do NOT hand-write these; let the tool diff
 #    against the (untouched) AppDbContextModelSnapshot.cs:
-dotnet ef migrations add ConvertTransactionFieldsToEnums --project PropertyApi.Infrastructure --startup-project PropertyApi
-dotnet ef migrations add AddPropertyPriceHistoryAndAvailabilityConfirmation --project PropertyApi.Infrastructure --startup-project PropertyApi
-dotnet ef migrations add AddSavedSearches --project PropertyApi.Infrastructure --startup-project PropertyApi
+dotnet ef migrations add ConvertTransactionFieldsToEnums --project HudhudNestApi.Infrastructure --startup-project HudhudNestApi
+dotnet ef migrations add AddPropertyPriceHistoryAndAvailabilityConfirmation --project HudhudNestApi.Infrastructure --startup-project HudhudNestApi
+dotnet ef migrations add AddSavedSearches --project HudhudNestApi.Infrastructure --startup-project HudhudNestApi
 
 # Review each generated migration's Up()/Down() before applying — in particular
 # confirm the Transaction migration does NOT silently drop/truncate any existing
@@ -164,15 +164,15 @@ dotnet ef migrations add AddSavedSearches --project PropertyApi.Infrastructure -
 # per the "dead code" finding above, but re-verify before running in an
 # environment that might not be).
 
-dotnet ef database update --project PropertyApi.Infrastructure --startup-project PropertyApi
+dotnet ef database update --project HudhudNestApi.Infrastructure --startup-project HudhudNestApi
 
 # 4. Run the full test suite:
 dotnet test
 
 # 5. Full solution build sanity check — this pass only reviewed the 4 core
 #    projects (Domain/Application/Infrastructure/API) plus
-#    PropertyApi.Application.Tests. It did NOT review PropertyApi.Integration.Tests,
-#    PropertyApi.Auth.Tests, PropertyApi.Architecture.Tests, or the other test/tool
+#    HudhudNestApi.Application.Tests. It did NOT review HudhudNestApi.Integration.Tests,
+#    HudhudNestApi.Auth.Tests, HudhudNestApi.Architecture.Tests, or the other test/tool
 #    projects in the .sln for any other class that might implement
 #    IPropertyRepository, IUnitOfWork, or INotificationService and would need the
 #    same "add the new interface member" fix already applied to
@@ -184,7 +184,7 @@ dotnet test
 ## 7. Angular frontend follow-up (done in a later pass)
 
 Everything listed as "not done in this pass" above for the frontend has since
-been implemented against the real `Wohnungsmieten` repo, in a separate
+been implemented against the real `HudhudNest` repo, in a separate
 session, using the same staged-edit-and-commit workflow (files staged from
 your machine, edited, committed back). **Same limitation as section 0
 applies, and is arguably more important here: this sandbox has no

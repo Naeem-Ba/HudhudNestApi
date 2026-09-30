@@ -1,7 +1,7 @@
 # Media Storage Architecture (Cloudinary)
 
 Status: current as of the per-entity folder redesign (2026-09-18). Supersedes the flat-folder
-layout described informally in [ARD-PropertyApi.md](ARD/ARD-PropertyApi.md) ADR-004.
+layout described informally in [ARD-HudhudNestApi.md](ARD/ARD-HudhudNestApi.md) ADR-004.
 
 ## 1. Folder structure
 
@@ -31,7 +31,7 @@ realestateworld/
 ## 2. Naming convention
 
 Every folder is built by exactly one class: `MediaFolderBuilder`
-(`PropertyApi.Application/Common/Services/MediaFolderBuilder.cs`), which implements
+(`HudhudNestApi.Application/Common/Services/MediaFolderBuilder.cs`), which implements
 `IMediaFolderBuilder`:
 
 ```csharp
@@ -39,14 +39,14 @@ string BuildFolder(MediaEntityType entityType, Guid entityId, string mediaCatego
 ```
 
 - `entityType` — one of `Agency`, `User`, `Property`, `ShortStayListing`, `Investment`,
-  `ServiceRequest`, `Social` (`PropertyApi.Application.Common.Enums.MediaEntityType`).
+  `ServiceRequest`, `Social` (`HudhudNestApi.Application.Common.Enums.MediaEntityType`).
 - `entityId` — must not be `Guid.Empty`.
 - `mediaCategory` — must match `^[a-z][a-z0-9-]*$` (single lowercase slug, no slashes, no path
   traversal). The standard values live in `MediaCategories`
-  (`PropertyApi.Application/Common/Models/MediaCategories.cs`): `Logo`, `Profile`, `Images`,
+  (`HudhudNestApi.Application/Common/Models/MediaCategories.cs`): `Logo`, `Profile`, `Images`,
   `Photos`, `Documents`, `Share`.
 
-This is registered as a singleton in `PropertyApi.Application/DependencyInjection.cs` — it is
+This is registered as a singleton in `HudhudNestApi.Application/DependencyInjection.cs` — it is
 pure/deterministic (no I/O), so one instance is safe to share across all requests, the same
 reasoning already used for `PwnedPasswordsCircuitBreaker` and
 `TemplateSocialContentGenerator` in that file.
@@ -109,7 +109,7 @@ own id — the folder itself carries no independent trust decision. Existing own
 | Upload | Check |
 |---|---|
 | Property images | `IPropertyOwnershipService.EnsureOwnerAsync` — `property.OwnerId == callerId` |
-| Agency logo | `[Authorize(Roles = AgencyOwner)]` **and** `agency.OwnerUserId == callerId` (the role alone only proves ownership of *some* agency, not this one — Agency has no row-level tenant isolation, see [ARD-PropertyApi.md](ARD/ARD-PropertyApi.md)) |
+| Agency logo | `[Authorize(Roles = AgencyOwner)]` **and** `agency.OwnerUserId == callerId` (the role alone only proves ownership of *some* agency, not this one — Agency has no row-level tenant isolation, see [ARD-HudhudNestApi.md](ARD/ARD-HudhudNestApi.md)) |
 | User avatar | Always the caller's own `UserId` from the JWT — there is no "target user" parameter to spoof |
 | Investment documents | `[Authorize(Roles = Admin)]` — platform-managed, not user-owned |
 | Service request documents | `serviceRequest.RequesterId == callerId \|\| provider.UserId == callerId` |
@@ -159,7 +159,7 @@ wanted later, it needs its own separate migration task with a dry-run/rollback p
 
 ## 10. How to add a new media type
 
-1. Add a case to `MediaEntityType` (`PropertyApi.Application/Common/Enums/MediaEntityType.cs`)
+1. Add a case to `MediaEntityType` (`HudhudNestApi.Application/Common/Enums/MediaEntityType.cs`)
    and to the `switch` in `MediaFolderBuilder.BuildFolder`.
 2. Add any new category slug needed to `MediaCategories`.
 3. In the new feature's upload command handler: authorize the caller against the target entity
@@ -167,7 +167,7 @@ wanted later, it needs its own separate migration task with a dry-run/rollback p
    result as `folder` to `IMediaStorageService.UploadImageAsync`.
 4. Add a `MediaFolderBuilderTests` case asserting the new entity segment, and a handler test
    asserting the folder is derived from the entity id (see
-   `tests/PropertyApi.Application.Tests/Common/MediaFolderBuilderTests.cs` and
+   `tests/HudhudNestApi.Application.Tests/Common/MediaFolderBuilderTests.cs` and
    `UploadUserAvatarCommandHandlerTests` for the pattern).
 
 ## 11. Known pre-existing gaps (not introduced or fixed by this change)
@@ -179,7 +179,7 @@ wanted later, it needs its own separate migration task with a dry-run/rollback p
 - **`ServiceProvider.LogoUrl`/`LogoPublicId`** and its `SetLogo()` domain method exist but have
   zero production callers.
 - **Cloudinary Staging/Production isolation is credentials-only, not storage** (documented
-  pre-existing risk R4 in [ARD-PropertyApi.md](ARD/ARD-PropertyApi.md)): both environments upload
+  pre-existing risk R4 in [ARD-HudhudNestApi.md](ARD/ARD-HudhudNestApi.md)): both environments upload
   to the same folder namespace, distinguished only by which `Cloudinary:*` API key is configured.
   This redesign does not change that — it was out of scope (not the folder-per-entity problem
   this task addressed). A future mitigation would prefix the root segment with the environment
@@ -189,7 +189,7 @@ wanted later, it needs its own separate migration task with a dry-run/rollback p
 
 ## 12. Frontend
 
-No Angular changes were needed or made. The Angular app (`Wohnungsmieten`, a separate repository)
+No Angular changes were needed or made. The Angular app (`HudhudNest`, a separate repository)
 never sent or received a folder/path/`PublicId` for any upload before this change, and still
 doesn't — every upload flow (avatar, property images, short-stay photos, investment/service
 documents) goes through one shared `BackendApiService.upload()` using plain `FormData`, and only

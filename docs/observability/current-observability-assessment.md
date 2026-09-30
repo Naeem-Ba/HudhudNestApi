@@ -3,7 +3,7 @@
 ## Baseline
 
 Before this change the API supplied correlation IDs, request logging scopes,
-`PropertyApi.Api` and `PropertyApi.Application` activity sources, and custom
+`HudhudNestApi.Api` and `HudhudNestApi.Application` activity sources, and custom
 meters. No `TracerProvider`, `MeterProvider`, OTLP exporter, collector, trace
 store, metric store, dashboard, executable SLO, or tested alert existed. An
 activity source alone therefore produced no export evidence.

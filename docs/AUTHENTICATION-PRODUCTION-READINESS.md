@@ -1,7 +1,7 @@
-# PropertyApi — Authentication & Login Production Readiness (Phase 6)
+# HudhudNestApi — Authentication & Login Production Readiness (Phase 6)
 
 Audit date: 2026-09-05. Scope: authentication end-to-end — ASP.NET Core / Clean
-Architecture backend (`PropertyApi`), the Angular + Capacitor frontend (separate repo,
+Architecture backend (`HudhudNestApi`), the Angular + Capacitor frontend (separate repo,
 `Naeem-Ba/Wohnungsmieten`) only for auth-related code, and the Google/Apple social-login
 integration specifically (not previously covered in depth by the general security audit
 below). Method: full repository inventory of every login method actually implemented
@@ -148,7 +148,7 @@ built. This audit's job on this question was to verify it, not choose it.
 
 ## 5. Google Login Assessment
 
-`GoogleTokenVerifier` (`PropertyApi.Infrastructure/Auth/GoogleTokenVerifier.cs`) delegates
+`GoogleTokenVerifier` (`HudhudNestApi.Infrastructure/Auth/GoogleTokenVerifier.cs`) delegates
 token validation to `Google.Apis.Auth.GoogleJsonWebSignature.ValidateAsync`, Google's own
 official server-side validation library, constrained to `Audience = [GoogleClientId]`.
 This library internally validates issuer, audience, signature (against Google's live
@@ -286,14 +286,14 @@ available) — **NOT VERIFIED**, but no code-level gap was found analogous to §
 
 | Suite / Filter | Result | Notes |
 |---|---|---|
-| `PropertyApi.Auth.Tests` (full) | **251/251 passed** | Full regression after this session's fixes |
+| `HudhudNestApi.Auth.Tests` (full) | **251/251 passed** | Full regression after this session's fixes |
 | → `SocialLoginSecurityTests` (8 tests) | **8/8 passed** | Unverified email rejected, deleted account rejected, verified+confirmed→linked, verified+unconfirmed→rejected without linking, provider-already-linked→sign-in, `AddLoginAsync` failure→no tokens issued |
 | → `AppleTokenVerifierNonceTests` (4 tests, pre-existing) | **4/4 passed** | Nonce match/mismatch/missing/not-expected |
 | → `AppleTokenVerifierValidationTests` (6 tests, **new this session**) | **6/6 passed** | Wrong audience, wrong issuer, expired, forged signature (attacker's own keypair), tampered payload, positive control |
 | `GoogleTokenVerifier` dedicated tests | **0 exist** | See §5, AUTH-F3 |
-| `PropertyApi.Application.Tests` (full) | **NOT RUN** | Pre-existing build break from the concurrent session's in-progress work (`DeletePropertyCommandHandlerTests.cs`, unrelated to auth) — not this audit's code, not fixed here (see report to user) |
+| `HudhudNestApi.Application.Tests` (full) | **NOT RUN** | Pre-existing build break from the concurrent session's in-progress work (`DeletePropertyCommandHandlerTests.cs`, unrelated to auth) — not this audit's code, not fixed here (see report to user) |
 
-A build-breaking typo in `PropertyApi.Application/Common/Security/PiiMasking.cs` (a
+A build-breaking typo in `HudhudNestApi.Application/Common/Security/PiiMasking.cs` (a
 missing `///` continuation marker on an XML doc comment, breaking the *entire* solution's
 compile) was found and fixed as a prerequisite to running any tests at all — see §14,
 Fix #1.
@@ -354,7 +354,7 @@ Per the brief's own rule (§59): NOT VERIFIED is recorded as exactly that, never
 
 **Fix #1 (build-blocking, not an auth defect but a prerequisite)**: Added the missing
 `///` continuation marker on line 8 of
-[`PiiMasking.cs`](../PropertyApi.Application/Common/Security/PiiMasking.cs) — a broken
+[`PiiMasking.cs`](../HudhudNestApi.Application/Common/Security/PiiMasking.cs) — a broken
 XML doc comment was failing the entire solution's compile (`CS1002`/`CS0116`/`CS1010`/
 `CS1012`), blocking every test in every project, including this audit's own. Root cause
 was a plain typo in unrelated, in-progress privacy-hardening work; fixed so this session
@@ -362,7 +362,7 @@ could get real test evidence rather than none at all.
 
 **Fix #2 (closes a real test-coverage gap, mirrors Phase 3's own JwtValidationTests
 methodology)**: Added
-[`AppleTokenVerifierValidationTests.cs`](../tests/PropertyApi.Auth.Tests/Infrastructure/Auth/AppleTokenVerifierValidationTests.cs) —
+[`AppleTokenVerifierValidationTests.cs`](../tests/HudhudNestApi.Auth.Tests/Infrastructure/Auth/AppleTokenVerifierValidationTests.cs) —
 6 new tests proving `AppleTokenVerifier` actually rejects a wrong-audience token,
 wrong-issuer token, expired token, a token forged with an attacker-controlled keypair,
 and a payload tampered after signing — plus one positive control. Before this, Apple's
@@ -392,7 +392,7 @@ forced to pass artificially.
    environment, or introducing a thin injectable abstraction around
    `GoogleJsonWebSignature.ValidateAsync` (an intentionally-deferred architecture
    decision, not done unreviewed mid-audit).
-5. Re-run `PropertyApi.Application.Tests` once the concurrent session's own
+5. Re-run `HudhudNestApi.Application.Tests` once the concurrent session's own
    `DeletePropertyCommandHandlerTests.cs` edit is finished, to get a full-solution
    regression baseline including this session's two changes.
 

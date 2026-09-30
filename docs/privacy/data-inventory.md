@@ -1,4 +1,4 @@
-# جرد البيانات الشخصية (Data Inventory) — PropertyApi / Wohnungsmieten
+# جرد البيانات الشخصية (Data Inventory) — HudhudNestApi / HudhudNest
 
 **الإصدار:** 0.2 (بعد اكتمال جميع عمليات التدقيق الفرعية وتنفيذ الإصلاحات الآمنة)
 **التاريخ:** 2026-09-05
@@ -11,8 +11,8 @@
 ## المنهجية وحدود المسؤولية
 
 هذا الجرد نتج عن فحص فعلي للكود المصدري في مستودعين:
-- **Backend**: `PropertyApi` (.NET 8 / ASP.NET Core)، بما فيه EF Core migrations، model snapshot، الإعدادات (`appsettings*.json`)، وواجهات الخدمات الخارجية.
-- **Frontend/Mobile**: `Wohnungsmieten` (Angular + Capacitor)، بما فيه مكونات الواجهة، `capacitor.config.ts`، `AndroidManifest.xml`، `Info.plist`.
+- **Backend**: `HudhudNestApi` (.NET 8 / ASP.NET Core)، بما فيه EF Core migrations، model snapshot، الإعدادات (`appsettings*.json`)، وواجهات الخدمات الخارجية.
+- **Frontend/Mobile**: `HudhudNest` (Angular + Capacitor)، بما فيه مكونات الواجهة، `capacitor.config.ts`، `AndroidManifest.xml`، `Info.plist`.
 
 **لا يمثل هذا الملف رأياً قانونياً.** كل صف في الجدول أدناه مصنّف بحسب مستوى التحقق:
 
@@ -93,11 +93,11 @@ Angular بكامله عبر تدقيقين منفصلين، Capacitor/Android/iO
 ## مصادر هذا الجرد (تتبّع الإثبات)
 
 كل نتيجة في الجدول أعلاه مبنية على قراءة فعلية للملفات التالية (قائمة غير شاملة، أهم المصادر):
-- `PropertyApi.Infrastructure/Migrations/AppDbContextModelSnapshot.cs` — المصدر الوحيد الموثوق لأسماء الجداول والأعمدة الفعلية الحالية.
-- `PropertyApi.Infrastructure/Persistence/AppDbContext.cs` — تكوين التشفير (`DataProtectionStringConverter`)، والحذف الناعم العام.
-- `PropertyApi/Controllers/*.cs`, `PropertyApi.Application/**/*.cs` — نقاط الدخول والمعالجات.
-- `PropertyApi.Infrastructure/Auth/**`, `Email/**`, `Media/**` — تكامل الخدمات الخارجية (Twilio, Resend, Cloudinary).
+- `HudhudNestApi.Infrastructure/Migrations/AppDbContextModelSnapshot.cs` — المصدر الوحيد الموثوق لأسماء الجداول والأعمدة الفعلية الحالية.
+- `HudhudNestApi.Infrastructure/Persistence/AppDbContext.cs` — تكوين التشفير (`DataProtectionStringConverter`)، والحذف الناعم العام.
+- `HudhudNestApi/Controllers/*.cs`, `HudhudNestApi.Application/**/*.cs` — نقاط الدخول والمعالجات.
+- `HudhudNestApi.Infrastructure/Auth/**`, `Email/**`, `Media/**` — تكامل الخدمات الخارجية (Twilio, Resend, Cloudinary).
 - `docs/observability/telemetry-data-classification.md`, `docs/phone-password-authentication-and-reverification.md`, `docs/architecture/*.md` — التوثيق الداخلي القائم (وتباينه عن الكود الفعلي حيث وُجد).
-- `capacitor.config.ts`, `package.json`, `android/app/src/main/AndroidManifest.xml`, `ios/App/App/Info.plist`, `ios/App/App/PrivacyInfo.xcprivacy` (مستودع Wohnungsmieten).
+- `capacitor.config.ts`, `package.json`, `android/app/src/main/AndroidManifest.xml`, `ios/App/App/Info.plist`, `ios/App/App/PrivacyInfo.xcprivacy` (مستودع HudhudNest).
 
 للتفاصيل الكاملة لكل نقطة (اقتباسات الكود الدقيقة والأسطر) راجع محاضر التدقيق التفصيلية المرفقة في سجل الجلسة، وملف [`data-flow.md`](./data-flow.md) لتتبع دورة الحياة الكاملة لكل نوع بيانات.

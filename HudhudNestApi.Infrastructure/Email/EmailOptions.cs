@@ -58,10 +58,10 @@ public sealed class EmailOptions
             return;
         }
 
-        if (From.EndsWith("@propertyapi.local", StringComparison.OrdinalIgnoreCase))
+        if (From.EndsWith("@hudhudnest.local", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                "Email:From must not use the placeholder @propertyapi.local domain in " +
+                "Email:From must not use the placeholder @hudhudnest.local domain in " +
                 "Production. Set it to an address on a domain verified with the email " +
                 "provider (e.g. Resend), or every send will be rejected with a silent 403.");
         }

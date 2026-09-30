@@ -2,7 +2,7 @@
 
 ## Scope and success criteria
 
-This runbook covers PropertyApi PostgreSQL 16/PostGIS 3.4. Success requires a non-empty encrypted custom archive in durable storage, matching checksum, readable TOC, restore to a separate disposable host, exact critical-table counts, valid constraints/indexes/sequences, matching EF migration and PostGIS version, EF/application verification, API readiness/read smoke, RPO/RTO PASS, and successful target cleanup.
+This runbook covers HudhudNestApi PostgreSQL 16/PostGIS 3.4. Success requires a non-empty encrypted custom archive in durable storage, matching checksum, readable TOC, restore to a separate disposable host, exact critical-table counts, valid constraints/indexes/sequences, matching EF migration and PostGIS version, EF/application verification, API readiness/read smoke, RPO/RTO PASS, and successful target cleanup.
 
 Never point a restore command at production. Never upload `.dump`, `.dump.gpg`, decrypted data, connection strings, or secret-bearing logs as GitHub artifacts.
 
@@ -75,7 +75,7 @@ Run application validation without printing rows:
 
 ```bash
 export ConnectionStrings__DefaultConnection='<RECOVERY_ADONET_CONNECTION>'
-dotnet run --project tools/PropertyApi.DatabaseRecoveryVerifier/PropertyApi.DatabaseRecoveryVerifier.csproj --configuration Release
+dotnet run --project tools/HudhudNestApi.DatabaseRecoveryVerifier/HudhudNestApi.DatabaseRecoveryVerifier.csproj --configuration Release
 ```
 
 Cleanup is explicit and has the same guards:

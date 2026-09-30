@@ -4,9 +4,9 @@ skinparam shadowing false
 skinparam roundcorner 8
 skinparam defaultFontName "Segoe UI"
 skinparam componentStyle rectangle
-title مخطط المكوّنات (Component Diagram) — الطبقات المعمارية لمشروع PropertyApi
+title مخطط المكوّنات (Component Diagram) — الطبقات المعمارية لمشروع HudhudNestApi
 
-package "PropertyApi (طبقة العرض / API Layer)" as ApiLayer {
+package "HudhudNestApi (طبقة العرض / API Layer)" as ApiLayer {
   [Controllers\n(41 وحدة تحكم: Auth, Agencies,\nProperties, Reviews, Visits,\nAdmin, ShortStay, Services,\nValuation, Investments,\nSocialDistribution ...)] as Controllers
   [Middleware\n(Exception, PhoneVerification,\nSecurity Headers, CSRF)] as Middleware
   [Security\n(JWT, CSRF, Rate Limiting,\nForwardedHeaders, Staging Guard)] as Security
@@ -14,7 +14,7 @@ package "PropertyApi (طبقة العرض / API Layer)" as ApiLayer {
   [SignalR Hub\n(NotificationHub)] as Hub
 }
 
-package "PropertyApi.Application (طبقة التطبيق)" as AppLayer {
+package "HudhudNestApi.Application (طبقة التطبيق)" as AppLayer {
   [MediatR Commands/Queries\n(CQRS لكل وحدة عمل:\nAuth, Agencies, Listings,\nBookings, Reviews, ShortStay,\nServices, Admin, Analytics ...)] as CQRS
   [Pipeline Behaviors\nTelemetry → Logging → Validation] as Behaviors
   [FluentValidation Validators] as Validators
@@ -23,13 +23,13 @@ package "PropertyApi.Application (طبقة التطبيق)" as AppLayer {
   [Valuation\n(CreateValuationInquiry, SubmitOfficeResponse,\nOfficeMatchingService,\nValuationSlaEnforcementService)] as ValuationApp
 }
 
-package "PropertyApi.Domain (طبقة النطاق)" as DomainLayer {
+package "HudhudNestApi.Domain (طبقة النطاق)" as DomainLayer {
   [الكيانات (Entities)\nAgency, Property, VisitRequest,\nPropertyReview, ShortStayListing,\nServiceRequest, UserAccount ...] as Entities
   [قواعد العمل والقيم الثابتة\n(Domain Exceptions, Enums,\nValue Objects)] as DomainRules
   [Valuation Entities\nValuationInquiry,\nValuationOfficeInvitation/Response,\nValuationContactConsent] as ValuationEntities
 }
 
-package "PropertyApi.Infrastructure (طبقة البنية التحتية)" as InfraLayer {
+package "HudhudNestApi.Infrastructure (طبقة البنية التحتية)" as InfraLayer {
   [Persistence\n(AppDbContext — EF Core / Npgsql,\nUnitOfWork, 57 Migrations)] as Persistence
   [Repositories] as Repos
   [Auth Infrastructure\n(Identity, JWT issuing,\nRefreshToken store, SMS, Apple/Google\ntoken verification)] as AuthInfra

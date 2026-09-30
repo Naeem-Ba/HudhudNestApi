@@ -1,33 +1,33 @@
 groups:
-  - name: property-api-operational
+  - name: hudhudnest-operational
     rules:
-      - alert: PropertyApiHigh5xxRate
-        expr: (sum(rate(http_server_request_duration_seconds_count{service_name="property-api",http_response_status_code=~"5.."}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count{service_name="property-api"}[5m])), 0.001)) > 0.05
+      - alert: HudhudNestApiHigh5xxRate
+        expr: (sum(rate(http_server_request_duration_seconds_count{service_name="hudhudnest-api",http_response_status_code=~"5.."}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count{service_name="hudhudnest-api"}[5m])), 0.001)) > 0.05
         for: 2m
         labels: { severity: page }
         annotations:
-          summary: PropertyApi 5xx ratio is above 5%
+          summary: HudhudNestApi 5xx ratio is above 5%
           runbook_url: docs/observability/alert-response-runbook.md#propertyapihigh5xxrate
-      - alert: PropertyApiHighP95Latency
-        expr: histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="property-api"}[5m]))) > 1
+      - alert: HudhudNestApiHighP95Latency
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="hudhudnest-api"}[5m]))) > 1
         for: 5m
         labels: { severity: ticket }
         annotations:
-          summary: PropertyApi p95 latency is above one second
+          summary: HudhudNestApi p95 latency is above one second
           runbook_url: docs/observability/alert-response-runbook.md#propertyapihighp95latency
-      - alert: PropertyApiAuthenticationFailures
+      - alert: HudhudNestApiAuthenticationFailures
         expr: sum(rate(propertyapi_auth_requests_total{outcome!="success"}[5m])) > 1
         for: 5m
         labels: { severity: ticket }
         annotations:
           summary: Authentication failures are elevated
           runbook_url: docs/observability/alert-response-runbook.md#propertyapiauthenticationfailures
-      - alert: PropertyApiDependencyFailures
-        expr: sum(rate(traces_span_metrics_calls_total{service_name="property-api",status_code="STATUS_CODE_ERROR",span_kind="SPAN_KIND_CLIENT"}[5m])) > 0.1
+      - alert: HudhudNestApiDependencyFailures
+        expr: sum(rate(traces_span_metrics_calls_total{service_name="hudhudnest-api",status_code="STATUS_CODE_ERROR",span_kind="SPAN_KIND_CLIENT"}[5m])) > 0.1
         for: 5m
         labels: { severity: ticket }
         annotations:
-          summary: A PropertyApi dependency is failing
+          summary: A HudhudNestApi dependency is failing
           runbook_url: docs/observability/alert-response-runbook.md#propertyapidependencyfailures
       - alert: OtelCollectorExportFailure
         expr: sum(rate(otelcol_exporter_send_failed_spans[5m])) + sum(rate(otelcol_exporter_send_failed_metric_points[5m])) > 0
@@ -36,17 +36,17 @@ groups:
         annotations:
           summary: OpenTelemetry Collector cannot export telemetry
           runbook_url: docs/observability/telemetry-export-failure-runbook.md
-  - name: property-api-burn-rate
+  - name: hudhudnest-burn-rate
     rules:
-      - alert: PropertyApiAvailabilityFastBurn
-        expr: (1 - propertyapi:sli_availability:ratio_rate5m) > (14.4 * 0.005)
+      - alert: HudhudNestApiAvailabilityFastBurn
+        expr: (1 - hudhudnest:sli_availability:ratio_rate5m) > (14.4 * 0.005)
         for: 5m
         labels: { severity: page }
         annotations:
           summary: Availability error budget is burning rapidly
           runbook_url: docs/observability/slo-response-runbook.md
-      - alert: PropertyApiAvailabilitySlowBurn
-        expr: (1 - propertyapi:sli_availability:ratio_rate5m) > (2 * 0.005)
+      - alert: HudhudNestApiAvailabilitySlowBurn
+        expr: (1 - hudhudnest:sli_availability:ratio_rate5m) > (2 * 0.005)
         for: 1h
         labels: { severity: ticket }
         annotations:

@@ -1,5 +1,5 @@
 # ──────────────────────────────────────────────────────────────
-# PropertyApi — .gitignore
+# HudhudNestApi — .gitignore
 # تاريخ التحديث: يونيو 2025 (مرحلة Stabilization)
 # ──────────────────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ Temp/
 temp/
 Legacy/
 legacy/
-PropertyApi/Legacy/    # ← مُضاف في Stabilization
+HudhudNestApi/Legacy/    # ← مُضاف في Stabilization
 *.bak
 *.backup
 *.tmp
@@ -74,8 +74,8 @@ PropertyApi/Legacy/    # ← مُضاف في Stabilization
 **/wwwroot/bilder/
 **/wwwroot/profile_fotos/
 **/wwwroot/uploads/
-PropertyApi/wwwroot/bilder/    # ← مُضاف في Stabilization
-PropertyApi/wwwroot/profile_fotos/
+HudhudNestApi/wwwroot/bilder/    # ← مُضاف في Stabilization
+HudhudNestApi/wwwroot/profile_fotos/
 
 # Docker local overrides
 compose.override.yml

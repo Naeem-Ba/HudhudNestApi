@@ -4,10 +4,10 @@
 
 | File | Change |
 |---|---|
-| `PropertyApi.Application/Auth/Commands/ResetPassword/ResetPasswordCommand.cs` | `ResetPasswordCommandValidator` now injects `IPasswordSecurityService` and runs the same breach/complexity check `RegisterCommandValidator` uses (`CustomAsync(ValidatePasswordSecurityAsync)`), instead of only `MinimumLength(8)`. |
-| `PropertyApi.Application/Users/Commands/ChangePassword/ChangePasswordCommandValidator.cs` | Same fix; also removes the previous ad-hoc `Matches("[A-Z]")`/`Matches("[0-9]")` rules, which were weaker than and inconsistent with Register/Reset (no lowercase/special-char/breach check). |
-| `tests/PropertyApi.Auth.Tests/ResetPasswordCommandValidatorTests.cs` (new) | 5 tests: breached password rejected, stable error code carried through, weak-complexity rejected, valid password passes, confirm-password mismatch still enforced. |
-| `tests/PropertyApi.Application.Tests/Users/ChangePasswordCommandValidatorTests.cs` (new) | 5 tests: breached password rejected, stable error code carried through, no-lowercase now rejected (regression guard for what the old regex rule missed), valid password passes, empty `UserId` still rejected. |
+| `HudhudNestApi.Application/Auth/Commands/ResetPassword/ResetPasswordCommand.cs` | `ResetPasswordCommandValidator` now injects `IPasswordSecurityService` and runs the same breach/complexity check `RegisterCommandValidator` uses (`CustomAsync(ValidatePasswordSecurityAsync)`), instead of only `MinimumLength(8)`. |
+| `HudhudNestApi.Application/Users/Commands/ChangePassword/ChangePasswordCommandValidator.cs` | Same fix; also removes the previous ad-hoc `Matches("[A-Z]")`/`Matches("[0-9]")` rules, which were weaker than and inconsistent with Register/Reset (no lowercase/special-char/breach check). |
+| `tests/HudhudNestApi.Auth.Tests/ResetPasswordCommandValidatorTests.cs` (new) | 5 tests: breached password rejected, stable error code carried through, weak-complexity rejected, valid password passes, confirm-password mismatch still enforced. |
+| `tests/HudhudNestApi.Application.Tests/Users/ChangePasswordCommandValidatorTests.cs` (new) | 5 tests: breached password rejected, stable error code carried through, no-lowercase now rejected (regression guard for what the old regex rule missed), valid password passes, empty `UserId` still rejected. |
 
 No other files were modified. No `docs/*` file other than the three new `docs/audit/*.md`
 files (this report, the verification report, the remediation plan) was changed.
@@ -29,16 +29,16 @@ existing abstraction, not duplicate it.
 
 | Command | Result |
 |---|---|
-| `dotnet build PropertyApi.sln -c Release` | Initial attempt failed with `CS0234`/`CS0246` on `AppUpdates`/`AppRelease` types that verifiably exist and are committed (confirmed via `git status`, file reads). Root-caused as a stale incremental-build cache (this was the first build in this checkout this session) — `dotnet clean PropertyApi.sln -c Release` followed by a fresh `dotnet build` succeeded with **0 errors, 0 warnings**. Not caused by, or related to, this session's changes. |
-| `dotnet test tests/PropertyApi.Auth.Tests -c Release --no-build` | **261/261 PASS** (includes the 5 new Reset validator tests) |
-| `dotnet test tests/PropertyApi.Application.Tests -c Release --no-build` | **1166/1166 PASS** (includes the 5 new ChangePassword validator tests) |
-| `dotnet test tests/PropertyApi.Architecture.Tests -c Release --no-build` | **164/164 PASS** — confirms no architectural-convention regression (anonymous-endpoint/rate-limit invariants etc.) |
-| `dotnet format PropertyApi.sln --verify-no-changes --include <4 changed/added files>` | Clean, no formatting diffs |
+| `dotnet build HudhudNestApi.sln -c Release` | Initial attempt failed with `CS0234`/`CS0246` on `AppUpdates`/`AppRelease` types that verifiably exist and are committed (confirmed via `git status`, file reads). Root-caused as a stale incremental-build cache (this was the first build in this checkout this session) — `dotnet clean HudhudNestApi.sln -c Release` followed by a fresh `dotnet build` succeeded with **0 errors, 0 warnings**. Not caused by, or related to, this session's changes. |
+| `dotnet test tests/HudhudNestApi.Auth.Tests -c Release --no-build` | **261/261 PASS** (includes the 5 new Reset validator tests) |
+| `dotnet test tests/HudhudNestApi.Application.Tests -c Release --no-build` | **1166/1166 PASS** (includes the 5 new ChangePassword validator tests) |
+| `dotnet test tests/HudhudNestApi.Architecture.Tests -c Release --no-build` | **164/164 PASS** — confirms no architectural-convention regression (anonymous-endpoint/rate-limit invariants etc.) |
+| `dotnet format HudhudNestApi.sln --verify-no-changes --include <4 changed/added files>` | Clean, no formatting diffs |
 
 **Not run this session** (no code path touches them, so re-running added no verification
-value for *this* change): `PropertyApi.Integration.Tests`, `PropertyApi.Concurrency.Tests`,
-`PropertyApi.Performance.Tests`, `PropertyApi.StagingSmokeTests`, `PropertyApi.Observability.Tests`,
-and the entire `Wohnungsmieten` frontend suite (`typecheck`, `ng test`, `ng build`) — this
+value for *this* change): `HudhudNestApi.Integration.Tests`, `HudhudNestApi.Concurrency.Tests`,
+`HudhudNestApi.Performance.Tests`, `HudhudNestApi.StagingSmokeTests`, `HudhudNestApi.Observability.Tests`,
+and the entire `HudhudNest` frontend suite (`typecheck`, `ng test`, `ng build`) — this
 session made zero frontend changes.
 
 ## Documentation updated
@@ -99,7 +99,7 @@ doc is the correct place to record the correction instead.
 - No branch or worktree was deleted.
 
 **Update:** the fix above was subsequently committed, pushed, and merged as
-[PR #156](https://github.com/Naeem-Ba/PropertyApi/pull/156), on the user's explicit
+[PR #156](https://github.com/Naeem-Ba/HudhudNestApi/pull/156), on the user's explicit
 instruction in a later turn (`/create-pr`). See the follow-up section below for what happened
 after that.
 
@@ -117,12 +117,12 @@ line of work did).
 
 | File | Change |
 |---|---|
-| `PropertyApi/Program.cs` | Extended the Production-only `Request.Scheme = "https"` override (from today's earlier PR #155) to also cover Staging (`IsProduction() \|\| IsStaging()`). **Uncommitted — see below, requires explicit approval.** |
-| `Wohnungsmieten/playwright.config.ts` (new) | Playwright config; targets deployed Staging by default, `E2E_BASE_URL` override for local runs. |
-| `Wohnungsmieten/e2e/auth-session-refresh.spec.ts` (new) | Phase A E2E spec (P1-4) — session-refresh-after-expired-token scenario. |
-| `Wohnungsmieten/package.json`, `package-lock.json` | Added `@playwright/test` devDependency. |
-| `Wohnungsmieten/.gitignore` | Added Playwright output directories (`test-results/`, `playwright-report/`, etc.). |
-| `Wohnungsmieten/docs/development/local-staging-testing.md` (new) | P1-3 — documents the `API_URL` env var needed to run `ng serve --configuration staging` locally against the real Staging API, and the separate, confirmed CORS constraint that still blocks it from `localhost` specifically. |
+| `HudhudNestApi/Program.cs` | Extended the Production-only `Request.Scheme = "https"` override (from today's earlier PR #155) to also cover Staging (`IsProduction() \|\| IsStaging()`). **Uncommitted — see below, requires explicit approval.** |
+| `HudhudNest/playwright.config.ts` (new) | Playwright config; targets deployed Staging by default, `E2E_BASE_URL` override for local runs. |
+| `HudhudNest/e2e/auth-session-refresh.spec.ts` (new) | Phase A E2E spec (P1-4) — session-refresh-after-expired-token scenario. |
+| `HudhudNest/package.json`, `package-lock.json` | Added `@playwright/test` devDependency. |
+| `HudhudNest/.gitignore` | Added Playwright output directories (`test-results/`, `playwright-report/`, etc.). |
+| `HudhudNest/docs/development/local-staging-testing.md` (new) | P1-3 — documents the `API_URL` env var needed to run `ng serve --configuration staging` locally against the real Staging API, and the separate, confirmed CORS constraint that still blocks it from `localhost` specifically. |
 
 ### Why
 
@@ -148,10 +148,10 @@ line of work did).
 
 | Command | Result |
 |---|---|
-| `dotnet build PropertyApi.sln -c Release` | 0 errors, 0 warnings (after the `Program.cs` change) |
-| `dotnet test tests/PropertyApi.Architecture.Tests --no-build` | 164/164 PASS |
-| `dotnet test tests/PropertyApi.Auth.Tests --no-build` | 261/261 PASS |
-| `dotnet format --verify-no-changes --include PropertyApi/Program.cs` | clean |
+| `dotnet build HudhudNestApi.sln -c Release` | 0 errors, 0 warnings (after the `Program.cs` change) |
+| `dotnet test tests/HudhudNestApi.Architecture.Tests --no-build` | 164/164 PASS |
+| `dotnet test tests/HudhudNestApi.Auth.Tests --no-build` | 261/261 PASS |
+| `dotnet format --verify-no-changes --include HudhudNestApi/Program.cs` | clean |
 | `npx playwright test` (E2E spec), run 1, against deployed Staging frontend | FAILED — registration step, deploy-staleness (see above); not a code defect |
 | `npx playwright test`, run 2, against a local `ng serve --configuration staging` pointed at the real Staging API | FAILED — CORS-blocked from `localhost` (confirmed expected, see P1-3) |
 | `npx playwright test`, run 3, using a directly API-registered throwaway account against the deployed Staging frontend | FAILED at the `/auth/refresh` assertion — **this is the real bug** (see above), not a test defect; login itself, the forced-401 simulation, and the interceptor's reactive refresh attempt all worked exactly as designed up to that point |
@@ -185,7 +185,7 @@ fix is deployed, as the acceptance check for that deploy.
 
 ### Actions NOT performed this pass (require explicit approval)
 
-- `PropertyApi/Program.cs`'s Staging fix was **not** committed, pushed, or deployed.
+- `HudhudNestApi/Program.cs`'s Staging fix was **not** committed, pushed, or deployed.
 - The new Playwright files (config, spec, `package.json`/`package-lock.json`,
   `.gitignore`, docs) were **not** committed or pushed.
 - No Staging environment variable or deployment was triggered.

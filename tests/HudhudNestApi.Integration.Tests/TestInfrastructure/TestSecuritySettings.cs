@@ -11,7 +11,7 @@ namespace HudhudNestApi.Integration.Tests.TestInfrastructure;
 /// </summary>
 internal static class TestSecuritySettings
 {
-    public const string JwtIssuer = "PropertyApi";
+    public const string JwtIssuer = "HudhudNestApi";
     public const string JwtAudience = "PropertyApiClient";
 
     public static string JwtKey { get; } =

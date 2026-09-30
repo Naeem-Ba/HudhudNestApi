@@ -5,7 +5,7 @@ API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:18080}"
 PROMETHEUS_URL="${PROMETHEUS_URL:-http://127.0.0.1:19090}"
 TEMPO_URL="${TEMPO_URL:-http://127.0.0.1:13200}"
 TEST_KEY="${OBSERVABILITY_TEST_KEY:-}"
-SERVICE_NAME="${OBSERVABILITY_SERVICE_NAME:-property-api}"
+SERVICE_NAME="${OBSERVABILITY_SERVICE_NAME:-hudhudnest-api}"
 SERVICE_VERSION="${OBSERVABILITY_SERVICE_VERSION:-local-observability}"
 EXPECTED_SHA="${EXPECTED_COMMIT_SHA:-local-observability}"
 ENVIRONMENT="${OBSERVABILITY_ENVIRONMENT:-Staging}"
@@ -193,14 +193,14 @@ request_metric=false
 latency_metric=false
 auth_metric=false
 runtime_metric=false
-metric_seen 'http_server_request_duration_seconds_count{service_name="property-api"}' && request_metric=true
-metric_seen 'http_server_request_duration_seconds_bucket{service_name="property-api"}' && latency_metric=true
+metric_seen 'http_server_request_duration_seconds_count{service_name="hudhudnest-api"}' && request_metric=true
+metric_seen 'http_server_request_duration_seconds_bucket{service_name="hudhudnest-api"}' && latency_metric=true
 metric_seen 'propertyapi_auth_requests_total' && auth_metric=true
-metric_seen 'process_memory_working_set_bytes{service_name="property-api"}' && runtime_metric=true
+metric_seen 'process_memory_working_set_bytes{service_name="hudhudnest-api"}' && runtime_metric=true
 
 queries_valid=false
-if metric_seen 'histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="property-api"}[5m])))' &&
-   metric_seen 'histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="property-api"}[5m])))'; then
+if metric_seen 'histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="hudhudnest-api"}[5m])))' &&
+   metric_seen 'histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="hudhudnest-api"}[5m])))'; then
   queries_valid=true
 fi
 
@@ -223,7 +223,7 @@ set_alert_test_gauge() {
 
 alert_is_firing() {
   curl --fail --silent --show-error "${PROMETHEUS_URL}/api/v1/alerts" |
-    jq -e '.data.alerts[] | select(.labels.alertname == "PropertyApiControlledObservabilityTest" and .state == "firing")' >/dev/null
+    jq -e '.data.alerts[] | select(.labels.alertname == "HudhudNestApiControlledObservabilityTest" and .state == "firing")' >/dev/null
 }
 
 # "Resolved" must mean Prometheus answered and no longer reports the alert as firing. The old check
@@ -232,7 +232,7 @@ alert_is_firing() {
 alert_is_resolved() {
   local body
   body="$(curl --fail --silent --max-time 20 "${PROMETHEUS_URL}/api/v1/alerts" 2>/dev/null)" || return 1
-  ! echo "${body}" | jq -e '.data.alerts[] | select(.labels.alertname == "PropertyApiControlledObservabilityTest" and .state == "firing")' >/dev/null
+  ! echo "${body}" | jq -e '.data.alerts[] | select(.labels.alertname == "HudhudNestApiControlledObservabilityTest" and .state == "firing")' >/dev/null
 }
 
 # The gauge is exported on the metric interval (30 s on Staging) before Prometheus can evaluate the

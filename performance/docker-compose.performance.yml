@@ -1,4 +1,4 @@
-name: propertyapi-performance
+name: hudhudnest-performance
 
 x-api-environment: &api-environment
   ASPNETCORE_ENVIRONMENT: Staging
@@ -8,7 +8,7 @@ x-api-environment: &api-environment
   ConnectionStrings__Redis: redis:6379,abortConnect=false
   Redis__ConnectionString: redis:6379,abortConnect=false
   RateLimiting__Redis__Enabled: "true"
-  RateLimiting__Redis__InstanceName: "PropertyApiPerformance:"
+  RateLimiting__Redis__InstanceName: "HudhudNestApiPerformance:"
   RateLimiting__Redis__Policies__auth-login__PermitLimit: ${PERF_LIMIT_AUTH_LOGIN:-10000}
   RateLimiting__Redis__Policies__auth-login__WindowSeconds: "5"
   RateLimiting__Redis__Policies__auth-register__PermitLimit: ${PERF_LIMIT_AUTH_REGISTER:-10000}
@@ -33,10 +33,10 @@ x-api-environment: &api-environment
   Security__PhoneLookupHmacKey: ${PERF_PHONE_HMAC_KEY:?required}
   DataProtection__PersistKeysToDatabase: "true"
   Staging__AllowHttpLocal: "true"
-  Staging__EnvironmentId: propertyapi-performance
+  Staging__EnvironmentId: hudhudnest-performance
   Staging__DatabaseNameMarker: propertyapi_performance
-  Staging__RedisIsolationMarker: propertyapi-performance
-  Staging__StorageIsolationMarker: propertyapi-performance
+  Staging__RedisIsolationMarker: hudhudnest-performance
+  Staging__StorageIsolationMarker: hudhudnest-performance
   Staging__ExternalNotificationsDisabled: "true"
   Staging__TestSupport__Enabled: "true"
   Staging__TestSupport__FixedOtp: ${PERF_FIXED_OTP:?required}

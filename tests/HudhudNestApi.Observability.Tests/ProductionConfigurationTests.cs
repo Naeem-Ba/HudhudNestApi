@@ -72,7 +72,7 @@ public sealed class ProductionConfigurationTests
     private static HudhudNestApiObservabilityOptions ValidOptions() => new()
     {
         Enabled = true,
-        ServiceName = "property-api",
+        ServiceName = "hudhudnest-api",
         ServiceNamespace = "yaqeen-real-estate",
         ServiceVersion = "1.0.0",
         Environment = "Production",

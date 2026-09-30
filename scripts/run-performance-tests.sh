@@ -197,7 +197,7 @@ export PERF_COMMIT_SHA="${PERF_COMMIT_SHA:-$(git rev-parse HEAD 2>/dev/null || e
 export PERF_RUN_ID="${PERF_RUN_ID:-$(date -u +%Y%m%d%H%M%S)-$(printf '%s' "${PERF_COMMIT_SHA}" | cut -c1-8)}"
 compose_run_id="$(printf '%s' "${PERF_RUN_ID}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')"
 [ -n "${compose_run_id}" ] || fail "PERF_RUN_ID must contain at least one Compose-safe character."
-export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-propertyapi-performance-${compose_run_id}}"
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-hudhudnest-performance-${compose_run_id}}"
 export PERF_POSTGRES_PASSWORD="${PERF_POSTGRES_PASSWORD:-$(openssl rand -hex 24)}"
 export PERF_JWT_KEY="${PERF_JWT_KEY:-$(openssl rand -base64 48 | tr -d '\r\n')}"
 export PERF_OTP_SECRET_KEY="${PERF_OTP_SECRET_KEY:-$(openssl rand -base64 48 | tr -d '\r\n')}"

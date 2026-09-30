@@ -1,4 +1,4 @@
-# Test Plan — PropertyApi Audit Remediation
+# Test Plan — HudhudNestApi Audit Remediation
 
 Tests required to validate each remediation item in `REMEDIATION-PLAN.md`. Commands assume the repository root as working directory and the existing test-project layout under `tests/`.
 
@@ -6,11 +6,11 @@ Tests required to validate each remediation item in `REMEDIATION-PLAN.md`. Comma
 
 ## T-01 — Production HTTPS-scheme-force regression test (for R-01)
 
-**Target:** `PropertyApi/Program.cs:169-195` (uncommitted scheme-force middleware), `PropertyApi/Security/Csrf/CsrfExtensions.cs`.
+**Target:** `HudhudNestApi/Program.cs:169-195` (uncommitted scheme-force middleware), `HudhudNestApi/Security/Csrf/CsrfExtensions.cs`.
 
 **Why:** this is the fix for the `3b80fdc` Production incident; it currently has zero automated coverage and previously relied on manual "verify via curl in Production."
 
-**Test data / setup:** requires a test host running with `ASPNETCORE_ENVIRONMENT=Production` (or equivalent `IsProduction()` override) plus `X-Forwarded-Proto: http` — reproducing exactly what Render/Cloudflare sends today. This depends on resolving the `TestApplication.CreateProduction()` Redis-config gap noted at `tests/PropertyApi.Integration.Tests/TestInfrastructure/TestApplication.cs:141` — do that first, or stand up a minimal isolated host for this one test if fixing the shared fixture is out of scope.
+**Test data / setup:** requires a test host running with `ASPNETCORE_ENVIRONMENT=Production` (or equivalent `IsProduction()` override) plus `X-Forwarded-Proto: http` — reproducing exactly what Render/Cloudflare sends today. This depends on resolving the `TestApplication.CreateProduction()` Redis-config gap noted at `tests/HudhudNestApi.Integration.Tests/TestInfrastructure/TestApplication.cs:141` — do that first, or stand up a minimal isolated host for this one test if fixing the shared fixture is out of scope.
 
 **Normal case:** request arrives with `X-Forwarded-Proto: https` (or no forwarded header, direct HTTPS) → antiforgery cookie is issued with `Secure=true`, no exception thrown, response is 200.
 
@@ -18,7 +18,7 @@ Tests required to validate each remediation item in `REMEDIATION-PLAN.md`. Comma
 
 **Command:**
 ```bash
-dotnet test tests/PropertyApi.Integration.Tests --filter "FullyQualifiedName~ProductionCsrfSchemeTests"
+dotnet test tests/HudhudNestApi.Integration.Tests --filter "FullyQualifiedName~ProductionCsrfSchemeTests"
 ```
 (new test class to be added; name illustrative)
 
@@ -39,7 +39,7 @@ dotnet test tests/PropertyApi.Integration.Tests --filter "FullyQualifiedName~Pro
 
 **Command:**
 ```bash
-dotnet test tests/PropertyApi.Integration.Tests --filter "FullyQualifiedName~CommonLookupServiceFailOpenTests"
+dotnet test tests/HudhudNestApi.Integration.Tests --filter "FullyQualifiedName~CommonLookupServiceFailOpenTests"
 ```
 
 **Success criteria:** 200 + correct payload in both cases.
@@ -61,7 +61,7 @@ dotnet test tests/PropertyApi.Integration.Tests --filter "FullyQualifiedName~Com
 
 **Command:**
 ```bash
-dotnet test tests/PropertyApi.Concurrency.Tests --filter "FullyQualifiedName~OtpAttemptRaceTests"
+dotnet test tests/HudhudNestApi.Concurrency.Tests --filter "FullyQualifiedName~OtpAttemptRaceTests"
 ```
 
 **Success criteria:** attempt counter never exceeds the documented maximum regardless of request interleaving, across repeated runs (run at least 20 times in CI to catch intermittent races, or use a deterministic concurrency-testing approach if available).
@@ -100,7 +100,7 @@ dotnet test tests/PropertyApi.Concurrency.Tests --filter "FullyQualifiedName~Otp
 
 **Command:**
 ```bash
-dotnet test tests/PropertyApi.Integration.Tests --filter "FullyQualifiedName~NpgsqlRetryPolicyTests"
+dotnet test tests/HudhudNestApi.Integration.Tests --filter "FullyQualifiedName~NpgsqlRetryPolicyTests"
 ```
 
 **Success criteria:** both scenarios pass; explicit-transaction code paths remain compatible with the retry strategy (likely requires wrapping `BeginTransactionAsync` calls in the execution strategy's `ExecuteAsync`, per EF Core's documented pattern for combining the two).
@@ -120,7 +120,7 @@ dotnet test tests/PropertyApi.Integration.Tests --filter "FullyQualifiedName~Npg
 
 **Command:**
 ```bash
-dotnet test tests/PropertyApi.Integration.Tests --filter "FullyQualifiedName~ValuationSlaEnforcementQueryCountTests"
+dotnet test tests/HudhudNestApi.Integration.Tests --filter "FullyQualifiedName~ValuationSlaEnforcementQueryCountTests"
 ```
 
 **Success criteria:** query count assertion passes at the new, lower bound.
@@ -133,15 +133,15 @@ dotnet test tests/PropertyApi.Integration.Tests --filter "FullyQualifiedName~Val
 For every item in this plan, run the full existing suite to confirm no regression:
 
 ```bash
-dotnet test tests/PropertyApi.Application.Tests
-dotnet test tests/PropertyApi.Architecture.Tests
-dotnet test tests/PropertyApi.Auth.Tests
-dotnet test tests/PropertyApi.Infrastructure.Tests
-dotnet test tests/PropertyApi.Integration.Tests
-dotnet test tests/PropertyApi.Observability.Tests
+dotnet test tests/HudhudNestApi.Application.Tests
+dotnet test tests/HudhudNestApi.Architecture.Tests
+dotnet test tests/HudhudNestApi.Auth.Tests
+dotnet test tests/HudhudNestApi.Infrastructure.Tests
+dotnet test tests/HudhudNestApi.Integration.Tests
+dotnet test tests/HudhudNestApi.Observability.Tests
 ```
 
-(`PropertyApi.Concurrency.Tests`, `PropertyApi.Performance.Tests`, `PropertyApi.StagingSmokeTests` run via their dedicated workflows, per the existing "every test project must have an owner" CI gate — not part of the fast local/PR loop.)
+(`HudhudNestApi.Concurrency.Tests`, `HudhudNestApi.Performance.Tests`, `HudhudNestApi.StagingSmokeTests` run via their dedicated workflows, per the existing "every test project must have an owner" CI gate — not part of the fast local/PR loop.)
 
 ## Success / Failure Criteria Summary
 

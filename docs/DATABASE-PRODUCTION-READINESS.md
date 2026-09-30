@@ -1,4 +1,4 @@
-# PropertyApi — Database Production Readiness (Phase 2)
+# HudhudNestApi — Database Production Readiness (Phase 2)
 
 Audit date: 2026-09-04. Scope: PostgreSQL/PostGIS database only (Phase 2 of the production
 readiness gate). Method: static inventory of the actual EF Core model, entity configurations,
@@ -85,18 +85,18 @@ override that; see §13.
 ## 2. Current Database Architecture
 
 - **Engine**: PostgreSQL, PostGIS extension. Provider: `Npgsql.EntityFrameworkCore.PostgreSQL`
-  8.0.11 on EF Core 8 / .NET 8 (`Directory.Packages.props`, `PropertyApi.Infrastructure.csproj`).
+  8.0.11 on EF Core 8 / .NET 8 (`Directory.Packages.props`, `HudhudNestApi.Infrastructure.csproj`).
 - **Context**: one primary `AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>`
-  ([AppDbContext.cs](../PropertyApi.Infrastructure/Persistence/AppDbContext.cs)) plus a second,
+  ([AppDbContext.cs](../HudhudNestApi.Infrastructure/Persistence/AppDbContext.cs)) plus a second,
   separate `DataProtectionKeyDbContext` for ASP.NET Data Protection keys.
-- **Design-time**: `AppDbContextFactory` ([AppDbContextFactory.cs](../PropertyApi.Infrastructure/Persistence/AppDbContextFactory.cs)).
-- **Migration execution**: a dedicated console tool, `tools/PropertyApi.Migrator`, applies
+- **Design-time**: `AppDbContextFactory` ([AppDbContextFactory.cs](../HudhudNestApi.Infrastructure/Persistence/AppDbContextFactory.cs)).
+- **Migration execution**: a dedicated console tool, `tools/HudhudNestApi.Migrator`, applies
   migrations and runs `DatabaseSeeder`. Startup-time auto-migration is deliberately not used in
-  the API process (confirmed both in code — no `Database.Migrate()` call in `PropertyApi`'s
+  the API process (confirmed both in code — no `Database.Migrate()` call in `HudhudNestApi`'s
   `Program.cs` — and in the migration-recovery runbook).
   This is also memory of a live Render Staging deploy: `Database__ApplyMigrationsOnStartup`
   is a vestigial config key nothing reads there either.
-- **Connection resolution**: `PostgresConnectionStringResolver` ([PostgresConnectionStringResolver.cs](../PropertyApi.Infrastructure/PostgresConnectionStringResolver.cs))
+- **Connection resolution**: `PostgresConnectionStringResolver` ([PostgresConnectionStringResolver.cs](../HudhudNestApi.Infrastructure/PostgresConnectionStringResolver.cs))
   reads `DATABASE_URL` in Production, `ConnectionStrings:DefaultConnection` otherwise; normalizes
   postgres:// URIs, forces SSL in Production, rejects placeholder passwords and
   `Trust Server Certificate=true`, and applies Supabase-pooler-aware pool-size defaults.
@@ -139,7 +139,7 @@ consistency gap between them.
 64 tables exist in the applied schema (7 are PostGIS/tiger-geocoder system tables created by
 `CREATE EXTENSION postgis` itself — `spatial_ref_sys`, `topology`, `layer`, and the TIGER
 geocoder tables — not application tables). Application tables, grouped by domain, from the
-`DbSet<>` list in [AppDbContext.cs:56-114](../PropertyApi.Infrastructure/Persistence/AppDbContext.cs#L56-L114):
+`DbSet<>` list in [AppDbContext.cs:56-114](../HudhudNestApi.Infrastructure/Persistence/AppDbContext.cs#L56-L114):
 
 | Domain | Tables |
 |---|---|
@@ -169,21 +169,21 @@ Per-table PK/FK/index/constraint detail for the tables that matter most to this 
 Two tables carry what a single "User" concept usually would, split deliberately:
 
 - **`Users`** (`ApplicationUser : IdentityUser<Guid>`,
-  [ApplicationUser.cs](../PropertyApi.Infrastructure/Identity/Entities/ApplicationUser.cs)) —
+  [ApplicationUser.cs](../HudhudNestApi.Infrastructure/Identity/Entities/ApplicationUser.cs)) —
   authentication and account-security state: password hash, security stamp, lockout,
   phone-verification lifecycle, ban state, soft-delete.
 - **`UserAccounts`** (`UserAccount`,
-  [UserAccount.cs](../PropertyApi.Domain/Users/Entities/UserAccount.cs)) — the business profile
+  [UserAccount.cs](../HudhudNestApi.Domain/Users/Entities/UserAccount.cs)) — the business profile
   that `Property.Owner`, reviews, favorites, and agency membership actually reference. Shared
   primary key with `Users` (`UserAccounts.Id = Users.Id`), FK `Restrict` (not cascade) so the
-  pairing cannot silently break — [UserAccountConfiguration.cs:26-29](../PropertyApi.Infrastructure/Persistence/Configurations/UserAccountConfiguration.cs#L26-L29).
+  pairing cannot silently break — [UserAccountConfiguration.cs:26-29](../HudhudNestApi.Infrastructure/Persistence/Configurations/UserAccountConfiguration.cs#L26-L29).
 
 | Field | Present | Notes |
 |---|---|---|
 | Primary Key | ✅ | `Guid`, shared between `Users` and `UserAccounts` |
 | Email | ✅ | `Users.Email`, `varchar(320)`, required |
 | Normalized Email | ✅ | `Users.NormalizedEmail`, but **not** the unique column — see Finding F3 |
-| Username | ✅ | Always set equal to Email (or phone, for phone-only accounts) — [IdentityAccountCreator.cs:34](../PropertyApi.Infrastructure/Identity/Services/IdentityAccountCreator.cs#L34) |
+| Username | ✅ | Always set equal to Email (or phone, for phone-only accounts) — [IdentityAccountCreator.cs:34](../HudhudNestApi.Infrastructure/Identity/Services/IdentityAccountCreator.cs#L34) |
 | Password Hash | ✅ | Identity-managed `PasswordHash`; never logged (§7 below) |
 | Phone | ✅ | Encrypted at rest via Data Protection (§14), plus a separate deterministic HMAC lookup hash column for exact-match queries |
 | CreatedAt/UpdatedAt | ✅ | On both `Users` and `UserAccounts` |
@@ -199,10 +199,10 @@ column, and holds today only as a side effect of one implementation detail.**
 
 Evidence:
 - `Identity.Options.User.RequireUniqueEmail = false` —
-  [PersistenceInfrastructureRegistration.cs:52](../PropertyApi.Infrastructure/Persistence/PersistenceInfrastructureRegistration.cs#L52).
+  [PersistenceInfrastructureRegistration.cs:52](../HudhudNestApi.Infrastructure/Persistence/PersistenceInfrastructureRegistration.cs#L52).
   This disables ASP.NET Identity's own case-insensitive email-uniqueness check.
 - The only unique index on email is `IX_Users_Email UNIQUE btree ("Email")` — on the **raw,
-  case-sensitive** column — [ApplicationUserConfiguration.cs:15-16](../PropertyApi.Infrastructure/Persistence/Configurations/ApplicationUserConfiguration.cs#L15-L16),
+  case-sensitive** column — [ApplicationUserConfiguration.cs:15-16](../HudhudNestApi.Infrastructure/Persistence/Configurations/ApplicationUserConfiguration.cs#L15-L16),
   confirmed live: `CREATE UNIQUE INDEX "IX_Users_Email" ... USING btree ("Email")`.
 - `NormalizedEmail` carries only Identity's own default **non-unique** index (`EmailIndex`),
   confirmed live.
@@ -217,7 +217,7 @@ Evidence:
   Identity's own **unique** `UserNameIndex` is on `NormalizedUserName` (case-insensitively
   normalized regardless of the input's casing), so it incidentally rejects a concurrent
   case-variant duplicate today. `RegisterAtomicityPostgresTests.ConcurrentRequests_WithSameEmail_OnlyOneSucceeds_ByDatabaseUniqueConstraint`
-  ([RegisterAtomicityPostgresTests.cs:163-238](../tests/PropertyApi.Integration.Tests/Auth/RegisterAtomicityPostgresTests.cs#L163)) proves same-case concurrent duplicates are blocked, but does not exercise the case-variant scenario.
+  ([RegisterAtomicityPostgresTests.cs:163-238](../tests/HudhudNestApi.Integration.Tests/Auth/RegisterAtomicityPostgresTests.cs#L163)) proves same-case concurrent duplicates are blocked, but does not exercise the case-variant scenario.
 - The risk: this protection is incidental, not declared. Any future code path that creates or
   edits a user with an `Email` but an independently-chosen `UserName` (a "pick your own
   username" feature, a different social-login binding path, an admin tool) silently loses this
@@ -240,7 +240,7 @@ be a no-op regardless of its value — every account here is created directly th
 `IdentityAccountCreator.cs`, bypassing `UserManager.CreateAsync` (the only code path that flag
 affects) entirely.
 
-[`AddEmailLowerCaseUniqueIndex`](../PropertyApi.Infrastructure/Migrations/20260907201638_AddEmailLowerCaseUniqueIndex.cs)
+[`AddEmailLowerCaseUniqueIndex`](../HudhudNestApi.Infrastructure/Migrations/20260907201638_AddEmailLowerCaseUniqueIndex.cs)
 adds `IX_Users_Email_Lower`, a genuine `CREATE UNIQUE INDEX ... ON "Users" (lower("Email"))` — a
 real constraint on `Email` itself, not on `UserName`. Guarded: the migration first runs a
 `DO $$ ... RAISE EXCEPTION ...` pre-check for existing case-variant duplicate groups and aborts
@@ -255,9 +255,9 @@ Live-verified against a real Postgres 17 database: `test@example.com` / `TEST@ex
 `Test@Example.Com` are rejected as the same account **even when inserted with independently-
 chosen, non-matching `UserName` values** — the exact scenario this finding proved was
 previously unprotected
-([EmailUniquenessPostgresTests.cs](../tests/PropertyApi.Integration.Tests/Auth/EmailUniquenessPostgresTests.cs)).
+([EmailUniquenessPostgresTests.cs](../tests/HudhudNestApi.Integration.Tests/Auth/EmailUniquenessPostgresTests.cs)).
 A second, dedicated test class
-([EmailUniquenessMigrationGuardTests.cs](../tests/PropertyApi.Integration.Tests/Auth/EmailUniquenessMigrationGuardTests.cs))
+([EmailUniquenessMigrationGuardTests.cs](../tests/HudhudNestApi.Integration.Tests/Auth/EmailUniquenessMigrationGuardTests.cs))
 proves the migration's guard itself: seeded a real case-variant duplicate directly via SQL on a
 disposable database migrated to one step short of this one, then confirmed the migration raises,
 leaves nothing applied, and creates no index — and, separately, that it applies and creates the
@@ -278,8 +278,8 @@ reproduced anywhere in this report or its evidence queries.
 
 ## 8. Refresh Tokens
 
-`RefreshTokens` ([RefreshToken.cs](../PropertyApi.Infrastructure/Identity/Entities/RefreshToken.cs),
-[RefreshTokenConfiguration.cs](../PropertyApi.Infrastructure/Persistence/Configurations/RefreshTokenConfiguration.cs)):
+`RefreshTokens` ([RefreshToken.cs](../HudhudNestApi.Infrastructure/Identity/Entities/RefreshToken.cs),
+[RefreshTokenConfiguration.cs](../HudhudNestApi.Infrastructure/Persistence/Configurations/RefreshTokenConfiguration.cs)):
 
 | Capability | Status | Evidence |
 |---|---|---|
@@ -300,9 +300,9 @@ integrity defect — not converted to a finding per the instruction not to inven
 There is **no separate password-reset or email-verification token table**. This platform's
 primary verification channel is phone OTP:
 
-- `PhoneOtpChallenges` ([PhoneOtpChallenge.cs](../PropertyApi.Domain/Auth/Entities/PhoneOtpChallenge.cs)) —
+- `PhoneOtpChallenges` ([PhoneOtpChallenge.cs](../HudhudNestApi.Domain/Auth/Entities/PhoneOtpChallenge.cs)) —
   covers `PhoneRegistration`, `PhonePasswordReset`, `PhoneReverification`, `PhoneNumberChange`
-  (`OtpPurpose` enum, [OtpPurpose.cs](../PropertyApi.Domain/Enums/OtpPurpose.cs)). Has
+  (`OtpPurpose` enum, [OtpPurpose.cs](../HudhudNestApi.Domain/Enums/OtpPurpose.cs)). Has
   `ExpiresAtUtc` (5-minute TTL, factory-enforced), `ConsumedAtUtc` (one-time use), `AttemptCount`,
   and a reservation mechanism (`ReservationId`/`ReservedUntilUtc`) that appears purpose-built to
   close a concurrent-verify race. `CodeHash`, not the raw code, is stored.
@@ -327,14 +327,14 @@ not itself a database defect.
 (`RoleExistsAsync` check before create), and it — along with every other seed — runs inside a
 Postgres advisory-lock-guarded transaction
 (`pg_advisory_xact_lock(20260621194421)`,
-[DatabaseSeeder.cs:36-49](../PropertyApi.Infrastructure/Persistence/Seeds/DatabaseSeeder.cs#L36))
+[DatabaseSeeder.cs:36-49](../HudhudNestApi.Infrastructure/Persistence/Seeds/DatabaseSeeder.cs#L36))
 so concurrent app-instance startups cannot race the seed. Standard Identity `UserRoles` table
 carries the FK/uniqueness (composite PK `(UserId, RoleId)`).
 
 ## 12–19. Property Domain Model
 
-Reviewed directly from [Property.cs](../PropertyApi.Domain/Listings/Entities/Property.cs) and
-[PropertyConfiguration.cs](../PropertyApi.Infrastructure/Persistence/Configurations/PropertyConfiguration.cs).
+Reviewed directly from [Property.cs](../HudhudNestApi.Domain/Listings/Entities/Property.cs) and
+[PropertyConfiguration.cs](../HudhudNestApi.Infrastructure/Persistence/Configurations/PropertyConfiguration.cs).
 
 | Area | Status | Evidence |
 |---|---|---|
@@ -351,7 +351,7 @@ Reviewed directly from [Property.cs](../PropertyApi.Domain/Listings/Entities/Pro
 ### PostGIS (§20-21) — live-verified
 
 `GeoLocation geography(Point, 4326) GENERATED ALWAYS AS (... ST_MakePoint(Longitude, Latitude) ...) STORED`
-([20260611065011_AddPropertyGeoLocationPostGis.cs](../PropertyApi.Infrastructure/Migrations/20260611065011_AddPropertyGeoLocationPostGis.cs)) —
+([20260611065011_AddPropertyGeoLocationPostGis.cs](../HudhudNestApi.Infrastructure/Migrations/20260611065011_AddPropertyGeoLocationPostGis.cs)) —
 a **generated/computed column**, not an app-synced or trigger-synced one, so `GeoLocation` can
 never drift from `Latitude`/`Longitude`. Correct SRID (4326/WGS84), correct coordinate order
 (longitude, then latitude, matching PostGIS's `ST_MakePoint(x, y)` convention).
@@ -373,8 +373,8 @@ pass.
 
 ### Image storage (§22-23) — PASS, no blocker
 
-`PropertyImages` ([PropertyImage.cs](../PropertyApi.Domain/Listings/Entities/PropertyImage.cs),
-[PropertyImageConfiguration.cs](../PropertyApi.Infrastructure/Persistence/Configurations/PropertyImageConfiguration.cs)):
+`PropertyImages` ([PropertyImage.cs](../HudhudNestApi.Domain/Listings/Entities/PropertyImage.cs),
+[PropertyImageConfiguration.cs](../HudhudNestApi.Infrastructure/Persistence/Configurations/PropertyImageConfiguration.cs)):
 `Url` (CDN URL, `varchar(2048)`) + `PublicId` (Cloudinary public id, `varchar(500)`) only.
 **Zero `byte[]`/`varbinary`/Base64 columns found anywhere in the Domain layer** (explicit grep,
 zero matches) — images are never stored as binary data in PostgreSQL. `PropertyId` FK,
@@ -388,14 +388,14 @@ application code.
 Verified live against the fully-migrated schema: querying `pg_constraint` for every `contype='c'`
 (CHECK) constraint returns exactly **one** application-defined check in the entire database —
 `CK_Plans_ListingLimit_PositiveOrUnlimited` on `Plans.ListingLimit`
-([PlanConfiguration.cs:50](../PropertyApi.Infrastructure/Persistence/Configurations/PlanConfiguration.cs#L50)).
+([PlanConfiguration.cs:50](../HudhudNestApi.Infrastructure/Persistence/Configurations/PlanConfiguration.cs#L50)).
 (Every other CHECK returned by that query belongs to PostGIS/TIGER-geocoder system tables, not
 application tables.)
 
 Not database-enforced anywhere else: `Property.Rooms >= 0`, `Property.Area > 0`,
 `Property.ColdRent/WarmRent/PurchasePrice/AdditionalCosts/Deposit >= 0`,
 `PropertyReview.Rating BETWEEN 1 AND 5` (enforced only in the domain factory —
-[PropertyReview.cs:29](../PropertyApi.Domain/Reviews/Entities/PropertyReview.cs#L29) — and a
+[PropertyReview.cs:29](../HudhudNestApi.Domain/Reviews/Entities/PropertyReview.cs#L29) — and a
 FluentValidation validator; both are real, but both are application code, not schema),
 `Transaction.Amount >= 0`, every Investments financial field.
 
@@ -419,9 +419,9 @@ already optional and needs no new rule"*). Confirmed with the project owner: `Ar
 the same as `Rooms`/the price columns — nullable, with the constraint only ruling out a
 zero/negative *value when present*, not requiring one.
 
-Applied via [`AddPropertyNumericConstraints`](../PropertyApi.Infrastructure/Migrations/20260907210822_AddPropertyNumericConstraints.cs)
+Applied via [`AddPropertyNumericConstraints`](../HudhudNestApi.Infrastructure/Migrations/20260907210822_AddPropertyNumericConstraints.cs)
 (scaffolded from a matching `HasCheckConstraint` declaration in
-[PropertyConfiguration.cs](../PropertyApi.Infrastructure/Persistence/Configurations/PropertyConfiguration.cs)
+[PropertyConfiguration.cs](../HudhudNestApi.Infrastructure/Persistence/Configurations/PropertyConfiguration.cs)
 so the EF model and schema cannot drift apart): five constraints, each shaped
 `col IS NULL OR col > 0` —
 `CK_Properties_Area_PositiveOrNull`, `CK_Properties_Rooms_PositiveOrNull`,
@@ -430,7 +430,7 @@ so the EF model and schema cannot drift apart): five constraints, each shaped
 
 Live-verified this session: applied cleanly to a fresh `postgis/postgis:17-3.5` database
 (confirmed present via `pg_constraint`); 21 new integration tests
-([PropertyNumericConstraintsPostgresTests.cs](../tests/PropertyApi.Integration.Tests/Listings/PropertyNumericConstraintsPostgresTests.cs))
+([PropertyNumericConstraintsPostgresTests.cs](../tests/HudhudNestApi.Integration.Tests/Listings/PropertyNumericConstraintsPostgresTests.cs))
 prove each column rejects `0`/negative via direct `SaveChangesAsync` (bypassing domain
 validation, the same technique that originally proved the gap) while still accepting `NULL` and
 a positive value; all pass.
@@ -451,11 +451,11 @@ domain-level `1..5` enforcement is unchanged and remains the only guard.
 
 - `ApplicationUser` (`Users`) has `IsDeleted`/`DeletedAt` and a global query filter:
   `builder.Entity<ApplicationUser>().HasQueryFilter(e => !e.IsDeleted)` —
-  [AppDbContext.cs:144](../PropertyApi.Infrastructure/Persistence/AppDbContext.cs#L144).
+  [AppDbContext.cs:144](../HudhudNestApi.Infrastructure/Persistence/AppDbContext.cs#L144).
 - `UserAccount` (`UserAccounts`) — the table `Property.Owner`, `Property.Agent`,
   `PropertyReview.Reviewer`, `Favorite.User`, `VisitRequest.Requester`, `UserRating`, and agency
   membership all actually FK to
-  ([PropertyConfiguration.cs:149,230](../PropertyApi.Infrastructure/Persistence/Configurations/PropertyConfiguration.cs#L149)) —
+  ([PropertyConfiguration.cs:149,230](../HudhudNestApi.Infrastructure/Persistence/Configurations/PropertyConfiguration.cs#L149)) —
   has **no `IsDeleted` column at all** (`UserAccount.cs` does not inherit from `BaseEntity`/
   `AuditableEntity`, confirmed by direct read) and therefore **no query filter**.
 - Consequence: soft-deleting/banning a `Users` row does not hide, and cannot hide, the paired
@@ -480,7 +480,7 @@ that email or phone. This may be an intended anti-abuse measure; it is flagged, 
 ### RESOLUTION (2026-09-07/08)
 
 `UserAccounts.IsDeleted` added
-([`AddUserAccountsIsDeleted`](../PropertyApi.Infrastructure/Migrations/20260907195225_AddUserAccountsIsDeleted.cs),
+([`AddUserAccountsIsDeleted`](../HudhudNestApi.Infrastructure/Migrations/20260907195225_AddUserAccountsIsDeleted.cs),
 additive, default `false`), set by `UserAccount.Anonymize()` — the same method
 `DeleteUserCommandHandler` already called, so no new call site was needed in the deletion flow.
 
@@ -502,18 +502,18 @@ already-shipped, tested retention policy in `docs/ACCOUNT-DELETION-PRODUCTION-RE
 
 Resolved (confirmed with the project owner) as a **scoped filter**: `IsDeleted` is applied
 explicitly only where a live gap was actually found —
-[`AgencyRepository.GetMembersAsync`/`CountMembersAsync`](../PropertyApi.Infrastructure/Repositories/AgencyRepository.cs)
+[`AgencyRepository.GetMembersAsync`/`CountMembersAsync`](../HudhudNestApi.Infrastructure/Repositories/AgencyRepository.cs)
 now add `&& !u.IsDeleted`, since neither previously excluded a deleted former member from an
 agency's member list/count. `GetUserByIdQueryHandler`/`GetUserProfileQueryHandler` needed no
 change — both already return null/404 for a deleted user by checking the paired
 `ApplicationUser.IsDeleted` first (verified by reading both handlers end to end).
 `AdminUserQueryRepository` also needed no change — it deliberately keeps showing deleted
 accounts to admins (`AccountStatus = "Disabled"`), which is correct, not a gap. A repo-wide
-`grep -rn "\.UserAccounts\b"` sweep across `PropertyApi.Infrastructure`/`PropertyApi.Application`
+`grep -rn "\.UserAccounts\b"` sweep across `HudhudNestApi.Infrastructure`/`HudhudNestApi.Application`
 found no other direct query site.
 
 Live-verified: two new integration tests
-([AgencyMembershipDeletedUserTests.cs](../tests/PropertyApi.Integration.Tests/Users/AgencyMembershipDeletedUserTests.cs))
+([AgencyMembershipDeletedUserTests.cs](../tests/HudhudNestApi.Integration.Tests/Users/AgencyMembershipDeletedUserTests.cs))
 against a real Postgres database — a deleted member is excluded from both the list and the
 count; active members are unaffected — both pass. The existing
 `DeleteUserCommandHandlerTests` happy-path test was extended with `Assert.True(account.IsDeleted)`
@@ -579,9 +579,9 @@ session: passes against the corrected repository (`6/6` references match); delib
 reintroducing a stale `16-3.4` reference and re-running the script produces a clear failure
 naming the exact file/line, then passes again once reverted.
 
-The full existing test suite (`PropertyApi.Application.Tests`, `PropertyApi.Auth.Tests`,
-`PropertyApi.Architecture.Tests`, and the Postgres-backed parts of
-`PropertyApi.Integration.Tests`) was run against a disposable `postgis/postgis:17-3.5` container
+The full existing test suite (`HudhudNestApi.Application.Tests`, `HudhudNestApi.Auth.Tests`,
+`HudhudNestApi.Architecture.Tests`, and the Postgres-backed parts of
+`HudhudNestApi.Integration.Tests`) was run against a disposable `postgis/postgis:17-3.5` container
 as part of this and the following findings' work — no PostGIS 3.4→3.5 or Postgres 16→17
 behavior difference surfaced.
 
@@ -642,7 +642,7 @@ explicit transactions interact): `o.EnableRetryOnFailure(...)`.
 
 ## Finding F7 (MEDIUM) — GDPR technical capability: no account deletion / data export path found
 
-Searched `PropertyApi.Application` for account-deletion or data-export capability
+Searched `HudhudNestApi.Application` for account-deletion or data-export capability
 (`DeleteAccount`, `AccountDeletion`, `ExportData`, `DataExport`, `GDPR` — zero matches). What
 exists: OTP/refresh-token expiration, admin-driven soft-delete (`IsDeleted` + `MarkAsDeleted`
 domain methods on several entities), and Data-Protection-encrypted storage for phone/WhatsApp/
@@ -664,7 +664,7 @@ work, without modifying its anonymization logic:
 - **Delay window**: `UserAccount.RequestDeletion`/`CancelDeletionRequest`/
   `HasPendingDeletionRequest` (new domain methods) plus two new nullable columns
   (`DeletionRequestedAt`/`DeletionScheduledFor`, migration
-  [`AddUserAccountDeletionSchedule`](../PropertyApi.Infrastructure/Migrations/20260907211928_AddUserAccountDeletionSchedule.cs)).
+  [`AddUserAccountDeletionSchedule`](../HudhudNestApi.Infrastructure/Migrations/20260907211928_AddUserAccountDeletionSchedule.cs)).
   `DELETE /api/Users/me` now calls a new `RequestDeleteUserCommandHandler` (re-authenticates,
   then schedules) instead of anonymizing synchronously — **this changes the endpoint's response
   from `204 No Content` to `202 Accepted` with `{ scheduledFor }`, a breaking contract change for
@@ -691,10 +691,10 @@ work, without modifying its anonymization logic:
   Live-verified against a real Postgres database: a due request executes (anonymized,
   soft-deleted) and a not-yet-due request is left completely untouched by the same sweep run; a
   cancelled request is never picked up even though its (cleared) schedule was once in the past
-  ([AccountDeletionSweepTests.cs](../tests/PropertyApi.Integration.Tests/Users/AccountDeletionSweepTests.cs),
+  ([AccountDeletionSweepTests.cs](../tests/HudhudNestApi.Integration.Tests/Users/AccountDeletionSweepTests.cs),
   2/2 pass, exercised through the real DI container/`Program` host). Seven new unit tests cover
   the domain methods
-  ([UserAccountDeletionScheduleTests.cs](../tests/PropertyApi.Application.Tests/Users/UserAccountDeletionScheduleTests.cs))
+  ([UserAccountDeletionScheduleTests.cs](../tests/HudhudNestApi.Application.Tests/Users/UserAccountDeletionScheduleTests.cs))
   and the two new handlers' re-authentication/scheduling/cancellation branches (19 tests total
   across `RequestDeleteUserCommandHandlerTests.cs`/`CancelAccountDeletionCommandHandlerTests.cs`).
 
@@ -717,7 +717,7 @@ work, without modifying its anonymization logic:
   choosing link-based delivery, which this implementation does not use.
 
   Live-verified with a real two-user HTTP test against a real Postgres database
-  ([AccountDataExportTests.cs](../tests/PropertyApi.Integration.Tests/Users/AccountDataExportTests.cs)):
+  ([AccountDataExportTests.cs](../tests/HudhudNestApi.Integration.Tests/Users/AccountDataExportTests.cs)):
   the export contains the caller's own property, and the raw JSON response body contains neither
   the string `"PasswordHash"`/`"SecurityStamp"` nor a second seeded user's email or property
   title — the actual IDOR proof, not just a code-inspection argument. Both tests pass.
@@ -806,7 +806,7 @@ in-code comment naming the specific query pattern it serves — none looked spec
 `GetPropertiesListQueryHandler` delegates filtering, sorting, and paging to
 `IPropertyRepository.GetPagedAsync`, which does the work as `IQueryable` (DB-side), not
 in-memory. Page size is server-clamped: `Math.Clamp(filter.PageSize, 1, 100)` —
-[PropertyRepository.cs:81](../PropertyApi.Infrastructure/Repositories/PropertyRepository.cs#L81)
+[PropertyRepository.cs:81](../HudhudNestApi.Infrastructure/Repositories/PropertyRepository.cs#L81)
 — so a client cannot force an unbounded page regardless of what it requests. No unaudited N+1
 pattern was found in the one handler reviewed in depth; the broader claim rests on the existing
 enforced CI gate, which is a real, running control, not aspirational.
@@ -824,7 +824,7 @@ query filters in `AppDbContext.OnModelCreating` (`Property`, `PropertyImage`, `A
 `UserRating`, `Transaction`, plus dependent filters on `Favorite`/`PropertyAmenity`/`RefreshToken`
 that key off their parent's `IsDeleted`), and `AppDbContext.SaveChangesAsync` intercepts a hard
 `Remove()` and rewrites it to a soft delete automatically
-([AppDbContext.cs:238-253](../PropertyApi.Infrastructure/Persistence/AppDbContext.cs#L238)) — so
+([AppDbContext.cs:238-253](../HudhudNestApi.Infrastructure/Persistence/AppDbContext.cs#L238)) — so
 even a repository that calls `Remove()` cannot accidentally hard-delete a row. This is a strong,
 centralized pattern. Its one gap is Finding F2 (`UserAccount` not covered).
 
@@ -870,7 +870,7 @@ guess business rules.
 Covered under Finding F4 (rating range is application-only) and the review deep-dive above:
 "one review per user per property" **is** database-enforced (`HasIndex(r => new
 { r.PropertyId, r.ReviewerId }).IsUnique()` —
-[PropertyReviewConfiguration.cs:29-30](../PropertyApi.Infrastructure/Persistence/Configurations/PropertyReviewConfiguration.cs#L29)),
+[PropertyReviewConfiguration.cs:29-30](../HudhudNestApi.Infrastructure/Persistence/Configurations/PropertyReviewConfiguration.cs#L29)),
 so that specific business rule is a genuine PASS at the database level, distinct from the rating
 range which is not.
 
@@ -951,12 +951,12 @@ assessment says it is.
 | Field | Stored as | Encrypted/Hashed | Notes |
 |---|---|---|---|
 | `Users.PasswordHash` | Hash | Hashed (Identity `PasswordHasher`) | Never logged |
-| `Users.PhoneNumber` | Encrypted | `DataProtectionStringConverter` (AES via ASP.NET Data Protection) | [AppDbContext.cs:173-177](../PropertyApi.Infrastructure/Persistence/AppDbContext.cs#L173) |
+| `Users.PhoneNumber` | Encrypted | `DataProtectionStringConverter` (AES via ASP.NET Data Protection) | [AppDbContext.cs:173-177](../HudhudNestApi.Infrastructure/Persistence/AppDbContext.cs#L173) |
 | `Users.PhoneNumberLookupHash` | HMAC hash | Deterministic HMAC (for exact-match lookup without decrypting) | Unique index |
 | `RefreshTokens.TokenHash` | Hash | SHA-256-class hash, not plaintext | §8 |
 | `PhoneOtpChallenges.CodeHash` | Hash | Not the raw OTP | §9 |
-| `UserAccounts.WhatsAppNumber` | Encrypted | `DataProtectionStringConverter` | [AppDbContext.cs:194-198](../PropertyApi.Infrastructure/Persistence/AppDbContext.cs#L194) |
-| `UserAccounts.TaxNumber` | Encrypted | `DataProtectionStringConverter` | [AppDbContext.cs:200-204](../PropertyApi.Infrastructure/Persistence/AppDbContext.cs#L200) |
+| `UserAccounts.WhatsAppNumber` | Encrypted | `DataProtectionStringConverter` | [AppDbContext.cs:194-198](../HudhudNestApi.Infrastructure/Persistence/AppDbContext.cs#L194) |
+| `UserAccounts.TaxNumber` | Encrypted | `DataProtectionStringConverter` | [AppDbContext.cs:200-204](../HudhudNestApi.Infrastructure/Persistence/AppDbContext.cs#L200) |
 | `DataProtectionKeys` | Key material | This *is* the key store — its own backup/rollback risk is separately classified `Critical` in the migration-recovery runbook | |
 | `ContactMessages.IpAddress`, `AuditLogs.IpAddress` | Plaintext | Not encrypted — operational/security metadata, retention not time-boxed at the schema level | Recorded, not flagged as a defect absent a stated retention requirement |
 
@@ -1022,7 +1022,7 @@ control for exactly the queries this section asks about (listing, detail, search
 login lookup is covered by the `Users.Email`/`NormalizedPhoneNumber` unique indexes, refresh
 token lookup by `IX_RefreshTokens_User_Active_ExpiresAt`). Re-running `EXPLAIN ANALYZE` against
 a fresh dataset was not repeated in this session — doing so productively requires the
-`PropertyApi.PerformanceDataGenerator` tool's representative dataset, which was out of scope for
+`HudhudNestApi.PerformanceDataGenerator` tool's representative dataset, which was out of scope for
 a database-structure-focused Phase 2 pass on top of the schema verification already performed.
 
 ## 52. Database Connection Configuration — PASS
@@ -1070,7 +1070,7 @@ a live production connection.
 
 Real PostgreSQL-backed integration tests exist and were read directly:
 `RegisterAtomicityPostgresTests.cs`, `SocialLoginAtomicityPostgresTests.cs`,
-`AuthDbAssertions.cs` (all in `tests/PropertyApi.Integration.Tests/Auth/`), built on
+`AuthDbAssertions.cs` (all in `tests/HudhudNestApi.Integration.Tests/Auth/`), built on
 `PostgresAuthTestFactory`, which requires a real `TEST_POSTGRES_CONNECTION_STRING` (no
 in-memory/SQLite fake — confirmed by reading the factory's constructor) — matching the
 `postgis/postgis:16-3.4` service container declared in `.github/workflows/ci.yml`. These

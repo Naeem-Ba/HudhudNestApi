@@ -6,7 +6,7 @@ public sealed class HudhudNestApiObservabilityOptions
 
     public bool Enabled { get; set; } = true;
 
-    public string ServiceName { get; set; } = "property-api";
+    public string ServiceName { get; set; } = "hudhudnest-api";
 
     public string ServiceNamespace { get; set; } = "yaqeen-real-estate";
 

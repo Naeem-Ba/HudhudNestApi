@@ -148,7 +148,7 @@ jobs:
             --env BACKUP_REQUIRE_REMOTE_UPLOAD --env BACKUP_ID --env BACKUP_OUTPUT_DIR \
             --env APPLICATION_COMMIT_SHA \
             --volume "${PWD}/artifacts/database-recovery:/workspace/artifacts/database-recovery" \
-            propertyapi-database-recovery:local \
+            hudhudnest-database-recovery:local \
             bash /workspace/scripts/database/backup-postgres.sh
           echo "BACKUP_ID=${BACKUP_ID}" >> "${GITHUB_ENV}"
 
@@ -168,7 +168,7 @@ jobs:
             --env BACKUP_AWS_REGION --env BACKUP_S3_ENDPOINT_URL \
             --env BACKUP_OUTPUT_DIR \
             --volume "${PWD}/artifacts/database-recovery:/workspace/artifacts/database-recovery" \
-            propertyapi-database-recovery:local \
+            hudhudnest-database-recovery:local \
             bash /workspace/scripts/database/download-latest-backup.sh
           mv artifacts/database-recovery/manifest.json artifacts/database-recovery/downloaded.manifest.json
           mv artifacts/database-recovery/backup.dump.gpg artifacts/database-recovery/downloaded.dump.gpg

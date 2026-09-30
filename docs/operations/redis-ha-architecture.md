@@ -4,7 +4,7 @@ Status: target architecture defined; production-provider evidence is not present
 
 ## Required Production Topology
 
-PropertyApi requires a managed Redis-compatible service with:
+HudhudNestApi requires a managed Redis-compatible service with:
 
 - one writable primary.
 - at least one replica.

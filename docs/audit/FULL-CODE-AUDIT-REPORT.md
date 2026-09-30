@@ -1,4 +1,4 @@
-# Full Code Audit Report — PropertyApi
+# Full Code Audit Report — HudhudNestApi
 
 - **Date:** 2026-09-18
 - **Branch audited:** `hotfix/revert-csrf-securepolicy-always` (up to date with `origin/master`, plus uncommitted working-tree changes — see §7)
@@ -7,7 +7,7 @@
 
 ## 1. Executive Summary
 
-PropertyApi is a .NET 8 "Clean Architecture" backend (Domain / Application / Infrastructure / API) for a real-estate platform, with an unusually mature set of self-produced production-readiness and architecture documents (`docs/SECURITY-PRODUCTION-READINESS.md`, `docs/AUTHENTICATION-PRODUCTION-READINESS.md`, `docs/DATABASE-PRODUCTION-READINESS.md`, `docs/architecture/ARD/ARD-PropertyApi.md`, several Redis HA/failure-policy docs), most dated within the last two weeks. This audit treated those documents as a baseline to verify, not to trust blindly, and focused new effort where the code could plausibly have drifted from what the docs claim.
+HudhudNestApi is a .NET 8 "Clean Architecture" backend (Domain / Application / Infrastructure / API) for a real-estate platform, with an unusually mature set of self-produced production-readiness and architecture documents (`docs/SECURITY-PRODUCTION-READINESS.md`, `docs/AUTHENTICATION-PRODUCTION-READINESS.md`, `docs/DATABASE-PRODUCTION-READINESS.md`, `docs/architecture/ARD/ARD-HudhudNestApi.md`, several Redis HA/failure-policy docs), most dated within the last two weeks. This audit treated those documents as a baseline to verify, not to trust blindly, and focused new effort where the code could plausibly have drifted from what the docs claim.
 
 **Overall state: no Critical or newly-discovered High-severity defects were found.** The single most important observation is **process-level, not code-level**: the current branch carries a real, correct, but **uncommitted** fix for a Production incident (§7), and that fix has no automated regression test. Everything else is Medium/Low/Informational — mostly known, already-tracked risks (some already documented as open items in the project's own readiness reports) plus a handful of newly found gaps in caching fail-open behavior, a mislabeled test project, and three stale documentation tables (now corrected as part of this audit, see §9).
 
@@ -15,17 +15,17 @@ There is **no frontend code in this repository** — the Angular SPA lives in a 
 
 ## 2. Scope of the Audit
 
-- **Backend:** PropertyApi.Domain, PropertyApi.Application, PropertyApi.Infrastructure, PropertyApi (API/composition root) — architecture, API/endpoints, auth/authz, database, Redis, security.
+- **Backend:** HudhudNestApi.Domain, HudhudNestApi.Application, HudhudNestApi.Infrastructure, HudhudNestApi (API/composition root) — architecture, API/endpoints, auth/authz, database, Redis, security.
 - **Tests:** all 9 projects under `tests/` (Application, Architecture, Auth, Concurrency, Infrastructure, Integration, Observability, Performance, StagingSmokeTests).
 - **CI/CD:** all 9 workflows under `.github/workflows/`.
-- **Dependencies:** `Directory.Packages.props`, `Directory.Build.props`, `NuGet.config`, `PropertyApi/packages.lock.json`.
+- **Dependencies:** `Directory.Packages.props`, `Directory.Build.props`, `NuGet.config`, `HudhudNestApi/packages.lock.json`.
 - **Git history:** full `git log` archaeology for recurring bug patterns, reverts, and hotfixes.
 - **Frontend:** out of scope — not present in this repository (see §1).
 
 ## 3. Documentation Read
 
 All of the following were read in full (not excerpted) by the relevant audit pass before forming judgments:
-`docs/architecture/*.md` (incl. `ARD/ARD-PropertyApi.md`), `docs/phase-b-*.md`, `docs/development/central-package-management.md`, `docs/SECURITY-PRODUCTION-READINESS.md`, `docs/AUTHENTICATION-PRODUCTION-READINESS.md`, `SECURITY_HARDENING_REPORT_AR.md`, `docs/password-policy.md`, `docs/security/*.md`, `docs/phone-password-authentication-and-reverification.md`, `docs/database/erd.md`, `docs/DATABASE-PRODUCTION-READINESS.md`, `docs/performance/postgresql-query-analysis.md`, `docs/REDIS-HA.md`, `docs/operations/redis-*.md`, `docs/testing/*.md`, `docs/performance/*.md`, `docs/operations/database-backup-restore-runbook.md`, `docs/operations/rpo-rto.md`.
+`docs/architecture/*.md` (incl. `ARD/ARD-HudhudNestApi.md`), `docs/phase-b-*.md`, `docs/development/central-package-management.md`, `docs/SECURITY-PRODUCTION-READINESS.md`, `docs/AUTHENTICATION-PRODUCTION-READINESS.md`, `SECURITY_HARDENING_REPORT_AR.md`, `docs/password-policy.md`, `docs/security/*.md`, `docs/phone-password-authentication-and-reverification.md`, `docs/database/erd.md`, `docs/DATABASE-PRODUCTION-READINESS.md`, `docs/performance/postgresql-query-analysis.md`, `docs/REDIS-HA.md`, `docs/operations/redis-*.md`, `docs/testing/*.md`, `docs/performance/*.md`, `docs/operations/database-backup-restore-runbook.md`, `docs/operations/rpo-rto.md`.
 
 ## 4. Project Components (as verified against code, not assumed)
 
@@ -50,23 +50,23 @@ Severity definitions: **Critical** = active exploit / data loss risk; **High** =
 
 | ID | Severity | Area | File(s) | Summary |
 |---|---|---|---|---|
-| AUD-01 | High (process) | Security / Release | `PropertyApi/Program.cs`, `PropertyApi/Security/Csrf/CsrfExtensions.cs` (uncommitted) | Working-tree-only fix for a real Production incident caused by commit `3b80fdc`; correct but uncommitted and untested. See §7. |
-| AUD-02 | Medium | Database / Redis | `PropertyApi.Infrastructure/Lookups/CommonLookupService.cs`, `Caching/DistributedCacheExtensions.cs` | Lookup cache does not fail open on Redis errors, contradicting documented policy. |
-| AUD-03 | Medium | CI/CD, Tests | `tests/PropertyApi.Concurrency.Tests/ConcurrencySafetyRegressionTests.cs` | Project named "Concurrency.Tests" does not execute any concurrent code — it's a text-regression guard on other scripts. |
+| AUD-01 | High (process) | Security / Release | `HudhudNestApi/Program.cs`, `HudhudNestApi/Security/Csrf/CsrfExtensions.cs` (uncommitted) | Working-tree-only fix for a real Production incident caused by commit `3b80fdc`; correct but uncommitted and untested. See §7. |
+| AUD-02 | Medium | Database / Redis | `HudhudNestApi.Infrastructure/Lookups/CommonLookupService.cs`, `Caching/DistributedCacheExtensions.cs` | Lookup cache does not fail open on Redis errors, contradicting documented policy. |
+| AUD-03 | Medium | CI/CD, Tests | `tests/HudhudNestApi.Concurrency.Tests/ConcurrencySafetyRegressionTests.cs` | Project named "Concurrency.Tests" does not execute any concurrent code — it's a text-regression guard on other scripts. |
 | AUD-04 | Medium | CI/CD | `.github/workflows/production-gate.yml` | "No previous deploy" fallback can't distinguish a genuine first deploy from a degraded Render API response. |
-| AUD-05 | Medium (trust boundary, needs verification) | Security / Architecture | `PropertyApi/Program.cs:169-195` | Production unconditionally forces `Request.Scheme = "https"`; correctness now depends entirely on Cloudflare/Render never exposing a plain-HTTP path to Kestrel. |
-| AUD-06 | Low-Medium (pre-existing, corroborated) | Database | `PropertyApi.Infrastructure/Persistence/PersistenceInfrastructureRegistration.cs` | No `EnableRetryOnFailure` on the Npgsql EF Core provider (already tracked as open item F6 in `DATABASE-PRODUCTION-READINESS.md`). |
+| AUD-05 | Medium (trust boundary, needs verification) | Security / Architecture | `HudhudNestApi/Program.cs:169-195` | Production unconditionally forces `Request.Scheme = "https"`; correctness now depends entirely on Cloudflare/Render never exposing a plain-HTTP path to Kestrel. |
+| AUD-06 | Low-Medium (pre-existing, corroborated) | Database | `HudhudNestApi.Infrastructure/Persistence/PersistenceInfrastructureRegistration.cs` | No `EnableRetryOnFailure` on the Npgsql EF Core provider (already tracked as open item F6 in `DATABASE-PRODUCTION-READINESS.md`). |
 | AUD-07 | Low | Database | `ValuationSlaEnforcementService.cs`, `DistributionEngine.cs` | Per-item DB/notification calls inside background sweep loops (N+1 shape, bounded/background only). |
-| AUD-08 | Low | Dependencies | `PropertyApi/PropertyApi.csproj` | `MessagePack` package referenced but unused anywhere in source. |
+| AUD-08 | Low | Dependencies | `HudhudNestApi/HudhudNestApi.csproj` | `MessagePack` package referenced but unused anywhere in source. |
 | AUD-09 | Low | CI/CD | `.github/workflows/ci.yml` | `pull-requests: write` permission granted with no located step that requires write access (needs verification). |
 | AUD-10 | Low | CI/CD | `.github/workflows/redis-ha-failover.yml` | Lacks the "no HA provider configured" skip guard that `production-gate.yml` has; would fail if run today. |
-| AUD-11 | Low | Tests | `tests/PropertyApi.Integration.Tests/.../RateLimitWindowSync.cs:41` | Real wall-clock `Task.Delay` to cross a rate-limit window — latent flakiness risk on a busy runner. |
-| AUD-12 | Low | Architecture | `PropertyApi.Infrastructure/Media/StagingSmokeMediaStorageService.cs` | In-memory singleton would break across multiple replicas if Staging is ever scaled beyond 1 instance (currently gated to Staging test-support flag only). |
-| AUD-13 | Informational | Documentation | `docs/architecture/ARD/ARD-PropertyApi.md` (R11) | Marked "unconfirmed" a question the code already answers (`ValuationInquiryExpiryHostedService` does use `BackgroundJobLock`). **Corrected as part of this audit — see §9.** |
+| AUD-11 | Low | Tests | `tests/HudhudNestApi.Integration.Tests/.../RateLimitWindowSync.cs:41` | Real wall-clock `Task.Delay` to cross a rate-limit window — latent flakiness risk on a busy runner. |
+| AUD-12 | Low | Architecture | `HudhudNestApi.Infrastructure/Media/StagingSmokeMediaStorageService.cs` | In-memory singleton would break across multiple replicas if Staging is ever scaled beyond 1 instance (currently gated to Staging test-support flag only). |
+| AUD-13 | Informational | Documentation | `docs/architecture/ARD/ARD-HudhudNestApi.md` (R11) | Marked "unconfirmed" a question the code already answers (`ValuationInquiryExpiryHostedService` does use `BackgroundJobLock`). **Corrected as part of this audit — see §9.** |
 | AUD-14 | Informational | Documentation | `docs/development/central-package-management.md` | Test-stack version table did not match `Directory.Packages.props`. **Corrected as part of this audit — see §9.** |
 | AUD-15 | Informational | Documentation | `docs/security/github-actions-pinning.md` | Example pinned-SHA table did not match the SHAs actually used in workflows. **Corrected as part of this audit — see §9.** |
 | AUD-16 | Informational | Architecture | — | No Redis distributed locks anywhere; all locking is via PostgreSQL advisory locks — sound design, avoids the classic Redis-lock-without-TTL deadlock hazard entirely. |
-| AUD-17 | Informational | Security | `PropertyApi/Security/RateLimiting/RedisRateLimitingMiddleware.cs`, `PropertyApi.Infrastructure/Identity/Services/CachedSecurityStampValidator.cs` | Rate limiting fails closed (503) and the security-stamp cache fails secure to the DB on Redis errors — both genuinely implemented, matching documented policy. |
+| AUD-17 | Informational | Security | `HudhudNestApi/Security/RateLimiting/RedisRateLimitingMiddleware.cs`, `HudhudNestApi.Infrastructure/Identity/Services/CachedSecurityStampValidator.cs` | Rate limiting fails closed (503) and the security-stamp cache fails secure to the DB on Redis errors — both genuinely implemented, matching documented policy. |
 | AUD-18 | Informational | CI/CD | all workflows | No `continue-on-error: true` anywhere; all external actions SHA-pinned; explicit least-privilege `permissions:` blocks; zero skipped tests among 1,646 `[Fact]`/`[Theory]` cases; `production-gate.yml` runs a real Redis-outage chaos test, not a stub. |
 
 Full detail for each finding, including reproduction/evidence and suggested fixes, is in `BACKEND-AUDIT-REPORT.md` and `CI-CD-AUDIT-REPORT.md`.
@@ -83,14 +83,14 @@ Direct answer to the question this branch's name raises — **is the CSRF/cookie
 
 **No — it is correct and internally consistent, but it is uncommitted, in-progress work, not a landed fix.**
 
-- `git status` shows two modified, unstaged files: `PropertyApi/Program.cs` and `PropertyApi/Security/Csrf/CsrfExtensions.cs`.
+- `git status` shows two modified, unstaged files: `HudhudNestApi/Program.cs` and `HudhudNestApi/Security/Csrf/CsrfExtensions.cs`.
 - Commit `3b80fdc` (already merged to `master` via PR #154) hard-coded `SecurePolicy = Always` for the antiforgery cookie in Production, intended to fix a missing-CSRF-cookie bug. According to the working tree's own code comments, **this merged fix caused real Production 500 errors within minutes of deployment**: `DefaultAntiforgery.CheckSSLConfig` throws when `SecurePolicy = Always` and `Request.IsHttps` is false — and `Request.IsHttps` was still unreliably false in Production, so the underlying detection problem was never actually fixed, only its symptom was papered over.
 - The current uncommitted working-tree fix addresses the root cause instead: `Program.cs` now forces `context.Request.Scheme = "https"` for every request when `IsProduction()`, placed immediately after `UseForwardedHeaders()`; `CsrfExtensions.cs` reverts `SecurePolicy` to plain `CookieSecurePolicy.SameAsRequest`, now safe because `Request.IsHttps` is reliably true. `CsrfController.cs`'s separate hard-coded `Secure = true` (which never went through `CheckSSLConfig`) was correctly left untouched.
 - `dotnet build` succeeds with these changes. No leftover dead branch or contradictory conditional was found between the three files.
 
 **Two concrete gaps remain:**
 1. **Not committed.** This fix currently exists only in the working tree and could be lost.
-2. **No automated regression test.** The `3b80fdc` commit message itself disclosed an abandoned attempt to add a `TestApplication.CreateProduction()` regression test (blocked by a pre-existing Redis-config gap in that test host, confirmed still open at `tests/PropertyApi.Integration.Tests/TestInfrastructure/TestApplication.cs:141`). The exact code path this fix depends on — the `IsProduction()` branch combined with a real-HTTPS `SameAsRequest` policy — has zero automated coverage today, relying on the same "verify in Production" methodology that already caused this incident once.
+2. **No automated regression test.** The `3b80fdc` commit message itself disclosed an abandoned attempt to add a `TestApplication.CreateProduction()` regression test (blocked by a pre-existing Redis-config gap in that test host, confirmed still open at `tests/HudhudNestApi.Integration.Tests/TestInfrastructure/TestApplication.cs:141`). The exact code path this fix depends on — the `IsProduction()` branch combined with a real-HTTPS `SameAsRequest` policy — has zero automated coverage today, relying on the same "verify in Production" methodology that already caused this incident once.
 
 **Recommendation:** commit these two files with a message that documents the `3b80fdc` regression (this fact currently only exists as a code comment on uncommitted work — commit it before it's lost), and close the `TestApplication.CreateProduction()` gap (or add an alternative automated proof) before relying on this fix again. See `REMEDIATION-PLAN.md` item R-01.
 
@@ -105,7 +105,7 @@ Direct answer to the question this branch's name raises — **is the CSRF/cookie
 
 Three documentation inaccuracies were found with direct code evidence and corrected as part of this audit (content changes only, no speculative additions):
 
-1. **`docs/architecture/ARD/ARD-PropertyApi.md`** — Risk R11 asked whether `ValuationInquiryExpiryHostedService` uses `BackgroundJobLock`; code confirms it does (`PropertyApi.Infrastructure/Valuation/ValuationInquiryExpiryHostedService.cs:95-121`). Updated from "unconfirmed" to confirmed, with the file reference.
+1. **`docs/architecture/ARD/ARD-HudhudNestApi.md`** — Risk R11 asked whether `ValuationInquiryExpiryHostedService` uses `BackgroundJobLock`; code confirms it does (`HudhudNestApi.Infrastructure/Valuation/ValuationInquiryExpiryHostedService.cs:95-121`). Updated from "unconfirmed" to confirmed, with the file reference.
 2. **`docs/development/central-package-management.md`** — "Test Stack" table listed `Microsoft.NET.Test.Sdk 17.8.0` / `xunit 2.6.6` / `xunit.runner.visualstudio 2.5.6` / `coverlet.collector 6.0.0`; actual centrally-pinned versions in `Directory.Packages.props` are `18.10.0` / `2.9.3` / `4.0.0` / `10.0.1`. Table updated to match.
 3. **`docs/security/github-actions-pinning.md`** — Example pinned-SHA table listed SHAs for `checkout@v5`, `setup-dotnet@v5`, `upload-artifact@v6`; the workflows currently and consistently use `checkout@...ba90b1 # v7.0.1`, `setup-dotnet@...06c68 # v6.0.0`, `upload-artifact@...fc6a0a # v7.0.1` across all 9 workflow files. Table updated to match current pins. (Enforcement script behavior is unaffected — it checks SHA *format*, not tag correctness.)
 

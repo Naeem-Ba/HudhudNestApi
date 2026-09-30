@@ -1,7 +1,7 @@
 groups:
-  - name: property-api-controlled-alert-test
+  - name: hudhudnest-controlled-alert-test
     rules:
-      - alert: PropertyApiControlledObservabilityTest
+      - alert: HudhudNestApiControlledObservabilityTest
         expr: propertyapi_synthetic_alert_test_state > 0
         for: 0s
         labels: { severity: test }

@@ -120,12 +120,12 @@ def main():
     testcases = []
     for item in scenarios:
         failure = "" if item.get("thresholdsPassed") else '<failure message="Performance threshold failed" />'
-        testcases.append(f'<testcase classname="PropertyApi.Performance" name="{escape(str(item.get("scenario")))}">{failure}</testcase>')
+        testcases.append(f'<testcase classname="HudhudNestApi.Performance" name="{escape(str(item.get("scenario")))}">{failure}</testcase>')
     for item in integrity:
         name = f'{item.get("race_kind")}-{item.get("concurrency")}-database-integrity'
         failure = "" if item.get("invariant_passed") else '<failure message="Database concurrency invariant failed" />'
-        testcases.append(f'<testcase classname="PropertyApi.Concurrency" name="{escape(name)}">{failure}</testcase>')
-    junit = f'<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="PropertyApi.PerformanceGate" tests="{len(testcases)}" failures="{len(failures)}" skipped="0">' + "".join(testcases) + "</testsuite>\n"
+        testcases.append(f'<testcase classname="HudhudNestApi.Concurrency" name="{escape(name)}">{failure}</testcase>')
+    junit = f'<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="HudhudNestApi.PerformanceGate" tests="{len(testcases)}" failures="{len(failures)}" skipped="0">' + "".join(testcases) + "</testsuite>\n"
     (root / "junit.xml").write_text(junit, encoding="utf-8")
     print(json.dumps({"result": summary["result"], "failureCount": len(failures)}, indent=2))
     return 0 if not failures else 1

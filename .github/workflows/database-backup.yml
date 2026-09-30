@@ -49,7 +49,7 @@ jobs:
           done
 
       - name: Build pinned PostgreSQL 16 recovery toolbox
-        run: docker build --pull --file ci/Dockerfile.database-recovery --tag propertyapi-database-recovery:local .
+        run: docker build --pull --file ci/Dockerfile.database-recovery --tag hudhudnest-database-recovery:local .
 
       - name: Create, encrypt, verify, and upload backup
         shell: bash
@@ -71,7 +71,7 @@ jobs:
             --env APPLICATION_COMMIT_SHA \
             --env BACKUP_OUTPUT_DIR \
             --volume "${PWD}/artifacts/database-backup:/workspace/artifacts/database-backup" \
-            propertyapi-database-recovery:local \
+            hudhudnest-database-recovery:local \
             bash /workspace/scripts/database/backup-postgres.sh
 
       - name: Apply tiered retention
@@ -88,7 +88,7 @@ jobs:
             --env BACKUP_AWS_REGION \
             --env BACKUP_S3_ENDPOINT_URL \
             --env RETENTION_APPLY \
-            propertyapi-database-recovery:local \
+            hudhudnest-database-recovery:local \
             bash /workspace/scripts/database/apply-retention.sh
             
       - name: Publish non-sensitive backup evidence

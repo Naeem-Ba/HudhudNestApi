@@ -1,4 +1,4 @@
-# PropertyApi SLOs
+# HudhudNestApi SLOs
 
 Rolling window: 30 days. Scheduled maintenance is excluded only when approved
 and annotated before the window.

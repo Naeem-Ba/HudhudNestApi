@@ -10,8 +10,8 @@ Assessment date: 2026-07-28. Finding: M-10 (P0, production blocking).
 | ORM and provider | EF Core 8.0.11 with Npgsql.EntityFrameworkCore.PostgreSQL 8.0.11 |
 | Database | PostgreSQL 16, pinned by `postgis/postgis:16-3.4` in the production gate |
 | Spatial extension | PostGIS 3.4 in the pinned database image; startup/readiness checks execute a PostGIS query |
-| Migrations | `PropertyApi.Infrastructure/Migrations`; history table is the EF default `__EFMigrationsHistory` |
-| Migration execution | Separate `tools/PropertyApi.Migrator`; startup migration is disabled in production-like Compose |
+| Migrations | `HudhudNestApi.Infrastructure/Migrations`; history table is the EF default `__EFMigrationsHistory` |
+| Migration execution | Separate `tools/HudhudNestApi.Migrator`; startup migration is disabled in production-like Compose |
 | Health | `/health/live` and `/health/ready`; readiness covers PostgreSQL/PostGIS and Redis |
 | Deployment evidence | Render is used externally. No `render.yaml`, registry publication workflow, production deploy job, or repository image-retention policy was present |
 | Existing gate | Build, tests, vulnerability, coverage, production-like containers, migrations, PostGIS, Redis outage/recovery, and optional staging smoke |

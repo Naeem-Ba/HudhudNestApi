@@ -23,12 +23,12 @@ No external API contracts were changed.
 
 | Command | Result |
 | --- | --- |
-| `dotnet test tests\PropertyApi.Auth.Tests\PropertyApi.Auth.Tests.csproj -c Release --no-restore --filter LoginCommandHandlerTests` | Passed: 2/2. |
-| `dotnet test tests\PropertyApi.Auth.Tests\PropertyApi.Auth.Tests.csproj -c Release --no-restore` | Passed: 158/158. |
-| `dotnet test tests\PropertyApi.Architecture.Tests\PropertyApi.Architecture.Tests.csproj -c Release --no-restore` | Passed: 32/32. |
-| `dotnet test tests\PropertyApi.Application.Tests\PropertyApi.Application.Tests.csproj -c Release --no-restore` | Passed: 122/122. |
-| `dotnet test tests\PropertyApi.Integration.Tests\PropertyApi.Integration.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName!~Postgres&FullyQualifiedName!~NotificationIntegrationTests"` | Passed: 20/20. |
-| `dotnet build .\PropertyApi.sln -c Release --no-restore` | Passed: 0 warnings, 0 errors. |
+| `dotnet test tests\HudhudNestApi.Auth.Tests\HudhudNestApi.Auth.Tests.csproj -c Release --no-restore --filter LoginCommandHandlerTests` | Passed: 2/2. |
+| `dotnet test tests\HudhudNestApi.Auth.Tests\HudhudNestApi.Auth.Tests.csproj -c Release --no-restore` | Passed: 158/158. |
+| `dotnet test tests\HudhudNestApi.Architecture.Tests\HudhudNestApi.Architecture.Tests.csproj -c Release --no-restore` | Passed: 32/32. |
+| `dotnet test tests\HudhudNestApi.Application.Tests\HudhudNestApi.Application.Tests.csproj -c Release --no-restore` | Passed: 122/122. |
+| `dotnet test tests\HudhudNestApi.Integration.Tests\HudhudNestApi.Integration.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName!~Postgres&FullyQualifiedName!~NotificationIntegrationTests"` | Passed: 20/20. |
+| `dotnet build .\HudhudNestApi.sln -c Release --no-restore` | Passed: 0 warnings, 0 errors. |
 
 ## Remaining Boundary
 

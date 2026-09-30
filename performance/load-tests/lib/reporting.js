@@ -84,7 +84,7 @@ export function performanceArtifacts(data, scenario, metadata = {}) {
     `<failure message="${xmlEscape(`${threshold.metric}: ${threshold.expression}`)}" />`).join('');
   const junit = `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<testsuite name="${xmlEscape(scenario)}" tests="1" failures="${failedThresholds.length ? 1 : 0}" skipped="0">` +
-    `<testcase classname="PropertyApi.Performance" name="${xmlEscape(scenario)}">${failures}</testcase>` +
+    `<testcase classname="HudhudNestApi.Performance" name="${xmlEscape(scenario)}">${failures}</testcase>` +
     `</testsuite>\n`;
 
   const root = `/artifacts/performance/k6/${scenario}`;

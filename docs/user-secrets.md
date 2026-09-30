@@ -1,6 +1,6 @@
 # User Secrets Setup
 
-This document explains how to configure local development secrets for the PropertyApi backend.
+This document explains how to configure local development secrets for the HudhudNestApi backend.
 
 ## Purpose
 
@@ -21,7 +21,7 @@ For local development, use the .NET User Secrets store.
 Run this command from the repository root:
 
 ```powershell
-dotnet user-secrets init --project .\PropertyApi\PropertyApi.csproj
+dotnet user-secrets init --project .\HudhudNestApi\HudhudNestApi.csproj
 ```
 
 ## Email delivery (Resend)
@@ -32,8 +32,8 @@ messages to the log and the application refuses to start with it in Production.
 The Resend API key is a secret and must never be committed. Set it locally with:
 
 ```powershell
-dotnet user-secrets set "Email:Provider" "Resend" --project .\PropertyApi\PropertyApi.csproj
-dotnet user-secrets set "Email:Resend:ApiKey" "re_your_key_here" --project .\PropertyApi\PropertyApi.csproj
+dotnet user-secrets set "Email:Provider" "Resend" --project .\HudhudNestApi\HudhudNestApi.csproj
+dotnet user-secrets set "Email:Resend:ApiKey" "re_your_key_here" --project .\HudhudNestApi\HudhudNestApi.csproj
 ```
 
 When deployed, supply the same values as environment variables instead:

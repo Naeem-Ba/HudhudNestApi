@@ -1,4 +1,4 @@
-name: propertyapi-database-recovery
+name: hudhudnest-database-recovery
 
 services:
   source-postgres:
@@ -65,7 +65,7 @@ services:
         condition: service_healthy
 
   recovery-toolbox:
-    image: propertyapi-database-recovery:local
+    image: hudhudnest-database-recovery:local
     build:
       context: ..
       dockerfile: ci/Dockerfile.database-recovery
@@ -101,7 +101,7 @@ services:
       DataProtection__PersistKeysToDatabase: "true"
       Jwt__Key: recovery-drill-only-64-character-key-never-use-in-production-12345678
       Jwt__Issuer: PropertyApi.RecoveryDrill
-      Jwt__Audience: PropertyApi.RecoveryDrill
+      Jwt__Audience: HudhudNestApi.RecoveryDrill
       Cloudinary__CloudName: recovery-drill
       Cloudinary__ApiKey: recovery-drill
       Cloudinary__ApiSecret: recovery-drill

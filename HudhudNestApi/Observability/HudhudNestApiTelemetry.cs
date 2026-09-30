@@ -32,25 +32,25 @@ public static class HudhudNestApiTelemetry
 
     private static readonly Counter<long> HttpRequestCounter =
         Meter.CreateCounter<long>(
-            "propertyapi.http.server.requests",
+            "hudhudnest.http.server.requests",
             unit: "requests",
             description: "Completed HTTP requests grouped by low-cardinality API operation.");
 
     private static readonly Histogram<double> HttpRequestDuration =
         Meter.CreateHistogram<double>(
-            "propertyapi.http.server.duration",
+            "hudhudnest.http.server.duration",
             unit: "ms",
             description: "HTTP request duration in milliseconds.");
 
     private static readonly Counter<long> AuthRequestCounter =
         Meter.CreateCounter<long>(
-            "propertyapi.auth.requests",
+            "hudhudnest.auth.requests",
             unit: "requests",
             description: "Authentication requests grouped by operation and outcome.");
 
     private static readonly Histogram<double> AuthRequestDuration =
         Meter.CreateHistogram<double>(
-            "propertyapi.auth.duration",
+            "hudhudnest.auth.duration",
             unit: "ms",
             description: "Authentication request duration in milliseconds.");
 
@@ -77,15 +77,15 @@ public static class HudhudNestApiTelemetry
 
     private static readonly Counter<long> PropertyRequestCounter =
         Meter.CreateCounter<long>(
-            "propertyapi.properties.requests",
+            "hudhudnest.properties.requests",
             unit: "requests",
-            description: "Property API requests grouped by operation and outcome.");
+            description: "HudhudNest API requests grouped by operation and outcome.");
 
     private static readonly Histogram<double> PropertyRequestDuration =
         Meter.CreateHistogram<double>(
-            "propertyapi.properties.duration",
+            "hudhudnest.properties.duration",
             unit: "ms",
-            description: "Property API request duration in milliseconds.");
+            description: "HudhudNest API request duration in milliseconds.");
 
     // Staging-only: toggled exclusively by ObservabilitySyntheticController's alert-test-state
     // endpoint, which is itself gated by Staging:TestSupport:Enabled and a shared secret. Exists
@@ -96,7 +96,7 @@ public static class HudhudNestApiTelemetry
 
     private static readonly ObservableGauge<long> SyntheticAlertTestState =
         Meter.CreateObservableGauge(
-            "propertyapi.synthetic.alert_test_state",
+            "hudhudnest.synthetic.alert_test_state",
             () => Interlocked.Read(ref _syntheticAlertTestState),
             description: "Staging-only synthetic gauge toggled by the observability smoke test " +
                 "to exercise a full Prometheus alert firing/resolution cycle. Always 0 outside " +

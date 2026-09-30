@@ -1,22 +1,22 @@
-# اختبارات OTP / SMS / ForwardedHeaders — PropertyApi
+# اختبارات OTP / SMS / ForwardedHeaders — HudhudNestApi
 
 هذا الحزمة تضيف اختبارات مخصصة للبنود الأربعة المطلوبة، مع تعديلين أمنيين صغيرين حتى تكون الاختبارات قابلة للنجاح ولا تكتفي بكشف الخلل فقط.
 
 ## الملفات المضافة
 
-- `tests/PropertyApi.Auth.Tests/Infrastructure/OtpGenerationTests.cs`
-- `tests/PropertyApi.Auth.Tests/Infrastructure/SmsHttpsOnlyTests.cs`
-- `tests/PropertyApi.Integration.Tests/Auth/OtpHourlyCountingTests.cs`
-- `tests/PropertyApi.Integration.Tests/Security/ForwardedHeadersTests.cs`
-- `tests/PropertyApi.Integration.Tests/TestInfrastructure/TestApplication.cs`
+- `tests/HudhudNestApi.Auth.Tests/Infrastructure/OtpGenerationTests.cs`
+- `tests/HudhudNestApi.Auth.Tests/Infrastructure/SmsHttpsOnlyTests.cs`
+- `tests/HudhudNestApi.Integration.Tests/Auth/OtpHourlyCountingTests.cs`
+- `tests/HudhudNestApi.Integration.Tests/Security/ForwardedHeadersTests.cs`
+- `tests/HudhudNestApi.Integration.Tests/TestInfrastructure/TestApplication.cs`
 
 ## الملفات المعدلة
 
-- `PropertyApi.Infrastructure/Auth/Services/OtpService.cs`
-- `PropertyApi.Infrastructure/Auth/Services/SmsProviderOptions.cs`
-- `PropertyApi.Infrastructure/DependencyInjection.cs`
-- `PropertyApi.Infrastructure/Health/ProductionStartupValidator.cs`
-- `PropertyApi/Program.cs`
+- `HudhudNestApi.Infrastructure/Auth/Services/OtpService.cs`
+- `HudhudNestApi.Infrastructure/Auth/Services/SmsProviderOptions.cs`
+- `HudhudNestApi.Infrastructure/DependencyInjection.cs`
+- `HudhudNestApi.Infrastructure/Health/ProductionStartupValidator.cs`
+- `HudhudNestApi/Program.cs`
 
 ## لماذا توجد تعديلات إنتاجية؟
 

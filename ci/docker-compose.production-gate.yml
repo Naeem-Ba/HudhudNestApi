@@ -1,13 +1,13 @@
-name: propertyapi-production-gate
+name: hudhudnest-production-gate
 
 # ---------------------------------------------------------------------------
 # Single source of truth for the database name.
-# Every service below reads ${PROPERTYAPI_GATE_DB} instead of a hardcoded
+# Every service below reads ${HUDHUDNEST_GATE_DB} instead of a hardcoded
 # string. Set it in ci/.env.production-gate (see .env.production-gate.example)
 # or export it in the shell / GitHub Actions env before running this file.
 # ---------------------------------------------------------------------------
 
-x-db-name: &db-name ${PROPERTYAPI_GATE_DB:-propertyapi_gate}
+x-db-name: &db-name ${HUDHUDNEST_GATE_DB:-propertyapi_gate}
 
 services:
   postgres:
@@ -16,13 +16,13 @@ services:
     # fails CI if this line ever drifts from that canonical value.
     image: postgis/postgis:17-3.5
     environment:
-      POSTGRES_USER: ${PROPERTYAPI_GATE_DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${PROPERTYAPI_GATE_DB_PASSWORD:-postgres}
+      POSTGRES_USER: ${HUDHUDNEST_GATE_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${HUDHUDNEST_GATE_DB_PASSWORD:-postgres}
       POSTGRES_DB: *db-name
     healthcheck:
       test:
         - CMD-SHELL
-        - pg_isready -U ${PROPERTYAPI_GATE_DB_USER:-postgres} -d ${PROPERTYAPI_GATE_DB:-propertyapi_gate}
+        - pg_isready -U ${HUDHUDNEST_GATE_DB_USER:-postgres} -d ${HUDHUDNEST_GATE_DB:-propertyapi_gate}
       interval: 5s
       timeout: 3s
       retries: 20
@@ -173,21 +173,21 @@ services:
       retries: 20
 
   migrator:
-    image: propertyapi-migrator:${PROPERTYAPI_IMAGE_TAG:-production-gate}
+    image: hudhudnest-migrator:${HUDHUDNEST_IMAGE_TAG:-production-gate}
     build:
       context: ..
       dockerfile: ci/Dockerfile.migrator
     environment:
       DOTNET_ENVIRONMENT: Staging
       ASPNETCORE_ENVIRONMENT: Staging
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${PROPERTYAPI_GATE_DB:-propertyapi_gate};Username=${PROPERTYAPI_GATE_DB_USER:-postgres};Password=${PROPERTYAPI_GATE_DB_PASSWORD:-postgres}
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${HUDHUDNEST_GATE_DB:-propertyapi_gate};Username=${HUDHUDNEST_GATE_DB_USER:-postgres};Password=${HUDHUDNEST_GATE_DB_PASSWORD:-postgres}
       Redis__Required: "false"
     depends_on:
       postgres:
         condition: service_healthy
 
   api:
-    image: propertyapi-api:${PROPERTYAPI_IMAGE_TAG:-production-gate}
+    image: hudhudnest-api:${HUDHUDNEST_IMAGE_TAG:-production-gate}
     build:
       context: ..
       dockerfile: HudhudNestApi/Dockerfile
@@ -195,7 +195,7 @@ services:
       DOTNET_ENVIRONMENT: Staging
       ASPNETCORE_ENVIRONMENT: Staging
       ASPNETCORE_HTTP_PORTS: "8080"
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${PROPERTYAPI_GATE_DB:-propertyapi_gate};Username=${PROPERTYAPI_GATE_DB_USER:-postgres};Password=${PROPERTYAPI_GATE_DB_PASSWORD:-postgres}
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${HUDHUDNEST_GATE_DB:-propertyapi_gate};Username=${HUDHUDNEST_GATE_DB_USER:-postgres};Password=${HUDHUDNEST_GATE_DB_PASSWORD:-postgres}
       ConnectionStrings__Redis: redis:6379,abortConnect=false
       Redis__ConnectionString: redis:6379,abortConnect=false
       Redis__Required: "true"
@@ -205,7 +205,7 @@ services:
       Deployment__ProductionBaseUrl: https://production.invalid
       Staging__AllowHttpLocal: "true"
       Staging__EnvironmentId: local-isolated-staging
-      Staging__DatabaseNameMarker: ${PROPERTYAPI_GATE_DB:-propertyapi_gate}
+      Staging__DatabaseNameMarker: ${HUDHUDNEST_GATE_DB:-propertyapi_gate}
       Staging__RedisIsolationMarker: local-staging-redis
       Staging__StorageIsolationMarker: local-in-memory-smoke-media
       Staging__ExternalNotificationsDisabled: "true"
@@ -217,7 +217,7 @@ services:
       DataProtection__PersistKeysToDatabase: "true"
       Jwt__Key: ci-only-64-character-development-key-change-before-any-real-deployment-1234
       Jwt__Issuer: PropertyApi.CI
-      Jwt__Audience: PropertyApi.CI
+      Jwt__Audience: HudhudNestApi.CI
       Cloudinary__CloudName: ci
       Cloudinary__ApiKey: ci
       Cloudinary__ApiSecret: ci

@@ -32,16 +32,16 @@ Date: 2026-09-04
 - Application: `PublishInvestmentProjectCommandHandler`'s cross-aggregate readiness checklist, `ExpressInvestmentInterestCommandHandler`'s idempotency, `AddInvestmentToWatchlistCommandHandler`'s duplicate prevention, `InvestmentCalculator`'s scenario math.
 
 **Regression-verified in this session:**
-- `dotnet test tests/PropertyApi.Application.Tests` — 495/495 passing (was 453 before this work; +42 new).
-- `dotnet test tests/PropertyApi.Auth.Tests` — 245/245 passing (unaffected by this change, re-run to confirm the `PropertySummary` extension didn't regress it).
-- `dotnet test tests/PropertyApi.Architecture.Tests` — 107/107 passing (2 initially failed on the new anonymous endpoints missing from the approved list/rate-limit policy — fixed).
-- `dotnet build PropertyApi.sln` — 0 errors, 0 warnings.
+- `dotnet test tests/HudhudNestApi.Application.Tests` — 495/495 passing (was 453 before this work; +42 new).
+- `dotnet test tests/HudhudNestApi.Auth.Tests` — 245/245 passing (unaffected by this change, re-run to confirm the `PropertySummary` extension didn't regress it).
+- `dotnet test tests/HudhudNestApi.Architecture.Tests` — 107/107 passing (2 initially failed on the new anonymous endpoints missing from the approved list/rate-limit policy — fixed).
+- `dotnet build HudhudNestApi.sln` — 0 errors, 0 warnings.
 
 **Not written / not run in this session (gap against the Definition of Done):**
-- Integration tests (EF mapping/constraints/migration apply, against a real PostgreSQL) — `tests/PropertyApi.Integration.Tests` was not run; no live database was available in this sandboxed session, and the user explicitly asked for the migration to be generated only, not applied.
+- Integration tests (EF mapping/constraints/migration apply, against a real PostgreSQL) — `tests/HudhudNestApi.Integration.Tests` was not run; no live database was available in this sandboxed session, and the user explicitly asked for the migration to be generated only, not applied.
 - API-level tests (anonymous/authenticated/admin access, invalid ids, invalid transitions) against a running `WebApplicationFactory`.
 - Explicit IDOR tests (User A editing/viewing User B's watchlist/interest, or a private document) at the HTTP layer — the repository-layer gating that should prevent this is implemented and covered by the domain/handler unit tests above, but not exercised end-to-end.
-- `PropertyApi.Concurrency.Tests`, `PropertyApi.Performance.Tests`, `PropertyApi.StagingSmokeTests` were not run (all require live infrastructure this sandbox doesn't have).
+- `HudhudNestApi.Concurrency.Tests`, `HudhudNestApi.Performance.Tests`, `HudhudNestApi.StagingSmokeTests` were not run (all require live infrastructure this sandbox doesn't have).
 
 ## Security checklist (Phase 1 scope guardrails)
 
@@ -59,27 +59,27 @@ Date: 2026-09-04
 
 ## Files created
 
-**Backend** (`PropertyApi` repo, branch `claude/investment-discovery-phase-1-ce4396`):
+**Backend** (`HudhudNestApi` repo, branch `claude/investment-discovery-phase-1-ce4396`):
 - `docs/investment/PHASE-1-DISCOVERY.md`, this report
-- `PropertyApi.Domain/Investments/**` — 7 entities, 6 enums
-- `PropertyApi.Infrastructure/Persistence/Configurations/Investments/**` — 7 EF configurations
-- `PropertyApi.Infrastructure/Migrations/20260904074621_AddInvestmentDiscoveryModule.*`
-- `PropertyApi.Infrastructure/Investments/**` — 7 repository implementations
-- `PropertyApi.Application/Investments/**` — DTOs, interfaces, 16 commands, 12 queries, calculator service, shared validation rule
-- `PropertyApi/Controllers/InvestmentsController.cs`, `AdminInvestmentsController.cs`
-- `tests/PropertyApi.Application.Tests/Investments/**` — 8 test files, 42 tests
+- `HudhudNestApi.Domain/Investments/**` — 7 entities, 6 enums
+- `HudhudNestApi.Infrastructure/Persistence/Configurations/Investments/**` — 7 EF configurations
+- `HudhudNestApi.Infrastructure/Migrations/20260904074621_AddInvestmentDiscoveryModule.*`
+- `HudhudNestApi.Infrastructure/Investments/**` — 7 repository implementations
+- `HudhudNestApi.Application/Investments/**` — DTOs, interfaces, 16 commands, 12 queries, calculator service, shared validation rule
+- `HudhudNestApi/Controllers/InvestmentsController.cs`, `AdminInvestmentsController.cs`
+- `tests/HudhudNestApi.Application.Tests/Investments/**` — 8 test files, 42 tests
 
-**Frontend** (`Wohnungsmieten` repo, branch `feature/investment-discovery-phase-1`):
+**Frontend** (`HudhudNest` repo, branch `feature/investment-discovery-phase-1`):
 - `src/app/core/models/investment.model.ts`, `src/app/core/api/investment-api.service.ts`
 - `src/app/features/investments/{investment-list,investment-details,investment-watchlist}/**`
 
 ## Files modified
 
 **Backend:**
-- `PropertyApi.Infrastructure/Persistence/AppDbContext.cs` (new DbSets)
-- `PropertyApi.Infrastructure/Repositories/RepositoryInfrastructureRegistration.cs` (new registrations)
-- `PropertyApi.Application/Common/Interfaces/IPropertyReadRepository.cs` + `PropertyApi.Infrastructure/Repositories/PropertyReadRepository.cs` (extended `PropertySummary` with a few optional fields, reused instead of a parallel abstraction)
-- `tests/PropertyApi.Architecture.Tests/Api/PublicEndpointPolicyTests.cs` (approved-anonymous list)
+- `HudhudNestApi.Infrastructure/Persistence/AppDbContext.cs` (new DbSets)
+- `HudhudNestApi.Infrastructure/Repositories/RepositoryInfrastructureRegistration.cs` (new registrations)
+- `HudhudNestApi.Application/Common/Interfaces/IPropertyReadRepository.cs` + `HudhudNestApi.Infrastructure/Repositories/PropertyReadRepository.cs` (extended `PropertySummary` with a few optional fields, reused instead of a parallel abstraction)
+- `tests/HudhudNestApi.Architecture.Tests/Api/PublicEndpointPolicyTests.cs` (approved-anonymous list)
 
 **Frontend:**
 - `src/app/app.routes.ts`, `src/app/navbar/navbar.component.html`, `public/i18n/{en,de,ar}.json`
@@ -89,7 +89,7 @@ Date: 2026-09-04
 `AddInvestmentDiscoveryModule` (20260904074621) — generated, **not applied**. To apply locally:
 
 ```bash
-dotnet ef database update --project PropertyApi.Infrastructure --startup-project PropertyApi
+dotnet ef database update --project HudhudNestApi.Infrastructure --startup-project HudhudNestApi
 ```
 
 ## Endpoints
@@ -100,7 +100,7 @@ summary: `GET/POST/DELETE /api/investments/**` (public + authenticated) and
 
 ## Next recommended phase
 
-1. Apply the migration and run `PropertyApi.Integration.Tests`/API tests against a real database
+1. Apply the migration and run `HudhudNestApi.Integration.Tests`/API tests against a real database
    to close the Tests/Security gaps flagged above (highest priority — this is the main thing
    standing between this PR and "done" per the spec's own Definition of Done).
 2. Build the Angular admin UI for `AdminInvestmentsController` (project list/review, the
