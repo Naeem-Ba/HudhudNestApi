@@ -16,7 +16,7 @@ The application now owns a stable configuration section:
 ```json
 {
   "Observability": {
-    "ServiceName": "PropertyApi",
+    "ServiceName": "HudhudNestApi",
     "ServiceVersion": "",
     "CorrelationHeaderName": "X-Correlation-ID",
     "RequestLoggingEnabled": true,

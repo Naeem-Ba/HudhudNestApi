@@ -13,13 +13,13 @@ public static class ApplicationTelemetry
 
     private static readonly Counter<long> RequestCounter =
         Meter.CreateCounter<long>(
-            "propertyapi.application.requests",
+            "hudhudnest.application.requests",
             unit: "requests",
             description: "Application requests grouped by request kind and outcome.");
 
     private static readonly Histogram<double> RequestDuration =
         Meter.CreateHistogram<double>(
-            "propertyapi.application.request.duration",
+            "hudhudnest.application.request.duration",
             unit: "ms",
             description: "Application request duration in milliseconds.");
 

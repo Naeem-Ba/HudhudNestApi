@@ -7,7 +7,7 @@ namespace HudhudNestApi.Application.Tests.SocialDistribution;
 public sealed class SocialAccountTests
 {
     private static SocialAccount MakeAccount() => SocialAccount.Create(
-        Guid.NewGuid(), SocialPlatform.Facebook, "عقار تيك دمشق", "ext-123", SocialAccountType.Page, governorateId: 1);
+        Guid.NewGuid(), SocialPlatform.Facebook, "هدهد نيست دمشق", "ext-123", SocialAccountType.Page, governorateId: 1);
 
     [Fact]
     public void Create_ValidInput_StartsPendingAuthorization_CannotPublishYet()

@@ -2,7 +2,7 @@
 
 ## Model
 
-Database and application rollback are independent. PropertyApi uses Render externally and the repository had no container registry/publish pipeline. The implemented rollback therefore targets an immutable Render deploy ID (`dep-...`) whose retained build artifact and commit are known. It never executes EF migration downgrade.
+Database and application rollback are independent. HudhudNestApi uses Render externally and the repository had no container registry/publish pipeline. The implemented rollback therefore targets an immutable Render deploy ID (`dep-...`) whose retained build artifact and commit are known. It never executes EF migration downgrade.
 
 Render must be configured to wait for the GitHub `Production Deployment Gate` check on `main`/`master`. The protected `production-release`, `production-recovery`, and `production-rollback` GitHub environments require reviewers. Auto-deploy must be paused during an incident so the bad commit is not immediately redeployed.
 

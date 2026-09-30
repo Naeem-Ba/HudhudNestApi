@@ -4,7 +4,7 @@ using HudhudNestApi.Domain.Plans.Entities;
 namespace HudhudNestApi.Infrastructure.Persistence.Seeds;
 
 /// <summary>
-/// Seeds the four tiers, mirroring the Wohnungsmieten frontend's
+/// Seeds the four tiers, mirroring the HudhudNest frontend's
 /// src/app/core/models/subscription-plan.model.ts SUBSCRIPTION_PLANS constant key
 /// for key — the two must stay in sync, since neither owns display text (that's
 /// entirely frontend i18n).

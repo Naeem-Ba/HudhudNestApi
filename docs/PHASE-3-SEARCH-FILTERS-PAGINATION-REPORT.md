@@ -1,6 +1,6 @@
 # Phase 3 — Search, Filters, Location Hierarchy & Pagination
 
-**Repos:** `PropertyApi` (branch `feature/phase3-search-filters-pagination` off `master`) and `Wohnungsmieten` (branch `feature/phase3-search-filters-pagination` off `main`).
+**Repos:** `HudhudNestApi` (branch `feature/phase3-search-filters-pagination` off `master`) and `HudhudNest` (branch `feature/phase3-search-filters-pagination` off `main`).
 **Scope executed:** §13 Search fix, §14/15 City↔District separation & linkage, §16 Search+Filters merge, §17 Reset Filters, §18 Pagination. Favorites/Sharing/Dashboard restructuring were not touched, per the phase's explicit exclusions.
 
 ---
@@ -9,13 +9,13 @@
 
 | Document | Relevant requirements | Impact on implementation |
 |---|---|---|
-| `PropertyApi/docs/phase-0-implementation.md` | History of the location model: legacy free-text `City`/`Region` → structured `Governorate → District → Neighborhood` FKs; "no filter set" must mean "any". | Established that the real hierarchy has no `City` tier — see Conflict #1 below. Confirmed empty-filter semantics already match spec. |
-| `PropertyApi/docs/database/erd.md`, `DATABASE-PRODUCTION-READINESS.md` | ERD: `Governorate ||--o{ District ||--o{ Neighborhood`, all nullable FKs on `Property`, `Restrict` delete. No `City` entity anywhere in the schema. | Confirmed the schema-level hierarchy; drove the City/Governorate conflict resolution. |
-| `PropertyApi.Application/Properties/DTOs/PropertyFilterDto.cs` (source, de-facto contract) | Full filter surface: pagination, legacy City/Region, structured Governorate/District/Neighborhood/PropertyType, price/room/area ranges, amenities, sort. No keyword field existed. | This *is* the combined search+filter DTO already — confirmed §16's "merge into one query" was mostly a frontend problem, except that a keyword field had to be added. |
-| `PropertyApi.Infrastructure/Repositories/PropertyRepository.cs` (`ApplyFilter`/`GetPagedAsync`) | Filter → Count → Sort → Skip/Take ordering; all filters AND-composed on one `IQueryable`. | Confirmed as the authoritative, already-correct pagination/filter pipeline — no reordering needed. |
+| `HudhudNestApi/docs/phase-0-implementation.md` | History of the location model: legacy free-text `City`/`Region` → structured `Governorate → District → Neighborhood` FKs; "no filter set" must mean "any". | Established that the real hierarchy has no `City` tier — see Conflict #1 below. Confirmed empty-filter semantics already match spec. |
+| `HudhudNestApi/docs/database/erd.md`, `DATABASE-PRODUCTION-READINESS.md` | ERD: `Governorate ||--o{ District ||--o{ Neighborhood`, all nullable FKs on `Property`, `Restrict` delete. No `City` entity anywhere in the schema. | Confirmed the schema-level hierarchy; drove the City/Governorate conflict resolution. |
+| `HudhudNestApi.Application/Properties/DTOs/PropertyFilterDto.cs` (source, de-facto contract) | Full filter surface: pagination, legacy City/Region, structured Governorate/District/Neighborhood/PropertyType, price/room/area ranges, amenities, sort. No keyword field existed. | This *is* the combined search+filter DTO already — confirmed §16's "merge into one query" was mostly a frontend problem, except that a keyword field had to be added. |
+| `HudhudNestApi.Infrastructure/Repositories/PropertyRepository.cs` (`ApplyFilter`/`GetPagedAsync`) | Filter → Count → Sort → Skip/Take ordering; all filters AND-composed on one `IQueryable`. | Confirmed as the authoritative, already-correct pagination/filter pipeline — no reordering needed. |
 | `public/i18n/{en,de,ar}.json` → `PROPERTY_LIST.SEARCH_PLACEHOLDER` | English key already read *"Search by title or description..."* | Confirmed the product intent for the search box was always Title/Description keyword search — validated the backend field choice (see §5). |
 | `docs/testing/coverage-improvement-plan.md` | Repositories/handlers must not be excluded from coverage; PR gate ≥70% line coverage on changed lines. | New `PropertyFilterDtoValidatorTests.cs` and `property-list.page.spec.ts` added to satisfy this on both repos. |
-| `dotnet format` / Architecture.Tests conventions | `dotnet format --verify-no-changes` gate; `PropertyApi.Architecture.Tests` enforces anonymous-endpoint/rate-limit invariants. | Verified clean after every backend change; full 164-test Architecture.Tests suite re-run. |
+| `dotnet format` / Architecture.Tests conventions | `dotnet format --verify-no-changes` gate; `HudhudNestApi.Architecture.Tests` enforces anonymous-endpoint/rate-limit invariants. | Verified clean after every backend change; full 164-test Architecture.Tests suite re-run. |
 
 **Conflict found and resolved:** The phase brief describes the hierarchy as *"Governorate → City → District, or the project's actual hierarchy if different"* (its own words hedge this). The actual, current schema has **no `City` entity** — it is `Governorate → District → Neighborhood`; `Property.City` is a separate, deprecated free-text column with no FK relationship to anything. Per the brief's own fallback clause, **"City" in §14/15 is read as the `Governorate` tier** for this implementation. This is a genuinely new-schema-work interpretation only if the user meant a literal, distinct `City` tier — flagged here explicitly rather than guessed silently, per Rule 1.
 
@@ -51,16 +51,16 @@
 
 ## 4. Changes Made
 
-### Backend (`PropertyApi`)
+### Backend (`HudhudNestApi`)
 
 | File | Change | Reason |
 |---|---|---|
-| [PropertyFilterDto.cs](PropertyApi.Application/Properties/DTOs/PropertyFilterDto.cs) | Added `SearchTerm` (string?). | New keyword-search field (§13). |
-| [PropertyRepository.cs](PropertyApi.Infrastructure/Repositories/PropertyRepository.cs) `ApplyFilter` | `SearchTerm` matched via `ILIKE` against `Title` OR `Description` (trimmed, case-insensitive, skipped when empty/whitespace); `City`/`Region` matches now trim the input before building the `ILIKE` pattern; `CurrencyCode` now actually applied (equality, uppercased). | Problems #1 and #4. |
-| [PropertyFilterDtoValidator.cs](PropertyApi.Application/Properties/Validators/PropertyFilterDtoValidator.cs) | Added `SearchTerm` max-length (200) and `CurrencyCode` length (3) rules. | Consistency with the geo-search validator's existing `CurrencyCode` rule; basic input-size guard for the new field. |
-| [PropertyFilterDtoValidatorTests.cs](tests/PropertyApi.Application.Tests/Properties/PropertyFilterDtoValidatorTests.cs) *(new)* | 10 tests covering the new rules plus existing ones (page size, min/max price ordering). | No prior coverage existed for this validator. |
+| [PropertyFilterDto.cs](HudhudNestApi.Application/Properties/DTOs/PropertyFilterDto.cs) | Added `SearchTerm` (string?). | New keyword-search field (§13). |
+| [PropertyRepository.cs](HudhudNestApi.Infrastructure/Repositories/PropertyRepository.cs) `ApplyFilter` | `SearchTerm` matched via `ILIKE` against `Title` OR `Description` (trimmed, case-insensitive, skipped when empty/whitespace); `City`/`Region` matches now trim the input before building the `ILIKE` pattern; `CurrencyCode` now actually applied (equality, uppercased). | Problems #1 and #4. |
+| [PropertyFilterDtoValidator.cs](HudhudNestApi.Application/Properties/Validators/PropertyFilterDtoValidator.cs) | Added `SearchTerm` max-length (200) and `CurrencyCode` length (3) rules. | Consistency with the geo-search validator's existing `CurrencyCode` rule; basic input-size guard for the new field. |
+| [PropertyFilterDtoValidatorTests.cs](tests/HudhudNestApi.Application.Tests/Properties/PropertyFilterDtoValidatorTests.cs) *(new)* | 10 tests covering the new rules plus existing ones (page size, min/max price ordering). | No prior coverage existed for this validator. |
 
-### Frontend (`Wohnungsmieten`)
+### Frontend (`HudhudNest`)
 
 | File | Change | Reason |
 |---|---|---|
@@ -115,7 +115,7 @@ Confirmed, unchanged: `Governorate → District → Neighborhood` (see Conflict 
 | Phase 1 Regression | PASS (Architecture.Tests 164/164; frontend 308/308) |
 | Phase 2 Regression | PASS (same suites — session-expiry, api-error-interceptor, and auth specs all included and passing) |
 
-**Backend:** `dotnet build` clean, `dotnet format --verify-no-changes` clean, `PropertyApi.Application.Tests` (new: 10/10), `PropertyApi.Architecture.Tests` (164/164, includes `PropertySortOrderTests`).
+**Backend:** `dotnet build` clean, `dotnet format --verify-no-changes` clean, `HudhudNestApi.Application.Tests` (new: 10/10), `HudhudNestApi.Architecture.Tests` (164/164, includes `PropertySortOrderTests`).
 **Frontend:** `npm run typecheck` clean, `npm run build -- --configuration=production` clean, full Karma suite **308/308** (new: 12/12 in `property-list.page.spec.ts`).
 
 ## 10. Performance Findings

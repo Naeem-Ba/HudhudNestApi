@@ -10,7 +10,7 @@ gate scripts, and missing report artifacts.
 
 | Gate | Enforcement |
 | --- | --- |
-| Format | `dotnet format PropertyApi.sln --verify-no-changes --no-restore` |
+| Format | `dotnet format HudhudNestApi.sln --verify-no-changes --no-restore` |
 | Vulnerabilities | `ci/check-vulnerable-packages.ps1` parses `dotnet list package --vulnerable --include-transitive` and fails on advisories not present in `ci/vulnerability-baseline.json` |
 | Coverage baseline | `ci/check-coverage-baseline.ps1` aggregates Cobertura reports and compares against `ci/coverage-baseline.json` |
 | Coverage report | `dotnet-reportgenerator-globaltool` writes HTML, Cobertura, and GitHub markdown summaries |

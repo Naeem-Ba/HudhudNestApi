@@ -1,12 +1,12 @@
-# Frontend Audit Report — PropertyApi
+# Frontend Audit Report — HudhudNestApi
 
 ## Scope note: no frontend code exists in this repository
 
-`C:\Users\naeem\Source\Repos\PropertyApi` contains **only the backend** (.NET 8 Clean Architecture: `PropertyApi.Domain`, `PropertyApi.Application`, `PropertyApi.Infrastructure`, `PropertyApi` API/composition root, plus `tests/`, `tools/`, `ci/`, `scripts/`, `docs/`, `.github/workflows/`). There is no Angular/React/TypeScript project, no `package.json` for a client app, and no `wwwroot` content beyond what the API itself serves (Swagger UI assets).
+`C:\Users\naeem\Source\Repos\HudhudNestApi` contains **only the backend** (.NET 8 Clean Architecture: `HudhudNestApi.Domain`, `HudhudNestApi.Application`, `HudhudNestApi.Infrastructure`, `HudhudNestApi` API/composition root, plus `tests/`, `tools/`, `ci/`, `scripts/`, `docs/`, `.github/workflows/`). There is no Angular/React/TypeScript project, no `package.json` for a client app, and no `wwwroot` content beyond what the API itself serves (Swagger UI assets).
 
 Per prior session context, the Angular single-page application that serves as this project's frontend lives in a **separate repository at a separate path**, outside this working directory. Auditing it was out of scope for this run because:
 
-1. This audit's file-system access is scoped to `C:\Users\naeem\Source\Repos\PropertyApi`.
+1. This audit's file-system access is scoped to `C:\Users\naeem\Source\Repos\HudhudNestApi`.
 2. The scheduled audit task's instructions describe a generic dual-repo (backend + frontend) review checklist, but do not supply the frontend repository's path or grant access to it.
 
 **No frontend findings are reported here** — fabricating them against code this audit never read would be worse than reporting nothing. This is a scope gap, not a "frontend passed" result.

@@ -12,7 +12,7 @@ public sealed class SocialPostContentTests
         string title = "شقة رائعة",
         string body = "شقة مساحتها 120 م² في دمشق",
         string imageUrl = "https://cdn.example.com/img.jpg",
-        string targetUrl = "https://realestateworld.world/properties/abc?utm_source=facebook",
+        string targetUrl = "https://hudhudnest.com/properties/abc?utm_source=facebook",
         IEnumerable<string>? hashtags = null,
         string language = "ar",
         SocialPlatform platform = SocialPlatform.Facebook) =>

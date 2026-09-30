@@ -1,13 +1,13 @@
 # وثيقة المرجع المعماري (Architectural Reference Document — ARD)
-## نظام PropertyApi — منصّة العقارات (Yaqeen Real Estate)
+## نظام HudhudNestApi — منصّة العقارات (Yaqeen Real Estate)
 
 | | |
 |---|---|
-| **اسم النظام** | PropertyApi (.NET 8 Web API) |
+| **اسم النظام** | HudhudNestApi (.NET 8 Web API) |
 | **إصدار الوثيقة** | 1.1 |
 | **تاريخ الإصدار** | 2026-09-12 |
 | **الحالة** | معتمدة — مطابقة للكود الفعلي في فرع `claude/valuation-module` (commit `1bffcec`) |
-| **المستودع** | `Naeem-Ba/PropertyApi` |
+| **المستودع** | `Naeem-Ba/HudhudNestApi` |
 | **نطاق الفحص** | تحليل مباشر لشيفرة المصدر: 4 مشاريع رئيسية (API، Application، Domain، Infrastructure)، 41 وحدة تحكم، 57 ترحيلة قاعدة بيانات، ملفات النشر والمراقبة الفعلية |
 
 ### سجلّ المراجعات (Revision History)
@@ -23,7 +23,7 @@
 
 ### 1.1 الغرض من الوثيقة
 
-الغرض من هذه الوثيقة هو توثيق المعمارية الفعلية لنظام **PropertyApi** كما هي مطبَّقة اليوم في الشيفرة المصدرية — وليس كما يُفترض أو يُخطَّط لها. كل ادّعاء تقني في هذه الوثيقة تم التحقق منه بالرجوع مباشرة إلى ملفات الكود (`Program.cs`، `DependencyInjection.cs`، وحدات التحكم، معالجات الأوامر/الاستعلامات، ملفات الإعداد، ملفات `docker-compose`)، وليس من وثائق تصميم منفصلة قد تكون قديمة.
+الغرض من هذه الوثيقة هو توثيق المعمارية الفعلية لنظام **HudhudNestApi** كما هي مطبَّقة اليوم في الشيفرة المصدرية — وليس كما يُفترض أو يُخطَّط لها. كل ادّعاء تقني في هذه الوثيقة تم التحقق منه بالرجوع مباشرة إلى ملفات الكود (`Program.cs`، `DependencyInjection.cs`، وحدات التحكم، معالجات الأوامر/الاستعلامات، ملفات الإعداد، ملفات `docker-compose`)، وليس من وثائق تصميم منفصلة قد تكون قديمة.
 
 **الجمهور المستهدف:**
 
@@ -38,7 +38,7 @@
 ### 1.2 نطاق الوثيقة
 
 **ما تغطيه هذه الوثيقة:**
-- الواجهة الخلفية `PropertyApi` (.NET 8) بطبقاتها الأربع: `PropertyApi` (API)، `PropertyApi.Application`، `PropertyApi.Domain`، `PropertyApi.Infrastructure`.
+- الواجهة الخلفية `HudhudNestApi` (.NET 8) بطبقاتها الأربع: `HudhudNestApi` (API)، `HudhudNestApi.Application`، `HudhudNestApi.Domain`، `HudhudNestApi.Infrastructure`.
 - تكامل هذه الواجهة مع الأنظمة الخارجية: PostgreSQL/PostGIS، Redis، Cloudinary، Resend/SMTP، بوابة SMS، Google/Apple OAuth، Have I Been Pwned، مكدّس المراقبة (OpenTelemetry/Prometheus/Grafana/Tempo).
 - بيئتا النشر الفعليتان على Render (Staging وProduction) وGitHub Actions كخط أنابيب CI/CD.
 - خمس تدفقات عمل جوهرية موثَّقة بمخططات تسلسلية: المصادقة، إدارة العقارات، رفع الصور، التقييمات، الزيارات.
@@ -66,7 +66,7 @@
 | **OTLP** | OpenTelemetry Protocol — بروتوكول تصدير القياسات والتتبعات (Traces/Metrics) إلى مجمّع المراقبة. |
 | **SLO / SLI** | Service Level Objective / Indicator — أهداف ومؤشرات مستوى الخدمة (انظر القسم 6.1). |
 | **RPO / RTO** | Recovery Point/Time Objective — أقصى فقدان بيانات مسموح به وأقصى زمن تعافٍ (انظر القسم 6.5). |
-| **Wohnungsmieten** | اسم مستودع الواجهة الأمامية Angular (منفصل عن هذا المستودع). |
+| **HudhudNest** | اسم مستودع الواجهة الأمامية Angular (منفصل عن هذا المستودع). |
 
 ### 1.4 المراجع
 
@@ -90,7 +90,7 @@
 
 ### 2.1 متطلبات العمل
 
-PropertyApi هي الواجهة الخلفية الوحيدة لمنصّة عقارية سورية/إقليمية (Yaqeen Real Estate) تخدم عدة نماذج عمل ضمن نظام واحد، مستخلَصة من وحدات التحكم الثلاثين الفعلية:
+HudhudNestApi هي الواجهة الخلفية الوحيدة لمنصّة عقارية سورية/إقليمية (Yaqeen Real Estate) تخدم عدة نماذج عمل ضمن نظام واحد، مستخلَصة من وحدات التحكم الثلاثين الفعلية:
 
 | المجال الوظيفي | الوظائف الأساسية | وحدات التحكم ذات الصلة |
 |---|---|---|
@@ -127,24 +127,24 @@ PropertyApi هي الواجهة الخلفية الوحيدة لمنصّة عق�
 |---|---|---|
 | **الأمان (Security)** | JWT + Refresh Token مدوَّر مع كشف إعادة الاستخدام، CSRF بتوكن مزدوج، رؤوس أمان HTTP، HSTS، تحديد معدّل مبني على Redis لكل نقطة نهاية حساسة، فحص كلمات المرور مقابل Have I Been Pwned، تحقق من توقيع الصور الثنائي (magic bytes) وليس فقط امتداد الملف | `Program.cs` (ترتيب الوسيطات)، `PasswordSecurityService.cs`، `UploadPropertyImagesCommandHandler.cs` |
 | **الأداء (Performance)** | هدف SLO: 95% من الطلبات ≤ 500ms على نافذة 30 يومًا؛ تخزين مؤقت للمخرجات (Output Cache) عبر Redis؛ تخزين مؤقت لتسريع فحص Security Stamp | `docs/observability/slo-definition.md`، `OutputCacheRegistration.cs` |
-| **قابلية التوسّع (Scalability)** | بدون حالة على مستوى العملية (Stateless): الجلسات في JWT/Redis لا في ذاكرة العملية؛ SignalR backplane عبر Redis يسمح بأكثر من نسخة خلفية؛ Output Cache وتحديد المعدل موزَّعان عبر Redis | `Program.cs` (`AddPropertyApiSignalR`)، `.env.example` (`SignalR__Provider`) |
+| **قابلية التوسّع (Scalability)** | بدون حالة على مستوى العملية (Stateless): الجلسات في JWT/Redis لا في ذاكرة العملية؛ SignalR backplane عبر Redis يسمح بأكثر من نسخة خلفية؛ Output Cache وتحديد المعدل موزَّعان عبر Redis | `Program.cs` (`AddHudhudNestApiSignalR`)، `.env.example` (`SignalR__Provider`) |
 | **الموثوقية والتعافي (Reliability/DR)** | RPO ≤ 60 دقيقة، RTO ≤ 120 دقيقة (مُقاسة فعليًا بسير عمل تعافٍ آلي أسبوعي)؛ Redis HA عبر Sentinel (Primary/Replica + 3 Sentinels) مُختبَر في CI | `docs/operations/rpo-rto.md`، `ci/docker-compose.production-gate.yml` |
-| **قابلية الصيانة (Maintainability)** | فصل صارم بين الطبقات (Clean Architecture)؛ اختبارات معمارية مخصّصة (`PropertyApi.Architecture.Tests`) تفرض القيود آليًا في CI؛ نمط CQRS موحّد لكل وحدة عمل جديدة | `tests/PropertyApi.Architecture.Tests` |
-| **قابلية النشر (Deployability)** | صورة حاوية واحدة (`multi-stage Dockerfile`) على أساس `aspnet:8.0-jammy-chiseled-extra` (سطح هجوم مخفَّض)؛ بوابة إصدار آلية (`production-gate.yml`) قبل أي نشر إلى Staging | `PropertyApi/Dockerfile`، `ci/docker-compose.production-gate.yml` |
-| **إمكانية المراقبة (Observability)** | OpenTelemetry مدمج منذ أول سطر في `Program.cs` (`AddPropertyApiObservability`)؛ تصدير OTLP/gRPC إلى مجمّع يغذّي Prometheus/Grafana/Tempo | `Program.cs:19`، `observability/docker-compose.observability.yml` |
+| **قابلية الصيانة (Maintainability)** | فصل صارم بين الطبقات (Clean Architecture)؛ اختبارات معمارية مخصّصة (`HudhudNestApi.Architecture.Tests`) تفرض القيود آليًا في CI؛ نمط CQRS موحّد لكل وحدة عمل جديدة | `tests/HudhudNestApi.Architecture.Tests` |
+| **قابلية النشر (Deployability)** | صورة حاوية واحدة (`multi-stage Dockerfile`) على أساس `aspnet:8.0-jammy-chiseled-extra` (سطح هجوم مخفَّض)؛ بوابة إصدار آلية (`production-gate.yml`) قبل أي نشر إلى Staging | `HudhudNestApi/Dockerfile`، `ci/docker-compose.production-gate.yml` |
+| **إمكانية المراقبة (Observability)** | OpenTelemetry مدمج منذ أول سطر في `Program.cs` (`AddHudhudNestApiObservability`)؛ تصدير OTLP/gRPC إلى مجمّع يغذّي Prometheus/Grafana/Tempo | `Program.cs:19`، `observability/docker-compose.observability.yml` |
 
 ### 2.3 القيود (Constraints)
 
 | القيد | الأثر المعماري |
 |---|---|
-| **.NET 8 / C# فقط، بنية Clean Architecture من أربع مشاريع** | كل تبعية جديدة يجب أن تحترم اتجاه الاعتماد (API→Application→Domain، Infrastructure→Application/Domain)؛ يُفرض آليًا عبر `PropertyApi.Architecture.Tests`. |
+| **.NET 8 / C# فقط، بنية Clean Architecture من أربع مشاريع** | كل تبعية جديدة يجب أن تحترم اتجاه الاعتماد (API→Application→Domain، Infrastructure→Application/Domain)؛ يُفرض آليًا عبر `HudhudNestApi.Architecture.Tests`. |
 | **PostgreSQL + PostGIS كقاعدة بيانات وحيدة** | كل ميزة بحث جغرافي (قرب الموقع، ضمن نطاق) يجب أن تُبنى على وظائف PostGIS، لا على محرك بحث منفصل. |
 | **Cloudinary كمخزن وسائط وحيد** | لا يوجد تجريد "متعدد المزوّدين" فعلي؛ `StagingSmokeMediaStorageService` هو بديل اختباري فقط لا مزوّد إنتاجي بديل. |
 | **مستودعان منفصلان تمامًا للواجهتين الخلفية والأمامية** | أي تغيير في عقد HTTP (شكل JSON، اسم كوكي، رأس CSRF) يتطلب تنسيقًا يدويًا بين مستودعي Git مختلفين — لا يمكن لأي أداة فحص نوع مشترك أن تكتشف عدم التطابق. |
 | **Netlify (أمامية) + Render (خلفية) لا يشتركان بنفس النطاق (Domain) في staging/production** | يمنع الاعتماد على قراءة كوكي عبر النطاقات من جافاسكربت؛ يفرض إرجاع توكن CSRF في جسم JSON بدل الاعتماد على الكوكي وحدها (انظر القسم 4.5). |
-| **خطة Render "Free" لبيئة Staging** | بدون Shell access، بدون نسخ احتياطي لقاعدة بيانات Staging، صلاحية قاعدة البيانات ~30 يومًا فقط؛ ترحيلات EF Core لا تُطبَّق تلقائيًا عند الإقلاع في أي بيئة — يجب تشغيلها يدويًا عبر `tools/PropertyApi.Migrator`. |
+| **خطة Render "Free" لبيئة Staging** | بدون Shell access، بدون نسخ احتياطي لقاعدة بيانات Staging، صلاحية قاعدة البيانات ~30 يومًا فقط؛ ترحيلات EF Core لا تُطبَّق تلقائيًا عند الإقلاع في أي بيئة — يجب تشغيلها يدويًا عبر `tools/HudhudNestApi.Migrator`. |
 | **Cloudinary بخطة مجانية (بيئة منتج واحدة)** | عزل Staging/Production لبيانات الوسائط هو عزل بيانات اعتماد (API keys) فقط، وليس عزل تخزين فعلي — يرفع كلا البيئتين إلى نفس المجلدات المُبرمَجة صراحة في الكود (`property-images/` ...). |
-| **حساب Resend بنطاق موثَّق واحد (`realestateworld.world`)** | فصل Staging عن Production بالبريد الإلكتروني يتم عبر مفتاح API مختلف على نفس النطاق، لا عبر نطاق منفصل. |
+| **حساب Resend بنطاق موثَّق واحد (`hudhudnest.com`)** | فصل Staging عن Production بالبريد الإلكتروني يتم عبر مفتاح API مختلف على نفس النطاق، لا عبر نطاق منفصل. |
 
 ---
 
@@ -152,7 +152,7 @@ PropertyApi هي الواجهة الخلفية الوحيدة لمنصّة عق�
 
 ### 3.1 وصف النظام
 
-**PropertyApi** واجهة خلفية REST مبنية بـ **.NET 8** تخدم منصّة عقارية متعددة الأدوار: باحثون عن عقارات (إيجار/شراء)، ملّاك ووسطاء أفراد، مكاتب عقارية مسجَّلة (Agencies)، مزوّدو خدمات مرتبطة بالعقار (نقل، تشطيب، صيانة)، ومسؤولو نظام. تُبنى المعمارية على نمط **Clean Architecture** بأربع طبقات فيزيائية منفصلة (مشاريع .NET مستقلة) مع **CQRS** عبر **MediatR** داخل طبقة التطبيق، وتُخزَّن البيانات التشغيلية في **PostgreSQL** بامتداد **PostGIS** للاستعلامات الجغرافية.
+**HudhudNestApi** واجهة خلفية REST مبنية بـ **.NET 8** تخدم منصّة عقارية متعددة الأدوار: باحثون عن عقارات (إيجار/شراء)، ملّاك ووسطاء أفراد، مكاتب عقارية مسجَّلة (Agencies)، مزوّدو خدمات مرتبطة بالعقار (نقل، تشطيب، صيانة)، ومسؤولو نظام. تُبنى المعمارية على نمط **Clean Architecture** بأربع طبقات فيزيائية منفصلة (مشاريع .NET مستقلة) مع **CQRS** عبر **MediatR** داخل طبقة التطبيق، وتُخزَّن البيانات التشغيلية في **PostgreSQL** بامتداد **PostGIS** للاستعلامات الجغرافية.
 
 النظام بلا حالة على مستوى العملية (stateless compute): أي حالة يجب أن تنجو بين الطلبات (الجلسة، معدّل الطلبات، ذاكرة التخزين المؤقت للمخرجات) تُحفَظ في **PostgreSQL** أو **Redis**، لا في ذاكرة عملية .NET — وهو ما يسمح بتشغيل أكثر من نسخة من الـ API خلف موازن تحميل دون فقدان الاتساق (مثال: SignalR backplane عبر Redis عند الحاجة لأكثر من نسخة).
 
@@ -162,7 +162,7 @@ PropertyApi هي الواجهة الخلفية الوحيدة لمنصّة عق�
 
 *(المصدر القابل للتعديل: `diagrams/01-system-context.puml`)*
 
-يوضّح المخطط أعلاه أن **PropertyApi هو النظام الوحيد** الذي يملك منطق العمل وقاعدة البيانات التشغيلية. الواجهة الأمامية (Angular SPA) وتطبيق الجوال (Capacitor) عميلان لا يحملان أي منطق عمل مستقل — كل قرار (من يملك ماذا، من يجوز له فعل ماذا) يُتخذ في الخلفية. الأنظمة الخارجية الثمانية المرسومة كلها **تبعيات صادرة** (النظام يستدعيها)، ولا يوجد نظام خارجي يستدعي PropertyApi (لا Webhooks واردة موثَّقة في هذا الإصدار).
+يوضّح المخطط أعلاه أن **HudhudNestApi هو النظام الوحيد** الذي يملك منطق العمل وقاعدة البيانات التشغيلية. الواجهة الأمامية (Angular SPA) وتطبيق الجوال (Capacitor) عميلان لا يحملان أي منطق عمل مستقل — كل قرار (من يملك ماذا، من يجوز له فعل ماذا) يُتخذ في الخلفية. الأنظمة الخارجية الثمانية المرسومة كلها **تبعيات صادرة** (النظام يستدعيها)، ولا يوجد نظام خارجي يستدعي HudhudNestApi (لا Webhooks واردة موثَّقة في هذا الإصدار).
 
 ### 3.3 الأهداف المعمارية
 
@@ -172,7 +172,7 @@ PropertyApi هي الواجهة الخلفية الوحيدة لمنصّة عق�
 2. **منع تسريب معلومات عبر قنوات جانبية** (استجابات تسجيل الدخول، رسائل الأخطاء) — مبدأ مطبَّق بانضباط ملحوظ في الكود الفعلي، وليس شعارًا نظريًا.
 3. **إبقاء التوسّع الأفقي ممكنًا دون إعادة تصميم** عبر عدم حفظ أي حالة في ذاكرة العملية.
 4. **جعل كل قرار تفويض قابلًا لإعادة الاستخدام ومركزيًا** (مثال: `IPropertyOwnershipService.EnsureOwnerAsync` / `GetOwnedPropertyOrThrowAsync` تُستدعى من كل معالج يلمس عقارًا، بدل تكرار منطق "هل أنت المالك؟" في كل مكان).
-5. **إبقاء الملاحظة (Observability) جزءًا من الإقلاع لا إضافة لاحقة** — `AddPropertyApiObservability()` هو أول سطر تنفيذي في `Program.cs`.
+5. **إبقاء الملاحظة (Observability) جزءًا من الإقلاع لا إضافة لاحقة** — `AddHudhudNestApiObservability()` هو أول سطر تنفيذي في `Program.cs`.
 
 ---
 
@@ -183,14 +183,14 @@ PropertyApi هي الواجهة الخلفية الوحيدة لمنصّة عق�
 النظام مقسَّم إلى **أربع طبقات فيزيائية** (مشاريع .NET منفصلة، لا مجرد مجلدات) تفرض اتجاه الاعتماد التالي:
 
 ```
-PropertyApi (API) ──depends on──▶ PropertyApi.Application ──depends on──▶ PropertyApi.Domain
+HudhudNestApi (API) ──depends on──▶ HudhudNestApi.Application ──depends on──▶ HudhudNestApi.Domain
         │                                    ▲
         └──────────────depends on────────────┘
-PropertyApi.Infrastructure ──implements interfaces of──▶ PropertyApi.Application
-PropertyApi.Infrastructure ──depends on──▶ PropertyApi.Domain
+HudhudNestApi.Infrastructure ──implements interfaces of──▶ HudhudNestApi.Application
+HudhudNestApi.Infrastructure ──depends on──▶ HudhudNestApi.Domain
 ```
 
-`PropertyApi.Domain` **لا يعتمد على أي مشروع آخر** — لا حزم ASP.NET، لا EF Core، لا MediatR. هذا القيد مفروض آليًا عبر `tests/PropertyApi.Architecture.Tests`، وليس اتفاقًا غير مكتوب.
+`HudhudNestApi.Domain` **لا يعتمد على أي مشروع آخر** — لا حزم ASP.NET، لا EF Core، لا MediatR. هذا القيد مفروض آليًا عبر `tests/HudhudNestApi.Architecture.Tests`، وليس اتفاقًا غير مكتوب.
 
 ![مخطط المكوّنات](diagrams/03-component.png)
 
@@ -200,10 +200,10 @@ PropertyApi.Infrastructure ──depends on──▶ PropertyApi.Domain
 
 | الطبقة | المسؤولية | أمثلة فعلية من الكود |
 |---|---|---|
-| **PropertyApi** (API) | استقبال HTTP، تحويل DTO ↔ أمر/استعلام MediatR، الوسيطات (Middleware)، الأمان الحدودي (JWT، CSRF، رؤوس الأمان، تحديد المعدّل) | 30 وحدة تحكم؛ `Program.cs`؛ `Security/`، `Middleware/` |
-| **PropertyApi.Application** | منطق التنسيق (Orchestration) بلا معرفة بـ ASP.NET أو EF Core؛ أوامر/استعلامات MediatR؛ تحقق FluentValidation؛ واجهات (Interfaces) للبنية التحتية | `Auth/Orchestration/SocialAuthenticationOrchestrator.cs`؛ `Listings/Commands/*` |
-| **PropertyApi.Domain** | الكيانات ذات السلوك، قواعد العمل الثابتة، الاستثناءات المتخصّصة (`DomainException`) | `Agencies/Entities/Agency.cs` (منطق `Create`/`UpdateProfile`/`TransferOwnership` داخل الكيان نفسه، لا في المعالج) |
-| **PropertyApi.Infrastructure** | تنفيذ الواجهات: EF Core/Npgsql، Cloudinary، Resend/SMTP، Redis، SignalR، بوابة SMS، Google/Apple token verification | `Persistence/AppDbContext.cs` (٤٠+ `DbSet`)؛ `Media/CloudinaryMediaStorageService.cs` |
+| **HudhudNestApi** (API) | استقبال HTTP، تحويل DTO ↔ أمر/استعلام MediatR، الوسيطات (Middleware)، الأمان الحدودي (JWT، CSRF، رؤوس الأمان، تحديد المعدّل) | 30 وحدة تحكم؛ `Program.cs`؛ `Security/`، `Middleware/` |
+| **HudhudNestApi.Application** | منطق التنسيق (Orchestration) بلا معرفة بـ ASP.NET أو EF Core؛ أوامر/استعلامات MediatR؛ تحقق FluentValidation؛ واجهات (Interfaces) للبنية التحتية | `Auth/Orchestration/SocialAuthenticationOrchestrator.cs`؛ `Listings/Commands/*` |
+| **HudhudNestApi.Domain** | الكيانات ذات السلوك، قواعد العمل الثابتة، الاستثناءات المتخصّصة (`DomainException`) | `Agencies/Entities/Agency.cs` (منطق `Create`/`UpdateProfile`/`TransferOwnership` داخل الكيان نفسه، لا في المعالج) |
+| **HudhudNestApi.Infrastructure** | تنفيذ الواجهات: EF Core/Npgsql، Cloudinary، Resend/SMTP، Redis، SignalR، بوابة SMS، Google/Apple token verification | `Persistence/AppDbContext.cs` (٤٠+ `DbSet`)؛ `Media/CloudinaryMediaStorageService.cs` |
 
 **نمط CQRS الموحَّد لكل وحدة عمل** (مطبَّق حرفيًا في كل وحدة من الوحدات الثلاثين تقريبًا):
 
@@ -214,13 +214,13 @@ Controller → IMediator.Send(Command|Query)
            → Domain Entity (تحقق قواعد العمل) + Repository/UnitOfWork
 ```
 
-هذا الترتيب (`Telemetry → Logging → Validation → Handler`) مُسجَّل حرفيًا في `PropertyApi.Application/DependencyInjection.cs`، وهو ثابت لكل أمر/استعلام في النظام دون استثناء.
+هذا الترتيب (`Telemetry → Logging → Validation → Handler`) مُسجَّل حرفيًا في `HudhudNestApi.Application/DependencyInjection.cs`، وهو ثابت لكل أمر/استعلام في النظام دون استثناء.
 
 ### 4.2 وجهة النظر التطويرية (Development View)
 
 **تنظيم الشيفرة والحزم:**
 
-- حل واحد (`PropertyApi.sln`) يضم 4 مشاريع إنتاجية + 8 مشاريع اختبار + 3 أدوات مستقلة (`tools/`).
+- حل واحد (`HudhudNestApi.sln`) يضم 4 مشاريع إنتاجية + 8 مشاريع اختبار + 3 أدوات مستقلة (`tools/`).
 - **إدارة حزم مركزية** (Central Package Management) عبر `Directory.Packages.props` — إصدار واحد لكل حزمة عبر كامل الحل، يمنع تعارض الإصدارات بين المشاريع.
 - **أقفال استعادة محكمة** (`packages.lock.json` لكل مشروع) و`dotnet restore --locked-mode` في `Dockerfile` — يمنع أي تغيّر غير مقصود في شجرة التبعيات عند البناء.
 
@@ -228,17 +228,17 @@ Controller → IMediator.Send(Command|Query)
 
 | المشروع | الغرض |
 |---|---|
-| `PropertyApi.Application.Tests` | اختبارات وحدة لمعالجات الأوامر/الاستعلامات (Mocking للواجهات) |
-| `PropertyApi.Architecture.Tests` | يفرض قيود المعمارية آليًا (اتجاه الاعتماد، Endpoints العامة الموافَق عليها، إلخ) — **بوابة CI حقيقية**، ليست اختبارًا توثيقيًا |
-| `PropertyApi.Auth.Tests` | تغطية مركّزة على وحدة المصادقة عبر طبقاتها الأربع |
-| `PropertyApi.Concurrency.Tests` | سيناريوهات تزامن (مثال: طلبين متزامنين على نفس المورد؛ أُضيفت في v1.1 سيناريوهات Valuation A/B/C/D لسباق SubmitOfficeResponse مقابل SLA sweep) |
-| `PropertyApi.Infrastructure.Tests` ⟵ *أُضيف بعد v1.0* | اختبارات على مكوّنات Infrastructure مباشرة (مثال: `SocialPublisherRegistryTests`, `GovernorateNeighborProviderTests`, `AuditLogRetentionHostedServiceTests`) دون المرور بكامل الـ WebApplicationFactory |
-| `PropertyApi.Integration.Tests` | اختبارات تكامل مع قاعدة بيانات/Redis حقيقيين (WebApplicationFactory) |
-| `PropertyApi.Observability.Tests` | يتحقق من أن القياسات/التتبعات تُصدَّر فعليًا لا أن الكود "يُفترض" أنها تُصدَّر |
-| `PropertyApi.Performance.Tests` | اختبارات أداء مقابل خط أساس محفوظ |
-| `PropertyApi.StagingSmokeTests` | اختبارات دخان فعلية ضد بيئة Staging المنشورة (وليست Mock) |
+| `HudhudNestApi.Application.Tests` | اختبارات وحدة لمعالجات الأوامر/الاستعلامات (Mocking للواجهات) |
+| `HudhudNestApi.Architecture.Tests` | يفرض قيود المعمارية آليًا (اتجاه الاعتماد، Endpoints العامة الموافَق عليها، إلخ) — **بوابة CI حقيقية**، ليست اختبارًا توثيقيًا |
+| `HudhudNestApi.Auth.Tests` | تغطية مركّزة على وحدة المصادقة عبر طبقاتها الأربع |
+| `HudhudNestApi.Concurrency.Tests` | سيناريوهات تزامن (مثال: طلبين متزامنين على نفس المورد؛ أُضيفت في v1.1 سيناريوهات Valuation A/B/C/D لسباق SubmitOfficeResponse مقابل SLA sweep) |
+| `HudhudNestApi.Infrastructure.Tests` ⟵ *أُضيف بعد v1.0* | اختبارات على مكوّنات Infrastructure مباشرة (مثال: `SocialPublisherRegistryTests`, `GovernorateNeighborProviderTests`, `AuditLogRetentionHostedServiceTests`) دون المرور بكامل الـ WebApplicationFactory |
+| `HudhudNestApi.Integration.Tests` | اختبارات تكامل مع قاعدة بيانات/Redis حقيقيين (WebApplicationFactory) |
+| `HudhudNestApi.Observability.Tests` | يتحقق من أن القياسات/التتبعات تُصدَّر فعليًا لا أن الكود "يُفترض" أنها تُصدَّر |
+| `HudhudNestApi.Performance.Tests` | اختبارات أداء مقابل خط أساس محفوظ |
+| `HudhudNestApi.StagingSmokeTests` | اختبارات دخان فعلية ضد بيئة Staging المنشورة (وليست Mock) |
 
-**بناء الحاوية (`PropertyApi/Dockerfile`):** بناء متعدد المراحل (`sdk:8.0` للبناء → `aspnet:8.0-jammy-chiseled-extra` للتشغيل). صورة التشغيل **chiseled** (مقتطَعة): بلا shell، بلا مدير حزم، مستخدم غير جذري (`$APP_UID`) — تقليل سطح الهجوم قرار معماري صريح، لا افتراضي.
+**بناء الحاوية (`HudhudNestApi/Dockerfile`):** بناء متعدد المراحل (`sdk:8.0` للبناء → `aspnet:8.0-jammy-chiseled-extra` للتشغيل). صورة التشغيل **chiseled** (مقتطَعة): بلا shell، بلا مدير حزم، مستخدم غير جذري (`$APP_UID`) — تقليل سطح الهجوم قرار معماري صريح، لا افتراضي.
 
 ### 4.3 وجهة النظر العملية (Process View)
 
@@ -247,10 +247,10 @@ Controller → IMediator.Send(Command|Query)
 ```
 1.  UseForwardedHeaders            (ثقة بعناوين IP الحقيقية خلف الوكيل، إن كانت موثوقة)
 2.  UsePerformanceInstanceHeader / UsePerformanceDatabaseDiagnostics
-3.  UsePropertyApiObservability    (بدء نطاق التتبع Trace Span)
+3.  UseHudhudNestApiObservability    (بدء نطاق التتبع Trace Span)
 4.  UseHsts (Production) | UseHttpsRedirection (غير ذلك)
 5.  ExceptionHandlingMiddleware    (تحويل الاستثناءات إلى استجابات HTTP موحّدة)
-6.  UsePropertyApiSecurityHeaders  (CSP، X-Frame-Options، إلخ)
+6.  UseHudhudNestApiSecurityHeaders  (CSP، X-Frame-Options، إلخ)
 7.  UseSwagger/UseSwaggerUI        (Development/Testing/CI فقط، أو Staging بعلم صريح)
 8.  UseStaticFiles
 9.  UseRouting
@@ -279,12 +279,12 @@ Controller → IMediator.Send(Command|Query)
 
 | | Production | Staging |
 |---|---|---|
-| خدمة الويب | `HudhudNest` (اسم خدمة Render السابق: `propertyapi-api`) | `hudhudnest-staging-api` (`srv-dacpbgf40ujc73epheig`) |
+| خدمة الويب | `HudhudNest` (اسم خدمة Render السابق: `hudhudnest-api`) | `hudhudnest-staging-api` (`srv-dacpbgf40ujc73epheig`) |
 | قاعدة البيانات | PostgreSQL + PostGIS مخصَّصة | `hudhudnest-staging-db` (PostgreSQL 18، خطة Free، بلا نسخ احتياطي، صلاحية ~30 يومًا) |
 | Redis | Upstash (مُدار خارجيًا) | `hudhudnest-redis` (Valkey 8 على Render، مُعاد استخدامه) |
-| الواجهة الأمامية | `realestateworld.world` (Netlify، فرع `main`) | `staging--bizorealestateworld.netlify.app` (فرع `staging`) |
+| الواجهة الأمامية | `hudhudnest.com` (Netlify، فرع `main`) | `staging--bizorealestateworld.netlify.app` (فرع `staging`) |
 | النشر التلقائي | — (بوابة تحقق فقط، لا نشر آلي مباشر موثَّق في هذه الوثيقة) | مُعطَّل (Auto-Deploy: off) — نشر عبر Deploy Hook يدويًا بعد نجاح `production-gate.yml` |
-| ترحيلات قاعدة البيانات | يدوية عبر `tools/PropertyApi.Migrator` | يدوية عبر `tools/PropertyApi.Migrator` (لا تطبيق تلقائي عند الإقلاع في أي بيئة) |
+| ترحيلات قاعدة البيانات | يدوية عبر `tools/HudhudNestApi.Migrator` | يدوية عبر `tools/HudhudNestApi.Migrator` (لا تطبيق تلقائي عند الإقلاع في أي بيئة) |
 | رؤوس الوكيل الموثوقة (`ForwardedHeaders`) | مفعّلة، مع `KnownNetworks` صريحة | **معطَّلة** (`ForwardedHeaders__Enabled=false`) — Render لا ينشر نطاق IP وكيل موثَّق، ولا تتوفر صلاحية Shell على الخطة المجانية للتحقق التجريبي |
 
 **أثر معماري مباشر لتعطيل ForwardedHeaders على Staging:** تقسيم تحديد المعدّل حسب عنوان IP للعميل (`RedisRateLimitPartitionKeyResolver`) يرى عنوان IP الحافة الواحد لـ Render بدل عنوان كل زائر فعلي — أي أن حصص تحديد المعدّل (مثال: 5 محاولات تحقق OTP/15 دقيقة) **تُشارَك فعليًا بين كل زوّار Staging في آن واحد**. هذا خطر تشغيلي معروف ومقبول بوعي (وليس عيبًا غير مكتشَف) — مسجَّل صراحة كقرار مؤرَّخ من الفريق، ويُعاد النظر فيه فقط عند الحاجة لاختبار متزامن حقيقي أو ترقية خطة Render.
@@ -305,7 +305,7 @@ Controller → IMediator.Send(Command|Query)
 - أدوار ASP.NET Identity: `User`, `Agent`, `Admin`, `AgencyOwner`, `AgencyAgent`. **الدور ليس كافيًا وحده أبدًا لمكاتب عقارية أو عقارات:** كل معالج يقارن أيضًا معرّف المستخدم المستدعي بـ `OwnerId`/`OwnerUserId` الفعلي على الكيان المستهدَف (موثَّق صراحة في تعليق رأس `AgenciesController`: "holding the role says a user owns *an* agency, not *this* one").
 - عزل الملكية على العقارات مركزي عبر خدمة واحدة (`IPropertyOwnershipService`)، لا منطق مكرَّر لكل نقطة نهاية.
 
-**حماية CSRF:** توكن مزدوج التقديم (Double-Submit) مبني على `IAntiforgery` المدمج، مع تعديل جوهري لأن الواجهة الأمامية والخلفية **لا يشتركان بنفس النطاق المسجَّل** في staging/production (`realestateworld.world` أمام `onrender.com`): يُعاد توكن الطلب في **جسم استجابة JSON** (`GET /api/security/csrf-token`) بالإضافة إلى كوكي قابل للقراءة من جافاسكربت، لأن الاعتماد فقط على قراءة كوكي عبر نطاقات غير مشتركة لا يعمل أصلًا من متصفح — قرار موثَّق ومُختبَر عبر مستودعي الواجهتين (انظر ADR-007 في القسم 5).
+**حماية CSRF:** توكن مزدوج التقديم (Double-Submit) مبني على `IAntiforgery` المدمج، مع تعديل جوهري لأن الواجهة الأمامية والخلفية **لا يشتركان بنفس النطاق المسجَّل** في staging/production (`hudhudnest.com` أمام `onrender.com`): يُعاد توكن الطلب في **جسم استجابة JSON** (`GET /api/security/csrf-token`) بالإضافة إلى كوكي قابل للقراءة من جافاسكربت، لأن الاعتماد فقط على قراءة كوكي عبر نطاقات غير مشتركة لا يعمل أصلًا من متصفح — قرار موثَّق ومُختبَر عبر مستودعي الواجهتين (انظر ADR-007 في القسم 5).
 
 **تحديد المعدّل (Rate Limiting):** مبني على Redis في الإنتاج (نافذة ثابتة/Fixed Window)، بسياسة **مستقلة لكل نقطة نهاية حساسة** — جدول كامل في القسم 6.3.
 
@@ -326,9 +326,9 @@ Controller → IMediator.Send(Command|Query)
 | النمط | أين يُطبَّق | لماذا |
 |---|---|---|
 | **Clean Architecture (طبقات متّجهة الاعتماد)** | كامل الحل، 4 مشاريع فيزيائية | يعزل قواعد العمل عن أي تفصيل تقني (قاعدة بيانات، إطار ويب) قابل للاستبدال |
-| **CQRS عبر MediatR** | كل وحدة عمل في `PropertyApi.Application` | يفصل مسار الكتابة (تحقق + تغيير حالة) عن مسار القراءة (تحسين أداء الاستعلام دون قيود الكتابة)؛ نقطة تمديد موحّدة (Pipeline Behaviors) |
-| **Domain Model غني (Rich Domain Model)، لا Anemic** | الكيانات في `PropertyApi.Domain` | قواعد العمل (مثال: تحقق طول الاسم، صيغة الـ Slug، حالة الدورة الزمنية للزيارة) تعيش **داخل** الكيان (`Agency.Create`, `VisitRequest` state machine) لا مبعثرة في المعالجات |
-| **Repository + Unit of Work** | `PropertyApi.Infrastructure/Repositories`, `Persistence/UnitOfWork.cs` | يجمّع كل تغييرات الطلب الواحد في معاملة قاعدة بيانات واحدة (`SaveChangesAsync` واحد لكل طلب في الغالب) |
+| **CQRS عبر MediatR** | كل وحدة عمل في `HudhudNestApi.Application` | يفصل مسار الكتابة (تحقق + تغيير حالة) عن مسار القراءة (تحسين أداء الاستعلام دون قيود الكتابة)؛ نقطة تمديد موحّدة (Pipeline Behaviors) |
+| **Domain Model غني (Rich Domain Model)، لا Anemic** | الكيانات في `HudhudNestApi.Domain` | قواعد العمل (مثال: تحقق طول الاسم، صيغة الـ Slug، حالة الدورة الزمنية للزيارة) تعيش **داخل** الكيان (`Agency.Create`, `VisitRequest` state machine) لا مبعثرة في المعالجات |
+| **Repository + Unit of Work** | `HudhudNestApi.Infrastructure/Repositories`, `Persistence/UnitOfWork.cs` | يجمّع كل تغييرات الطلب الواحد في معاملة قاعدة بيانات واحدة (`SaveChangesAsync` واحد لكل طلب في الغالب) |
 | **Best-Effort للتبعيات الثانوية (إشعارات، اقتراحات)** | متكرر عبر عشرات المعالجات | يمنع فشل SignalR أو بريد إلكتروني من إسقاط عملية أساسية محفوظة أصلًا بنجاح |
 | **Event-Driven جزئي عبر SignalR** | `NotificationHub`، `INotificationService` | إشعارات فورية (زيارة جديدة، تقييم جديد) دون Polling من الواجهة الأمامية |
 
@@ -370,7 +370,7 @@ Controller → IMediator.Send(Command|Query)
 
 - **الحالة:** مقبول ومطبَّق بالكامل.
 - **السياق:** نظام متعدد الوحدات (عقارات، مكاتب، إقامة قصيرة، خدمات، إدارة) ينمو باستمرار؛ خطر انزلاق منطق العمل إلى طبقة الويب أو تسرّب تفاصيل EF Core إلى طبقة النطاق يزداد مع الفريق والزمن.
-- **القرار:** فصل فيزيائي (لا مجرد Namespace) إلى 4 مشاريع .NET، مع مشروع اختبار مخصَّص (`PropertyApi.Architecture.Tests`) يفرض اتجاه الاعتماد وقواعد أخرى (مثل قائمة نقاط النهاية العامة الموافَق عليها) كبوابة CI حقيقية تُفشِل البناء عند الانتهاك.
+- **القرار:** فصل فيزيائي (لا مجرد Namespace) إلى 4 مشاريع .NET، مع مشروع اختبار مخصَّص (`HudhudNestApi.Architecture.Tests`) يفرض اتجاه الاعتماد وقواعد أخرى (مثل قائمة نقاط النهاية العامة الموافَق عليها) كبوابة CI حقيقية تُفشِل البناء عند الانتهاك.
 - **البدائل المرفوضة:** توثيق نصّي لقواعد المعمارية بلا فرض آلي (رُفض: يتآكل مع الزمن دون إنفاذ)؛ معمارية طبقة واحدة (Monolith بلا فصل) (رُفض: يصعب اختبار منطق العمل بمعزل عن ASP.NET/EF Core).
 - **الأثر:** كل ميزة جديدة أبطأ قليلًا في الكتابة الأولى (يجب المرور عبر 3–4 طبقات) مقابل قابلية اختبار وصيانة أعلى بكثير على المدى الطويل.
 
@@ -417,7 +417,7 @@ Controller → IMediator.Send(Command|Query)
 #### ADR-007 — توكن CSRF مُعاد في جسم JSON، لا الاعتماد على قراءة كوكي عبر النطاقات فقط
 
 - **الحالة:** مقبول ومطبَّق عبر مستودعي الواجهتين معًا (تنسيق متعدد المستودعات).
-- **السياق:** الواجهة الأمامية (`realestateworld.world` على Netlify) والخلفية (نطاق `onrender.com`) **لا يشتركان بأي لاحقة نطاق مسجَّلة (Registrable Domain)** في staging/production. آلية Angular المدمجة (`withXsrfConfiguration`) تعتمد على قراءة كوكي غير HttpOnly من `document.cookie` على أصل (Origin) الواجهة الأمامية — وهذا **مستحيل تقنيًا** عبر نطاقات لا تشترك أي جزء، بصرف النظر عن أي إعداد `Domain` على الكوكي. حدث هذا فعليًا كعطل إنتاجي حقيقي: تسجيل خروج قسري لكل مستخدم كل ~30 دقيقة (فشل CSRF على تحديث الرمز) لأن الواجهة لم تكن ترسل رأس `X-XSRF-TOKEN` أصلًا.
+- **السياق:** الواجهة الأمامية (`hudhudnest.com` على Netlify) والخلفية (نطاق `onrender.com`) **لا يشتركان بأي لاحقة نطاق مسجَّلة (Registrable Domain)** في staging/production. آلية Angular المدمجة (`withXsrfConfiguration`) تعتمد على قراءة كوكي غير HttpOnly من `document.cookie` على أصل (Origin) الواجهة الأمامية — وهذا **مستحيل تقنيًا** عبر نطاقات لا تشترك أي جزء، بصرف النظر عن أي إعداد `Domain` على الكوكي. حدث هذا فعليًا كعطل إنتاجي حقيقي: تسجيل خروج قسري لكل مستخدم كل ~30 دقيقة (فشل CSRF على تحديث الرمز) لأن الواجهة لم تكن ترسل رأس `X-XSRF-TOKEN` أصلًا.
 - **القرار:** `GET /api/security/csrf-token` يُعيد التوكن في **جسم استجابة JSON** (`{ csrfToken }`) بالإضافة إلى كوكي `XSRF-TOKEN` قابل للقراءة من جافاسكربت (يبقى يعمل محليًا حيث الأصلان يشتركان في `localhost`). الواجهة الأمامية تخزّن القيمة من الجسم في خدمة داخلية (`CsrfTokenService`) وترسلها كرأس `X-XSRF-TOKEN` عبر Interceptor موحّد، بما يشمل نقطتي الاستدعاء اللتين تتجاوزان سلسلة الـ Interceptors عمدًا.
 - **البدائل المرفوضة:** الاعتماد فقط على آلية Angular المدمجة (`withXsrfConfiguration`) — **مُختبَرة فعليًا وتبيّن أنها تعمل محليًا فقط** وتفشل صامتة في staging/production؛ إسقاط CSRF كليًا (رُفض: يفتح الباب لهجمات تزوير طلب عبر الموقع على نقاط نهاية تعتمد على الكوكي).
 - **الأثر:** أي تغيير مستقبلي في نطاقي الاستضافة (توحيدهما تحت نطاق مشترك، مثلًا) يفتح الباب لإعادة تقييم هذا القرار، لكن لا حاجة ملحّة له اليوم.
@@ -435,7 +435,7 @@ Controller → IMediator.Send(Command|Query)
 - **الحالة:** مقبول ومطبَّق (v1.1).
 - **السياق:** كل `ValuationInquiry` يجب أن ينتقل تلقائيًا (بلا تدخل مستخدم) عبر: تذكير عند 18 ساعة (`ReminderWindow`) → انتهاء صلاحية عند 24 ساعة (`DefaultExpiryWindow`) إن لم يكتمل، مع إعادة محاولة أي إشعار فشل إرساله سابقًا، ودون تكرار إشعار نجح فعلًا (Idempotency).
 - **القرار:** `ValuationInquiryExpiryHostedService` يُشغِّل `ValuationSlaEnforcementService.RunSweepAsync` دوريًا، يسحب حتى `MaxBatchesPerPhasePerTick` (25) دفعة لكل طور (تذكير/انتهاء/إعادة محاولة إشعار) في كل تشغيل — بدل معالجة كل السجلات المتأخرة دفعة واحدة (قد تستغرق ~12.5 ساعة لتفريغ Backlog كبير) أو استخدام مؤقّت مستقل لكل صف. الإشعار يُعتبَر "نجح" فقط بعد أن يُسجَّل ختم زمني صريح (`ExpiryNotifiedAt`/`ResultReadyNotifiedAt`/`ReminderSentAt`) — لا افتراض نجاح ضمنيًا.
-- **الأدلة:** `PropertyApi.Infrastructure/Valuation/ValuationInquiryExpiryHostedService.cs`؛ `PropertyApi.Application/Valuation/Services/ValuationSlaEnforcementService.cs`؛ رسالة Commit `1bffcec` (بنود M2/M3/M4).
+- **الأدلة:** `HudhudNestApi.Infrastructure/Valuation/ValuationInquiryExpiryHostedService.cs`؛ `HudhudNestApi.Application/Valuation/Services/ValuationSlaEnforcementService.cs`؛ رسالة Commit `1bffcec` (بنود M2/M3/M4).
 - **البدائل المرفوضة:** معالجة الـ Backlog بالكامل في تشغيل واحد (رُفض: قد يحجب الخيط لساعات عند تراكم كبير)؛ Timer مستقل لكل `ValuationInquiry` (رُفض: يتطلّب بنية جدولة إضافية غير موجودة، ولا يتوسّع جيدًا مع آلاف السجلات المتزامنة).
 - **الأثر:** Backlog كبير يتصرّف بشكل تدريجي (يفرغ خلال عدة دورات Sweep، لا فورًا) — مقايضة مقصودة بين استجابة فورية وحماية العملية من الحجب.
 
@@ -453,7 +453,7 @@ Controller → IMediator.Send(Command|Query)
 - **الحالة:** مقبول ومطبَّق (v1.1) — التنفيذ الحالي قالب حتمي فقط، لا استدعاء خارجي.
 - **السياق:** ميزة "Social Distribution" (اسم مرحلتها في المواصفة يتضمّن "AI") تحتاج توليد نص منشور مخصَّص لكل منصّة من بيانات عقار مُتحقَّق منها، دون توفّر أي مزوّد LLM/مفتاح API فعلي في بيئة التطوير هذه.
 - **القرار:** واجهة `ISocialContentGenerator` واحدة في Application، بتنفيذ وحيد اليوم (`TemplateSocialContentGenerator`) حتمي بالكامل (بلا استدعاء شبكي، بلا مفتاح API) — موثَّق صراحة في تعليق رأس الواجهة نفسها بأن كلمة "AI" في اسم المرحلة "طموح لا إلزام"، وأن اختراع استدعاء وهمي لخدمة "ذكاء اصطناعي" كان سيخالف مبدأ المشروع بعدم اختلاق قدرة يمكن التحقق منها خارجيًا. أي مُخرَج (من أي تنفيذ مستقبلي أيضًا) يمر إلزاميًا عبر `SocialContentFactValidator` قبل أي استخدام لاحق.
-- **الأدلة:** `PropertyApi.Application/SocialDistribution/AiContent/ISocialContentGenerator.cs` (تعليق التوثيق الداخلي)؛ `TemplateSocialContentGenerator.cs`.
+- **الأدلة:** `HudhudNestApi.Application/SocialDistribution/AiContent/ISocialContentGenerator.cs` (تعليق التوثيق الداخلي)؛ `TemplateSocialContentGenerator.cs`.
 - **قرار مرتبط ومماثل (نفس الـ ADR):** ناشرو المنصّات الفعليون (`FacebookPublisher`, `InstagramPublisher`, `TikTokPublisher`, `LinkedInPublisher`, `TelegramPublisher`, `YouTubePublisher`) يرثون جميعًا من `PlatformNotConfiguredPublisherBase` — يُنفَّذ التحقق من القدرات (`GetCapabilities`) فعليًا، لكن **استدعاء النشر الحقيقي إلى أي منصّة ليس مطبَّقًا بعد** (توثيق صريح في كل ملف Publisher). `SocialPublisherRegistry` مبني بحيث يستبدل أي تنفيذ حقيقي لاحقًا (`FacebookGraphApiSocialPublisher` مثلًا) الـ Placeholder بلا تغيير في أي كود آخر يعتمد على السجل.
 - **البدائل المرفوضة:** استدعاء وهمي (Mock) لخدمة ذكاء اصطناعي خارجية بمفتاح API غير حقيقي لإيهام الوثيقة/الاختبارات بوجود تكامل (رُفض صراحة كمخالفة لمبدأ عدم اختلاق قدرة غير موجودة).
 - **الأثر:** يجب على أي قارئ لهذه الوثيقة أو لمواصفة "Social Distribution" عدم افتراض وجود نشر حي فعلي على أي منصّة تواصل اجتماعي، أو توليد محتوى بذكاء اصطناعي حقيقي، حتى تُستبدَل هذه التنفيذات الوهمية بتكامل فعلي.
@@ -479,7 +479,7 @@ Controller → IMediator.Send(Command|Query)
 
 ### 6.2 قابلية التوسّع
 
-- **بلا حالة على مستوى العملية (Stateless Compute):** أي نسخة من `PropertyApi` قابلة للاستبدال فورًا دون فقدان جلسات أو حالة — الحالة الوحيدة الحيّة في الذاكرة هي ذاكرة تخزين مؤقت قصيرة العمر قابلة لإعادة البناء.
+- **بلا حالة على مستوى العملية (Stateless Compute):** أي نسخة من `HudhudNestApi` قابلة للاستبدال فورًا دون فقدان جلسات أو حالة — الحالة الوحيدة الحيّة في الذاكرة هي ذاكرة تخزين مؤقت قصيرة العمر قابلة لإعادة البناء.
 - **SignalR Backplane عبر Redis:** يسمح بتشغيل أكثر من نسخة خلفية خلف موازن تحميل مع بقاء الإشعارات الفورية متسقة عبر كل النسخ (`SignalR__Provider` قابل للتفعيل صراحة عند الحاجة).
 - **تحديد المعدّل الموزَّع عبر Redis:** يمنع تجاوز حصص الحماية عند تشغيل أكثر من نسخة (لو كان تحديد المعدّل محليًا في ذاكرة كل نسخة، لكانت كل نسخة تمنح حصّة كاملة منفصلة — ثغرة توسّع أفقي شائعة يتجنّبها هذا التصميم).
 - **قيد معروف على التوسّع الأفقي لبيئة Staging تحديدًا:** تعطيل `ForwardedHeaders` هناك (انظر القسم 4.4) يعني أن تحديد المعدّل حسب IP لا يفرّق فعليًا بين زوّار متعددين خلف نفس حافة Render — قيد بيئة اختبار محدَّد، لا قيد معماري عام.
@@ -512,7 +512,7 @@ Controller → IMediator.Send(Command|Query)
 
 ### 6.4 قابلية الصيانة
 
-- **اختبارات معمارية آلية** (`PropertyApi.Architecture.Tests`) تحوّل قواعد التصميم (اتجاه الاعتماد، قائمة نقاط النهاية العامة الموافَق عليها) من اتفاقيات موثَّقة فقط إلى **بوابات CI فعلية تُفشِل البناء**.
+- **اختبارات معمارية آلية** (`HudhudNestApi.Architecture.Tests`) تحوّل قواعد التصميم (اتجاه الاعتماد، قائمة نقاط النهاية العامة الموافَق عليها) من اتفاقيات موثَّقة فقط إلى **بوابات CI فعلية تُفشِل البناء**.
 - **نمط CQRS موحّد بلا استثناء تقريبًا** يعني أن أي مطوّر جديد يتعلّم نمطًا واحدًا (Controller → Command/Query → Handler) وينطبق على كل الوحدات الثلاثين.
 - **تعليقات الكود توثّق "لماذا" لا "ماذا" فقط** — ملاحظة جديرة بالذكر: نسبة كبيرة من التعليقات في هذا الكود تشرح قرارًا أمنيًا أو إصلاح عطل حقيقي (`RELEASE-BLOCKERS-AR.md B-##`) بدل وصف الكود حرفيًا، ما يقلّل من "تآكل التوثيق" بمرور الوقت لأن التعليق يبقى صحيحًا حتى لو تغيّر التفصيل التقني حوله.
 
@@ -525,7 +525,7 @@ Controller → IMediator.Send(Command|Query)
 | **بوابة إصدار للإنتاج** | إلزامية | `production-gate.yml` يجب أن ينجح (بما فيه اختبارات Redis Sentinel HA) قبل اعتبار أي نشر مؤهَّلًا |
 | **صورة حاوية مخفَّضة السطح** | `chiseled` | بلا shell/مدير حزم في صورة التشغيل، مستخدم غير جذري |
 
-**استراتيجية النشر الفعلية:** بناء صورة واحدة عبر `Dockerfile` متعدد المراحل → اجتياز بوابة `production-gate` (اختبارات + طبولوجيا Redis HA) → نشر يدوي عبر Deploy Hook إلى Staging → (خارج نطاق الأتمتة الموثَّقة هنا) ترقية إلى Production. **ترحيلات قاعدة البيانات ليست جزءًا من إقلاع التطبيق في أي بيئة** — خطوة منفصلة صريحة عبر `tools/PropertyApi.Migrator`، ما يمنع سباقًا (Race) بين عدة نسخ تطبيق تحاول ترحيل نفس قاعدة البيانات في آن واحد عند التوسّع الأفقي.
+**استراتيجية النشر الفعلية:** بناء صورة واحدة عبر `Dockerfile` متعدد المراحل → اجتياز بوابة `production-gate` (اختبارات + طبولوجيا Redis HA) → نشر يدوي عبر Deploy Hook إلى Staging → (خارج نطاق الأتمتة الموثَّقة هنا) ترقية إلى Production. **ترحيلات قاعدة البيانات ليست جزءًا من إقلاع التطبيق في أي بيئة** — خطوة منفصلة صريحة عبر `tools/HudhudNestApi.Migrator`، ما يمنع سباقًا (Race) بين عدة نسخ تطبيق تحاول ترحيل نفس قاعدة البيانات في آن واحد عند التوسّع الأفقي.
 
 ---
 
@@ -537,13 +537,13 @@ Controller → IMediator.Send(Command|Query)
 | R2 | لا عزل صفوف صارم بين المكاتب العقارية (Agencies) — معالج جديد قد ينسى مُسندًا صريحًا فيسرّب بيانات عبر حدود مكتبين | منخفض حاليًا (حجم الميزة محدود)، يرتفع مع نمو الميزة | عالٍ إن تحقّق | ADR-006: قيد موثَّق بوعي؛ مسار ترقية معروف (Global Query Filter + `IAgencyContext`) غير منفَّذ |
 | R3 | تحديد المعدّل حسب IP على Staging غير فعّال فعليًا (IP الحافة الموحّد لـ Render) | مؤكَّد الحدوث (خطر معروف) | منخفض (Staging فقط، ليس Production) | مقبول صراحة كقرار مؤرَّخ؛ يُعاد النظر عند ترقية خطة Render أو الحاجة لاختبار متزامن حقيقي |
 | R4 | عزل Cloudinary/Staging-Production بيانات اعتماد فقط لا تخزين — صور الاختبار وصور الإنتاج تتشارك نفس المجلدات المنطقية | منخفض | متوسط (احتمال تلوّث بيانات وسائط بين بيئتين، لا تسريب أمني مباشر) | لا تخفيف مطبَّق حاليًا؛ خيار مستقبلي: مجلد مبنيّ على اسم البيئة بدل ثابت |
-| R5 | مستودعا الواجهتين منفصلان تمامًا بلا فحص نوع (Type-Checking) مشترك لعقد HTTP | متوسط (يتطلب تنسيقًا يدويًا مستمرًا) | متوسط–عالٍ (عطل CSRF التاريخي مثال فعلي وقع) | لا أداة آلية؛ الاعتماد على اختبارات دخان Staging (`PropertyApi.StagingSmokeTests`) للكشف بعد النشر |
+| R5 | مستودعا الواجهتين منفصلان تمامًا بلا فحص نوع (Type-Checking) مشترك لعقد HTTP | متوسط (يتطلب تنسيقًا يدويًا مستمرًا) | متوسط–عالٍ (عطل CSRF التاريخي مثال فعلي وقع) | لا أداة آلية؛ الاعتماد على اختبارات دخان Staging (`HudhudNestApi.StagingSmokeTests`) للكشف بعد النشر |
 | R6 | خطة Render "Free" لـ Staging: بلا نسخ احتياطي، صلاحية قاعدة بيانات ~30 يومًا، بلا Shell access للتشخيص | مؤكَّد (قيد بنية تحتية حالي) | منخفض–متوسط (Staging فقط) | مقبول كتوازن تكلفة/فائدة لبيئة اختبار؛ لا ينطبق على Production |
 | R7 | ترحيلات قاعدة البيانات يدوية بالكامل عبر أداة منفصلة، لا جزء من الإقلاع الآلي | منخفض (بتصميم متعمَّد) | متوسط إن نُسيت الخطوة قبل نشر يعتمد على مخطط جديد | إجراء تشغيلي موثَّق (Runbook)؛ يعتمد على انضباط عملية النشر اليدوية |
 | R8 | لا مسار Webhook وارد موثَّق من أي مزوّد خارجي (Cloudinary/Resend/SMS) — أي تغيّر حالة خارجي (فشل بريد لاحق، إلخ) لا يُعاد للنظام تلقائيًا | غير مؤكَّد (خارج نطاق هذا التحليل) | منخفض–متوسط | يستحق تحققًا منفصلًا خارج نطاق هذه الوثيقة |
 | R9 *(v1.1)* | ناشرو Social Distribution لكل منصّة (Facebook/Instagram/TikTok/...) Placeholder فعليًا — لا نشر حي حقيقي بعد؛ خطر أن يفترض أصحاب المنتج/الفريق أن الميزة "تعمل" من اسمها أو من واجهتها الإدارية فقط | مؤكَّد (حالة معروفة موثَّقة في الكود نفسه) | متوسط (توقّعات عمل غير مطابقة للواقع التقني إن لم تُبلَّغ بوضوح) | موثَّق صراحة في كل ملف Publisher وفي ADR-011؛ يتطلّب تنفيذ تكامل حقيقي لكل منصّة قبل الاعتماد التسويقي على الميزة |
 | R10 *(v1.1)* | مولّد محتوى Social Distribution قالب حتمي فقط رغم أن اسم المرحلة يتضمّن "AI" — خطر تسمية مُضلِّلة في تواصل غير تقني (عروض تسويقية، وثائق منتج) | مؤكَّد | منخفض (لا يوجد استدعاء API فعلي لتصحيحه لاحقًا، فقط توقّعات) | موثَّق صراحة في ADR-011؛ يوصى بمراجعة أي مادة تسويقية تستخدم مصطلح "AI" لهذه الميزة تحديدًا |
-| R11 *(v1.1, تحديث 2026-09-18)* | وحدة Valuation تعتمد على `ValuationInquiryExpiryHostedService` (نسخة واحدة تعمل داخل عملية الـ API) لإنفاذ SLA | **مؤكَّد** — تم فحص الكود مباشرة (`PropertyApi.Infrastructure/Valuation/ValuationInquiryExpiryHostedService.cs:95-121`) ضمن مراجعة `docs/audit/`: الخدمة تستخدم فعليًا `BackgroundJobLock.TryRunAsync` مع `BackgroundJobLockKeys.ValuationInquiryExpiry`، بنفس النمط المستخدَم في `ListingExpiryHostedService` | منخفض — الآلية موزَّعة وآمنة عند التوسّع الأفقي لأكثر من نسخة API | لا يتطلّب إجراءً إضافيًا؛ الفحص المنفصل المطلوب سابقًا أُنجز |
+| R11 *(v1.1, تحديث 2026-09-18)* | وحدة Valuation تعتمد على `ValuationInquiryExpiryHostedService` (نسخة واحدة تعمل داخل عملية الـ API) لإنفاذ SLA | **مؤكَّد** — تم فحص الكود مباشرة (`HudhudNestApi.Infrastructure/Valuation/ValuationInquiryExpiryHostedService.cs:95-121`) ضمن مراجعة `docs/audit/`: الخدمة تستخدم فعليًا `BackgroundJobLock.TryRunAsync` مع `BackgroundJobLockKeys.ValuationInquiryExpiry`، بنفس النمط المستخدَم في `ListingExpiryHostedService` | منخفض — الآلية موزَّعة وآمنة عند التوسّع الأفقي لأكثر من نسخة API | لا يتطلّب إجراءً إضافيًا؛ الفحص المنفصل المطلوب سابقًا أُنجز |
 
 ---
 
@@ -551,7 +551,7 @@ Controller → IMediator.Send(Command|Query)
 
 ### 8.1 الملخص
 
-**PropertyApi** نظام واجهة خلفية ناضج نسبيًا، مبني بانضباط معماري ملحوظ: فصل طبقات مفروض آليًا (لا اتفاقًا فقط)، نمط CQRS موحّد بلا استثناء تقريبًا عبر إحدى وأربعين وحدة تحكم، ومركزية متكرّرة لمنطق التفويض والتحقق الحسّاس. الأمان ليس طبقة مضافة لاحقًا بل قرارات متكرّرة ومقصودة في كل معالج (عدم تسريب معلومات، عدم الثقة بمدخلات العميل الحسّاسة، فحص فعلي لمحتوى الملفات لا امتدادها فقط). أبرز نقاط القوة: بوابات CI آلية حقيقية (معمارية، Redis HA، اختبارات دخان)، مراقبة مدمجة منذ الإقلاع، وتوثيق داخلي غني بـ"لماذا" وراء كل قرار — وهذا الانضباط يمتد إلى وحدة **Valuation** المُضافة حديثًا (v1.1): تعامل صريح مع سباقات التزامن (ADR-010)، إنفاذ SLA متدرّج بلا حجب (ADR-009)، ورفض واعٍ لاختلاق تكامل ذكاء اصطناعي غير موجود بدل التظاهر به (ADR-011).
+**HudhudNestApi** نظام واجهة خلفية ناضج نسبيًا، مبني بانضباط معماري ملحوظ: فصل طبقات مفروض آليًا (لا اتفاقًا فقط)، نمط CQRS موحّد بلا استثناء تقريبًا عبر إحدى وأربعين وحدة تحكم، ومركزية متكرّرة لمنطق التفويض والتحقق الحسّاس. الأمان ليس طبقة مضافة لاحقًا بل قرارات متكرّرة ومقصودة في كل معالج (عدم تسريب معلومات، عدم الثقة بمدخلات العميل الحسّاسة، فحص فعلي لمحتوى الملفات لا امتدادها فقط). أبرز نقاط القوة: بوابات CI آلية حقيقية (معمارية، Redis HA، اختبارات دخان)، مراقبة مدمجة منذ الإقلاع، وتوثيق داخلي غني بـ"لماذا" وراء كل قرار — وهذا الانضباط يمتد إلى وحدة **Valuation** المُضافة حديثًا (v1.1): تعامل صريح مع سباقات التزامن (ADR-010)، إنفاذ SLA متدرّج بلا حجب (ADR-009)، ورفض واعٍ لاختلاق تكامل ذكاء اصطناعي غير موجود بدل التظاهر به (ADR-011).
 
 أبرز القيود المعروفة والمقبولة بوعي (لا عيوب مخفية): عدم اكتمال عزل أحمال Redis (ADR-005)، عدم وجود عزل صفوف صارم بين المكاتب العقارية (ADR-006)، اعتماد كامل على تنسيق يدوي بين مستودعي الواجهتين المنفصلين لأي تغيير في عقد HTTP، وأن ميزة Social Distribution (v1.1) جاهزة بنيويًا (قواعد، طابور، محتوى) لكن **بلا نشر حي فعلي على أي منصّة تواصل اجتماعي بعد** (R9/R10).
 

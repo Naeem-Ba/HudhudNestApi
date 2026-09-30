@@ -26,7 +26,7 @@ public sealed class SocialMediaAssetGeneratorTests
         public Fixture()
         {
             Brand.Setup(x => x.GetCurrentBrand()).Returns(
-                new BrandIdentity("عقار تيك", "https://cdn.example.com/logo.png", "#0B3D59", "#D4AF37", "#FFFFFF", "#0B3D59", "Arial", 1));
+                new BrandIdentity("هدهد نيست", "https://cdn.example.com/logo.png", "#0B3D59", "#D4AF37", "#FFFFFF", "#0B3D59", "Arial", 1));
             Assets.Setup(x => x.FindReusableAsync(
                 It.IsAny<Guid>(), It.IsAny<SocialPlatform>(), It.IsAny<SocialAssetType>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((SocialMediaAsset?)null);

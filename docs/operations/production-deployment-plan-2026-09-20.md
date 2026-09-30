@@ -28,7 +28,7 @@ connection strings are supplied only through process environment variables for t
    against `ci/migration-risk-baseline.json`. Review the generated SQL: additive only, no drops, no long locks.
 3. **Backup, then apply migrations (expand only).** Take and verify a fresh pre-deployment backup
    (`scripts/database/backup-postgres.sh`, `verify-backup.sh`) before any schema change. Then run
-   `tools/PropertyApi.Migrator` with `ASPNETCORE_ENVIRONMENT=Production` and settings from environment
+   `tools/HudhudNestApi.Migrator` with `ASPNETCORE_ENVIRONMENT=Production` and settings from environment
    variables. Verify pending = 0 and the new column/table exist. Additive migrations stay compatible with
    the running application.
 4. **Run Production Gate via `workflow_dispatch` on `master`.** It performs the recovery gate with a fresh

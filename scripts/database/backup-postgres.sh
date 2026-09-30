@@ -25,7 +25,7 @@ log "Source identity: host=${PGHOST}, port=${PGPORT}, database=${PGDATABASE}."
 
 BACKUP_STARTED_EPOCH="$(date -u +%s)"
 BACKUP_CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-BACKUP_ID="${BACKUP_ID:-propertyapi-$(date -u +%Y%m%dT%H%M%SZ)}"
+BACKUP_ID="${BACKUP_ID:-hudhudnest-$(date -u +%Y%m%dT%H%M%SZ)}"
 RAW_DUMP="${WORK_DIR}/${BACKUP_ID}.dump"
 RAW_GLOBALS="${WORK_DIR}/${BACKUP_ID}.globals.sql"
 ARCHIVE_FILE="${OUTPUT_DIR}/${BACKUP_ID}.dump.gpg"

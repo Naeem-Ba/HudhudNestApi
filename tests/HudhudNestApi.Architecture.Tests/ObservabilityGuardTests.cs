@@ -18,8 +18,8 @@ public sealed class ObservabilityGuardTests
         Assert.Contains("ActivitySource", telemetry);
         Assert.Contains("Meter.CreateCounter", telemetry);
         Assert.Contains("Meter.CreateHistogram", telemetry);
-        Assert.Contains("propertyapi.auth.requests", telemetry);
-        Assert.Contains("propertyapi.properties.requests", telemetry);
+        Assert.Contains("hudhudnest.auth.requests", telemetry);
+        Assert.Contains("hudhudnest.properties.requests", telemetry);
         Assert.Contains("route_group", telemetry);
         Assert.Contains("operation", telemetry);
         Assert.Contains("ActivityTrackingOptions.TraceId", extensions);
@@ -48,8 +48,8 @@ public sealed class ObservabilityGuardTests
         Assert.Contains("ApplicationTelemetry.ActivitySource.StartActivity", behavior);
         Assert.Contains("application.request.kind", behavior);
         Assert.Contains("ActivityStatusCode.Error", behavior);
-        Assert.Contains("propertyapi.application.requests", telemetry);
-        Assert.Contains("propertyapi.application.request.duration", telemetry);
+        Assert.Contains("hudhudnest.application.requests", telemetry);
+        Assert.Contains("hudhudnest.application.request.duration", telemetry);
         Assert.DoesNotContain("Email", behavior);
         Assert.DoesNotContain("PhoneNumber", behavior);
         Assert.DoesNotContain("AccessToken", behavior);

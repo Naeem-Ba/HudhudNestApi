@@ -5,10 +5,10 @@
 Run:
 
 ```bash
-dotnet restore PropertyApi.sln --locked-mode
-dotnet format PropertyApi.sln --verify-no-changes --no-restore
-dotnet build PropertyApi.sln --configuration Release --no-restore
-pwsh ./scripts/validate-package-governance.ps1 -RepositoryRoot . -SolutionPath PropertyApi.sln
+dotnet restore HudhudNestApi.sln --locked-mode
+dotnet format HudhudNestApi.sln --verify-no-changes --no-restore
+dotnet build HudhudNestApi.sln --configuration Release --no-restore
+pwsh ./scripts/validate-package-governance.ps1 -RepositoryRoot . -SolutionPath HudhudNestApi.sln
 python scripts/validate-github-actions-pinning.py --repository-root .
 ```
 
@@ -17,8 +17,8 @@ CI runs the same checks and uploads sanitized reports under `artifacts/supply-ch
 ## Package Updates
 
 1. Edit `Directory.Packages.props`.
-2. Regenerate lock files with `dotnet restore PropertyApi.sln --use-lock-file`.
-3. Confirm locked restore with `dotnet restore PropertyApi.sln --locked-mode`.
+2. Regenerate lock files with `dotnet restore HudhudNestApi.sln --use-lock-file`.
+3. Confirm locked restore with `dotnet restore HudhudNestApi.sln --locked-mode`.
 4. Run tests and vulnerability scan.
 5. Keep project-level `Version` attributes out of `.csproj` files.
 
@@ -49,7 +49,7 @@ Do not replace a pinned SHA with a mutable tag during updates.
 The production gate builds the API image once with:
 
 ```text
-propertyapi-api:${GITHUB_SHA}
+hudhudnest-api:${GITHUB_SHA}
 ```
 
 It captures the immutable `sha256:` image id and uses that same image id for:
@@ -65,8 +65,8 @@ A future registry deployment must promote the same digest that was scanned.
 
 The production gate emits:
 
-- `artifacts/supply-chain/propertyapi-dotnet.cdx.json`;
-- `artifacts/supply-chain/propertyapi-container.spdx.json`;
+- `artifacts/supply-chain/hudhudnest-dotnet.cdx.json`;
+- `artifacts/supply-chain/hudhudnest-container.spdx.json`;
 - `artifacts/supply-chain/sbom-metadata.json`;
 - `artifacts/supply-chain/sbom-vulnerability-report.json`.
 

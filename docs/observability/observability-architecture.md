@@ -1,6 +1,6 @@
 # Observability architecture
 
-`PropertyApi -> OTLP/gRPC -> OpenTelemetry Collector -> Tempo + Prometheus -> Grafana`
+`HudhudNestApi -> OTLP/gRPC -> OpenTelemetry Collector -> Tempo + Prometheus -> Grafana`
 
 The application exports traces and metrics only. The collector performs a
 second redaction pass, batches signals, sends traces to Tempo, converts spans to

@@ -63,7 +63,7 @@ public sealed class CreateSocialPublicationCommandHandlerTests
         fixture.Channels.Setup(x => x.GetByIdAsync(channel.Id, It.IsAny<CancellationToken>())).ReturnsAsync(channel);
         fixture.UrlBuilder
             .Setup(x => x.BuildAttributedTargetUrl(property.Id, "facebook", "social", "social_distribution", It.IsAny<string>()))
-            .Returns("https://realestateworld.world/properties/p1?utm_source=facebook");
+            .Returns("https://hudhudnest.com/properties/p1?utm_source=facebook");
 
         SocialPublication? added = null;
         fixture.Publications.Setup(x => x.AddAsync(It.IsAny<SocialPublication>(), It.IsAny<CancellationToken>()))
@@ -189,7 +189,7 @@ public sealed class CreateSocialPublicationCommandHandlerTests
         fixture.Channels.Setup(x => x.GetByIdAsync(channel.Id, It.IsAny<CancellationToken>())).ReturnsAsync(channel);
         fixture.UrlBuilder
             .Setup(x => x.BuildAttributedTargetUrl(property.Id, "facebook", "social", "social_distribution", It.IsAny<string>()))
-            .Returns("https://realestateworld.world/properties/p1?utm_source=facebook");
+            .Returns("https://hudhudnest.com/properties/p1?utm_source=facebook");
 
         var handler = fixture.BuildHandler();
 
@@ -216,7 +216,7 @@ public sealed class CreateSocialPublicationCommandHandlerTests
         fixture.Channels.Setup(x => x.GetByIdAsync(channel.Id, It.IsAny<CancellationToken>())).ReturnsAsync(channel);
         fixture.UrlBuilder
             .Setup(x => x.BuildAttributedTargetUrl(property.Id, "facebook", "social", "social_distribution", It.IsAny<string>()))
-            .Returns("https://realestateworld.world/properties/p1?utm_source=facebook");
+            .Returns("https://hudhudnest.com/properties/p1?utm_source=facebook");
 
         var handler = fixture.BuildHandler(new SocialDistributionContentReviewOptions { RequireReviewForAutomaticPublications = true });
 
@@ -244,7 +244,7 @@ public sealed class CreateSocialPublicationCommandHandlerTests
         fixture.Channels.Setup(x => x.GetByIdAsync(channel.Id, It.IsAny<CancellationToken>())).ReturnsAsync(channel);
         fixture.UrlBuilder
             .Setup(x => x.BuildAttributedTargetUrl(property.Id, "facebook", "social", "social_distribution", It.IsAny<string>()))
-            .Returns("https://realestateworld.world/properties/p1?utm_source=facebook");
+            .Returns("https://hudhudnest.com/properties/p1?utm_source=facebook");
 
         var handler = fixture.BuildHandler(new SocialDistributionContentReviewOptions { RequireReviewForAutomaticPublications = true });
 
@@ -269,7 +269,7 @@ public sealed class CreateSocialPublicationCommandHandlerTests
         fixture.Channels.Setup(x => x.GetByIdAsync(channel.Id, It.IsAny<CancellationToken>())).ReturnsAsync(channel);
         fixture.UrlBuilder
             .Setup(x => x.BuildAttributedTargetUrl(property.Id, "facebook", "social", "social_distribution", It.IsAny<string>()))
-            .Returns("https://realestateworld.world/properties/p1?utm_source=facebook");
+            .Returns("https://hudhudnest.com/properties/p1?utm_source=facebook");
 
         var handler = fixture.BuildHandler();
 

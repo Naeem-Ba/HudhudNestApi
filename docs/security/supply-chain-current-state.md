@@ -4,7 +4,7 @@ Date: 2026-07-28
 
 ## Scope
 
-This assessment covers the PropertyApi solution projects, package references, Dockerfiles, GitHub Actions workflows, NuGet vulnerability gate, coverage gate, and production-gate container flow.
+This assessment covers the HudhudNestApi solution projects, package references, Dockerfiles, GitHub Actions workflows, NuGet vulnerability gate, coverage gate, and production-gate container flow.
 
 ## Findings Before This Change
 

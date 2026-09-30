@@ -32,7 +32,7 @@ require_boolean_true() {
 create_private_temp_dir() {
   local base="${DATABASE_RECOVERY_TEMP_ROOT:-${TMPDIR:-/tmp}}"
   mkdir -p "${base}"
-  mktemp -d "${base%/}/propertyapi-db-recovery.XXXXXXXX"
+  mktemp -d "${base%/}/hudhudnest-db-recovery.XXXXXXXX"
 }
 
 # Points GnuPG at a private directory the current process already owns,

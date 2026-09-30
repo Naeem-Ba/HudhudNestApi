@@ -22,7 +22,7 @@ public sealed class ServiceRequestHandlerTests
 
     private static ServiceProvider MakeProvider(Guid? userId = null) =>
         ServiceProvider.Create(
-            userId ?? Guid.NewGuid(), null, "AqarTech Verify", null, null, null, UtcNow);
+            userId ?? Guid.NewGuid(), null, "HudhudNest Verify", null, null, null, UtcNow);
 
     private static ServiceOffering MakeOffering(Guid providerId, bool isActive = true)
     {

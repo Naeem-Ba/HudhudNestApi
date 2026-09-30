@@ -14,7 +14,7 @@ for command in curl jq; do command -v "${command}" >/dev/null 2>&1 || fail "Miss
 [[ "${RENDER_SERVICE_ID}" =~ ^srv-[A-Za-z0-9]+$ ]] || fail "Invalid Render service ID."
 [[ "${TARGET_DEPLOY_ID}" =~ ^dep-[A-Za-z0-9]+$ ]] || fail "Invalid Render deploy ID."
 [[ "${PRODUCTION_BASE_URL}" =~ ^https:// ]] || fail "PRODUCTION_BASE_URL must use HTTPS."
-WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/propertyapi-render-rollback.XXXXXXXX")"
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/hudhudnest-render-rollback.XXXXXXXX")"
 cleanup() { rm -rf -- "${WORK_DIR}"; }
 trap cleanup EXIT INT TERM
 CURL_CONFIG="${WORK_DIR}/curl.conf"

@@ -14,7 +14,7 @@ public sealed class DistributedCacheHealthCheck(
         CancellationToken cancellationToken = default)
     {
         var key =
-            $"propertyapi:health:{Guid.NewGuid():N}";
+            $"hudhudnest:health:{Guid.NewGuid():N}";
 
         using var timeoutSource =
             CancellationTokenSource.CreateLinkedTokenSource(

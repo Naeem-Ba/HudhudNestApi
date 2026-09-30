@@ -1,10 +1,10 @@
-# تقرير تنفيذ Security Hardening لمشروع PropertyApi
+# تقرير تنفيذ Security Hardening لمشروع HudhudNestApi
 
 تاريخ التنفيذ: 2026-06-15
 
 ## النتيجة التنفيذية
 
-تم تعديل مشروع `PropertyApi` مباشرة داخل نسخة معدلة من الملف المرفوع. التعديلات ركزت على النقاط المطلوبة:
+تم تعديل مشروع `HudhudNestApi` مباشرة داخل نسخة معدلة من الملف المرفوع. التعديلات ركزت على النقاط المطلوبة:
 
 1. Redis-based distributed rate limiting للـ endpoints الحساسة.
 2. SecurityStamp cache invalidation عند logout وعند تغيير الـ security stamp.
@@ -20,21 +20,21 @@
 
 ### الملفات الجديدة
 
-- `PropertyApi/Security/RateLimiting/RedisRateLimitingMiddleware.cs`
-- `PropertyApi/Security/RateLimiting/RedisRateLimitingOptions.cs`
-- `PropertyApi/Security/RateLimiting/RedisFixedWindowRateLimitPolicyOptions.cs`
-- `PropertyApi/Security/RateLimiting/RedisRateLimitingDefaults.cs`
-- `PropertyApi/Security/RateLimiting/RedisRateLimitPartitionKeyResolver.cs`
-- `PropertyApi/Security/RateLimiting/RedisRateLimitingServiceCollectionExtensions.cs`
-- `PropertyApi/Security/RateLimiting/RedisRateLimitingApplicationBuilderExtensions.cs`
+- `HudhudNestApi/Security/RateLimiting/RedisRateLimitingMiddleware.cs`
+- `HudhudNestApi/Security/RateLimiting/RedisRateLimitingOptions.cs`
+- `HudhudNestApi/Security/RateLimiting/RedisFixedWindowRateLimitPolicyOptions.cs`
+- `HudhudNestApi/Security/RateLimiting/RedisRateLimitingDefaults.cs`
+- `HudhudNestApi/Security/RateLimiting/RedisRateLimitPartitionKeyResolver.cs`
+- `HudhudNestApi/Security/RateLimiting/RedisRateLimitingServiceCollectionExtensions.cs`
+- `HudhudNestApi/Security/RateLimiting/RedisRateLimitingApplicationBuilderExtensions.cs`
 
 ### الملفات المعدلة
 
-- `PropertyApi/Program.cs`
-- `PropertyApi/PropertyApi.csproj`
-- `PropertyApi/appsettings.Development.example.json`
-- `PropertyApi/appsettings.Testing.json`
-- `PropertyApi/Controllers/AuthController.cs`
+- `HudhudNestApi/Program.cs`
+- `HudhudNestApi/HudhudNestApi.csproj`
+- `HudhudNestApi/appsettings.Development.example.json`
+- `HudhudNestApi/appsettings.Testing.json`
+- `HudhudNestApi/Controllers/AuthController.cs`
 
 ### ماذا تغير؟
 
@@ -70,16 +70,16 @@
 
 ### الملفات الجديدة
 
-- `PropertyApi.Application/Common/Interfaces/IUserSecurityStampCacheInvalidator.cs`
-- `PropertyApi.Infrastructure/Identity/Services/DistributedSecurityStampCacheInvalidator.cs`
-- `PropertyApi.Infrastructure/Identity/Services/SecurityStampCacheKeys.cs`
+- `HudhudNestApi.Application/Common/Interfaces/IUserSecurityStampCacheInvalidator.cs`
+- `HudhudNestApi.Infrastructure/Identity/Services/DistributedSecurityStampCacheInvalidator.cs`
+- `HudhudNestApi.Infrastructure/Identity/Services/SecurityStampCacheKeys.cs`
 
 ### الملفات المعدلة
 
-- `PropertyApi.Infrastructure/DependencyInjection.cs`
-- `PropertyApi.Infrastructure/Identity/Services/CachedSecurityStampValidator.cs`
-- `PropertyApi.Infrastructure/Identity/Services/IdentityUserService.cs`
-- `PropertyApi.Application/Auth/Commands/Logout/LogoutCommand.cs`
+- `HudhudNestApi.Infrastructure/DependencyInjection.cs`
+- `HudhudNestApi.Infrastructure/Identity/Services/CachedSecurityStampValidator.cs`
+- `HudhudNestApi.Infrastructure/Identity/Services/IdentityUserService.cs`
+- `HudhudNestApi.Application/Auth/Commands/Logout/LogoutCommand.cs`
 
 ### ماذا تغير؟
 
@@ -101,10 +101,10 @@ Logout الآن يبطل access tokens السابقة لأنها تعتمد عل
 
 ### الملفات الجديدة
 
-- `PropertyApi/Security/Csrf/CookieCsrfOptions.cs`
-- `PropertyApi/Security/Csrf/CookieCsrfProtectionMiddleware.cs`
-- `PropertyApi/Security/Csrf/CsrfExtensions.cs`
-- `PropertyApi/Controllers/CsrfController.cs`
+- `HudhudNestApi/Security/Csrf/CookieCsrfOptions.cs`
+- `HudhudNestApi/Security/Csrf/CookieCsrfProtectionMiddleware.cs`
+- `HudhudNestApi/Security/Csrf/CsrfExtensions.cs`
+- `HudhudNestApi/Controllers/CsrfController.cs`
 
 ### الوضع الحالي
 
@@ -148,9 +148,9 @@ X-XSRF-TOKEN: <token>
 
 ### الملفات الجديدة
 
-- `PropertyApi/Security/Headers/SecurityHeadersOptions.cs`
-- `PropertyApi/Security/Headers/SecurityHeadersMiddleware.cs`
-- `PropertyApi/Security/Headers/SecurityHeadersExtensions.cs`
+- `HudhudNestApi/Security/Headers/SecurityHeadersOptions.cs`
+- `HudhudNestApi/Security/Headers/SecurityHeadersMiddleware.cs`
+- `HudhudNestApi/Security/Headers/SecurityHeadersExtensions.cs`
 
 ### Headers المضافة
 
@@ -173,13 +173,13 @@ X-XSRF-TOKEN: <token>
 
 ### ملفات جديدة
 
-- `tests/PropertyApi.Auth.Tests/Application/Security/DistributedSecurityStampCacheInvalidatorTests.cs`
-- `tests/PropertyApi.Architecture.Tests/Api/RedisRateLimitingGuardTests.cs`
-- `tests/PropertyApi.Architecture.Tests/ProductionHardening/SecurityHeadersTests.cs`
+- `tests/HudhudNestApi.Auth.Tests/Application/Security/DistributedSecurityStampCacheInvalidatorTests.cs`
+- `tests/HudhudNestApi.Architecture.Tests/Api/RedisRateLimitingGuardTests.cs`
+- `tests/HudhudNestApi.Architecture.Tests/ProductionHardening/SecurityHeadersTests.cs`
 
 ### ملفات معدلة
 
-- `tests/PropertyApi.Architecture.Tests/Api/RateLimitingGuardTests.cs`
+- `tests/HudhudNestApi.Architecture.Tests/Api/RateLimitingGuardTests.cs`
 
 ---
 
@@ -196,13 +196,13 @@ dotnet test
 لتجربة Redis محليًا عبر Docker:
 
 ```powershell
-docker run --name propertyapi-redis -p 6379:6379 -d redis:7-alpine
+docker run --name hudhudnest-redis -p 6379:6379 -d redis:7-alpine
 ```
 
 ثم اضبط:
 
 ```powershell
-dotnet user-secrets set "ConnectionStrings:Redis" "localhost:6379" --project .\PropertyApi\PropertyApi.csproj
+dotnet user-secrets set "ConnectionStrings:Redis" "localhost:6379" --project .\HudhudNestApi\HudhudNestApi.csproj
 ```
 
 ---

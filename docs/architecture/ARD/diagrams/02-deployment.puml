@@ -8,14 +8,14 @@ title مخطط النشر (Deployment Diagram) — بيئتا Staging و Product
 node "جهاز المستخدم\n(Browser / Mobile)" as Client
 
 cloud "Netlify" {
-  node "Production Frontend\nrealestateworld.world\n(main branch)" as FeProd
+  node "Production Frontend\nhudhudnest.com\n(main branch)" as FeProd
   node "Staging Frontend\nstaging--bizorealestateworld\n.netlify.app (staging branch)" as FeStage
 }
 
 cloud "Render.com — My project (prj-d5b6uk2li9vc73bhpe20)" {
   node "بيئة Production" as RenderProd {
-    node "Web Service\nHudhudNest (Render service name: propertyapi-api)\n(Docker: dotnet/aspnet:8.0-jammy-chiseled-extra)\nASPNETCORE_HTTP_PORTS=8080" as ApiProd
-    database "propertyapi-production-db\n(PostgreSQL + PostGIS)" as DbProd
+    node "Web Service\nHudhudNest (Render service name: hudhudnest-api)\n(Docker: dotnet/aspnet:8.0-jammy-chiseled-extra)\nASPNETCORE_HTTP_PORTS=8080" as ApiProd
+    database "hudhudnest-production-db\n(PostgreSQL + PostGIS)" as DbProd
   }
 
   node "بيئة Staging (معزولة)" as RenderStage {
@@ -32,7 +32,7 @@ node "Render Redis (Valkey 8)\nhudhudnest-redis\n(معاد استخدامه لب
 
 cloud "خدمات SaaS خارجية" {
   [Cloudinary\n(صور — بيئة إنتاج مشتركة،\nمفاتيح API منفصلة لكل بيئة)] as Cloudinary
-  [Resend\n(دومين موثّق واحد: realestateworld.world\nمفاتيح API منفصلة لكل بيئة)] as Resend
+  [Resend\n(دومين موثّق واحد: hudhudnest.com\nمفاتيح API منفصلة لكل بيئة)] as Resend
   [Google / Apple OAuth] as OAuthProviders
   [بوابة SMS] as Sms
 }
@@ -46,7 +46,7 @@ node "مجموعة المراقبة (Observability Stack)\ndocker-compose.observ
 
 node "GitHub Actions\n(CI/CD)" as CI {
   [production-gate.yml\nبناء + اختبارات + بوابة إصدار] as Gate
-  [Docker Build\nPropertyApi/Dockerfile\nci/Dockerfile.migrator] as Build
+  [Docker Build\nHudhudNestApi/Dockerfile\nci/Dockerfile.migrator] as Build
 }
 
 Client --> FeProd
@@ -84,7 +84,7 @@ end note
 
 note right of DbStage
   ترحيلات EF Core (Migrations) لا تُطبَّق تلقائيًا
-  عند الإقلاع؛ تُنفَّذ عبر tools/PropertyApi.Migrator
+  عند الإقلاع؛ تُنفَّذ عبر tools/HudhudNestApi.Migrator
   كخطوة نشر منفصلة.
 end note
 

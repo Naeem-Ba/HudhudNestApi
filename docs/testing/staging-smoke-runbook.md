@@ -6,7 +6,7 @@ The release path is build/test/container gate → Staging deploy hook → deploy
 verification → full HTTP E2E journey → protected Production environment approval → Production deploy
 hook. Any failed, cancelled, neutral, or skipped mandatory Staging result blocks Production.
 
-The runner is `tests/PropertyApi.StagingSmokeTests`; `scripts/smoke-staging.sh` validates configuration,
+The runner is `tests/HudhudNestApi.StagingSmokeTests`; `scripts/smoke-staging.sh` validates configuration,
 runs it, checks its machine-readable result, and publishes the Markdown summary.
 
 ## Required GitHub `staging` environment configuration
@@ -29,7 +29,7 @@ Secrets:
 - `STAGING_SMOKE_CLEANUP_SECRET`
 - `STAGING_DATABASE_URL` — external connection string of the Render Staging Postgres
   (`postgresql://user:pass@host/propertyapi_staging`; `sslmode=require` is appended if absent).
-  The gate applies pending EF migrations to it with `tools/PropertyApi.Migrator` **before** the deploy
+  The gate applies pending EF migrations to it with `tools/HudhudNestApi.Migrator` **before** the deploy
   hook, because the API does not migrate on startup and Render Free has no pre-deploy command. The step
   refuses any database whose name does not contain `staging`.
 

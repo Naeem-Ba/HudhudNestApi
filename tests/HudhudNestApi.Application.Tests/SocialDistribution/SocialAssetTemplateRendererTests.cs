@@ -9,7 +9,7 @@ namespace HudhudNestApi.Application.Tests.SocialDistribution;
 public sealed class SocialAssetTemplateRendererTests
 {
     private static readonly BrandIdentity Brand = new(
-        "عقار تيك", "https://cdn.example.com/logo.png", "#0B3D59", "#D4AF37", "#FFFFFF", "#0B3D59", "Arial", 1);
+        "هدهد نيست", "https://cdn.example.com/logo.png", "#0B3D59", "#D4AF37", "#FFFFFF", "#0B3D59", "Arial", 1);
 
     private static SocialAssetTemplateContext MakeContext(
         string title = "شقة رائعة للبيع", string language = "ar", string? sourceImageUrl = "https://cdn.example.com/property.jpg") => new(

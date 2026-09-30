@@ -36,7 +36,7 @@ public sealed class InstagramGraphApiPublisherTests
             Title = "عنوان",
             Body = body,
             ImageUrl = imageUrl ?? string.Empty,
-            TargetUrl = "https://realestateworld.world/properties/p1",
+            TargetUrl = "https://hudhudnest.com/properties/p1",
             Hashtags = hashtags ?? Array.Empty<string>(),
             Language = "ar",
         };

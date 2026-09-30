@@ -18,7 +18,7 @@ public sealed class SocialPublicationJobQueueTests
         var publication = SocialPublication.Create(Guid.NewGuid(), account.Id, Guid.NewGuid(), platform);
         var content = SocialPostContent.Create(
             publication.Id, platform, "عنوان", "نص", "https://cdn.example.com/img.jpg",
-            "https://realestateworld.world/properties/p1", null, "ar");
+            "https://hudhudnest.com/properties/p1", null, "ar");
         publication.AttachContent(content);
         publication.Queue(null, DateTime.UtcNow);
 

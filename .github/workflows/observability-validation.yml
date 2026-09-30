@@ -21,7 +21,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - run: dotnet test tests/HudhudNestApi.Observability.Tests/HudhudNestApi.Observability.Tests.csproj
-      - run: jq -e . observability/grafana/dashboards/property-api-production.json >/dev/null
+      - run: jq -e . observability/grafana/dashboards/hudhudnest-production.json >/dev/null
       - run: docker compose -f observability/docker-compose.observability.yml config --quiet
       - name: Validate collector
         run: |

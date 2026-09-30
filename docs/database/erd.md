@@ -1,4 +1,4 @@
-# PropertyApi — Entity Relationship Diagram (as-applied schema)
+# HudhudNestApi — Entity Relationship Diagram (as-applied schema)
 
 Generated 2026-09-04 from the actual `AppDbContext` model and migration set (verified live by
 applying all 35 migrations to a disposable PostgreSQL 17/PostGIS 3.5 database — see

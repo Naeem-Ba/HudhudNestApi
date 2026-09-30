@@ -1,15 +1,15 @@
-# AqarTech Services Marketplace — Implementation Report
+# HudhudNest Services Marketplace — Implementation Report
 
 **Session scope (as agreed with the user):** Foundation + one full vertical slice —
 the shared Services domain plus one fully working, fully tested, end-to-end service
-(**AqarTech Verify**). The remaining four MVP services (Valuation, Inspect, Media,
+(**HudhudNest Verify**). The remaining four MVP services (Valuation, Inspect, Media,
 Care) are reserved in the domain model but are not working products yet.
 
 ## 1. What changed, and why
 
-### 1.1 Backend (`PropertyApi`, this repo)
+### 1.1 Backend (`HudhudNestApi`, this repo)
 
-**Domain** (`PropertyApi.Domain/Services/`) — new bounded context, DDD style
+**Domain** (`HudhudNestApi.Domain/Services/`) — new bounded context, DDD style
 (private setters, static `Create()` factories, domain state-machine methods),
 directly mirroring `VisitRequest`:
 
@@ -27,7 +27,7 @@ directly mirroring `VisitRequest`:
 | `Common/Exceptions/InvalidStateTransitionException.cs` | Subclass of `DomainException`; the one deliberate deviation from `VisitRequest`'s 400-for-everything precedent — mapped to **409** by the middleware. |
 | `Notifications/Enums/NotificationType.cs` | Appended `19..25` (`ServiceRequestSubmitted/Accepted/Rejected/Scheduled/Completed/Cancelled`, `ServiceReviewAdded`) — nothing renumbered. |
 
-**Application** (`PropertyApi.Application/Services/`) — 14 commands, 10 queries
+**Application** (`HudhudNestApi.Application/Services/`) — 14 commands, 10 queries
 (CQRS/MediatR + FluentValidation), a `ServiceMapper`, 7 interfaces
 (`IServiceProviderRepository`, `IServiceOfferingRepository`, `IServiceRequestRepository`,
 `IServiceRequestStatusHistoryRepository`, `IServiceReviewRepository`,
@@ -37,7 +37,7 @@ server-side and compares it to the authenticated caller — **no new Identity ro
 `RequestNumber`, `Status`, `CreatedAt`, `FinalPrice` etc. are never accepted from
 the client.
 
-**Infrastructure** (`PropertyApi.Infrastructure/`):
+**Infrastructure** (`HudhudNestApi.Infrastructure/`):
 - 6 `IEntityTypeConfiguration<T>` classes (`Persistence/Configurations/Service*.cs`) —
   `HasConversion<string>()` for the three enums (majority convention), filtered-unique
   indexes (`ServiceProviders.UserId`, `ServiceRequests.RequestNumber`,
@@ -56,7 +56,7 @@ the client.
   which already falls through to a generic message template for any `NotificationType`
   it doesn't special-case.
 
-**API** (`PropertyApi/Controllers/`):
+**API** (`HudhudNestApi/Controllers/`):
 - `ServiceProvidersController`, `ServiceOfferingsController`, `ServiceRequestsController` —
   same `GetUserId()`/`[Authorize]`/thin-controller convention as `VisitsController`.
 - New rate-limit policies `service-requests` (10/hour) and `service-request-documents`
@@ -69,9 +69,9 @@ the client.
   block, placed **before** the existing `catch (DomainException)` block (C# picks the
   first matching catch — order matters), mapping to 409.
 
-### 1.2 Frontend (`Wohnungsmieten`, separate repo)
+### 1.2 Frontend (`HudhudNest`, separate repo)
 
-Consumes the new backend for the same one working flow: request AqarTech Verify from
+Consumes the new backend for the same one working flow: request HudhudNest Verify from
 a property page, see it in "my requests," cancel it, review it once completed.
 
 - `core/models/service.model.ts`, `core/api/service-offering.service.ts`,
@@ -89,7 +89,7 @@ a property page, see it in "my requests," cancel it, review it once completed.
 
 ## 2. Database changes
 
-One migration: `PropertyApi.Infrastructure/Migrations/20260828064403_AddAqarTechServicesMarketplace.cs`.
+One migration: `HudhudNestApi.Infrastructure/Migrations/20260828064403_AddAqarTechServicesMarketplace.cs`.
 
 - **New tables**: `ServiceProviders`, `ServiceOfferings`, `ServiceRequests`,
   `ServiceRequestStatusHistories`, `ServiceReviewDocuments`, `ServiceReviews`.
@@ -97,7 +97,7 @@ One migration: `PropertyApi.Infrastructure/Migrations/20260828064403_AddAqarTech
   first-class "add a bare sequence" builder call for this ownership shape, same reason
   the codebase's PostGIS geography column is also hand-written SQL).
 - **No existing table was altered.**
-- Migration is applied at deploy time exclusively via `tools/PropertyApi.Migrator`
+- Migration is applied at deploy time exclusively via `tools/HudhudNestApi.Migrator`
   (not touched this session) — nothing about that process changed.
 
 ## 3. API surface added
@@ -144,12 +144,12 @@ One migration: `PropertyApi.Infrastructure/Migrations/20260828064403_AddAqarTech
 
 | Suite | Result | Notes |
 |---|---|---|
-| `PropertyApi.Auth.Tests` (Domain + Application handlers) | **314/314 passed** | includes 22 new `ServiceRequestTests` (state machine) + 12 new `ServiceRequestHandlerTests` (authorization, state-machine, validation gating) |
-| `PropertyApi.Application.Tests` | **313/313 passed** | no regressions |
-| `PropertyApi.Architecture.Tests` | **108/108 passed** | layering, migration-completeness, `PublicEndpointPolicyTests`, `RateLimitingGuardTests` all green with the new surface registered |
-| `PropertyApi.Observability.Tests` | **9/9 passed** | no regressions |
-| `PropertyApi.Integration.Tests` | **53/95 passed** | see below |
-| `dotnet build PropertyApi.sln` | **Success**, 0 warnings, 0 errors | |
+| `HudhudNestApi.Auth.Tests` (Domain + Application handlers) | **314/314 passed** | includes 22 new `ServiceRequestTests` (state machine) + 12 new `ServiceRequestHandlerTests` (authorization, state-machine, validation gating) |
+| `HudhudNestApi.Application.Tests` | **313/313 passed** | no regressions |
+| `HudhudNestApi.Architecture.Tests` | **108/108 passed** | layering, migration-completeness, `PublicEndpointPolicyTests`, `RateLimitingGuardTests` all green with the new surface registered |
+| `HudhudNestApi.Observability.Tests` | **9/9 passed** | no regressions |
+| `HudhudNestApi.Integration.Tests` | **53/95 passed** | see below |
+| `dotnet build HudhudNestApi.sln` | **Success**, 0 warnings, 0 errors | |
 | Angular `npm run typecheck` | **Clean** | |
 | Angular `ng build` (development) | **Success** | new `my-service-requests-page` chunk (39.75 kB dev / 14.19 kB prod) |
 | Angular `ng build` (production) | **Success**, no budget warnings | |
@@ -216,7 +216,7 @@ agreed session scope:
 - `dotnet ef migrations add` generated cleanly against the existing model snapshot;
   `MigrationCompletenessTests` (offline model-vs-snapshot diff) passes.
 - No CI workflow changes needed: new tests were added to the existing
-  `PropertyApi.Auth.Tests` and `PropertyApi.Integration.Tests` projects (already
+  `HudhudNestApi.Auth.Tests` and `HudhudNestApi.Integration.Tests` projects (already
   "owned" in `ci.yml`), not new `.csproj` files.
 - The Postgres/Redis-backed CI job will exercise the 41 currently-unrunnable
   Integration tests and should be watched on the first real CI run for this branch —

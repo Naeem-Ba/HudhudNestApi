@@ -14,7 +14,7 @@ public sealed class SocialPublicationTests
         var publication = MakePublication(platform);
         var content = SocialPostContent.Create(
             publication.Id, platform, "عنوان", "نص المنشور",
-            "https://cdn.example.com/img.jpg", "https://realestateworld.world/properties/p1", null, "ar");
+            "https://cdn.example.com/img.jpg", "https://hudhudnest.com/properties/p1", null, "ar");
         publication.AttachContent(content);
         return publication;
     }
@@ -512,7 +512,7 @@ public sealed class SocialPublicationTests
         var publication = MakePublicationWithContent();
         var secondContent = SocialPostContent.Create(
             publication.Id, SocialPlatform.Facebook, "عنوان2", "نص2",
-            "https://cdn.example.com/img2.jpg", "https://realestateworld.world/properties/p1", null, "ar");
+            "https://cdn.example.com/img2.jpg", "https://hudhudnest.com/properties/p1", null, "ar");
 
         Assert.Throws<InvalidStateTransitionException>(() => publication.AttachContent(secondContent));
     }
@@ -523,7 +523,7 @@ public sealed class SocialPublicationTests
         var publication = MakePublication();
         var mismatchedContent = SocialPostContent.Create(
             Guid.NewGuid(), SocialPlatform.Facebook, "عنوان", "نص",
-            "https://cdn.example.com/img.jpg", "https://realestateworld.world/properties/p1", null, "ar");
+            "https://cdn.example.com/img.jpg", "https://hudhudnest.com/properties/p1", null, "ar");
 
         Assert.Throws<DomainException>(() => publication.AttachContent(mismatchedContent));
     }

@@ -1,7 +1,7 @@
 # Account Deletion — Production Readiness (Phase 5)
 
 **Date:** 2026-09-05
-**Scope:** Server-side account deletion for PropertyApi (.NET 8) + the Wohnungsmieten Angular/Capacitor client, per the Phase 5 spec (Google Play + Apple App Store account-deletion compliance).
+**Scope:** Server-side account deletion for HudhudNestApi (.NET 8) + the HudhudNest Angular/Capacitor client, per the Phase 5 spec (Google Play + Apple App Store account-deletion compliance).
 **Status of this document:** Technical readiness assessment based on actual code inspection and test runs performed in this session. It is **not** a legal opinion — see §18 for what still needs a legal/business decision.
 
 > **Note on concurrent work:** this repository had several other Claude Code sessions active on the same working tree while this phase was executed (visible via `git status` picking up unrelated in-flight changes — a new Consent-tracking feature, PII log-masking, audit-log retention, Cloudinary cleanup for expired listings). Those are **out of scope** for this document and were not modified by this phase; they are called out only where they touch a fact this report depends on (e.g. `docs/privacy/data-inventory.md`).
@@ -48,7 +48,7 @@ This is corroborated by `docs/privacy/data-inventory.md` and `docs/privacy/data-
 
 ## 3. Data Dependency Map
 
-Built from the actual EF Core configurations (`PropertyApi.Infrastructure/Persistence/Configurations/*.cs`), not assumed. `UserAccounts.Id` = `ApplicationUser.Id` (shared primary key, `DeleteBehavior.Restrict` — see `UserAccountConfiguration.cs`), so **no row that is a business record can ever be hard-deleted while any of the tables below still reference it** — this is why anonymize-in-place, not hard delete, is the only viable strategy in this codebase today.
+Built from the actual EF Core configurations (`HudhudNestApi.Infrastructure/Persistence/Configurations/*.cs`), not assumed. `UserAccounts.Id` = `ApplicationUser.Id` (shared primary key, `DeleteBehavior.Restrict` — see `UserAccountConfiguration.cs`), so **no row that is a business record can ever be hard-deleted while any of the tables below still reference it** — this is why anonymize-in-place, not hard delete, is the only viable strategy in this codebase today.
 
 | Entity | References User via | Personal data? | Delete behavior on user | Action taken |
 |---|---|---|---|---|
@@ -97,7 +97,7 @@ Built from the actual EF Core configurations (`PropertyApi.Infrastructure/Persis
 
 ## 5. API
 
-`DELETE /api/Users/me` (`PropertyApi/Controllers/UsersController.cs:DeleteAccount`) — no new endpoint was created; the existing one was extended, per the instruction to prefer extending existing architecture.
+`DELETE /api/Users/me` (`HudhudNestApi/Controllers/UsersController.cs:DeleteAccount`) — no new endpoint was created; the existing one was extended, per the instruction to prefer extending existing architecture.
 
 - Request body (optional): `{ "currentPassword"?: string }`.
 - Responses: `204 No Content` (success), `401 Unauthorized` (not authenticated, or identity not found/already deleted), `400 Bad Request` with `{ "errors": [...] }` for `CURRENT_PASSWORD_REQUIRED` / `INVALID_CURRENT_PASSWORD` / `ACCOUNT_LOCKED` / any identity-layer failure code.
@@ -150,7 +150,7 @@ The avatar's `ProfileImagePublicId` is read **before** `account.Anonymize()` cle
 
 ---
 
-## 10. Frontend UX (Wohnungsmieten / Angular)
+## 10. Frontend UX (HudhudNest / Angular)
 
 `src/app/profile/profile.component.ts`/`.html`/`.scss`:
 
@@ -211,7 +211,7 @@ Content: how to delete in-app/on-web, exactly what is deleted vs. retained (same
 
 ## 15. Security Tests
 
-All in `tests/PropertyApi.Application.Tests/Users/DeleteUserCommandHandlerTests.cs` (12 tests, **all passing** — `dotnet test`, see §16 for the exact command) unless noted:
+All in `tests/HudhudNestApi.Application.Tests/Users/DeleteUserCommandHandlerTests.cs` (12 tests, **all passing** — `dotnet test`, see §16 for the exact command) unless noted:
 
 - Unauthenticated/missing identity → `UserNotFound` (also proven at the HTTP level, see below).
 - Already-deleted identity → `UserNotFound`.
@@ -226,7 +226,7 @@ All in `tests/PropertyApi.Application.Tests/Users/DeleteUserCommandHandlerTests.
 - No avatar set → Cloudinary never called.
 - Cloudinary throwing → deletion still reports success (external cleanup is best-effort, post-commit).
 
-`tests/PropertyApi.Integration.Tests/Security/AccountDeletionAuthenticationTests.cs` (2 tests, **passing**, real HTTP round-trip through the actual JWT middleware): no token → 401; malformed token → 401.
+`tests/HudhudNestApi.Integration.Tests/Security/AccountDeletionAuthenticationTests.cs` (2 tests, **passing**, real HTTP round-trip through the actual JWT middleware): no token → 401; malformed token → 401.
 
 **IDOR** is structurally proven by code inspection (§7) rather than a dedicated test — the endpoint has no attacker-controllable identifier at all, so there is no "User A targets User B" code path to exercise. A dedicated two-user HTTP test was not added — see §16.
 
@@ -237,12 +237,12 @@ All in `tests/PropertyApi.Application.Tests/Users/DeleteUserCommandHandlerTests.
 Run in this session (all passing):
 
 ```
-dotnet build PropertyApi.sln                                    → 0 errors
-dotnet test tests/PropertyApi.Application.Tests/...              → 549/549 passed
-dotnet test tests/PropertyApi.Architecture.Tests/...              → 108/108 passed
-dotnet test tests/PropertyApi.Auth.Tests/...                       → 254/254 passed
-dotnet test tests/PropertyApi.Integration.Tests/... --filter AccountDeletionAuthenticationTests  → 2/2 passed
-npm run build   (Wohnungsmieten, production config)               → succeeded, 0 errors
+dotnet build HudhudNestApi.sln                                    → 0 errors
+dotnet test tests/HudhudNestApi.Application.Tests/...              → 549/549 passed
+dotnet test tests/HudhudNestApi.Architecture.Tests/...              → 108/108 passed
+dotnet test tests/HudhudNestApi.Auth.Tests/...                       → 254/254 passed
+dotnet test tests/HudhudNestApi.Integration.Tests/... --filter AccountDeletionAuthenticationTests  → 2/2 passed
+npm run build   (HudhudNest, production config)               → succeeded, 0 errors
 ```
 
 **NOT VERIFIED in this session** (honest disclosure, not a claimed PASS):

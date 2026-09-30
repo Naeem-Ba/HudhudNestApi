@@ -33,7 +33,7 @@ public sealed class ServiceRequestsControllerTests
         var userId = Guid.NewGuid();
         var dto = new ServiceRequestDto(
             Guid.NewGuid(), "SR-2026-000001", propertyId, "Villa", null, userId, "Test User",
-            Guid.NewGuid(), "AqarTech Verify", offeringId, "Standard Check",
+            Guid.NewGuid(), "HudhudNest Verify", offeringId, "Standard Check",
             ServiceCategory.Verification, ServiceRequestStatus.UnderReview,
             null, null, null, null, null, null, null, null, null, null, DateTime.UtcNow);
 
@@ -61,7 +61,7 @@ public sealed class ServiceRequestsControllerTests
         var userId = Guid.NewGuid();
         var dto = new ServiceRequestDto(
             requestId, "SR-2026-000002", Guid.NewGuid(), "Villa", null, userId, "Test User",
-            Guid.NewGuid(), "AqarTech Verify", Guid.NewGuid(), "Standard Check",
+            Guid.NewGuid(), "HudhudNest Verify", Guid.NewGuid(), "Standard Check",
             ServiceCategory.Verification, ServiceRequestStatus.UnderReview,
             null, null, null, null, null, null, null, null, null, null, DateTime.UtcNow);
 
@@ -86,7 +86,7 @@ public sealed class ServiceRequestsControllerTests
         var userId = Guid.NewGuid();
         var dto = new ServiceRequestDto(
             requestId, "SR-2026-000003", Guid.NewGuid(), "Villa", null, Guid.NewGuid(), "Test User",
-            Guid.NewGuid(), "AqarTech Verify", Guid.NewGuid(), "Standard Check",
+            Guid.NewGuid(), "HudhudNest Verify", Guid.NewGuid(), "Standard Check",
             ServiceCategory.Verification, ServiceRequestStatus.Accepted,
             null, null, null, null, null, null, null, null, null, null, DateTime.UtcNow);
 

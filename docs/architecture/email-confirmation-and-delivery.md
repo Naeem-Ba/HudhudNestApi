@@ -73,14 +73,14 @@ A misconfigured deployment therefore fails at boot rather than at the first regi
 
 ### The one placeholder startup validation now catches — and the one it still can't
 
-`Email:From` defaults to `no-reply@propertyapi.local`, a non-routable domain. Resend rejects
+`Email:From` defaults to `no-reply@hudhudnest.local`, a non-routable domain. Resend rejects
 unverified sending domains with a 403 — and **both callers swallow send failures** (see
 below). A deployment that kept the default used to pass every startup check, register users
 normally, and deliver zero mail, with the only trace an ERROR line nobody was watching.
 
 `EmailOptions.ValidateForEnvironment`, called from `ProductionStartupValidator` alongside the
 SMS check it mirrors, now refuses to start in Production if `Email:From` still ends in
-`@propertyapi.local` — the exact shipped default. That closes the specific mistake of
+`@hudhudnest.local` — the exact shipped default. That closes the specific mistake of
 forgetting to change it.
 
 **It cannot close the general case.** A real domain that exists but was never verified in the

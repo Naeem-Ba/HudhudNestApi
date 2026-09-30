@@ -77,7 +77,7 @@ public sealed class SocialDistributionApiTestFactory : WebApplicationFactory<Pro
                 ["DataProtection:PersistKeysToDatabase"] = "true",
                 ["OtpSettings:SecretKey"] = "integration-test-otp-secret-key-at-least-32-bytes",
                 ["Security:PhoneLookupHmacKey"] = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
-                ["Frontend:BaseUrl"] = "https://realestateworld.world",
+                ["Frontend:BaseUrl"] = "https://hudhudnest.com",
             };
 
             foreach (var pair in ConfigurationOverrides)

@@ -1,4 +1,4 @@
-# CI/CD Audit Report — PropertyApi
+# CI/CD Audit Report — HudhudNestApi
 
 Companion detail report to `FULL-CODE-AUDIT-REPORT.md`. Covers all 9 GitHub Actions workflows and the full test suite. Read-only audit; nothing was triggered, merged, or deployed.
 
@@ -45,12 +45,12 @@ Both have substantive, non-placeholder implementations:
 
 ### A6. Broken/inconsistent references — none found
 
-All `run:` script paths and tool project paths referenced across all 9 workflows (~28 spot-checked, including `tools/PropertyApi.Migrator`, `tools/PropertyApi.DatabaseRecoveryVerifier`, compose files) exist on disk.
+All `run:` script paths and tool project paths referenced across all 9 workflows (~28 spot-checked, including `tools/HudhudNestApi.Migrator`, `tools/HudhudNestApi.DatabaseRecoveryVerifier`, compose files) exist on disk.
 
 ### A7. Other confirmed findings
 
 - **AUD-10 (Low):** `redis-ha-failover.yml` calls `scripts/verify-redis-ha.sh` unconditionally, unlike `production-gate.yml`'s `validate-redis-ha-topology` job which has an explicit skip-if-`REDIS_HA_EVIDENCE_JSON`-unset escape hatch. Since no managed Redis HA provider is currently wired to Staging (per `docs/REDIS-HA.md`), running this workflow today would fail at that step. Low severity because it's manual-dispatch-only and doesn't block any gate — but it's presently non-functional.
-- **Positive, confirmed:** `ci.yml`'s "every test project must have an owner" step (lines ~413-448) is a real structural control that already caught a historical bug (documented in-code: `PropertyApi.Infrastructure.Tests` was once added but never wired into a `dotnet test` step).
+- **Positive, confirmed:** `ci.yml`'s "every test project must have an owner" step (lines ~413-448) is a real structural control that already caught a historical bug (documented in-code: `HudhudNestApi.Infrastructure.Tests` was once added but never wired into a `dotnet test` step).
 
 ## Part B — Test Suite
 
@@ -74,20 +74,20 @@ Grepped for `[Fact(Skip`, `[Theory(Skip`, `Skip =`, `.Skip(`, `Ignore(`, `Assert
 
 ### B4. CSRF and concurrency coverage vs. documentation — one real gap
 
-**CSRF: well covered.** `CookieCsrfProtectionIntegrationTests.cs` (7 tests) covers token issuance, the Partitioned/CHIPS cookie attribute, missing-header rejection, invalid-token rejection, the cross-site-attacker-cannot-forge-header scenario, and the full valid round-trip. `PropertyApi.Architecture.Tests` additionally has `MiddlewareOrderGuardTests.cs`, `OptionsValidationGuardTests.cs`, `PublicEndpointPolicyTests.cs` covering CSRF-adjacent structural rules. **Not covered:** the new uncommitted `Program.cs` Production scheme-force fix (see AUD-01) — see `TEST-PLAN.md` for the specific test to add.
+**CSRF: well covered.** `CookieCsrfProtectionIntegrationTests.cs` (7 tests) covers token issuance, the Partitioned/CHIPS cookie attribute, missing-header rejection, invalid-token rejection, the cross-site-attacker-cannot-forge-header scenario, and the full valid round-trip. `HudhudNestApi.Architecture.Tests` additionally has `MiddlewareOrderGuardTests.cs`, `OptionsValidationGuardTests.cs`, `PublicEndpointPolicyTests.cs` covering CSRF-adjacent structural rules. **Not covered:** the new uncommitted `Program.cs` Production scheme-force fix (see AUD-01) — see `TEST-PLAN.md` for the specific test to add.
 
-**Concurrency: AUD-03 (Medium-High, confirmed).** `tests/PropertyApi.Concurrency.Tests/ConcurrencySafetyRegressionTests.cs` is the entire project — 4 tests, and **none of them execute concurrent code**. All four read other files on disk (a k6 scenario script, a SQL integrity-check script, `PhoneAuthenticationWorkflow.cs`'s source text, `run-performance-tests.sh`) and assert those files still contain specific literal substrings — e.g. confirming the OTP-attempt-increment guard line hasn't been edited away. This proves the *source text* hasn't regressed; it does **not** exercise any actual concurrent execution path in-process. Real multi-replica/Redis-rate-limit-race and OTP-attempt-race behavior is only actually *executed* by the k6 scenarios inside `performance-validation.yml`, a separate workflow gated behind Docker/k6/Postgres/Redis containers — not part of a normal `dotnet test` run.
+**Concurrency: AUD-03 (Medium-High, confirmed).** `tests/HudhudNestApi.Concurrency.Tests/ConcurrencySafetyRegressionTests.cs` is the entire project — 4 tests, and **none of them execute concurrent code**. All four read other files on disk (a k6 scenario script, a SQL integrity-check script, `PhoneAuthenticationWorkflow.cs`'s source text, `run-performance-tests.sh`) and assert those files still contain specific literal substrings — e.g. confirming the OTP-attempt-increment guard line hasn't been edited away. This proves the *source text* hasn't regressed; it does **not** exercise any actual concurrent execution path in-process. Real multi-replica/Redis-rate-limit-race and OTP-attempt-race behavior is only actually *executed* by the k6 scenarios inside `performance-validation.yml`, a separate workflow gated behind Docker/k6/Postgres/Redis containers — not part of a normal `dotnet test` run.
 
-This is a **documented-capability-with-no-corresponding-test gap**: running `dotnet test tests/PropertyApi.Concurrency.Tests` locally or in a fast CI lane gives a false impression that concurrency safety is verified in-process, when it's actually a content-regression tripwire for the performance-test scripts. `docs/performance/load-testing-architecture.md` explicitly claims "Authentication races... invalid OTP attempt race" are covered — true in the k6/performance-validation sense, but misleading given this project's name and location. Worth flagging to whoever maintains `docs/testing/coverage-improvement-plan.md`'s Stage 3 entry ("Add behavior tests for failure paths... concurrency").
+This is a **documented-capability-with-no-corresponding-test gap**: running `dotnet test tests/HudhudNestApi.Concurrency.Tests` locally or in a fast CI lane gives a false impression that concurrency safety is verified in-process, when it's actually a content-regression tripwire for the performance-test scripts. `docs/performance/load-testing-architecture.md` explicitly claims "Authentication races... invalid OTP attempt race" are covered — true in the k6/performance-validation sense, but misleading given this project's name and location. Worth flagging to whoever maintains `docs/testing/coverage-improvement-plan.md`'s Stage 3 entry ("Add behavior tests for failure paths... concurrency").
 
 Distributed-lock coverage: not applicable — this codebase uses PostgreSQL advisory locks exclusively, not Redis locks (see Backend Audit Report §5). Redis-backed rate limiting **does** have real coverage: `RedisRateLimitingMiddlewareTests.cs`, `RateLimitingTests.cs`, `Architecture.Tests/Api/RedisRateLimitingGuardTests.cs`.
 
 ### B5. Project structure / isolation — sound
 
-- `PropertyApi.Application.Tests.csproj` references only `PropertyApi.Application` + `PropertyApi.Domain` — no Infrastructure/DB.
-- `PropertyApi.Infrastructure.Tests` has zero references to live DB/Redis/`WebApplicationFactory` — genuinely pure-unit with Moq.
-- `PropertyApi.Integration.Tests` correctly pairs with CI's Postgres/Redis service containers; Redis is explicitly `FLUSHALL`'d between Auth and Integration test runs (`ci.yml:462-467, 481-486`) to prevent cross-suite state leakage.
-- `PropertyApi.StagingSmokeTests`, `PropertyApi.Performance.Tests`, `PropertyApi.Concurrency.Tests` are correctly excluded from the main fast `ci.yml` run and delegated to their own specialized workflows, per the "every test project must have an owner" gate.
+- `HudhudNestApi.Application.Tests.csproj` references only `HudhudNestApi.Application` + `HudhudNestApi.Domain` — no Infrastructure/DB.
+- `HudhudNestApi.Infrastructure.Tests` has zero references to live DB/Redis/`WebApplicationFactory` — genuinely pure-unit with Moq.
+- `HudhudNestApi.Integration.Tests` correctly pairs with CI's Postgres/Redis service containers; Redis is explicitly `FLUSHALL`'d between Auth and Integration test runs (`ci.yml:462-467, 481-486`) to prevent cross-suite state leakage.
+- `HudhudNestApi.StagingSmokeTests`, `HudhudNestApi.Performance.Tests`, `HudhudNestApi.Concurrency.Tests` are correctly excluded from the main fast `ci.yml` run and delegated to their own specialized workflows, per the "every test project must have an owner" gate.
 
 ## Summary of Severities (CI/CD & Tests)
 

@@ -32,7 +32,7 @@ The authoritative file names and machine policy are in `ci/migration-risk-baseli
 2. Review generated SQL, lock duration, table size, backfill idempotency, old/new app compatibility, and `Down` data effects.
 3. For any schema/backfill/connectivity/high-risk release, create and verify the fresh pre-deployment backup. Record current/target commit, current/target migration, checksum, and backup ID.
 4. Perform expand first, resumable measured backfill second, and contract in a later approved release after no active version uses the old shape. Create another backup before contract.
-5. Execute only through `PropertyApi.Migrator`; do not enable startup migration in horizontally scaled API containers.
+5. Execute only through `HudhudNestApi.Migrator`; do not enable startup migration in horizontally scaled API containers.
 
 ## Failure decisions
 

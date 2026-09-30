@@ -3,10 +3,10 @@
 Re-verification of the issues listed in `Claude outputs/تقرير-الأخطاء-مرتب-بالأولوية-2026-09-18.md`
 and `Claude outputs/تقرير-الحلول-جاهزة-للتنفيذ-2026-09-18.md` against the actual state of both
 repos, done this session with direct terminal/git/code access (the prior report explicitly
-lacked that access — see its own disclaimer). Repos: `PropertyApi` (started this session on
+lacked that access — see its own disclaimer). Repos: `HudhudNestApi` (started this session on
 branch `hotfix/revert-csrf-securepolicy-always` = `origin/master` + 2 uncommitted files; the
 user committed and merged that hotfix independently, outside this session — see the P0 section
-below — and the repo is now on `master`, commit `81d97c8`, PR #155) and `Wohnungsmieten`
+below — and the repo is now on `master`, commit `81d97c8`, PR #155) and `HudhudNest`
 (branch `main`, clean throughout).
 
 ## P0 — Uncommitted Phase 2/Phase 3 work
@@ -38,7 +38,7 @@ below — and the repo is now on `master`, commit `81d97c8`, PR #155) and `Wohnu
   correctly alarming when made; it is stale now.
 
 **What WAS uncommitted at session start (real, unrelated, untouched by this session):**
-- `PropertyApi/Program.cs` and `PropertyApi/Security/Csrf/CsrfExtensions.cs` on branch
+- `HudhudNestApi/Program.cs` and `HudhudNestApi/Security/Csrf/CsrfExtensions.cs` on branch
   `hotfix/revert-csrf-securepolicy-always` — an in-progress, well-documented revert of the
   `CookieSecurePolicy.Always` hotfix (PR #154) back to forcing `Request.Scheme` in
   `Program.cs` + `SameAsRequest`. This is **unrelated to the P0-P3 list** in the attached
@@ -50,7 +50,7 @@ below — and the repo is now on `master`, commit `81d97c8`, PR #155) and `Wohnu
   override, not SecurePolicy.Always") and it is now merged to `origin/master` via PR #155
   (`81d97c8`). Net effect: that work is now safely committed and pushed — better protected
   than it was at session start, and this session did not cause or interfere with that.
-- Two untracked files under `PropertyApi/Claude outputs/` (the attached reports themselves).
+- Two untracked files under `HudhudNestApi/Claude outputs/` (the attached reports themselves).
 - Two pre-existing frontend stashes (`stash@{0}` "phase3 wip - unrelated to hotfix 2",
   `stash@{1}` old i18n WIP) — untouched, not part of the current P0-P3 scope.
 
@@ -64,13 +64,13 @@ on the CSRF hotfix files per the mandatory "protect first" rule.
 **Status: CONFIRMED, FIXED this session.**
 
 **Evidence (before fix):**
-- `RegisterCommandValidator` (`PropertyApi.Application/Auth/Commands/Register/RegisterCommand.cs`)
+- `RegisterCommandValidator` (`HudhudNestApi.Application/Auth/Commands/Register/RegisterCommand.cs`)
   calls `IPasswordSecurityService.ValidatePasswordAsync` (complexity + HIBP breach check).
 - `ResetPasswordCommandValidator`
-  (`PropertyApi.Application/Auth/Commands/ResetPassword/ResetPasswordCommand.cs`) had only
+  (`HudhudNestApi.Application/Auth/Commands/ResetPassword/ResetPasswordCommand.cs`) had only
   `NotEmpty()`/`MinimumLength(8)` — no complexity check, no breach check at all.
 - `ChangePasswordCommandValidator`
-  (`PropertyApi.Application/Users/Commands/ChangePassword/ChangePasswordCommandValidator.cs`)
+  (`HudhudNestApi.Application/Users/Commands/ChangePassword/ChangePasswordCommandValidator.cs`)
   had `MinimumLength(8)` + ad-hoc `Matches("[A-Z]")`/`Matches("[0-9]")` — weaker than Register
   (no lowercase/special-char check) and also **no breach check**. This path was not examined
   in the original report and is a second, previously-undocumented instance of the same gap.
@@ -81,20 +81,20 @@ the existing abstraction. `ChangePasswordCommandValidator`'s ad-hoc regex rules 
 since the service already covers (and exceeds) them.
 
 **Files changed:**
-- `PropertyApi.Application/Auth/Commands/ResetPassword/ResetPasswordCommand.cs`
-- `PropertyApi.Application/Users/Commands/ChangePassword/ChangePasswordCommandValidator.cs`
+- `HudhudNestApi.Application/Auth/Commands/ResetPassword/ResetPasswordCommand.cs`
+- `HudhudNestApi.Application/Users/Commands/ChangePassword/ChangePasswordCommandValidator.cs`
 
 **Tests added:**
-- `tests/PropertyApi.Auth.Tests/ResetPasswordCommandValidatorTests.cs` (5 tests)
-- `tests/PropertyApi.Application.Tests/Users/ChangePasswordCommandValidatorTests.cs` (5 tests)
+- `tests/HudhudNestApi.Auth.Tests/ResetPasswordCommandValidatorTests.cs` (5 tests)
+- `tests/HudhudNestApi.Application.Tests/Users/ChangePasswordCommandValidatorTests.cs` (5 tests)
 
-**Test results:** `PropertyApi.Auth.Tests` 261/261 PASS (includes the 5 new
-`ResetPasswordCommandValidatorTests`), `PropertyApi.Application.Tests` 1166/1166 PASS
-(includes the 5 new `ChangePasswordCommandValidatorTests`), `PropertyApi.Architecture.Tests`
+**Test results:** `HudhudNestApi.Auth.Tests` 261/261 PASS (includes the 5 new
+`ResetPasswordCommandValidatorTests`), `HudhudNestApi.Application.Tests` 1166/1166 PASS
+(includes the 5 new `ChangePasswordCommandValidatorTests`), `HudhudNestApi.Architecture.Tests`
 164/164 PASS. Full-suite pass with zero failures confirms zero regressions from this change
 (absolute counts are higher than the old Phase 2/3 reports' baselines because unrelated work —
 e.g. App Update Management, PR #153 — merged into `master` since those reports were written).
-`dotnet build PropertyApi.sln -c Release` clean (0 errors after a stale-cache false failure was
+`dotnet build HudhudNestApi.sln -c Release` clean (0 errors after a stale-cache false failure was
 cleared with `dotnet clean`, see Implementation Report), `dotnet format --verify-no-changes`
 clean on all 4 changed/added files.
 
@@ -110,7 +110,7 @@ a missing capability.
 dev-only gap, and the real Staging deployment is already verified working.**
 
 **Evidence:**
-- `PropertyApi/Configuration/CorsRegistration.cs` is already correctly written: it never
+- `HudhudNestApi/Configuration/CorsRegistration.cs` is already correctly written: it never
   combines `AllowAnyOrigin()` with `AllowCredentials()`, and throws
   `InvalidOperationException` if `Cors:AllowedOrigins` is empty outside Development — this is
   the *safe* pattern, not the bug.
@@ -155,7 +155,7 @@ caught a real, previously-unknown live bug.**
 
 Added `@playwright/test`, `playwright.config.ts` (targets deployed Staging by default,
 overridable via `E2E_BASE_URL`), and one spec,
-`Wohnungsmieten/e2e/auth-session-refresh.spec.ts`, guarding the B-20 regression class: an
+`HudhudNest/e2e/auth-session-refresh.spec.ts`, guarding the B-20 regression class: an
 access token rejected mid-session must trigger a silent `/auth/refresh` (real
 `refresh_token` cookie) and a transparent retry — never a visible failure.
 
@@ -177,7 +177,7 @@ sandboxed session unexpectedly had outbound network access this pass — confirm
    discovered, live-confirmed defect, not a test artifact.
 
 **Root cause (confirmed by reading the code, not guessed):** today's earlier fix in this same
-session (PR #155 / commit `81d97c8`) made `PropertyApi/Program.cs` force
+session (PR #155 / commit `81d97c8`) made `HudhudNestApi/Program.cs` force
 `Request.Scheme = "https"` — needed because `Request.IsHttps` is unreliable on Render — but
 scoped to `app.Environment.IsProduction()` only. Staging has the identical structural cause
 (confirmed via `render-staging-deployment` memory: `ForwardedHeaders__Enabled=false` there, so
@@ -191,7 +191,7 @@ blockers on that exact call were rate-limiting and a different CSRF-token-omissi
 *test script itself* (fixed in PR #141) — this new E2E run is the first time this specific
 path was driven through a real browser, with real cookie/CORS/CSRF semantics, end to end.
 
-**Fix prepared, NOT deployed:** `PropertyApi/Program.cs`'s condition changed to
+**Fix prepared, NOT deployed:** `HudhudNestApi/Program.cs`'s condition changed to
 `IsProduction() || IsStaging()` (uncommitted on `master`, tests green — see Implementation
 Report). **Not pushed or merged.** This is exactly the kind of change the project's own
 history flags as historically sensitive (CSRF/cookie config has been touched at least 5 times
@@ -204,7 +204,7 @@ deployed Staging**, and will continue to until the fix above is deployed there. 
 test doing its job, not a defect in it. Not wired into any CI workflow this session (per the
 original plan — a spec that cannot pass yet must not be added as a required or even
 optional-but-silently-red CI job). `test-results/` and Playwright's own output directories are
-now git-ignored (see `Wohnungsmieten/.gitignore`).
+now git-ignored (see `HudhudNest/.gitignore`).
 
 **Test data left in Staging:** one throwaway account,
 `e2e-smoke-<unix-timestamp>@example.com` / a password only used for this test, created via
@@ -252,7 +252,7 @@ session's mandate was limited fixes, not an API-wide contract change.
 endpoint always returns `LoginResponseDto.CreateInvalidCredentials()`;
 `CreateAccountLocked`/`CreateRateLimited`/`CreateAccountDisabled`/`CreatePasswordChangeRequired`
 are referenced only from `LoginResponseDto.cs` itself and
-`tests/PropertyApi.Auth.Tests/Contracts/LoginResponseContractTests.cs`. **Not removed this
+`tests/HudhudNestApi.Auth.Tests/Contracts/LoginResponseContractTests.cs`. **Not removed this
 session** — this is intentionally conservative: `AuthController.cs`'s own comment documents a
 deliberate anti-enumeration decision to always return one generic response, and these methods
 appear to be the DTO's "shape" kept for that contract test / possible future re-introduction

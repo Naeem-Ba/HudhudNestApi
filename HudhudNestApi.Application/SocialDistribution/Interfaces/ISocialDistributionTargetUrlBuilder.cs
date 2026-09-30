@@ -2,7 +2,7 @@ namespace HudhudNestApi.Application.SocialDistribution.Interfaces;
 
 /// <summary>
 /// Backend equivalent of the frontend's PropertyShareUrlService + UtmAttributionService
-/// (Phase 1/2, Wohnungsmieten repo) — needed here because a distribution post is prepared and
+/// (Phase 1/2, HudhudNest repo) — needed here because a distribution post is prepared and
 /// published server-side, with no browser/Angular runtime involved to build the link. Reads the
 /// same <c>Frontend:BaseUrl</c> configuration the rest of this backend already uses for
 /// user-facing links (PasswordResetUrlBuilder, EmailConfirmationUrlBuilder).

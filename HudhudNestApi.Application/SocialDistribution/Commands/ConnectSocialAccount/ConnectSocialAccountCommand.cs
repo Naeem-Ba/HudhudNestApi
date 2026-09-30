@@ -5,7 +5,7 @@ namespace HudhudNestApi.Application.SocialDistribution.Commands.ConnectSocialAcc
 
 /// <summary>
 /// No real OAuth handshake exists yet (spec §17: no unofficial APIs, no fabricated tokens) — this
-/// is the manual-registration path an AqarTech operator uses once a credential has been
+/// is the manual-registration path an HudhudNest operator uses once a credential has been
 /// provisioned out-of-band (a bot token from @BotFather, a Page/Instagram access token from Meta
 /// for Developers, ...). <paramref name="CredentialReference"/> IS that real credential value for
 /// this specific account (Phase 3 — see <see cref="Infrastructure.SocialDistribution.Publishing.TelegramBotPublisher"/>

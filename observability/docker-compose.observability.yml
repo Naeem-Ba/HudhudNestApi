@@ -1,4 +1,4 @@
-name: propertyapi-observability
+name: hudhudnest-observability
 
 services:
   postgres:
@@ -22,7 +22,7 @@ services:
       service: api
     environment:
       Observability__Enabled: "true"
-      Observability__ServiceName: property-api
+      Observability__ServiceName: hudhudnest-api
       Observability__ServiceNamespace: yaqeen-real-estate
       Observability__ServiceVersion: local-observability
       Observability__Environment: Staging

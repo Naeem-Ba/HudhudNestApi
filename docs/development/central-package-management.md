@@ -1,6 +1,6 @@
 # Central Package Management
 
-PropertyApi uses NuGet Central Package Management through `Directory.Packages.props`.
+HudhudNestApi uses NuGet Central Package Management through `Directory.Packages.props`.
 
 ## Rules
 
@@ -29,7 +29,7 @@ These versions were selected because they are already compatible with the reposi
 CI and production gate restore with:
 
 ```bash
-dotnet restore PropertyApi.sln --locked-mode
+dotnet restore HudhudNestApi.sln --locked-mode
 ```
 
 Any dependency graph change must update the relevant `packages.lock.json` files intentionally.
@@ -47,8 +47,8 @@ No package source credentials may be committed. If private packages are introduc
 ## Security Updates
 
 1. Update the central version in `Directory.Packages.props`.
-2. Run `dotnet restore PropertyApi.sln --use-lock-file`.
-3. Run `dotnet restore PropertyApi.sln --locked-mode`.
+2. Run `dotnet restore HudhudNestApi.sln --use-lock-file`.
+3. Run `dotnet restore HudhudNestApi.sln --locked-mode`.
 4. Run the full test suite and vulnerability gate.
 5. Document any temporary exception in `ci/vulnerability-exceptions.json` with owner, expiration, and remediation issue.
 

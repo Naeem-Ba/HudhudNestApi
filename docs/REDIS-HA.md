@@ -148,7 +148,7 @@ These are deliberately kept separate:
 
 * **Infrastructure HA verification** (this document, the `redis-sentinel-ha` job): proves the
   Redis/Sentinel *topology itself* fails over correctly. It does **not** exercise the
-  PropertyApi application at all — the `api` container in
+  HudhudNestApi application at all — the `api` container in
   `ci/docker-compose.production-gate.yml` still points at the plain, single `redis:` service
   used for the ordinary build/test/container gate, not at this Sentinel topology.
 * **Application Sentinel-awareness**: `RedisConnectionResolver` and every Redis consumer in
@@ -160,7 +160,7 @@ These are deliberately kept separate:
   enough for `ConnectionMultiplexer` to discover the current primary through Sentinel and
   follow it across a failover, with zero application code changes. This is proven as a real
   runtime assertion (not a source grep) in
-  `tests/PropertyApi.Integration.Tests/Redis/RedisSentinelConnectionStringTests.cs` against the
+  `tests/HudhudNestApi.Integration.Tests/Redis/RedisSentinelConnectionStringTests.cs` against the
   exact StackExchange.Redis version this repository ships. Wiring an actual live
   Sentinel-fronted Redis into a deployed environment's `ConnectionStrings:Redis` is an
   infrastructure/ops decision, not something this Gate performs — see
@@ -221,7 +221,7 @@ success condition, and nothing treats their absence as a failure.
   failure, not that data is retained beyond what replication already held at the moment of
   failure, and not protection against data corruption, accidental deletion, or a
   region-wide outage.
-* **The CI-native topology is infrastructure-only.** The PropertyApi `api` container is not
+* **The CI-native topology is infrastructure-only.** The HudhudNestApi `api` container is not
   connected to the Sentinel topology in this Gate (see
   [Application-level Sentinel-aware failover](#application-level-sentinel-aware-failover-vs-infrastructure-ha-verification)
   above) — that is a deliberate scope boundary, not an oversight.

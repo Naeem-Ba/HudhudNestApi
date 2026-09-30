@@ -1,4 +1,4 @@
-# Remediation Plan — PropertyApi
+# Remediation Plan — HudhudNestApi
 
 Ordered by priority. Each item lists the issue ID from `FULL-CODE-AUDIT-REPORT.md` §5, the fix, dependencies, complexity, required tests, acceptance criteria, rollback plan, and risks. No code changes were made as part of producing this plan — it is a proposal for a human/maintainer to execute and review.
 
@@ -7,11 +7,11 @@ Ordered by priority. Each item lists the issue ID from `FULL-CODE-AUDIT-REPORT.m
 ## Urgent (before the next Production deploy)
 
 ### R-01 — Commit and test the CSRF/HTTPS-scheme fix (AUD-01)
-- **Issue:** `PropertyApi/Program.cs` and `PropertyApi/Security/Csrf/CsrfExtensions.cs` carry a correct, working-tree-only fix for the Production incident caused by merged commit `3b80fdc`. Uncommitted work can be lost; the fix has zero automated regression coverage.
+- **Issue:** `HudhudNestApi/Program.cs` and `HudhudNestApi/Security/Csrf/CsrfExtensions.cs` carry a correct, working-tree-only fix for the Production incident caused by merged commit `3b80fdc`. Uncommitted work can be lost; the fix has zero automated regression coverage.
 - **Fix:**
   1. Commit the two files with a message documenting *why* (the `3b80fdc` regression), not just *what*, so the reasoning survives outside a code comment.
   2. Add a regression test proving the scheme-force behavior (see `TEST-PLAN.md` T-01).
-  3. Either fix or explicitly document the `TestApplication.CreateProduction()` gap (`tests/PropertyApi.Integration.Tests/TestInfrastructure/TestApplication.cs:141`) that previously blocked a Production-mode antiforgery regression test.
+  3. Either fix or explicitly document the `TestApplication.CreateProduction()` gap (`tests/HudhudNestApi.Integration.Tests/TestInfrastructure/TestApplication.cs:141`) that previously blocked a Production-mode antiforgery regression test.
 - **Dependencies:** none — can proceed immediately.
 - **Complexity:** Low (commit + one focused test).
 - **Tests required:** T-01 (see Test Plan).
@@ -44,7 +44,7 @@ Ordered by priority. Each item lists the issue ID from `FULL-CODE-AUDIT-REPORT.m
 - **Rollback plan:** revert the single commit; behavior returns to current (fail-closed) state.
 - **Risk:** near-zero — this closes a gap the project's own docs already call out as intended behavior.
 
-### R-04 — Rename or re-scope `PropertyApi.Concurrency.Tests` (AUD-03)
+### R-04 — Rename or re-scope `HudhudNestApi.Concurrency.Tests` (AUD-03)
 - **Fix:** either (a) rename the project/tests to reflect what they actually do (e.g. `ScriptIntegrityRegressionTests`), or (b) add real in-process concurrency tests (e.g. two parallel requests racing an OTP-attempt increment, asserting only one succeeds) alongside the existing script-integrity checks, and update `docs/testing/coverage-improvement-plan.md` / `docs/performance/load-testing-architecture.md` to accurately describe where concurrency is actually exercised (k6/performance-validation) vs. what this project checks.
 - **Dependencies:** none.
 - **Complexity:** Medium if adding real tests (option b); Low if just renaming/documenting (option a).
@@ -113,7 +113,7 @@ Ordered by priority. Each item lists the issue ID from `FULL-CODE-AUDIT-REPORT.m
 ## Long-term / improvements (not urgent)
 
 ### R-11 — Remove unused `MessagePack` dependency (AUD-08)
-- **Fix:** remove the `MessagePack` package reference from `PropertyApi.csproj` and `Directory.Packages.props` if confirmed genuinely unused (re-confirm with a fresh grep immediately before removal, since new code may have started using it since this audit).
+- **Fix:** remove the `MessagePack` package reference from `HudhudNestApi.csproj` and `Directory.Packages.props` if confirmed genuinely unused (re-confirm with a fresh grep immediately before removal, since new code may have started using it since this audit).
 - **Complexity:** Low.
 - **Tests required:** full build + test suite after removal to confirm nothing transitively depended on it.
 - **Acceptance criteria:** build succeeds, all tests pass, package no longer listed.

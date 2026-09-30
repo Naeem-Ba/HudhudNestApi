@@ -17,7 +17,7 @@ public sealed class CancelAndRetrySocialPublicationCommandHandlerTests
         var publication = SocialPublication.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), SocialPlatform.Facebook);
         var content = SocialPostContent.Create(
             publication.Id, SocialPlatform.Facebook, "عنوان", "نص", "https://cdn.example.com/img.jpg",
-            "https://realestateworld.world/properties/p1", null, "ar");
+            "https://hudhudnest.com/properties/p1", null, "ar");
         publication.AttachContent(content);
         return publication;
     }

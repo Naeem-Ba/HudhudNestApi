@@ -36,7 +36,7 @@ internal static class CacheInfrastructureRegistration
             services.AddStackExchangeRedisCache(options =>
             {
                 options.Configuration = redisConnectionString;
-                options.InstanceName = "PropertyApi:";
+                options.InstanceName = "HudhudNestApi:";
             });
         }
         else if (!isTestingOrCi &&
@@ -45,7 +45,7 @@ internal static class CacheInfrastructureRegistration
             services.AddStackExchangeRedisCache(options =>
             {
                 options.Configuration = redisConnectionString;
-                options.InstanceName = "PropertyApi:";
+                options.InstanceName = "HudhudNestApi:";
             });
         }
         else

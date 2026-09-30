@@ -105,7 +105,7 @@ if (hasRedisConnectionString)
     builder.Services.AddStackExchangeRedisCache(options =>
     {
         options.Configuration = redisConnectionString;
-        options.InstanceName = "PropertyApi:";
+        options.InstanceName = "HudhudNestApi:";
     });
 }
 else

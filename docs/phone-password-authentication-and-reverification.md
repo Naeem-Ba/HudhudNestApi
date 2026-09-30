@@ -138,7 +138,7 @@ Official Cloud API only, an approved AUTHENTICATION template carrying the code (
 
 ### Monitoring
 
-Structured logs (masked number, never the code, token or provider payload): challenge created, provider selected, send succeeded/failed with outcome, rate limited. Metrics on the `PropertyApi.Application` meter: `auth.otp.send` (`channel`, `outcome` = `sent` | `unreachable` | `provider_unavailable` | `channel_unavailable` | `rate_limited`) and `auth.otp.verification` (`channel`, `outcome` = `succeeded` | `failed`). No phone number and no country label (a country label would be an unbounded tag set; the channel and outcome sets are fixed).
+Structured logs (masked number, never the code, token or provider payload): challenge created, provider selected, send succeeded/failed with outcome, rate limited. Metrics on the `HudhudNestApi.Application` meter: `auth.otp.send` (`channel`, `outcome` = `sent` | `unreachable` | `provider_unavailable` | `channel_unavailable` | `rate_limited`) and `auth.otp.verification` (`channel`, `outcome` = `succeeded` | `failed`). No phone number and no country label (a country label would be an unbounded tag set; the channel and outcome sets are fixed).
 
 ### Provider availability
 

@@ -15,7 +15,7 @@ Before production readiness can pass, attach sanitized evidence for:
 
 Do not copy credentials or internal connection strings into this document or CI artifacts.
 
-## PropertyApi Recovery Objectives
+## HudhudNestApi Recovery Objectives
 
 | Objective | Target | Current evidence |
 | --- | ---: | --- |

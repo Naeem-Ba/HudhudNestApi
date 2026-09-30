@@ -165,7 +165,7 @@ SECURITY TIPS:
 • Enable 2FA for additional protection
 • Review login activity regularly
 
-Questions? Contact our security team: security@propertyapi.local
+Questions? Contact our security team: security@hudhudnest.local
 
 This is an automated security alert - do not reply to this email.
 ";
@@ -248,7 +248,7 @@ SECURITY CHECKLIST:
 □ Enable two-factor authentication
 
 STILL LOCKED AFTER {minutesRemaining} MINUTES?
-Contact support: support@propertyapi.local
+Contact support: support@hudhudnest.local
 
 This is an automated security alert - do not reply to this email.
 ";
@@ -310,7 +310,7 @@ Consider enabling two-factor authentication for additional account protection.
 
 IF YOU DIDN'T CHANGE YOUR PASSWORD:
 Your account may be compromised! Contact support immediately:
-support@propertyapi.local
+support@hudhudnest.local
 
 This is an automated notification - do not reply to this email.
 ";

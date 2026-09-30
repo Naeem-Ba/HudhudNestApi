@@ -1,12 +1,12 @@
 # Production Backend Readiness — Phase 1 Gate
 
-**Scope:** ASP.NET Core / Clean Architecture backend (`PropertyApi`) only. Frontend (Angular) and
+**Scope:** ASP.NET Core / Clean Architecture backend (`HudhudNestApi`) only. Frontend (Angular) and
 mobile (Capacitor) are out of scope except where they affect a backend decision (CORS, CSRF).
 **Method:** repository/code audit, live GitHub API queries (environments, secrets metadata, workflow
 runs), a live in-progress `production-gate.yml` run observed end-to-end, and a local `dotnet build`.
 No credentials were invented; no external service (Render dashboard, Upstash, Cloudinary) was queried
 live in this session beyond what GitHub's API exposes — those facts are cited from this repository's
-own prior documentation (`docs/architecture/ARD/ARD-PropertyApi.md`, `docs/REDIS-HA.md`) and dated
+own prior documentation (`docs/architecture/ARD/ARD-HudhudNestApi.md`, `docs/REDIS-HA.md`) and dated
 accordingly.
 **Date of this audit:** 2026-09-04.
 
@@ -34,7 +34,7 @@ Production release impossible right now without human intervention:
 2. **The mandatory `staging-smoke` gate is failing right now**, on the real, current `master` HEAD, with
    `Staging did not activate the intended commit with complete migrations before timeout` — because no
    step in the pipeline applies EF Core migrations to Staging after triggering a deploy (migrations are
-   manual-only, `tools/PropertyApi.Migrator`, by design). See §CI/CD Readiness, Finding B2.
+   manual-only, `tools/HudhudNestApi.Migrator`, by design). See §CI/CD Readiness, Finding B2.
 3. **The mandatory `Production Database Recovery Gate` (real backup + restore + validate against
    PostgreSQL 17/PostGIS) is failing right now**, on the same run, at the "Restore and validate the
    backup" step. See §CI/CD Readiness, Finding B3.
@@ -42,7 +42,7 @@ Production release impossible right now without human intervention:
 `deploy-production` requires all three (plus `redis-sentinel-ha`, `performance-validation`,
 `observability-validation`, `production-deployment-gate`) to succeed. It cannot run to completion
 today. This is evidence gathered from a live workflow run observed during this audit
-(`https://github.com/Naeem-Ba/PropertyApi/actions/runs/33911314587`), not a theoretical gap.
+(`https://github.com/Naeem-Ba/HudhudNestApi/actions/runs/33911314587`), not a theoretical gap.
 
 Two further HIGH-severity, previously-known and self-documented risks compound the picture:
 Production's `production`/`production-release`/`production-recovery` GitHub Environments carry **zero
@@ -60,7 +60,7 @@ file citation in this report.
 Mobile App (Capacitor) ──┐
                           │ HTTPS
 Web App (Netlify,        │
-realestateworld.world) ──┼──► propertyapi-api (Render, Docker, ASPNETCORE_ENVIRONMENT=Production)
+hudhudnest.com) ──┼──► hudhudnest-api (Render, Docker, ASPNETCORE_ENVIRONMENT=Production)
                           │        │
                           │        ├── PostgreSQL + PostGIS (dedicated Production instance)
                           │        ├── Redis — Upstash (external managed, Free tier, no HA)
@@ -87,16 +87,16 @@ from a plain push is explicitly disabled for this job (`workflow_dispatch` only)
 | B1 | BLOCKER | `PRODUCTION_DEPLOY_HOOK_URL` is not configured on the `production` environment or at repo level | `gh api .../environments/production/secrets` → `{"total_count":0}`; `gh api .../actions/secrets` (repo-level, 7 secrets) does not list it | Confirmed live, 2026-09-04 | Manual action required — see §Remaining Manual Actions |
 | B2 | BLOCKER | Mandatory `staging-smoke` gate fails: Staging deploy never reports `migration.complete=true` because no CI step applies EF Core migrations to Staging after the deploy hook fires | Live run `33911314587`, job "Mandatory Staging Deploy + E2E Smoke" → annotation: *"Staging did not activate the intended commit with complete migrations before timeout."*; workflow code at [production-gate.yml:1050-1090](../.github/workflows/production-gate.yml) has no migrator step between "Trigger staging deployment" and "Wait for intended staging release" | Confirmed live, reproducing on current `master` HEAD | Fix is in-repo (add an automated migration-apply step) but needs a new secret (Staging DB connection string) that does not currently exist — classified BLOCKER, not silently fixed. See §Remaining Manual Actions |
 | B3 | BLOCKER | Mandatory `Production Database Recovery Gate` (real backup → restore → validate against PostgreSQL 17 + PostGIS) fails at "Restore and validate the backup" | Live run `33911314587`, job "Production Database Recovery Gate / Actual PostgreSQL 17 + PostGIS Restore", step 11 failed after steps 1-10 (including "Create fresh encrypted backup") succeeded | Confirmed live, reproducing on current `master` HEAD | Root cause not fully diagnosable from this session (job logs are withheld by GitHub until the whole run completes, and the run outlived this audit's polling window). **Manual action:** re-run `.github/workflows/database-restore-drill.yml` via `workflow_dispatch` once this run finishes, capture the "Restore and validate the backup" step log, and fix before attempting a Production release |
-| H1 | HIGH | `production`, `production-release`, `production-recovery` GitHub Environments have **zero protection rules** — no required reviewers, no wait timer, no branch restriction | `gh api repos/Naeem-Ba/PropertyApi/environments` → all three show `"protection_rules":[]` (checked live, 2026-09-04) | Confirmed, previously self-documented as a known org-billing-plan limitation (`docs/testing/staging-production-gate-checklist.md`) | Cannot be fixed from the repo — GitHub rejects "Required reviewers" on this org's current billing plan for a private repo. The `workflow_dispatch`-only trigger is a partial mitigation, not equivalent. Manual action required (billing upgrade or alternate approval control) |
+| H1 | HIGH | `production`, `production-release`, `production-recovery` GitHub Environments have **zero protection rules** — no required reviewers, no wait timer, no branch restriction | `gh api repos/Naeem-Ba/HudhudNestApi/environments` → all three show `"protection_rules":[]` (checked live, 2026-09-04) | Confirmed, previously self-documented as a known org-billing-plan limitation (`docs/testing/staging-production-gate-checklist.md`) | Cannot be fixed from the repo — GitHub rejects "Required reviewers" on this org's current billing plan for a private repo. The `workflow_dispatch`-only trigger is a partial mitigation, not equivalent. Manual action required (billing upgrade or alternate approval control) |
 | H2 | HIGH | Production Redis (Upstash) has **no HA/failover capability** — confirmed Free tier, no payment method configured, serves 4 coupled workloads (rate limiting, output cache, security-stamp cache, SignalR backplane) | `docs/REDIS-HA.md` lines 180-185 (team's own documentation, dated before this session — not independently re-verified against the live Upstash account in this session, since no Upstash credentials were available) | Documented, not re-verified live this session | STATUS = NOT VERIFIED per the task's own rule for unproven HA. Manual action: either upgrade to a paid HA tier, or explicitly accept a Redis-outage blast radius (auth security-stamp cache, rate limiting, real-time notifications) as a conscious risk with a written incident runbook |
-| M1 | MEDIUM | Production's `ForwardedHeaders:KnownNetworks` reportedly includes `0.0.0.0/0` (per this session's recalled prior-session notes, not re-verified live against Render this session) | `docs/architecture/ARD/ARD-PropertyApi.md` states Production has ForwardedHeaders "enabled, with explicit KnownNetworks" but does not print the value in-repo (correctly — it's an env var, not committed); a `0.0.0.0/0` entry, if accurate, means the "known network" boundary trusts the immediate peer regardless of IP, relying entirely on Render's edge being the only thing that can reach Kestrel | Not independently re-verified this session (no Render dashboard access) | Manual action: confirm the live value in Render's environment variables; if it is genuinely `0.0.0.0/0`, document explicitly *why* (Render publishes no fixed proxy range) rather than leaving it implicit |
+| M1 | MEDIUM | Production's `ForwardedHeaders:KnownNetworks` reportedly includes `0.0.0.0/0` (per this session's recalled prior-session notes, not re-verified live against Render this session) | `docs/architecture/ARD/ARD-HudhudNestApi.md` states Production has ForwardedHeaders "enabled, with explicit KnownNetworks" but does not print the value in-repo (correctly — it's an env var, not committed); a `0.0.0.0/0` entry, if accurate, means the "known network" boundary trusts the immediate peer regardless of IP, relying entirely on Render's edge being the only thing that can reach Kestrel | Not independently re-verified this session (no Render dashboard access) | Manual action: confirm the live value in Render's environment variables; if it is genuinely `0.0.0.0/0`, document explicitly *why* (Render publishes no fixed proxy range) rather than leaving it implicit |
 | M2 | MEDIUM | `docs/operations/redis-production-readiness-decision.md` ("Decision: FAIL... blocks release") is stale/contradicted by current pipeline behavior — `production-gate.yml`'s `validate-redis-ha-topology` job now treats a missing `REDIS_HA_EVIDENCE_JSON` as **non-blocking** (exits 0 with a notice), per the newer, more detailed reasoning in `docs/REDIS-HA.md` | Compared [production-gate.yml:876-906](../.github/workflows/production-gate.yml) against both docs | Confirmed by direct code/doc comparison | Reconcile the two documents — either delete/update the older decision doc or add a pointer to `docs/REDIS-HA.md` so a reviewer doesn't read a stale "blocks release" claim |
 | M3 | MEDIUM | Redis workload isolation not implemented (ADR-005) — one Redis instance serves rate limiting, output cache, security-stamp cache, and SignalR backplane; a saturation/outage event affects all four at once | `docs/architecture/adr-redis-workload-isolation.md`; ARD risk R1 | Previously documented, not re-verified as changed | Track against ADR-005's migration plan; not a release blocker on its own, compounds with H2 |
 | M4 | MEDIUM | No strict row-level tenant isolation between real-estate Agencies (ADR-006) — authorization relies on explicit predicate checks per handler, not a global query filter | ARD risk R2; `Agency.cs` header comment (explicit, conscious scope decision) | Previously documented | No code change made (task rule: do not redesign architecture); flagged for awareness only |
 | L1 | LOW | Cloudinary Staging and Production share the same folder namespace (`property-images/`, etc.) — credential-isolated, not storage-isolated | ARD risk R4; [[render-staging-deployment]] session memory | Documented | Low risk (media cross-contamination between environments, not a security leak); optional future fix: environment-prefixed folder names |
 | L2 | ~~LOW~~ **Resolved 2026-09-24** | `security-stamp-resilience-sources-20260714-213313.zip` is committed to the repo root — a zip bundle of source files already tracked elsewhere in the repo (verified: contains only `.cs` source, no secrets, no config with real values) | `git ls-files` + `unzip -l` inspection this session | Confirmed harmless | Housekeeping only — safe to delete, not a security or readiness issue | Removed together with `Collect-SecurityStampResilience-Sources.ps1`; root `*.zip` is now git-ignored.
 | I1 | INFO | Gitleaks secret scanning runs on every CI build, pinned to a commit SHA | `.github/workflows/ci.yml:572-584` | Confirmed | No action — cited as evidence for §Search-based Leakage Detection |
-| I2 | INFO | `dotnet build PropertyApi.sln -c Release` succeeds locally with 0 errors | Run this session | Confirmed | No action |
+| I2 | INFO | `dotnet build HudhudNestApi.sln -c Release` succeeds locally with 0 errors | Run this session | Confirmed | No action |
 
 ---
 
@@ -104,17 +104,17 @@ from a plain push is explicitly disabled for this job (`workflow_dispatch` only)
 
 No secrets or Production credentials found committed to git in any `appsettings*.json`:
 
-- `PropertyApi/appsettings.json` (base, shipped): every secret-shaped key (`Jwt:Key`,
+- `HudhudNestApi/appsettings.json` (base, shipped): every secret-shaped key (`Jwt:Key`,
   `Cloudinary:*`, `Email:*`, `Redis:ConnectionString`, `ConnectionStrings:DefaultConnection`) is an
   **empty string** — nothing to leak, and every one of them fails fast in Production if left empty
   (`JwtOptions` validator, `RedisConnectionResolver`, `ProductionStartupValidator`).
-- `PropertyApi/appsettings.Development.json`: no secrets; `Cors:AllowedOrigins` points at
+- `HudhudNestApi/appsettings.Development.json`: no secrets; `Cors:AllowedOrigins` points at
   `localhost:4200` only — expected, Development-only.
-- `PropertyApi/appsettings.Testing.json`: contains `Jwt:Key = "TEST_ONLY_SECRET_KEY_..."`,
+- `HudhudNestApi/appsettings.Testing.json`: contains `Jwt:Key = "TEST_ONLY_SECRET_KEY_..."`,
   `Cloudinary:CloudName/ApiKey/ApiSecret = "test"`, and a `postgres/postgres@localhost` connection
   string — all clearly-labeled, isolated test fixtures, not reachable from Production. Expected, no
   action.
-- `PropertyApi/appsettings.Development.example.json`: `Password=CHANGE_ME` placeholder. Expected.
+- `HudhudNestApi/appsettings.Development.example.json`: `Password=CHANGE_ME` placeholder. Expected.
 - **No `appsettings.Production.json` exists in the repo, and none should** — Production configuration
   is 100% environment-variable driven (Render dashboard), which is the correct pattern; `.gitignore`
   additionally excludes `appsettings.Production.json` by name (line 55) as a second line of defense.
@@ -138,7 +138,7 @@ Verified in code (not assumed from file existence):
   `Trust Server Certificate=true` is present in the Production connection string, SMS/Email settings
   fail their Production-only validation, or PostGIS is not actually reachable and healthy.
 - `Email:Provider` is validated to reject `Console` in Production (`AuthInfrastructureRegistration.cs:249`)
-  and to reject the shipped placeholder `@propertyapi.local` `From` address (`EmailOptions.ValidateForEnvironment`).
+  and to reject the shipped placeholder `@hudhudnest.local` `From` address (`EmailOptions.ValidateForEnvironment`).
 - `Jwt:Key` is validated to be ≥32 characters via `IOptions<JwtOptions>.ValidateOnStart()`
   (`AuthInfrastructureRegistration.cs:58-81`) — a short/default key crashes the app at boot, in every
   environment, not just Production.
@@ -149,7 +149,7 @@ This satisfies the task's requirement to verify *runtime behavior*, not just fil
 
 - No `localhost`/`127.0.0.1`/hardcoded `Host=` value found anywhere in non-test, non-example C# code
   or config (`grep` swept the full tree excluding `bin/obj/.vs/Migrations`, zero matches).
-- Production DB is a dedicated instance per `docs/architecture/ARD/ARD-PropertyApi.md` (distinct from
+- Production DB is a dedicated instance per `docs/architecture/ARD/ARD-HudhudNestApi.md` (distinct from
   `propertyapi-staging-db`); this was not independently re-verified against Render this session (no
   Render credentials available) — cited as documented, not re-confirmed live.
 - **SSL/TLS is enforced, not merely configured**: `ProductionStartupValidator` explicitly throws if the
@@ -169,14 +169,14 @@ This satisfies the task's requirement to verify *runtime behavior*, not just fil
 - `Database__ApplyMigrationsOnStartup` is read nowhere in the codebase (`grep` confirms) — it is a
   vestigial key some earlier config carried, and setting it today would do nothing.
 - The only mechanism that applies EF Core migrations to any environment is running
-  `tools/PropertyApi.Migrator` manually, pointed at that environment's connection string
+  `tools/HudhudNestApi.Migrator` manually, pointed at that environment's connection string
   (`ci/Dockerfile.migrator` packages this as a container image for CI use).
 - This eliminates the "race between API instances / migrator / startup logic" risk the task asked
   about — there is exactly one applier, and it never runs concurrently with API instance startup.
 - **The gap is not "unsafe," it's "incomplete automation":** the CI pipeline deploys new code to
   Staging via a Render Deploy Hook but never invokes the Migrator against Staging afterward, so any
   commit that ships a new migration (this repository ships one almost every day — see
-  `PropertyApi.Infrastructure/Migrations/`) makes the mandatory `staging-smoke` gate time out. See
+  `HudhudNestApi.Infrastructure/Migrations/`) makes the mandatory `staging-smoke` gate time out. See
   §Remaining Manual Actions for the concrete fix.
 - Recommended target strategy (already partially true, needs the missing link added):
   ```
@@ -215,7 +215,7 @@ This satisfies the task's requirement to verify *runtime behavior*, not just fil
   `wwwroot` static-file serving for the app's own static assets (`app.UseStaticFiles()` in
   `Program.cs`, unrelated to uploads).
 - Upload validation checks real binary magic bytes (JPEG/PNG/WebP), not just declared `Content-Type`
-  or file extension (`docs/architecture/ARD/ARD-PropertyApi.md` §4.5, verified by the presence of the
+  or file extension (`docs/architecture/ARD/ARD-HudhudNestApi.md` §4.5, verified by the presence of the
   described check — file-level line audit not repeated here to control scope).
 - Production credentials source: Render environment variables (`Cloudinary:CloudName/ApiKey/ApiSecret`),
   never committed (confirmed empty in every tracked `appsettings*.json`).
@@ -316,7 +316,7 @@ No BLOCKER or HIGH finding here — this is the strongest area of the audit. No 
 
 ## Docker Production Audit
 
-`PropertyApi/Dockerfile`:
+`HudhudNestApi/Dockerfile`:
 
 - Multi-stage build (`sdk:8.0` build stage → `aspnet:8.0-jammy-chiseled-extra` runtime stage) —
   build tools are not present in the shipped image.
@@ -334,7 +334,7 @@ No BLOCKER or HIGH finding here — this is the strongest area of the audit. No 
 
 `ci/docker-compose.production-gate.yml` — this is CI-only tooling, not Production infrastructure. Its
 `propertyapi_gate` database name (which superficially matches one of the task's forbidden-pattern
-examples) was checked and confirmed to be parameterized (`${PROPERTYAPI_GATE_DB:-propertyapi_gate}`),
+examples) was checked and confirmed to be parameterized (`${HUDHUDNEST_GATE_DB:-propertyapi_gate}`),
 used only for the ephemeral CI Postgres container, and never referenced from any Production or Staging
 configuration path. **No action required** — flagging this explicitly because the task's own
 instructions named this exact string as a red flag to check.
@@ -353,7 +353,7 @@ Live evidence gathered this session (not just reading the YAML):
 - No secret value is ever echoed (`echo $SECRET` or similar) anywhere in `.github/workflows/*.yml` —
   confirmed by grep.
 - Gitleaks runs on every CI build, pinned to a commit SHA (`ci.yml:572-584`).
-- **Live run observed this session**: `https://github.com/Naeem-Ba/PropertyApi/actions/runs/33911314587`
+- **Live run observed this session**: `https://github.com/Naeem-Ba/HudhudNestApi/actions/runs/33911314587`
   (triggered by the `master` merge of PR #126, 2026-09-04T19:28 UTC):
 
   | Job | Result |
@@ -412,7 +412,7 @@ Secrets are write-only via the API used).
 | Setting | Development | Test | Staging | Production | Status |
 |---|---|---|---|---|---|
 | PostgreSQL | `localhost`, `propertyapi_local` (example) | `localhost`, `propertyapi_testing` | Dedicated Render Postgres 18, Free, no backups, ~30-day TTL | Dedicated instance, backup/restore drilled by CI (currently failing, B3) | Separated ✅ / Prod backup gate ❌ |
-| Redis | none (in-memory cache fallback) | disabled (`RateLimiting:Redis:Enabled=false`) | `propertyapi-redis` (Valkey 8 on Render) | Upstash, external, **no HA** (H2) | Separated ✅ / HA ❌ NOT VERIFIED |
+| Redis | none (in-memory cache fallback) | disabled (`RateLimiting:Redis:Enabled=false`) | `hudhudnest-redis` (Valkey 8 on Render) | Upstash, external, **no HA** (H2) | Separated ✅ / HA ❌ NOT VERIFIED |
 | JWT | User Secrets | `TEST_ONLY_SECRET_KEY_...` (fixture) | Env var, ≥32 chars enforced | Env var, ≥32 chars enforced | Enforced ✅ |
 | CORS | `localhost:4200` | `localhost:4200` | Staging frontend origin | Production frontend origin (not re-verified live) | Enforced (no `*`, no silent fallback) ✅ |
 | Cloudinary | empty (uploads likely fail) | `test`/`test`/`test` fixture | Dedicated API key, shared folders with Prod (L1) | Dedicated credentials | Credential-separated ✅ / Storage-separated ❌ (L1) |
@@ -432,7 +432,7 @@ Secrets are write-only via the API used).
 Mobile App / Web App
         │ HTTPS
         ▼
-propertyapi-api (Render, Docker, chiseled, non-root)
+hudhudnest-api (Render, Docker, chiseled, non-root)
         │
         ├── PostgreSQL + PostGIS ── TLS required (Trust Server Certificate=true rejected at boot)
         │                            Health: /health/ready "postgresql-postgis"
@@ -492,15 +492,15 @@ core reason for the BLOCKED verdict, independent of any code-quality finding.
 
 ### B1 — Configure `PRODUCTION_DEPLOY_HOOK_URL`
 
-- **ACTION:** Copy the Deploy Hook URL from Render's dashboard for the Production `propertyapi-api`
+- **ACTION:** Copy the Deploy Hook URL from Render's dashboard for the Production `hudhudnest-api`
   service (Settings → Deploy Hook), and add it as a secret named exactly `PRODUCTION_DEPLOY_HOOK_URL`
   on the GitHub `production` Environment (Settings → Environments → `production` → Secrets).
-- **WHERE:** GitHub repo `Naeem-Ba/PropertyApi` → Settings → Environments → `production`.
+- **WHERE:** GitHub repo `Naeem-Ba/HudhudNestApi` → Settings → Environments → `production`.
 - **WHY:** `deploy-production`'s "Trigger production deployment" step reads
   `secrets.PRODUCTION_DEPLOY_HOOK_URL` and hard-fails (`exit 1`) if empty — confirmed absent both at
   environment and repo scope via live API query this session.
 - **EXPECTED VALUE TYPE:** An HTTPS URL of the form `https://api.render.com/deploy/srv-XXXXXXXX?key=YYYYYYYY`.
-- **HOW TO VERIFY:** Re-run `gh api repos/Naeem-Ba/PropertyApi/environments/production/secrets` and
+- **HOW TO VERIFY:** Re-run `gh api repos/Naeem-Ba/HudhudNestApi/environments/production/secrets` and
   confirm `PRODUCTION_DEPLOY_HOOK_URL` is listed (name only, as expected — the value is never
   retrievable via API by design).
 - **BLOCKING:** Yes — without this, `deploy-production` cannot succeed under any circumstances.
@@ -512,7 +512,7 @@ core reason for the BLOCKED verdict, independent of any code-quality finding.
      `staging` GitHub Environment. This value must be pasted from Render's `propertyapi-staging-db`
      connection details — it is a live infrastructure credential and must not be invented or guessed.
   2. Add a CI step to the `staging-smoke` job, between "Trigger staging deployment" and "Wait for
-     intended staging release", that runs `tools/PropertyApi.Migrator` (the same container image
+     intended staging release", that runs `tools/HudhudNestApi.Migrator` (the same container image
      already built by `ci/Dockerfile.migrator`) against that connection string.
 - **WHERE:** `.github/workflows/production-gate.yml`, job `staging-smoke`; secret on the `staging`
   GitHub Environment.
@@ -555,7 +555,7 @@ core reason for the BLOCKED verdict, independent of any code-quality finding.
 - **WHY:** Confirmed live this session: all three environments have `protection_rules: []`. Anyone
   with push/workflow access can single-handedly trigger a Production deploy once the gates are green.
 - **EXPECTED VALUE TYPE:** N/A — an org billing/process decision, not a secret.
-- **HOW TO VERIFY:** `gh api repos/Naeem-Ba/PropertyApi/environments/production` shows a non-empty
+- **HOW TO VERIFY:** `gh api repos/Naeem-Ba/HudhudNestApi/environments/production` shows a non-empty
   `protection_rules` array.
 - **BLOCKING:** No (documented, accepted mitigation exists) — but strongly recommended before scaling
   the team beyond the current single-operator model.
@@ -580,12 +580,12 @@ core reason for the BLOCKED verdict, independent of any code-quality finding.
 
 ## Tests Executed This Session
 
-- `dotnet build PropertyApi.sln -c Release` — **0 errors**, 8 NuGet-audit warnings (sandbox has no
+- `dotnet build HudhudNestApi.sln -c Release` — **0 errors**, 8 NuGet-audit warnings (sandbox has no
   outbound access to `api.nuget.org`; expected in this environment, not a code issue).
 - No `dotnet test` run in full (the existing CI pipeline already runs the full suite — Architecture,
   Application, Auth, Concurrency, Integration, Observability, Performance — on every push, and this
   session's live run showed `Build, Test and Container Gate` passing, which includes that suite).
-- Live GitHub API queries against `Naeem-Ba/PropertyApi` (environments, secrets/variables metadata,
+- Live GitHub API queries against `Naeem-Ba/HudhudNestApi` (environments, secrets/variables metadata,
   workflow runs, job steps, check-run annotations) — see inline citations throughout this report.
 - One full, real `production-gate.yml` run observed end-to-end from trigger to (mostly) completion.
 

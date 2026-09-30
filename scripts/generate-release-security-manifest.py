@@ -90,8 +90,8 @@ def main() -> int:
     parser.add_argument("--action-pinning-report", default="artifacts/supply-chain/action-pinning-report.json")
     parser.add_argument("--coverage-report", default="artifacts/coverage/coverage-threshold-summary.json")
     parser.add_argument("--container-scan-json", default="artifacts/supply-chain/container-scan.json")
-    parser.add_argument("--dotnet-sbom", default="artifacts/supply-chain/propertyapi-dotnet.cdx.json")
-    parser.add_argument("--container-sbom", default="artifacts/supply-chain/propertyapi-container.spdx.json")
+    parser.add_argument("--dotnet-sbom", default="artifacts/supply-chain/hudhudnest-dotnet.cdx.json")
+    parser.add_argument("--container-sbom", default="artifacts/supply-chain/hudhudnest-container.spdx.json")
     parser.add_argument("--vulnerability-exceptions", default="ci/vulnerability-exceptions.json")
     args = parser.parse_args()
 
@@ -106,17 +106,17 @@ def main() -> int:
     failures = []
     commit_sha = os.environ.get("GITHUB_SHA") or git_commit(repository_root)
     workflow_run_id = os.environ.get("GITHUB_RUN_ID", "")
-    image_ref = os.environ.get("PROPERTYAPI_IMAGE_REF", "")
-    image_digest = os.environ.get("PROPERTYAPI_IMAGE_DIGEST", "")
+    image_ref = os.environ.get("HUDHUDNEST_IMAGE_REF", "")
+    image_digest = os.environ.get("HUDHUDNEST_IMAGE_DIGEST", "")
 
     if not commit_sha:
         failures.append("Commit SHA could not be determined.")
 
     if not image_ref:
-        failures.append("PROPERTYAPI_IMAGE_REF is required.")
+        failures.append("HUDHUDNEST_IMAGE_REF is required.")
 
     if not image_digest.startswith("sha256:"):
-        failures.append("PROPERTYAPI_IMAGE_DIGEST must be an immutable sha256 digest or local image ID.")
+        failures.append("HUDHUDNEST_IMAGE_DIGEST must be an immutable sha256 digest or local image ID.")
 
     artifact_paths = {
         "packageGovernance": repository_root / args.package_governance_report,
@@ -235,12 +235,12 @@ def main() -> int:
     manifest = {
         "schemaVersion": 1,
         "commitSha": commit_sha,
-        "applicationVersion": os.environ.get("PROPERTYAPI_APPLICATION_VERSION", commit_sha[:12] if commit_sha else ""),
+        "applicationVersion": os.environ.get("HUDHUDNEST_APPLICATION_VERSION", commit_sha[:12] if commit_sha else ""),
         "workflowRunId": workflow_run_id,
         "buildTimestampUtc": datetime.now(timezone.utc).isoformat(),
         "image": {
-            "repository": "propertyapi-api",
-            "tag": os.environ.get("PROPERTYAPI_IMAGE_TAG", commit_sha),
+            "repository": "hudhudnest-api",
+            "tag": os.environ.get("HUDHUDNEST_IMAGE_TAG", commit_sha),
             "ref": image_ref,
             "digest": image_digest,
             "promotionStrategy": "Build once in the production gate, scan the captured immutable image id, then run and promote that same image."
