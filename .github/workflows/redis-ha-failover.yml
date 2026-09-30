@@ -9,7 +9,7 @@ permissions:
 jobs:
   redis-ha-failover:
     name: Redis HA Failover Drill
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: staging
     timeout-minutes: 45
 
