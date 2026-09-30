@@ -19,11 +19,11 @@
     "minimumLineCoveragePercent": 70.0,
     "minimumBranchCoveragePercent": 60.0,
     "productionPathPrefixes": [
-      "PropertyApi/",
-      "PropertyApi.Application/",
-      "PropertyApi.Domain/",
-      "PropertyApi.Infrastructure/",
-      "tools/PropertyApi.Migrator/"
+      "HudhudNestApi/",
+      "HudhudNestApi.Application/",
+      "HudhudNestApi.Domain/",
+      "HudhudNestApi.Infrastructure/",
+      "tools/HudhudNestApi.Migrator/"
     ],
     "excludedPathPatterns": [
       "/Migrations/",

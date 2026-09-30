@@ -10,9 +10,9 @@ Describe the purpose of this pull request.
 
 ## Validation
 
-- [ ] `dotnet format PropertyApi.sln --verify-no-changes --no-restore`
-- [ ] `dotnet build PropertyApi.sln --configuration Release --no-restore`
-- [ ] `dotnet test PropertyApi.sln --configuration Release --no-build`
+- [ ] `dotnet format HudhudNestApi.sln --verify-no-changes --no-restore`
+- [ ] `dotnet build HudhudNestApi.sln --configuration Release --no-restore`
+- [ ] `dotnet test HudhudNestApi.sln --configuration Release --no-build`
 - [ ] CI quality gates reviewed: vulnerability scan, coverage baseline, artifacts.
 
 ## Checklist

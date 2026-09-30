@@ -113,6 +113,6 @@ jobs:
           if [ -n "${RECOVERY_ALERT_WEBHOOK_URL:-}" ]; then
             curl --fail --silent --show-error --request POST \
               --header 'Content-Type: application/json' \
-              --data "$(jq -n --arg text "PropertyApi production database backup failed: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" '{text:$text}')" \
+              --data "$(jq -n --arg text "HudhudNestApi production database backup failed: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" '{text:$text}')" \
               "${RECOVERY_ALERT_WEBHOOK_URL}"
           fi

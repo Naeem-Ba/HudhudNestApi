@@ -1,0 +1,79 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using HudhudNestApi.Application.Auth.Interfaces;
+using HudhudNestApi.Application.Auth.Models;
+using HudhudNestApi.Infrastructure.Identity.Entities;
+
+namespace HudhudNestApi.Infrastructure.Identity.Services;
+
+public sealed class IdentityAccountCreator
+{
+    private readonly UserManager<ApplicationUser> _users;
+    private readonly IPhoneNumberLookupHasher _phoneLookupHasher;
+
+    public IdentityAccountCreator(
+        UserManager<ApplicationUser> users,
+        IPhoneNumberLookupHasher phoneLookupHasher)
+    {
+        _users = users;
+        _phoneLookupHasher = phoneLookupHasher;
+    }
+
+    public async Task<IdentityOperationResult> CreateAsync(
+        CreateIdentityAccount request,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ct.ThrowIfCancellationRequested();
+        var now = request.LegacyCreatedAtUtc ?? DateTime.UtcNow;
+        var verifiedAt = request.PhoneConfirmed
+            ? new DateTimeOffset(now, TimeSpan.Zero)
+            : (DateTimeOffset?)null;
+        var user = new ApplicationUser
+        {
+            Id = request.UserAccountId,
+            UserName = request.Email ?? request.PhoneNumber ?? request.UserAccountId.ToString("N"),
+            Email = request.Email,
+            EmailConfirmed = request.EmailConfirmed,
+            PhoneNumber = request.PhoneNumber,
+            PhoneNumberLookupHash = string.IsNullOrWhiteSpace(request.PhoneNumber)
+                ? null
+                : _phoneLookupHasher.Compute(request.PhoneNumber),
+            NormalizedPhoneNumber = request.PhoneNumber,
+            PhoneNumberConfirmed = request.PhoneConfirmed,
+            PhoneLastVerifiedAtUtc = verifiedAt,
+            PhoneVerificationDueAtUtc = verifiedAt?.AddDays(180),
+            PhoneVerificationGraceEndsAtUtc = verifiedAt?.AddDays(183),
+            PhoneVerificationState = request.PhoneConfirmed
+                ? HudhudNestApi.Domain.Enums.PhoneVerificationState.Verified
+                : HudhudNestApi.Domain.Enums.PhoneVerificationState.NotConfigured,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        try
+        {
+            var result = string.IsNullOrWhiteSpace(request.Password)
+                ? await _users.CreateAsync(user)
+                : await _users.CreateAsync(user, request.Password);
+            return IdentityAdapterMapping.Result(result);
+        }
+        catch (DbUpdateException ex) when (IsEmailUniqueViolation(ex))
+        {
+            // UserManager's own duplicate check is a read-then-write, so two concurrent
+            // registrations for one address both pass it and the loser is stopped only by
+            // the unique index. That is an expected outcome, not a database fault: report
+            // it exactly as UserManager reports a duplicate it saw, instead of a 500.
+            return IdentityOperationResult.Failed(IdentityOperationResult.DuplicateEmailCode);
+        }
+    }
+
+    // Narrow on purpose: only a 23505 on the email/username indexes is a duplicate address.
+    // A phone-hash collision or any other database failure must keep surfacing as itself.
+    private static bool IsEmailUniqueViolation(DbUpdateException ex) =>
+        ex.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: "IX_Users_Email" or "IX_Users_Email_Lower" or "UserNameIndex"
+        };
+}

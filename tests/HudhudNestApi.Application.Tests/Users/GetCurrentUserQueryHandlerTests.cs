@@ -1,0 +1,292 @@
+using HudhudNestApi.Application.Auth.Interfaces;
+using HudhudNestApi.Application.Auth.Models;
+using HudhudNestApi.Application.Plans.Interfaces;
+using HudhudNestApi.Application.Users.Interfaces;
+using HudhudNestApi.Application.Users.Queries.GetCurrentUser;
+using HudhudNestApi.Domain.Plans.Entities;
+using HudhudNestApi.Domain.Users.Entities;
+
+namespace HudhudNestApi.Application.Tests.Users;
+
+public sealed class GetCurrentUserQueryHandlerTests
+{
+    [Fact]
+    public async Task Handle_CombinesUserAccountProfileWithIdentitySnapshot()
+    {
+        // Arrange
+        var id =
+            Guid.NewGuid();
+
+        var account =
+            CreateUserAccount(id);
+
+        var identity =
+            new IdentityAccountSnapshot(
+                IdentityId: id,
+                UserAccountId: id,
+                Email: "user@example.com",
+                PhoneNumber: "+49123456789",
+                EmailConfirmed: true,
+                PhoneConfirmed: true,
+                HasPassword: true,
+                IsDeleted: false);
+
+        var sut =
+            new GetCurrentUserQueryHandler(
+                new StubIdentityService(
+                    identity,
+                    ["User"]),
+                new StubUserAccountRepository(
+                    account),
+                new StubPlanRepository());
+
+        // Act
+        var result =
+            await sut.Handle(
+                new GetCurrentUserQuery(id),
+                CancellationToken.None);
+
+        // Assert
+        Assert.NotNull(result);
+
+        Assert.Equal(
+            id,
+            result!.Id);
+
+        Assert.Equal(
+            "user@example.com",
+            result.Email);
+
+        Assert.Equal(
+            "Naeem",
+            result.FirstName);
+
+        Assert.Equal(
+            "User",
+            result.LastName);
+
+        Assert.Equal(
+            "Naeem User",
+            result.DisplayName);
+
+        Assert.Equal(
+            "+49123456789",
+            result.PhoneNumber);
+
+        Assert.True(
+            result.EmailConfirmed);
+
+        Assert.Contains(
+            "User",
+            result.Roles);
+    }
+
+    [Fact]
+    public async Task Handle_ReturnsNull_WhenIdentityAccountIsDeleted()
+    {
+        // Arrange
+        var id =
+            Guid.NewGuid();
+
+        var identity =
+            new IdentityAccountSnapshot(
+                IdentityId: id,
+                UserAccountId: id,
+                Email: "deleted@example.com",
+                PhoneNumber: null,
+                EmailConfirmed: true,
+                PhoneConfirmed: false,
+                HasPassword: true,
+                IsDeleted: true);
+
+        var sut =
+            new GetCurrentUserQueryHandler(
+                new StubIdentityService(
+                    identity,
+                    ["User"]),
+                new StubUserAccountRepository(
+                    CreateUserAccount(id)),
+                new StubPlanRepository());
+
+        // Act
+        var result =
+            await sut.Handle(
+                new GetCurrentUserQuery(id),
+                CancellationToken.None);
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task Handle_ReturnsNull_WhenIdentityAccountIsMissing()
+    {
+        // Arrange
+        var id =
+            Guid.NewGuid();
+
+        var sut =
+            new GetCurrentUserQueryHandler(
+                new StubIdentityService(
+                    account: null,
+                    roles: []),
+                new StubUserAccountRepository(
+                    CreateUserAccount(id)),
+                new StubPlanRepository());
+
+        // Act
+        var result =
+            await sut.Handle(
+                new GetCurrentUserQuery(id),
+                CancellationToken.None);
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task Handle_ReturnsNull_WhenUserAccountIsMissing()
+    {
+        // Arrange
+        var id =
+            Guid.NewGuid();
+
+        var identity =
+            new IdentityAccountSnapshot(
+                IdentityId: id,
+                UserAccountId: id,
+                Email: "user@example.com",
+                PhoneNumber: null,
+                EmailConfirmed: true,
+                PhoneConfirmed: false,
+                HasPassword: true,
+                IsDeleted: false);
+
+        var sut =
+            new GetCurrentUserQueryHandler(
+                new StubIdentityService(
+                    identity,
+                    ["User"]),
+                new StubUserAccountRepository(
+                    null),
+                new StubPlanRepository());
+
+        // Act
+        var result =
+            await sut.Handle(
+                new GetCurrentUserQuery(id),
+                CancellationToken.None);
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    private static UserAccount CreateUserAccount(
+        Guid id)
+    {
+        var now =
+            DateTime.UtcNow;
+
+        var account =
+            UserAccount.Create(
+                id,
+                "Naeem",
+                "User",
+                now);
+
+        account.UpdateProfile(
+            "Naeem",
+            "User",
+            "Naeem User",
+            now);
+
+        return account;
+    }
+
+    private sealed class StubIdentityService(
+        IdentityAccountSnapshot? account,
+        IReadOnlyList<string> roles)
+        : IUserIdentityReadService
+    {
+        public Task<IdentityAccountSnapshot?>
+            FindByIdAsync(
+                Guid identityId,
+                CancellationToken ct = default)
+        {
+            if (account is null ||
+                account.IdentityId != identityId)
+            {
+                return Task.FromResult<
+                    IdentityAccountSnapshot?>(
+                        null);
+            }
+
+            return Task.FromResult<
+                IdentityAccountSnapshot?>(
+                    account);
+        }
+
+        public Task<IReadOnlyList<string>>
+            GetRolesAsync(
+                Guid identityId,
+                CancellationToken ct = default)
+        {
+            return Task.FromResult(
+                roles);
+        }
+    }
+
+    private sealed class StubUserAccountRepository(
+        UserAccount? account)
+        : IUserAccountRepository
+    {
+        public Task<UserAccount?> GetByIdAsync(
+            Guid id,
+            CancellationToken ct = default)
+        {
+            if (account is null ||
+                account.Id != id)
+            {
+                return Task.FromResult<
+                    UserAccount?>(
+                        null);
+            }
+
+            return Task.FromResult<
+                UserAccount?>(
+                    account);
+        }
+
+        public Task AddAsync(
+            UserAccount newAccount,
+            CancellationToken ct = default)
+        {
+            throw new NotSupportedException(
+                "This test repository is read-only.");
+        }
+
+        public Task<IReadOnlyList<Guid>> GetDueForDeletionAsync(
+            DateTime asOfUtc,
+            int batchSize,
+            CancellationToken ct = default)
+        {
+            throw new NotSupportedException(
+                "Not exercised by GetCurrentUserQueryHandlerTests.");
+        }
+    }
+
+    /// <summary>None of these tests select a plan, so account.PlanId is always null and
+    /// this is never actually called — kept trivial rather than NotSupportedException so
+    /// a future test that does select a plan doesn't need to touch this class.</summary>
+    private sealed class StubPlanRepository : IPlanRepository
+    {
+        public Task<IReadOnlyList<Plan>> GetActiveAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<Plan>>(Array.Empty<Plan>());
+
+        public Task<Plan?> GetByTierAsync(string tier, CancellationToken ct = default)
+            => Task.FromResult<Plan?>(null);
+
+        public Task<Plan?> GetByIdAsync(Guid id, CancellationToken ct = default)
+            => Task.FromResult<Plan?>(null);
+    }
+}

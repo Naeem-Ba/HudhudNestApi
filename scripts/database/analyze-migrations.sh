@@ -5,7 +5,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 require_command python3
 require_command jq
-MIGRATIONS_DIR="${MIGRATIONS_DIR:-${REPOSITORY_ROOT}/PropertyApi.Infrastructure/Migrations}"
+MIGRATIONS_DIR="${MIGRATIONS_DIR:-${REPOSITORY_ROOT}/HudhudNestApi.Infrastructure/Migrations}"
 BASELINE_FILE="${MIGRATION_RISK_BASELINE:-${REPOSITORY_ROOT}/ci/migration-risk-baseline.json}"
 OUTPUT_FILE="${MIGRATION_RISK_OUTPUT:-${REPOSITORY_ROOT}/artifacts/database-recovery/migration-risk-report.json}"
 mkdir -p "$(dirname "${OUTPUT_FILE}")"

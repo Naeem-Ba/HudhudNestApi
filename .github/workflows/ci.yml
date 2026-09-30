@@ -28,7 +28,7 @@ concurrency:
 
 env:
   DOTNET_VERSION: '8.0.x'
-  SOLUTION_PATH: 'PropertyApi.sln'
+  SOLUTION_PATH: 'HudhudNestApi.sln'
   COVERAGE_BASELINE_PATH: 'ci/coverage-baseline.json'
   VULNERABILITY_BASELINE_PATH: 'ci/vulnerability-baseline.json'
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -245,7 +245,7 @@ jobs:
       - name: Apply EF Core migrations
         run: |
           dotnet run \
-            --project tools/PropertyApi.Migrator/PropertyApi.Migrator.csproj \
+            --project tools/HudhudNestApi.Migrator/HudhudNestApi.Migrator.csproj \
             --configuration Release \
             --no-build \
             --no-restore
@@ -416,15 +416,15 @@ jobs:
           set -euo pipefail
 
           owned="
-          PropertyApi.Application.Tests|this job
-          PropertyApi.Auth.Tests|this job
-          PropertyApi.Integration.Tests|this job
-          PropertyApi.Architecture.Tests|this job
-          PropertyApi.Infrastructure.Tests|this job
-          PropertyApi.Observability.Tests|this job
-          PropertyApi.Concurrency.Tests|performance-validation.yml
-          PropertyApi.Performance.Tests|performance-validation.yml
-          PropertyApi.StagingSmokeTests|runs against a deployed Staging environment
+          HudhudNestApi.Application.Tests|this job
+          HudhudNestApi.Auth.Tests|this job
+          HudhudNestApi.Integration.Tests|this job
+          HudhudNestApi.Architecture.Tests|this job
+          HudhudNestApi.Infrastructure.Tests|this job
+          HudhudNestApi.Observability.Tests|this job
+          HudhudNestApi.Concurrency.Tests|performance-validation.yml
+          HudhudNestApi.Performance.Tests|performance-validation.yml
+          HudhudNestApi.StagingSmokeTests|runs against a deployed Staging environment
           "
 
           missing=""
@@ -450,7 +450,7 @@ jobs:
       - name: Run Application tests
         run: >
           dotnet test
-          tests/PropertyApi.Application.Tests/PropertyApi.Application.Tests.csproj
+          tests/HudhudNestApi.Application.Tests/HudhudNestApi.Application.Tests.csproj
           --configuration Release
           --no-build
           --no-restore
@@ -469,7 +469,7 @@ jobs:
       - name: Run Auth tests
         run: >
           dotnet test
-          tests/PropertyApi.Auth.Tests/PropertyApi.Auth.Tests.csproj
+          tests/HudhudNestApi.Auth.Tests/HudhudNestApi.Auth.Tests.csproj
           --configuration Release
           --no-build
           --no-restore
@@ -488,7 +488,7 @@ jobs:
       - name: Run Integration tests
         run: >
           dotnet test
-          tests/PropertyApi.Integration.Tests/PropertyApi.Integration.Tests.csproj
+          tests/HudhudNestApi.Integration.Tests/HudhudNestApi.Integration.Tests.csproj
           --configuration Release
           --no-build
           --no-restore
@@ -500,7 +500,7 @@ jobs:
       - name: Run Architecture tests
         run: >
           dotnet test
-          tests/PropertyApi.Architecture.Tests/PropertyApi.Architecture.Tests.csproj
+          tests/HudhudNestApi.Architecture.Tests/HudhudNestApi.Architecture.Tests.csproj
           --configuration Release
           --no-build
           --no-restore
@@ -519,7 +519,7 @@ jobs:
       - name: Run Infrastructure tests
         run: >
           dotnet test
-          tests/PropertyApi.Infrastructure.Tests/PropertyApi.Infrastructure.Tests.csproj
+          tests/HudhudNestApi.Infrastructure.Tests/HudhudNestApi.Infrastructure.Tests.csproj
           --configuration Release
           --no-build
           --no-restore
@@ -529,12 +529,12 @@ jobs:
           --logger "trx;LogFileName=infrastructure-tests.trx"
 
       # observability-validation.yml also runs these, but it is path-filtered to
-      # PropertyApi/Observability/** and observability/**. A change anywhere else
+      # HudhudNestApi/Observability/** and observability/**. A change anywhere else
       # that breaks them would not trigger it, so they run here unconditionally too.
       - name: Run Observability tests
         run: >
           dotnet test
-          tests/PropertyApi.Observability.Tests/PropertyApi.Observability.Tests.csproj
+          tests/HudhudNestApi.Observability.Tests/HudhudNestApi.Observability.Tests.csproj
           --configuration Release
           --no-build
           --no-restore

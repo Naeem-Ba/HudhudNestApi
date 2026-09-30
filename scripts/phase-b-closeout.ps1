@@ -169,11 +169,11 @@ function Compare-Performance {
 }
 
 Invoke-Gate "restore" { dotnet restore }
-Invoke-Gate "format" { dotnet format PropertyApi.sln --verify-no-changes --no-restore }
-Invoke-Gate "build" { dotnet build PropertyApi.sln --configuration $Configuration --no-restore }
-Invoke-Gate "application-tests" { dotnet test tests/PropertyApi.Application.Tests/PropertyApi.Application.Tests.csproj --configuration $Configuration --no-build }
-Invoke-Gate "auth-tests" { dotnet test tests/PropertyApi.Auth.Tests/PropertyApi.Auth.Tests.csproj --configuration $Configuration --no-build }
-Invoke-Gate "architecture-tests" { dotnet test tests/PropertyApi.Architecture.Tests/PropertyApi.Architecture.Tests.csproj --configuration $Configuration --no-build }
+Invoke-Gate "format" { dotnet format HudhudNestApi.sln --verify-no-changes --no-restore }
+Invoke-Gate "build" { dotnet build HudhudNestApi.sln --configuration $Configuration --no-restore }
+Invoke-Gate "application-tests" { dotnet test tests/HudhudNestApi.Application.Tests/HudhudNestApi.Application.Tests.csproj --configuration $Configuration --no-build }
+Invoke-Gate "auth-tests" { dotnet test tests/HudhudNestApi.Auth.Tests/HudhudNestApi.Auth.Tests.csproj --configuration $Configuration --no-build }
+Invoke-Gate "architecture-tests" { dotnet test tests/HudhudNestApi.Architecture.Tests/HudhudNestApi.Architecture.Tests.csproj --configuration $Configuration --no-build }
 
 if ($SkipIntegrationTests) {
     Add-GateResult "integration-tests" "skipped" "SkipIntegrationTests was specified."
@@ -181,7 +181,7 @@ if ($SkipIntegrationTests) {
 else {
     Invoke-Gate "integration-tests" {
         Assert-TestPostgresConfigured
-        dotnet test tests/PropertyApi.Integration.Tests/PropertyApi.Integration.Tests.csproj --configuration $Configuration --no-build
+        dotnet test tests/HudhudNestApi.Integration.Tests/HudhudNestApi.Integration.Tests.csproj --configuration $Configuration --no-build
     }
 }
 

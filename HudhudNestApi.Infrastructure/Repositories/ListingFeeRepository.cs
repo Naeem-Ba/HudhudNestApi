@@ -1,0 +1,69 @@
+using Microsoft.EntityFrameworkCore;
+using HudhudNestApi.Application.Listings.Interfaces;
+using HudhudNestApi.Domain.Transactions.Entities;
+using HudhudNestApi.Domain.Transactions.Enums;
+using HudhudNestApi.Infrastructure.Persistence;
+
+namespace HudhudNestApi.Infrastructure.Repositories;
+
+public sealed class ListingFeeRepository : IListingFeeRepository
+{
+    private readonly AppDbContext _db;
+
+    public ListingFeeRepository(AppDbContext db)
+    {
+        _db = db;
+    }
+
+    public async Task<Transaction?> GetPendingFeeAsync(
+        Guid propertyId,
+        Guid payerId,
+        TransactionType transactionType,
+        CancellationToken ct = default)
+    {
+        // Tracked, not AsNoTracking: the caller may hand this straight back as a quote, but
+        // ConfirmListingExtensionPayment mutates the same row through GetByIdAsync, and
+        // returning a detached entity from one path and a tracked one from the other is the
+        // kind of inconsistency that produces a silent no-op save later.
+        return await _db.Transactions
+            .Where(t =>
+                t.PropertyId == propertyId &&
+                t.PayerId == payerId &&
+                t.TransactionType == transactionType &&
+                t.Status == TransactionStatus.Pending)
+            .OrderByDescending(t => t.TransactedAt)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<Transaction?> GetByIdAsync(Guid transactionId, CancellationToken ct = default)
+    {
+        return await _db.Transactions
+            .FirstOrDefaultAsync(t => t.Id == transactionId, ct);
+    }
+
+    public async Task AddAsync(Transaction transaction, CancellationToken ct = default)
+    {
+        await _db.Transactions.AddAsync(transaction, ct);
+    }
+
+    public async Task<(int CurrencyId, decimal ExchangeRateToUsd)> GetUsdCurrencyAsync(
+        CancellationToken ct = default)
+    {
+        var usd = await _db.Currencies
+            .AsNoTracking()
+            .Where(c => c.Code == "USD")
+            .Select(c => new { c.Id, c.ExchangeRateToUSD })
+            .FirstOrDefaultAsync(ct);
+
+        if (usd is null)
+        {
+            // CurrencySeed guarantees this row. If it is missing, the seed did not run —
+            // recording a fee against a guessed currency id would corrupt the financial
+            // audit trail, so fail loudly instead.
+            throw new InvalidOperationException(
+                "USD currency row is missing. CurrencySeed must run before listing fees can be recorded.");
+        }
+
+        return (usd.Id, usd.ExchangeRateToUSD);
+    }
+}

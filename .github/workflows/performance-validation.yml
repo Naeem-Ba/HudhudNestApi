@@ -104,19 +104,19 @@ jobs:
       - name: Restore performance projects
         run: |
           set -euo pipefail
-          dotnet restore PropertyApi.sln
+          dotnet restore HudhudNestApi.sln
 
       - name: Build performance validation system
         run: |
           set -euo pipefail
-          dotnet build PropertyApi.sln --configuration Release --no-restore
+          dotnet build HudhudNestApi.sln --configuration Release --no-restore
 
       - name: Run performance configuration regression tests
         run: |
           set -euo pipefail
-          dotnet test tests/PropertyApi.Performance.Tests/PropertyApi.Performance.Tests.csproj \
+          dotnet test tests/HudhudNestApi.Performance.Tests/HudhudNestApi.Performance.Tests.csproj \
             --configuration Release --no-build --no-restore
-          dotnet test tests/PropertyApi.Concurrency.Tests/PropertyApi.Concurrency.Tests.csproj \
+          dotnet test tests/HudhudNestApi.Concurrency.Tests/HudhudNestApi.Concurrency.Tests.csproj \
             --configuration Release --no-build --no-restore
 
       - name: Run mandatory concurrent performance and query gate

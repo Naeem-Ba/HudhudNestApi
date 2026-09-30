@@ -2,8 +2,8 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 COPY . .
-RUN dotnet restore tools/PropertyApi.Migrator/PropertyApi.Migrator.csproj --locked-mode
-RUN dotnet publish tools/PropertyApi.Migrator/PropertyApi.Migrator.csproj \
+RUN dotnet restore tools/HudhudNestApi.Migrator/HudhudNestApi.Migrator.csproj --locked-mode
+RUN dotnet publish tools/HudhudNestApi.Migrator/HudhudNestApi.Migrator.csproj \
     --configuration Release \
     --no-restore \
     --output /app/publish \
@@ -13,4 +13,4 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
 USER app
-ENTRYPOINT ["dotnet", "PropertyApi.Migrator.dll"]
+ENTRYPOINT ["dotnet", "HudhudNestApi.Migrator.dll"]

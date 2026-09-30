@@ -13,5 +13,5 @@ groups:
 # at runtime. scripts/verify-observability.sh drives its firing/resolution by toggling the
 # propertyapi_synthetic_alert_test_state gauge through
 # POST /internal/observability/synthetic/alert-test-state, a Staging-only, shared-secret-gated
-# endpoint (see PropertyApi/Controllers/ObservabilitySyntheticController.cs). The gauge is
+# endpoint (see HudhudNestApi/Controllers/ObservabilitySyntheticController.cs). The gauge is
 # always 0 -- and the alert never fires -- outside a controlled test invocation.

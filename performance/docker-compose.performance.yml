@@ -132,7 +132,7 @@ services:
   api1:
     build:
       context: ..
-      dockerfile: PropertyApi/Dockerfile
+      dockerfile: HudhudNestApi/Dockerfile
     environment:
       <<: *api-environment
       Performance__InstanceId: api-1
@@ -145,7 +145,7 @@ services:
   api2:
     build:
       context: ..
-      dockerfile: PropertyApi/Dockerfile
+      dockerfile: HudhudNestApi/Dockerfile
     environment:
       <<: *api-environment
       Performance__InstanceId: api-2
@@ -191,7 +191,7 @@ services:
         condition: service_completed_successfully
     healthcheck:
       # The API only maps /health/live and /health/ready (see
-      # PropertyApi/Health/HealthEndpointExtensions.cs) -- there is no
+      # HudhudNestApi/Health/HealthEndpointExtensions.cs) -- there is no
       # handler for bare "/", so it 404s. "wget --spider" treats any
       # non-2xx response as failure, so probing "/" made this healthcheck
       # fail on every single check even though nginx was correctly

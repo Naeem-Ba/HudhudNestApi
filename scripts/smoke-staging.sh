@@ -30,7 +30,7 @@ write_bootstrap_failure() {
 
   cat > "${artifacts_dir}/staging-smoke-junit.xml" <<XML
 <?xml version="1.0" encoding="utf-8"?>
-<testsuites><testsuite name="PropertyApi.StagingSmoke.Bootstrap" tests="1" failures="1"><testcase name="configuration"><failure>Staging smoke bootstrap failed.</failure></testcase></testsuite></testsuites>
+<testsuites><testsuite name="HudhudNestApi.StagingSmoke.Bootstrap" tests="1" failures="1"><testcase name="configuration"><failure>Staging smoke bootstrap failed.</failure></testcase></testsuite></testsuites>
 XML
 
   {
@@ -131,11 +131,11 @@ export SMOKE_RUN_ID="${SMOKE_RUN_ID:-$(date -u +%Y%m%d%H%M%S)-${EXPECTED_COMMIT_
 echo "Running mandatory Staging E2E smoke suite against ${staging_host}."
 
 dotnet restore \
-  tests/PropertyApi.StagingSmokeTests/PropertyApi.StagingSmokeTests.csproj
+  tests/HudhudNestApi.StagingSmokeTests/HudhudNestApi.StagingSmokeTests.csproj
 
 set +e
 dotnet test \
-  tests/PropertyApi.StagingSmokeTests/PropertyApi.StagingSmokeTests.csproj \
+  tests/HudhudNestApi.StagingSmokeTests/HudhudNestApi.StagingSmokeTests.csproj \
   --configuration Release \
   --no-restore \
   --results-directory "${artifacts_dir}/test-results" \

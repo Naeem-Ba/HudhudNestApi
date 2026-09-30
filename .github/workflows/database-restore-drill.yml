@@ -116,8 +116,8 @@ jobs:
       - name: Build recovery assets
         run: |
           docker compose -f ci/docker-compose.database-recovery.yml build --pull recovery-toolbox api-restored
-          dotnet restore tools/PropertyApi.DatabaseRecoveryVerifier/PropertyApi.DatabaseRecoveryVerifier.csproj --locked-mode
-          dotnet build tools/PropertyApi.DatabaseRecoveryVerifier/PropertyApi.DatabaseRecoveryVerifier.csproj --configuration Release --no-restore
+          dotnet restore tools/HudhudNestApi.DatabaseRecoveryVerifier/HudhudNestApi.DatabaseRecoveryVerifier.csproj --locked-mode
+          dotnet build tools/HudhudNestApi.DatabaseRecoveryVerifier/HudhudNestApi.DatabaseRecoveryVerifier.csproj --configuration Release --no-restore
 
       - name: Create fresh encrypted backup
         # BUG: a plain `schedule` trigger (this job's weekly cron) supplies no
@@ -252,7 +252,7 @@ jobs:
           # Pre-deploy backups lack the release's new migrations; rehearse applying them on this
           # disposable, loopback-only restored copy (see DatabaseRecoveryVerifier/Program.cs).
           RECOVERY_APPLY_PENDING_MIGRATIONS: "true"
-        run: dotnet run --project tools/PropertyApi.DatabaseRecoveryVerifier/PropertyApi.DatabaseRecoveryVerifier.csproj --configuration Release --no-build --no-restore
+        run: dotnet run --project tools/HudhudNestApi.DatabaseRecoveryVerifier/HudhudNestApi.DatabaseRecoveryVerifier.csproj --configuration Release --no-build --no-restore
 
       - name: Start API against restored database
         run: docker compose -f ci/docker-compose.database-recovery.yml up -d api-restored
@@ -320,6 +320,6 @@ jobs:
           set -euo pipefail
           if [ -n "${RECOVERY_ALERT_WEBHOOK_URL:-}" ]; then
             curl --fail --silent --show-error --request POST --header 'Content-Type: application/json' \
-              --data "$(jq -n --arg text "PropertyApi database restore drill failed: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" '{text:$text}')" \
+              --data "$(jq -n --arg text "HudhudNestApi database restore drill failed: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" '{text:$text}')" \
               "${RECOVERY_ALERT_WEBHOOK_URL}"
           fi

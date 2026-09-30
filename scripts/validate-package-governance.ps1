@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string] $RepositoryRoot = (Resolve-Path ".").Path,
-    [string] $SolutionPath = "PropertyApi.sln",
+    [string] $SolutionPath = "HudhudNestApi.sln",
     [string] $PolicyPath = "ci/package-policy.json",
     [string] $OutputDirectory = "artifacts/supply-chain"
 )
