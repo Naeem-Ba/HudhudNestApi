@@ -68,18 +68,21 @@ public sealed class LoginResponseDto
     /// <summary>
     /// Number of failed login attempts recorded for this account.
     /// </summary>
-    public int FailedAttemptCount { get; init; }
+    public int? FailedAttemptCount { get; init; }
 
     /// <summary>
     /// Maximum allowed failed attempts before lockout.
     /// </summary>
-    public int MaxFailedAttempts { get; init; } = 5;
+    public int? MaxFailedAttempts { get; init; }
 
     /// <summary>
-    /// Remaining attempts before the account locks.
+    /// Remaining attempts before the account locks. Null when the response deliberately
+    /// carries no counter (the anonymous login 401 -- see <see cref="CreateInvalidCredentials"/>).
     /// </summary>
-    public int RemainingAttemptsBeforeLockout =>
-        Math.Max(0, MaxFailedAttempts - FailedAttemptCount);
+    public int? RemainingAttemptsBeforeLockout =>
+        FailedAttemptCount is { } failed && MaxFailedAttempts is { } max
+            ? Math.Max(0, max - failed)
+            : null;
 
     /// <summary>
     /// Is the account currently locked?
@@ -146,17 +149,28 @@ public sealed class LoginResponseDto
         };
     }
 
+    /// <summary>
+    /// With no arguments (what /auth/login sends) the response carries NO attempt counter.
+    /// It used to default to 0 failed of 5, so every failure -- for every address, registered
+    /// or not -- reported "5 attempts remaining" regardless of the real AccessFailedCount.
+    /// The real count cannot be returned anonymously without revealing which addresses have
+    /// accounts, so the counter is omitted rather than faked.
+    /// </summary>
     public static LoginResponseDto CreateInvalidCredentials(
-        int failedAttemptCount = 0,
+        int? failedAttemptCount = null,
         int maxAttempts = 5)
     {
-        var remainingAttempts = Math.Max(0, maxAttempts - failedAttemptCount);
-        var warningMessage = remainingAttempts switch
+        string? warningMessage = null;
+        if (failedAttemptCount is { } failed)
         {
-            0 => "Your account will lock after 1 more attempt",
-            1 => "1 attempt remaining before lockout",
-            _ => $"{remainingAttempts} attempts remaining before lockout"
-        };
+            var remainingAttempts = Math.Max(0, maxAttempts - failed);
+            warningMessage = remainingAttempts switch
+            {
+                0 => "Your account will lock after 1 more attempt",
+                1 => "1 attempt remaining before lockout",
+                _ => $"{remainingAttempts} attempts remaining before lockout"
+            };
+        }
 
         return new LoginResponseDto
         {
@@ -166,7 +180,7 @@ public sealed class LoginResponseDto
             ErrorCode = LoginErrorCodes.InvalidCredentials,
             ErrorType = LoginErrorType.InvalidCredentials,
             FailedAttemptCount = failedAttemptCount,
-            MaxFailedAttempts = maxAttempts,
+            MaxFailedAttempts = failedAttemptCount is null ? null : maxAttempts,
             AttemptWarningMessage = warningMessage,
             RecommendedAction = "retry"
         };

@@ -81,6 +81,19 @@ public sealed class LoginResponseContractTests
         Assert.False((bool?)json["isAccountLocked"]);
     }
 
+    [Fact(DisplayName = "Anonymous invalid-credentials 401 carries no attempt counter")]
+    public void InvalidCredentials_Default_OmitsAttemptCounters()
+    {
+        // Regression: this used to serialize failedAttemptCount=0 / remaining=5 on every
+        // failure, so the UI always claimed "5 attempts remaining".
+        var json = Serialize(LoginResponseDto.CreateInvalidCredentials());
+
+        Assert.Null(json["failedAttemptCount"]);
+        Assert.Null(json["maxFailedAttempts"]);
+        Assert.Null(json["remainingAttemptsBeforeLockout"]);
+        Assert.Null(json["attemptWarningMessage"]);
+    }
+
     [Fact(DisplayName = "errorType serializes as a string, not a numeric enum value")]
     public void ErrorType_SerializesAsString()
     {

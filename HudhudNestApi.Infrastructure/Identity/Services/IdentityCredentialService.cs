@@ -46,7 +46,19 @@ public sealed class IdentityCredentialService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(token);
         ArgumentException.ThrowIfNullOrWhiteSpace(password);
-        return Result(await _users.ResetPasswordAsync(await Load(id, ct), token, password));
+        var user = await Load(id, ct);
+        var result = Result(await _users.ResetPasswordAsync(user, token, password));
+        if (!result.Succeeded)
+        {
+            return result;
+        }
+
+        // The reset token proves control of the mailbox, so it is safe to lift a lockout the
+        // owner just triggered by mistyping; otherwise "reset your password" would leave
+        // them locked out for the rest of the lockout window. Matches the phone reset flow.
+        await _users.ResetAccessFailedCountAsync(user);
+        await _users.SetLockoutEndDateAsync(user, null);
+        return result;
     }
 
     public async Task<IdentityOperationResult> ChangePasswordAsync(
