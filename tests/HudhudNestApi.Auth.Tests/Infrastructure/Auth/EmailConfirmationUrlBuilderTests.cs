@@ -109,6 +109,36 @@ public sealed class EmailConfirmationUrlBuilderTests
         Assert.Contains("HTTPS", exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("  https://app.example.com/  ")]
+    [InlineData("https://app.example.com//")]
+    public void Build_NormalisesSurroundingWhitespaceAndTrailingSlashes_WithoutDoubleSlash(
+        string configured)
+    {
+        var url = CreateBuilder(configured, Environments.Production)
+            .Build(IdentityId, "token");
+
+        Assert.StartsWith("https://app.example.com/#/auth/verify-email?", url, StringComparison.Ordinal);
+        Assert.DoesNotContain("com//", url, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Build_AcceptsPlainHttp_InDevelopment()
+    {
+        var url = CreateBuilder("http://localhost:4200", Environments.Development)
+            .Build(IdentityId, "token");
+
+        Assert.StartsWith("http://localhost:4200/#/", url, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Build_Throws_WhenProductionOriginContainsWhitespace()
+    {
+        var builder = CreateBuilder("https://app example.com", Environments.Production);
+
+        Assert.Throws<InvalidOperationException>(() => builder.Build(IdentityId, "token"));
+    }
+
     [Fact]
     public void Build_Throws_WhenTheConfiguredOriginIsRelative()
     {

@@ -28,8 +28,8 @@ public sealed record UpdateShortStayListingCommand(
     bool SelfCheckInEnabled,
     bool InstantBookingEnabled,
     bool RequestBookingEnabled,
-    decimal Latitude,
-    decimal Longitude,
+    decimal? Latitude,
+    decimal? Longitude,
     int? GovernorateId,
     int? DistrictId,
     int? NeighborhoodId,
@@ -58,15 +58,18 @@ public sealed class UpdateShortStayListingCommandHandler
 {
     private readonly IShortStayListingRepository _listings;
     private readonly IAccommodationTypeRepository _accommodationTypes;
+    private readonly IShortStayLocationResolver _locationResolver;
     private readonly IUnitOfWork _uow;
 
     public UpdateShortStayListingCommandHandler(
         IShortStayListingRepository listings,
         IAccommodationTypeRepository accommodationTypes,
+        IShortStayLocationResolver locationResolver,
         IUnitOfWork uow)
     {
         _listings = listings;
         _accommodationTypes = accommodationTypes;
+        _locationResolver = locationResolver;
         _uow = uow;
     }
 
@@ -84,8 +87,10 @@ public sealed class UpdateShortStayListingCommandHandler
         listing.UpdateBookingSettings(request.InstantBookingEnabled, request.RequestBookingEnabled);
 
         var locationVisibility = Enum.Parse<LocationVisibility>(request.LocationVisibility, ignoreCase: true);
+        var city = await _locationResolver.ResolveCityAsync(
+            request.GovernorateId, request.DistrictId, request.NeighborhoodId, request.City, ct);
         listing.UpdateLocation(request.Latitude, request.Longitude, request.GovernorateId, request.DistrictId,
-            request.NeighborhoodId, request.City, locationVisibility);
+            request.NeighborhoodId, city, locationVisibility);
 
         if (request.PoolType is not null && request.PoolLocation is not null)
         {

@@ -142,6 +142,9 @@ builder.Services
         // are now redundant (kept for clarity, not correctness) and the adapter is deleted.
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        // Short-stay check-in/out and quiet hours arrive as "HH:mm" from <input type="time">;
+        // the built-in TimeOnly converter rejects that (it requires seconds).
+        options.JsonSerializerOptions.Converters.Add(new HudhudNestApi.Configuration.LenientTimeOnlyJsonConverter());
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
 
@@ -160,6 +163,11 @@ builder.Services.AddHudhudNestApiRateLimiting();
 
 var app = builder.Build();
 
+// useRedisRateLimiting above only decides what to register. Which limiter runs is decided from the
+// built host's configuration, the same options the Redis middleware reads per request -- see
+// IsRedisRateLimitingActive for how the two disagreeing left a host with no rate limiting at all.
+var redisRateLimitingActive = app.Services.IsRedisRateLimitingActive();
+
 // The IConnectionMultiplexer singleton is otherwise built lazily by whichever request needs it
 // first, and with abortConnect=false ConnectionMultiplexer.Connect returns before the socket is
 // up. On a freshly started instance the first rate-limited requests therefore hit
@@ -169,7 +177,7 @@ var app = builder.Build();
 // window of failed logins after every deploy. Connect eagerly before Kestrel starts listening
 // and give the connection a bounded time to establish. If Redis is really down the instance
 // still starts (fail-closed behaviour and readiness are unchanged).
-if (useRedisRateLimiting)
+if (redisRateLimitingActive)
 {
     await RedisStartupConnection.EnsureConnectedAsync(
         app.Services.GetRequiredService<IConnectionMultiplexer>(),
@@ -264,7 +272,7 @@ app.UseCors("DefaultCors");
 app.UseAuthentication();
 app.UseMiddleware<HudhudNestApi.Security.PhoneVerificationRestrictionMiddleware>();
 
-if (useRedisRateLimiting)
+if (redisRateLimitingActive)
 {
     app.UseRedisRateLimiting();
 }

@@ -1,7 +1,9 @@
+using MediatR;
 using Microsoft.Extensions.Logging;
 using Moq;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Commands.DeleteProperty;
+using HudhudNestApi.Application.Listings.Events;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Domain.Audit.Constants;
 using HudhudNestApi.Domain.Enums;
@@ -51,6 +53,7 @@ public sealed class DeletePropertyCommandHandlerTests
 
         var uow = new Mock<IUnitOfWork>();
         var auditLogs = new Mock<IAuditLogService>();
+        var publisher = new Mock<IPublisher>();
         var logger = new Mock<ILogger<DeletePropertyCommandHandler>>();
 
         var sut = new DeletePropertyCommandHandler(
@@ -60,6 +63,7 @@ public sealed class DeletePropertyCommandHandlerTests
             storage.Object,
             uow.Object,
             auditLogs.Object,
+            publisher.Object,
             logger.Object);
 
         // Act
@@ -102,7 +106,7 @@ public sealed class DeletePropertyCommandHandlerTests
             CreateImage(property.Id, publicId: string.Empty)
         };
 
-        var (sut, storage, _) = BuildSut(property, ownerId);
+        var (sut, storage, _, _) = BuildSut(property, ownerId);
 
         await sut.Handle(
             new DeletePropertyCommand(property.Id, ownerId, "127.0.0.1"),
@@ -127,7 +131,7 @@ public sealed class DeletePropertyCommandHandlerTests
             CreateImage(property.Id, "properties/succeeds")
         };
 
-        var (sut, storage, uow) = BuildSut(property, ownerId);
+        var (sut, storage, uow, _) = BuildSut(property, ownerId);
 
         storage
             .Setup(x => x.DeleteImageAsync("properties/fails", It.IsAny<CancellationToken>()))
@@ -146,7 +150,41 @@ public sealed class DeletePropertyCommandHandlerTests
         uow.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    private static (DeletePropertyCommandHandler Sut, Mock<IMediaStorageService> Storage, Mock<IUnitOfWork> Uow)
+    [Fact]
+    public async Task Handle_PublishesPropertyDeletedEvent_ForALiveListingWithNoStatusTransition()
+    {
+        // Phase 1 audit F-10: deleting an Available listing directly never changes Status, so
+        // PropertyStatusChangedEvent's transition map would never see it — this dedicated event
+        // is what tells SocialDistribution to remove any live post.
+        var ownerId = Guid.NewGuid();
+        var property = CreateProperty(ownerId);
+        var (sut, _, _, publisher) = BuildSut(property, ownerId);
+
+        await sut.Handle(new DeletePropertyCommand(property.Id, ownerId, "127.0.0.1"), CancellationToken.None);
+
+        publisher.Verify(
+            x => x.Publish(
+                It.Is<PropertyDeletedEvent>(e => e.PropertyId == property.Id && e.StatusAtDeletion == PropertyStatus.Available),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPropertyDeletedEventPublishThrows_StillSucceeds()
+    {
+        var ownerId = Guid.NewGuid();
+        var property = CreateProperty(ownerId);
+        var (sut, _, _, publisher) = BuildSut(property, ownerId);
+        publisher
+            .Setup(x => x.Publish(It.IsAny<PropertyDeletedEvent>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("subscriber blew up"));
+
+        var result = await sut.Handle(new DeletePropertyCommand(property.Id, ownerId, "127.0.0.1"), CancellationToken.None);
+
+        Assert.True(result);
+    }
+
+    private static (DeletePropertyCommandHandler Sut, Mock<IMediaStorageService> Storage, Mock<IUnitOfWork> Uow, Mock<IPublisher> Publisher)
         BuildSut(Property property, Guid ownerId)
     {
         var ownership = new Mock<IPropertyOwnershipService>();
@@ -168,6 +206,7 @@ public sealed class DeletePropertyCommandHandlerTests
         var storage = new Mock<IMediaStorageService>();
         var uow = new Mock<IUnitOfWork>();
         var auditLogs = new Mock<IAuditLogService>();
+        var publisher = new Mock<IPublisher>();
         var logger = new Mock<ILogger<DeletePropertyCommandHandler>>();
 
         var sut = new DeletePropertyCommandHandler(
@@ -177,9 +216,10 @@ public sealed class DeletePropertyCommandHandlerTests
             storage.Object,
             uow.Object,
             auditLogs.Object,
+            publisher.Object,
             logger.Object);
 
-        return (sut, storage, uow);
+        return (sut, storage, uow, publisher);
     }
 
     private static Property CreateProperty(Guid ownerId)

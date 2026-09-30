@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using MediatR;
 using Moq;
 using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Auth.Interfaces;
@@ -9,6 +10,7 @@ using HudhudNestApi.Application.Listings;
 using HudhudNestApi.Application.Listings.Commands.ConfirmListingExtensionPayment;
 using HudhudNestApi.Application.Listings.Commands.CreateProperty;
 using HudhudNestApi.Application.Listings.Commands.RequestListingExtension;
+using HudhudNestApi.Application.Listings.Events;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Listings.Mappers;
 using HudhudNestApi.Domain.Common.Exceptions;
@@ -209,6 +211,70 @@ public sealed class ListingLifecycleTests
         await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
             ValidCreateCommand() with { OwnerId = ownerId },
             CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CreateProperty_PublishesPropertyPublishedEvent_AfterTheListingIsCommitted()
+    {
+        // A listing created through the app is live immediately (Property.Create defaults to
+        // published), so this is the moment SocialDistribution must hear about it — before this
+        // event existed, only the explicit PATCH /publish (drafts) ever triggered distribution.
+        var ownerId = Guid.NewGuid();
+        var repository = new Mock<IPropertyRepository>();
+        var uow = new Mock<IUnitOfWork>();
+        var publisher = new Mock<IPublisher>();
+        var order = new List<string>();
+        uow.Setup(x => x.CommitTransactionAsync(It.IsAny<CancellationToken>())).Callback(() => order.Add("commit"));
+        publisher
+            .Setup(x => x.Publish(It.IsAny<PropertyPublishedEvent>(), It.IsAny<CancellationToken>()))
+            .Callback(() => order.Add("publish"))
+            .Returns(Task.CompletedTask);
+
+        var handler = CreatePropertyHandler(repository, unitOfWork: uow, publisher: publisher);
+
+        var id = await handler.Handle(ValidCreateCommand() with { OwnerId = ownerId }, CancellationToken.None);
+
+        publisher.Verify(
+            x => x.Publish(
+                It.Is<PropertyPublishedEvent>(e => e.PropertyId == id && e.PublishedByUserId == ownerId),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        Assert.Equal(new[] { "commit", "publish" }, order);
+    }
+
+    [Fact]
+    public async Task CreateProperty_RejectedByQuota_PublishesNoEvent()
+    {
+        var ownerId = Guid.NewGuid();
+        var repository = new Mock<IPropertyRepository>();
+        repository
+            .Setup(x => x.CountActiveListingsByOwnerAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(250);
+        var publisher = new Mock<IPublisher>();
+
+        var handler = CreatePropertyHandler(repository, quotaPolicy: new FakeListingQuotaPolicy(250), publisher: publisher);
+
+        await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
+            ValidCreateCommand() with { OwnerId = ownerId }, CancellationToken.None));
+
+        publisher.Verify(x => x.Publish(It.IsAny<PropertyPublishedEvent>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateProperty_WhenTheEventPublishThrows_StillReturnsTheNewListing()
+    {
+        // Distribution is a side effect: even a broken subscriber pipeline must never turn a
+        // successfully saved listing into a failed request the owner would then retry (creating a duplicate).
+        var publisher = new Mock<IPublisher>();
+        publisher
+            .Setup(x => x.Publish(It.IsAny<PropertyPublishedEvent>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("subscriber blew up"));
+
+        var handler = CreatePropertyHandler(new Mock<IPropertyRepository>(), publisher: publisher);
+
+        var id = await handler.Handle(ValidCreateCommand(), CancellationToken.None);
+
+        Assert.NotEqual(Guid.Empty, id);
     }
 
     [Fact]
@@ -703,6 +769,26 @@ public sealed class ListingLifecycleTests
     }
 
     [Fact]
+    public async Task ConfirmExtension_OnPendingFee_PublishesPropertyPublishedEvent()
+    {
+        // ExtendPublication republishes an expired listing — SocialDistribution must get the same
+        // chance to (re-)distribute it as a fresh PATCH /publish would give a new draft.
+        var property = CreateListing();
+        property.ExpiresAt = DateTime.UtcNow.AddDays(-2);
+        property.MarkExpired();
+
+        var fee = BuildPendingFee(property.Id, property.OwnerId);
+        var publisher = new Mock<IPublisher>();
+        var handler = ConfirmExtensionHandler(property, fee, publisher);
+
+        await handler.Handle(new ConfirmListingExtensionPaymentCommand(fee.Id, Guid.NewGuid()), CancellationToken.None);
+
+        publisher.Verify(
+            x => x.Publish(It.Is<PropertyPublishedEvent>(e => e.PropertyId == property.Id), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
     public async Task ConfirmExtension_OnAFeeThatIsNotAnExtension_IsRejected()
     {
         var property = CreateListing();
@@ -750,7 +836,8 @@ public sealed class ListingLifecycleTests
         Mock<IAgencyRepository>? agencies = null,
         IListingQuotaPolicy? quotaPolicy = null,
         Mock<IUnitOfWork>? unitOfWork = null,
-        Mock<IUserIdentityReadService>? identity = null)
+        Mock<IUserIdentityReadService>? identity = null,
+        Mock<IPublisher>? publisher = null)
         => new(
             repository.Object,
             (agencies ?? DefaultAgencies()).Object,
@@ -759,6 +846,7 @@ public sealed class ListingLifecycleTests
             Mock.Of<ILocationSuggestionService>(),
             quotaPolicy ?? new FakeListingQuotaPolicy(50),
             new PropertyOnlyActiveListingCounter(repository.Object),
+            (publisher ?? new Mock<IPublisher>()).Object,
             NullLogger<CreatePropertyCommandHandler>.Instance);
 
     /// <summary>
@@ -880,7 +968,8 @@ public sealed class ListingLifecycleTests
 
     private static ConfirmListingExtensionPaymentCommandHandler ConfirmExtensionHandler(
         Property property,
-        Transaction fee)
+        Transaction fee,
+        Mock<IPublisher>? publisher = null)
     {
         var extensions = new Mock<IListingFeeRepository>();
         extensions
@@ -896,6 +985,7 @@ public sealed class ListingLifecycleTests
             extensions.Object,
             properties.Object,
             Mock.Of<IUnitOfWork>(),
+            (publisher ?? new Mock<IPublisher>()).Object,
             NullLogger<ConfirmListingExtensionPaymentCommandHandler>.Instance);
     }
 

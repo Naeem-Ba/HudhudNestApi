@@ -26,6 +26,8 @@ namespace HudhudNestApi.Controllers;
 [ApiController]
 [Route("api/auth")]
 [Produces("application/json")]
+// Auth responses carry tokens, challenge ids and account status: never stored by a browser or a proxy.
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class PhoneAuthController : ControllerBase
 {
     private readonly ISender _mediator;

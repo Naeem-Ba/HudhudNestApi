@@ -37,34 +37,8 @@ public abstract class PlatformNotConfiguredPublisherBase : ISocialPublisher
 
     public abstract SocialPublisherCapabilities GetCapabilities();
 
-    public virtual SocialContentValidationResult ValidateContent(SocialPublishRequest request)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-
-        var capabilities = GetCapabilities();
-        var limits = SocialContentPolicy.GetLimits(Platform);
-        var errors = new List<string>();
-
-        if (capabilities.RequiresImage && string.IsNullOrWhiteSpace(request.ImageUrl))
-            errors.Add($"منصة {Platform} تتطلب صورة، والمحتوى لا يحتوي على رابط صورة.");
-
-        if (!string.IsNullOrEmpty(request.ImageUrl) && !SocialContentPolicy.IsValidPublicUrl(request.ImageUrl))
-            errors.Add("رابط الصورة غير صالح (يجب أن يكون رابطاً عاماً http/https).");
-
-        if (!SocialContentPolicy.IsValidPublicUrl(request.TargetUrl))
-            errors.Add("رابط الوجهة (TargetUrl) غير صالح.");
-
-        if (request.Body.Length > limits.MaxBodyLength)
-            errors.Add($"نص المنشور يتجاوز الحد المسموح لمنصة {Platform} ({limits.MaxBodyLength} حرفاً).");
-
-        if (capabilities.MaxTextLength is { } maxText && request.Title.Length > maxText)
-            errors.Add($"عنوان المنشور يتجاوز الحد الأقصى المدعوم من هذه المنصة ({maxText} حرفاً).");
-
-        if (!capabilities.SupportsHashtags && request.Hashtags.Count > 0)
-            errors.Add($"منصة {Platform} لا تدعم الوسوم (Hashtags).");
-
-        return errors.Count == 0 ? SocialContentValidationResult.Valid : SocialContentValidationResult.Invalid(errors.ToArray());
-    }
+    public virtual SocialContentValidationResult ValidateContent(SocialPublishRequest request) =>
+        SocialContentValidator.Validate(request, Platform, GetCapabilities());
 
     public Task<SocialPublishResult> PublishAsync(SocialPublishRequest request, CancellationToken ct = default)
     {
@@ -87,7 +61,7 @@ public abstract class PlatformNotConfiguredPublisherBase : ISocialPublisher
     }
 
     /// <summary>Placeholder (Phase 11 spec §7).</summary>
-    public Task<SocialPublishResult> CommentAsync(string externalPostId, string commentBody, CancellationToken ct = default)
+    public Task<SocialPublishResult> CommentAsync(SocialPublishRequest request, string externalPostId, string commentBody, CancellationToken ct = default)
     {
         _logger.LogWarning(
             "No real ISocialPublisher is configured for platform {Platform} — cannot comment on external post {ExternalPostId}.",
@@ -97,7 +71,7 @@ public abstract class PlatformNotConfiguredPublisherBase : ISocialPublisher
     }
 
     /// <summary>Placeholder (Phase 11 spec §7).</summary>
-    public Task<SocialPublishResult> DeleteAsync(string externalPostId, CancellationToken ct = default)
+    public Task<SocialPublishResult> DeleteAsync(SocialPublishRequest request, string externalPostId, CancellationToken ct = default)
     {
         _logger.LogWarning(
             "No real ISocialPublisher is configured for platform {Platform} — cannot delete external post {ExternalPostId}.",

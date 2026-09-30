@@ -179,6 +179,39 @@ public sealed class SocialContentFactValidatorTests
         Assert.False(result.IsValid);
     }
 
+    // A real property link carries a GUID id and UTM params — digits inside the link are not
+    // "figures the generator invented", so they must never be mistaken for a fabricated price.
+    // (Regression: Facebook/Telegram bodies, which include the link line, were rejected for any
+    // GUID containing 4+ consecutive digits and silently fell back to the raw default body.)
+    private const string RealisticCanonicalUrl =
+        "https://realestateworld.world/properties/979a8254-fff2-4d78-bf31-b4331ddea0ad" +
+        "?utm_source=facebook&utm_medium=social&utm_campaign=social_distribution&utm_content=publication_5d642dce-5ab1-40fe-92bf-b5421ee70064";
+
+    [Theory]
+    [InlineData(SocialPlatform.Facebook)]
+    [InlineData(SocialPlatform.Telegram)]
+    [InlineData(SocialPlatform.Instagram)]
+    public async Task Validate_GeneratedContent_WithGuidAndUtmDigitsInTheLink_IsAccepted(SocialPlatform platform)
+    {
+        var facts = MakeFacts() with { Price = 500m, CanonicalUrl = RealisticCanonicalUrl };
+        var content = await new TemplateSocialContentGenerator().GenerateAsync(new GenerateSocialContentRequest(facts, platform, "ar"));
+
+        var result = SocialContentFactValidator.Validate(content, facts);
+
+        Assert.True(result.IsValid, string.Join(" | ", result.Errors));
+    }
+
+    [Fact]
+    public void Validate_FabricatedPrice_NextToARealisticLink_IsStillRejected()
+    {
+        var facts = MakeFacts() with { Price = 500m, CanonicalUrl = RealisticCanonicalUrl };
+        var content = MakeContent($"بسعر 999999 دولار فقط {facts.CanonicalUrl}");
+
+        var result = SocialContentFactValidator.Validate(content, facts);
+
+        Assert.False(result.IsValid);
+    }
+
     [Fact]
     public void Validate_NoPriceInFacts_NeverFlagsUnrelatedNumbers()
     {

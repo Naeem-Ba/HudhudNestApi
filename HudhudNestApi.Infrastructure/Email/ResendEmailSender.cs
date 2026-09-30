@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -107,8 +108,11 @@ public sealed class ResendEmailSender
 
         if (response.IsSuccessStatusCode)
         {
+            // Resend's {"id": "..."} is what support and the dashboard's delivery log key
+            // off, so it is the one thing worth keeping when a user says "it never came".
             _logger.LogInformation(
-                "Resend accepted the message to {Email} with subject {Subject}.",
+                "Resend accepted the message {ResendMessageId} to {Email} with subject {Subject}.",
+                await ReadMessageIdAsync(response, ct),
                 PiiMasking.MaskEmail(message.To),
                 message.Subject);
 
@@ -127,8 +131,50 @@ public sealed class ResendEmailSender
             (int)response.StatusCode,
             body);
 
+        // The recipient is masked here too: this message ends up in the callers' error logs
+        // and in tickets, and the address adds nothing the status and body do not say.
         throw new InvalidOperationException(
-            $"Resend returned {(int)response.StatusCode} when sending to {message.To}: {body}");
+            $"Resend returned {(int)response.StatusCode} when sending to " +
+            $"{PiiMasking.MaskEmail(message.To)}: {Diagnose(response.StatusCode)}{body}");
+    }
+
+    /// <summary>
+    /// Points the developer at the setting that is almost certainly wrong. Only the two
+    /// statuses that mean "the configuration is at fault" get a hint; everything else is
+    /// left to Resend's own body.
+    /// </summary>
+    private static string Diagnose(HttpStatusCode status)
+        => status switch
+        {
+            HttpStatusCode.Unauthorized =>
+                "[Email:Resend:ApiKey was rejected -- it is missing, revoked or invalid.] ",
+
+            HttpStatusCode.Forbidden =>
+                "[Resend refused the sender -- check that the domain of Email:From is verified " +
+                "in the Resend dashboard, and that Email:Resend:ApiKey has sending access.] ",
+
+            _ => string.Empty
+        };
+
+    private static async Task<string> ReadMessageIdAsync(
+        HttpResponseMessage response,
+        CancellationToken ct)
+    {
+        try
+        {
+            using var document = await JsonDocument.ParseAsync(
+                await response.Content.ReadAsStreamAsync(ct),
+                cancellationToken: ct);
+
+            return document.RootElement.TryGetProperty("id", out var id) &&
+                   id.ValueKind == JsonValueKind.String
+                ? id.GetString()!
+                : "(no id in response)";
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            return "(no id in response)";
+        }
     }
 
     private string BuildFrom()

@@ -23,4 +23,12 @@ public sealed record SocialPublisherCapabilities(
     int? MaxTextLength = null,
     int? MaxImages = null,
     bool RequiresImage = false,
-    bool SupportsComment = true);
+    bool SupportsComment = true,
+    /// <summary>
+    /// A platform-specific ceiling on the BODY (not the title) that only applies when an image is
+    /// also attached — real, well-documented Telegram Bot API behavior: <c>sendMessage</c> allows
+    /// up to 4096 characters, but <c>sendPhoto</c>'s caption tops out at 1024. Null (the default)
+    /// means no such photo-specific ceiling exists for this platform, so only
+    /// <see cref="SocialContentPolicy.PlatformLimits.MaxBodyLength"/> applies.
+    /// </summary>
+    int? MaxCaptionLengthWithImage = null);

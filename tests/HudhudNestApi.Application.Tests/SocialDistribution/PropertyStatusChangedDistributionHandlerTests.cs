@@ -73,13 +73,13 @@ public sealed class PropertyStatusChangedDistributionHandlerTests
             return Task.FromResult(SocialPublishResult.Success(externalPostId));
         }
 
-        public Task<SocialPublishResult> CommentAsync(string externalPostId, string commentBody, CancellationToken ct = default)
+        public Task<SocialPublishResult> CommentAsync(SocialPublishRequest request, string externalPostId, string commentBody, CancellationToken ct = default)
         {
             CommentCalled = true;
             return Task.FromResult(SocialPublishResult.Success(externalPostId));
         }
 
-        public Task<SocialPublishResult> DeleteAsync(string externalPostId, CancellationToken ct = default)
+        public Task<SocialPublishResult> DeleteAsync(SocialPublishRequest request, string externalPostId, CancellationToken ct = default)
         {
             DeleteCalled = true;
             return Task.FromResult(SocialPublishResult.Success(externalPostId));
@@ -195,6 +195,81 @@ public sealed class PropertyStatusChangedDistributionHandlerTests
 
         var exception = await Record.ExceptionAsync(() => fixture.Build().Handle(
             new PropertyStatusChangedEvent(Guid.NewGuid(), PropertyStatus.Available, PropertyStatus.Sold, DateTime.UtcNow),
+            CancellationToken.None));
+
+        Assert.Null(exception);
+    }
+
+    // ── PropertyDeletedEvent (Phase 1 audit F-10) — always Delete, no status transition needed ──
+
+    [Fact]
+    public async Task Handle_PropertyDeleted_SupportsDelete_CallsDelete()
+    {
+        var fixture = new Fixture();
+        var (publication, account) = MakePublishedPublication();
+        var publisher = new FakeCapabilityPublisher(SocialPlatform.Facebook, FullCapabilities());
+
+        fixture.Publications.Setup(x => x.GetActiveForPropertyAsync(publication.PropertyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { publication });
+        fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+        fixture.Registry.Setup(x => x.TryGetPublisher(SocialPlatform.Facebook)).Returns(publisher);
+
+        await fixture.Build().Handle(
+            new PropertyDeletedEvent(publication.PropertyId, PropertyStatus.Available, DateTime.UtcNow, Guid.NewGuid()),
+            CancellationToken.None);
+
+        Assert.True(publisher.DeleteCalled);
+    }
+
+    [Fact]
+    public async Task Handle_PropertyDeleted_PublisherDoesNotSupportDelete_RecordsNoOp_NeverThrows()
+    {
+        var fixture = new Fixture();
+        var (publication, account) = MakePublishedPublication(SocialPlatform.TikTok);
+        var publisher = new FakeCapabilityPublisher(SocialPlatform.TikTok, NoLifecycleCapabilities());
+
+        fixture.Publications.Setup(x => x.GetActiveForPropertyAsync(publication.PropertyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { publication });
+        fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+        fixture.Registry.Setup(x => x.TryGetPublisher(SocialPlatform.TikTok)).Returns(publisher);
+
+        await fixture.Build().Handle(
+            new PropertyDeletedEvent(publication.PropertyId, PropertyStatus.Available, DateTime.UtcNow, Guid.NewGuid()),
+            CancellationToken.None);
+
+        Assert.False(publisher.DeleteCalled);
+    }
+
+    [Fact]
+    public async Task Handle_PropertyDeleted_TwiceForTheSamePublication_ActsOnlyOnce()
+    {
+        var fixture = new Fixture();
+        var (publication, account) = MakePublishedPublication();
+        var publisher = new FakeCapabilityPublisher(SocialPlatform.Facebook, FullCapabilities());
+
+        fixture.Publications.Setup(x => x.GetActiveForPropertyAsync(publication.PropertyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { publication });
+        fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+        fixture.Registry.Setup(x => x.TryGetPublisher(SocialPlatform.Facebook)).Returns(publisher);
+        fixture.History.Setup(x => x.GetByPublicationIdAsync(publication.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { SocialPublicationStatusHistory.Record(publication.Id, publication.Status, publication.Status, null, $"PropertyDeleted:{publication.PropertyId}: تم تنفيذ Delete — نجح.", DateTime.UtcNow) });
+
+        await fixture.Build().Handle(
+            new PropertyDeletedEvent(publication.PropertyId, PropertyStatus.Available, DateTime.UtcNow, Guid.NewGuid()),
+            CancellationToken.None);
+
+        Assert.False(publisher.DeleteCalled);
+    }
+
+    [Fact]
+    public async Task Handle_PropertyDeleted_PublisherThrows_IsCaughtAndLogged_NeverPropagates()
+    {
+        var fixture = new Fixture();
+        fixture.Publications.Setup(x => x.GetActiveForPropertyAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("boom"));
+
+        var exception = await Record.ExceptionAsync(() => fixture.Build().Handle(
+            new PropertyDeletedEvent(Guid.NewGuid(), PropertyStatus.Available, DateTime.UtcNow, null),
             CancellationToken.None));
 
         Assert.Null(exception);

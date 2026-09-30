@@ -47,9 +47,20 @@ public interface ISocialPublisher
     /// </summary>
     Task<SocialPublishResult> UpdateAsync(SocialPublishRequest request, string externalPostId, CancellationToken ct = default);
 
-    /// <summary>Adds a comment beneath an already-published post (Phase 11 spec §7) — same capability-gating contract as <see cref="UpdateAsync"/>.</summary>
-    Task<SocialPublishResult> CommentAsync(string externalPostId, string commentBody, CancellationToken ct = default);
+    /// <summary>
+    /// Adds a comment beneath an already-published post (Phase 11 spec §7) — same capability-gating
+    /// contract as <see cref="UpdateAsync"/>. Takes the full <paramref name="request"/> (not just
+    /// the bare id) for the same reason <see cref="UpdateAsync"/> does: a real adapter needs to
+    /// know WHERE to act (<see cref="SocialPublishRequest.ExternalAccountId"/>/chat/page), not only
+    /// which post — <paramref name="request"/>'s own Title/Body/ImageUrl are irrelevant here and a
+    /// caller may pass placeholder values for them.
+    /// </summary>
+    Task<SocialPublishResult> CommentAsync(SocialPublishRequest request, string externalPostId, string commentBody, CancellationToken ct = default);
 
-    /// <summary>Removes an already-published post (Phase 11 spec §7) — same capability-gating contract as <see cref="UpdateAsync"/>, gated by <see cref="SocialPublisherCapabilities.SupportsDelete"/>.</summary>
-    Task<SocialPublishResult> DeleteAsync(string externalPostId, CancellationToken ct = default);
+    /// <summary>
+    /// Removes an already-published post (Phase 11 spec §7) — same capability-gating contract as
+    /// <see cref="UpdateAsync"/>, gated by <see cref="SocialPublisherCapabilities.SupportsDelete"/>.
+    /// Takes the full <paramref name="request"/> for the same reason as <see cref="CommentAsync"/>.
+    /// </summary>
+    Task<SocialPublishResult> DeleteAsync(SocialPublishRequest request, string externalPostId, CancellationToken ct = default);
 }

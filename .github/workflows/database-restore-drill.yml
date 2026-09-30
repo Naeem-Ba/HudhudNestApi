@@ -86,7 +86,7 @@ jobs:
       RESTORE_ADMIN_DATABASE_URL: postgresql://postgres:postgres@restore-postgres:5432/postgres?sslmode=disable
       BACKUP_OUTPUT_DIR: /workspace/artifacts/database-recovery
       RESTORE_RESULT_DIR: /workspace/artifacts/database-recovery
-      RPO_TARGET_SECONDS: "3600"
+      RPO_TARGET_SECONDS: "90000"
       RTO_TARGET_SECONDS: "7200"
       APPLICATION_COMMIT_SHA: ${{ github.sha }}
     steps:

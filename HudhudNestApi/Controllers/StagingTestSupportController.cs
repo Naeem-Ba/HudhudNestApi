@@ -127,6 +127,33 @@ public sealed class StagingTestSupportController : ControllerBase
         await _db.PropertyImages.IgnoreQueryFilters()
             .Where(x => propertyIds.Contains(x.PropertyId))
             .ExecuteDeleteAsync(ct);
+
+        // SocialDistribution rows are Restrict-FK'd to Properties (historical-record-must-
+        // survive-soft-delete rationale — see DistributionRunConfiguration/
+        // SocialPublicationConfiguration), but this endpoint hard-deletes the property, and
+        // PropertyPublishedDistributionHandler creates a DistributionRun for every publish
+        // unconditionally (even with zero matching rules), so every smoke run leaves one behind.
+        // Deepest dependents first so none of the Restrict FKs below block the next delete.
+        var socialPublicationIds = await _db.SocialPublications
+            .Where(x => propertyIds.Contains(x.PropertyId))
+            .Select(x => x.Id)
+            .ToListAsync(ct);
+        await _db.SocialPublicationDeadLetters
+            .Where(x => socialPublicationIds.Contains(x.PublicationId))
+            .ExecuteDeleteAsync(ct);
+        await _db.SocialPublicationStatusHistories
+            .Where(x => socialPublicationIds.Contains(x.SocialPublicationId))
+            .ExecuteDeleteAsync(ct);
+        await _db.SocialMediaAssets
+            .Where(x => propertyIds.Contains(x.PropertyId))
+            .ExecuteDeleteAsync(ct);
+        await _db.SocialPublications
+            .Where(x => propertyIds.Contains(x.PropertyId))
+            .ExecuteDeleteAsync(ct);
+        await _db.DistributionRuns
+            .Where(x => propertyIds.Contains(x.PropertyId))
+            .ExecuteDeleteAsync(ct);
+
         await _db.Properties.IgnoreQueryFilters()
             .Where(x => propertyIds.Contains(x.Id))
             .ExecuteDeleteAsync(ct);

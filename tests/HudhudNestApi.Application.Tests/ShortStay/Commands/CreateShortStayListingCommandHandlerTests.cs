@@ -38,6 +38,17 @@ public sealed class CreateShortStayListingCommandHandlerTests
         PropertyId: null,
         CurrencyCode: "USD");
 
+    /// <summary>Passes the client's free-text city through, like the real resolver does with no governorate.</summary>
+    private static Mock<IShortStayLocationResolver> DefaultLocationResolver()
+    {
+        var resolver = new Mock<IShortStayLocationResolver>();
+        resolver
+            .Setup(x => x.ResolveCityAsync(
+                It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((int? _, int? _, int? _, string? city, CancellationToken _) => city);
+        return resolver;
+    }
+
     private static Mock<IAccommodationTypeRepository> DefaultAccommodationTypes()
     {
         var repo = new Mock<IAccommodationTypeRepository>();
@@ -86,7 +97,8 @@ public sealed class CreateShortStayListingCommandHandlerTests
         Mock<IAccommodationTypeRepository>? accommodationTypes = null,
         Mock<IAgencyRepository>? agencies = null,
         Mock<IUserIdentityReadService>? identity = null,
-        Mock<IPropertyOwnershipService>? propertyOwnership = null)
+        Mock<IPropertyOwnershipService>? propertyOwnership = null,
+        Mock<IShortStayLocationResolver>? locationResolver = null)
         => new(
             listings.Object,
             (accommodationTypes ?? DefaultAccommodationTypes()).Object,
@@ -95,9 +107,77 @@ public sealed class CreateShortStayListingCommandHandlerTests
             activeListingCounter.Object,
             new FakeListingQuotaPolicy(limit),
             (propertyOwnership ?? new Mock<IPropertyOwnershipService>()).Object,
+            (locationResolver ?? DefaultLocationResolver()).Object,
             new Mock<IUnitOfWork>().Object,
             NullLogger<CreateShortStayListingCommandHandler>.Instance);
 
+
+    [Fact]
+    public async Task Handle_WithGovernorate_StoresTheResolvedCityAndTheStructuredIds()
+    {
+        var ownerId = Guid.NewGuid();
+        var listings = new Mock<IShortStayListingRepository>();
+        ShortStayListing? saved = null;
+        listings.Setup(x => x.AddAsync(It.IsAny<ShortStayListing>(), It.IsAny<CancellationToken>()))
+            .Callback<ShortStayListing, CancellationToken>((l, _) => saved = l);
+        var counter = new Mock<IActiveListingCounter>();
+        counter.Setup(x => x.CountActiveListingsByOwnerAsync(ownerId, It.IsAny<CancellationToken>())).ReturnsAsync(0);
+        var resolver = new Mock<IShortStayLocationResolver>();
+        resolver.Setup(x => x.ResolveCityAsync(3, 30, 300, "typed by client", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("دمشق");
+
+        var handler = MakeHandler(listings, counter, limit: 5, locationResolver: resolver);
+
+        var dto = await handler.Handle(
+            ValidCommand(ownerId) with { GovernorateId = 3, DistrictId = 30, NeighborhoodId = 300, City = "typed by client" },
+            CancellationToken.None);
+
+        Assert.NotNull(saved);
+        Assert.Equal("دمشق", saved!.City);
+        Assert.Equal(3, saved.GovernorateId);
+        Assert.Equal(30, saved.DistrictId);
+        Assert.Equal(300, saved.NeighborhoodId);
+        Assert.Equal("دمشق", dto.City);
+    }
+
+    [Fact]
+    public async Task Handle_WithMismatchedDistrict_IsRejectedBeforeAnythingIsPersisted()
+    {
+        var ownerId = Guid.NewGuid();
+        var listings = new Mock<IShortStayListingRepository>();
+        var counter = new Mock<IActiveListingCounter>();
+        var resolver = new Mock<IShortStayLocationResolver>();
+        resolver.Setup(x => x.ResolveCityAsync(
+                It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ValidationException("districtId", "المنطقة المختارة لا تتبع هذه المحافظة."));
+
+        var handler = MakeHandler(listings, counter, limit: 5, locationResolver: resolver);
+
+        await Assert.ThrowsAsync<ValidationException>(
+            () => handler.Handle(ValidCommand(ownerId) with { GovernorateId = 1, DistrictId = 99 }, CancellationToken.None));
+
+        listings.Verify(x => x.AddAsync(It.IsAny<ShortStayListing>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WithoutLocation_CreatesADraftWithNullCoordinatesNotZero()
+    {
+        var ownerId = Guid.NewGuid();
+        var listings = new Mock<IShortStayListingRepository>();
+        ShortStayListing? saved = null;
+        listings.Setup(x => x.AddAsync(It.IsAny<ShortStayListing>(), It.IsAny<CancellationToken>()))
+            .Callback<ShortStayListing, CancellationToken>((l, _) => saved = l);
+        var counter = new Mock<IActiveListingCounter>();
+        counter.Setup(x => x.CountActiveListingsByOwnerAsync(ownerId, It.IsAny<CancellationToken>())).ReturnsAsync(0);
+
+        var handler = MakeHandler(listings, counter, limit: 5);
+
+        await handler.Handle(ValidCommand(ownerId) with { Latitude = null, Longitude = null }, CancellationToken.None);
+
+        Assert.Null(saved!.Latitude);
+        Assert.Null(saved.Longitude);
+        Assert.False(saved.HasLocation);
+    }
 
     [Fact]
     public async Task Handle_PropertyIdNotOwnedByCaller_IsRejectedBeforeAnythingIsPersisted()

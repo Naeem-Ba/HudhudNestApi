@@ -230,6 +230,18 @@ jobs:
             --collect:"XPlat Code Coverage" \
             --logger "trx;LogFileName=integration-tests.trx"
 
+      # Infrastructure adapters (SMS providers, storage, ...) are unit-tested here, not in the three
+      # suites above. Without this step the changed-code coverage check counted their tests as missing
+      # (PR #210: 9% changed-line coverage although every adapter had a test).
+      - name: Run infrastructure tests with coverage
+        run: |
+          dotnet test \
+            tests/HudhudNestApi.Infrastructure.Tests/HudhudNestApi.Infrastructure.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=infrastructure-tests.trx"
+
       - name: Validate test result files
         shell: pwsh
         run: |

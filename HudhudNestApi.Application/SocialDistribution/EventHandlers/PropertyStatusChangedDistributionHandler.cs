@@ -22,7 +22,8 @@ namespace HudhudNestApi.Application.SocialDistribution.EventHandlers;
 /// exception is caught and logged here, never rethrown — a broken publisher/registry entry must
 /// never turn into a failed property status update.
 /// </summary>
-public sealed class PropertyStatusChangedDistributionHandler : INotificationHandler<PropertyStatusChangedEvent>
+public sealed class PropertyStatusChangedDistributionHandler :
+    INotificationHandler<PropertyStatusChangedEvent>, INotificationHandler<PropertyDeletedEvent>
 {
     private readonly ISocialPublicationRepository _publications;
     private readonly ISocialAccountRepository _accounts;
@@ -70,6 +71,31 @@ public sealed class PropertyStatusChangedDistributionHandler : INotificationHand
         }
     }
 
+    /// <summary>
+    /// Phase 1 audit F-10: a deleted listing never went through a Status transition
+    /// <see cref="SocialPublicationLifecyclePolicy"/> could key off (see
+    /// <see cref="PropertyDeletedEvent"/>'s own remarks for why) — this always means Delete,
+    /// unconditionally, for every currently-live publication of the property.
+    /// </summary>
+    public async Task Handle(PropertyDeletedEvent notification, CancellationToken ct)
+    {
+        try
+        {
+            var transitionTag = $"PropertyDeleted:{notification.PropertyId}";
+            var publications = await _publications.GetActiveForPropertyAsync(notification.PropertyId, ct);
+
+            foreach (var publication in publications)
+                await ApplyToOnePublicationAsync(publication, SocialPublicationLifecycleAction.Delete, transitionTag, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "فشلت معالجة حذف العقار {PropertyId} على مستوى التوزيع الاجتماعي. لن يؤثر ذلك على حذف العقار نفسه.",
+                notification.PropertyId);
+        }
+    }
+
     private async Task ApplyToOnePublicationAsync(
         SocialPublication publication, SocialPublicationLifecycleAction action, string transitionTag, CancellationToken ct)
     {
@@ -112,13 +138,18 @@ public sealed class PropertyStatusChangedDistributionHandler : INotificationHand
             return;
         }
 
+        // Comment/Delete need the same "which account/chat" context Update always did — a real
+        // adapter cannot act on a bare externalPostId alone (Phase 2 finding: the interface used
+        // to only pass the id, which no genuine Telegram/Facebook/... implementation could work
+        // with). BuildLifecycleRequest is the one place that context is assembled.
         var result = effectiveAction switch
         {
             SocialPublicationLifecycleAction.Update => await publisher.UpdateAsync(
-                BuildUpdateRequest(publication, account!), publication.ExternalPostId!, ct),
+                BuildLifecycleRequest(publication, account!), publication.ExternalPostId!, ct),
             SocialPublicationLifecycleAction.Comment => await publisher.CommentAsync(
-                publication.ExternalPostId!, BuildStatusComment(publication), ct),
-            SocialPublicationLifecycleAction.Delete => await publisher.DeleteAsync(publication.ExternalPostId!, ct),
+                BuildLifecycleRequest(publication, account!), publication.ExternalPostId!, BuildStatusComment(publication), ct),
+            SocialPublicationLifecycleAction.Delete => await publisher.DeleteAsync(
+                BuildLifecycleRequest(publication, account!), publication.ExternalPostId!, ct),
             _ => SocialPublishResult.Failure(SocialPublicationErrorCode.PlatformNotConfigured, "no-op"),
         };
 
@@ -128,7 +159,7 @@ public sealed class PropertyStatusChangedDistributionHandler : INotificationHand
         await RecordAsync(publication, $"{transitionTag}: تم تنفيذ {effectiveAction} — {outcome}.", ct);
     }
 
-    private static SocialPublishRequest BuildUpdateRequest(SocialPublication publication, SocialAccount account) => new()
+    private static SocialPublishRequest BuildLifecycleRequest(SocialPublication publication, SocialAccount account) => new()
     {
         PublicationId = publication.Id,
         Platform = account.Platform,

@@ -30,6 +30,21 @@ public sealed class PhoneOtpChallengeTests
         Assert.Null(challenge.ReservedUntilUtc);
     }
 
+    [Fact(DisplayName = "Create: the channel defaults to SMS and can be set to another")]
+    public void Create_Channel_DefaultsToSms_AndKeepsTheRequestedOne()
+    {
+        var now = new DateTimeOffset(2026, 9, 24, 10, 0, 0, TimeSpan.Zero);
+
+        var sms = PhoneOtpChallenge.Create("+963911234567", "h", OtpPurpose.PhoneRegistration, now);
+        var telegram = PhoneOtpChallenge.Create("+963911234567", "h", OtpPurpose.PhoneRegistration, now, null, OtpChannel.Telegram);
+        telegram.SetProviderRequestId("req-1");
+
+        Assert.Equal(OtpChannel.Sms, sms.Channel);
+        Assert.Null(sms.ProviderRequestId);
+        Assert.Equal(OtpChannel.Telegram, telegram.Channel);
+        Assert.Equal("req-1", telegram.ProviderRequestId);
+    }
+
     [Fact(DisplayName = "Reserve and consume: tracks reservation and releases it on consume")]
     public void Reserve_And_Consume_TracksAndReleasesReservation()
     {

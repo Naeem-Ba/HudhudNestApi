@@ -93,6 +93,17 @@ public sealed class SocialPublicationRepository : ISocialPublicationRepository
             .Take(take)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<SocialPublication>> GetPublishingWithExpiredLeaseAsync(DateTime utcNow, int take, CancellationToken ct = default) =>
+        await _db.SocialPublications
+            .Include(p => p.Content)
+            .Where(p =>
+                p.Status == SocialPublicationStatus.Publishing &&
+                p.LeaseUntil != null &&
+                p.LeaseUntil <= utcNow)
+            .OrderBy(p => p.LeaseUntil)
+            .Take(take)
+            .ToListAsync(ct);
+
     public Task<bool> ExistsActiveForPropertyAndAccountAsync(Guid propertyId, Guid socialAccountId, CancellationToken ct = default) =>
         _db.SocialPublications.AnyAsync(p =>
             p.PropertyId == propertyId &&

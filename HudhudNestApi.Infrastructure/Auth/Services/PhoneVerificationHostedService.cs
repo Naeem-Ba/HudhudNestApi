@@ -9,6 +9,7 @@ using HudhudNestApi.Domain.Notifications.Entities;
 using HudhudNestApi.Domain.Notifications.Enums;
 using HudhudNestApi.Infrastructure.Persistence;
 using HudhudNestApi.Application.Common.Interfaces;
+using HudhudNestApi.Application.Auth.Services;
 using HudhudNestApi.Domain.Audit.Constants;
 
 namespace HudhudNestApi.Infrastructure.Auth.Services;
@@ -34,7 +35,23 @@ public sealed class PhoneVerificationHostedService : BackgroundService
         do
         {
             if (_configuration.GetValue<bool>("PhoneVerification:ReminderProcessingEnabled"))
-                await ProcessAsync(stoppingToken);
+            {
+                try
+                {
+                    await ProcessAsync(stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // A failed tick (database briefly unreachable, migration not applied yet, ...) must not
+                    // escape ExecuteAsync: the default BackgroundServiceExceptionBehavior.StopHost would take
+                    // the whole API process down. Log it and try again on the next tick.
+                    _logger.LogError(ex, "Phone verification reminder processing failed; will retry on the next tick.");
+                }
+            }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
@@ -64,23 +81,40 @@ public sealed class PhoneVerificationHostedService : BackgroundService
                 _logger,
                 async () =>
                 {
-                    var offset = 0;
-                    while (!ct.IsCancellationRequested)
+                    // Only users with something to do: dates missing (repaired below), inside the reminder
+                    // window or past it, or a stored state that no longer matches (e.g. re-verified elsewhere).
+                    // Everyone else is Verified with no event due -- used to be read in full every hour.
+                    // The ids are taken up front and processed in chunks: paging with Skip over a set the tick
+                    // itself changes (a state fixed back to Verified leaves the filter) skipped users.
+                    var windowEnd = _clock.GetUtcNow() + PhoneVerificationPolicy.DueSoonWindow;
+                    List<Guid> candidateIds;
+                    using (var idScope = _scopes.CreateScope())
                     {
+                        candidateIds = await idScope.ServiceProvider.GetRequiredService<AppDbContext>().Users
+                            .Where(x => x.PhoneLastVerifiedAtUtc != null &&
+                                (x.PhoneVerificationDueAtUtc == null || x.PhoneVerificationGraceEndsAtUtc == null ||
+                                 x.PhoneVerificationDueAtUtc <= windowEnd ||
+                                 x.PhoneVerificationState != PhoneVerificationState.Verified))
+                            .OrderBy(x => x.Id).Select(x => x.Id).ToListAsync(ct);
+                    }
+
+                    foreach (var chunk in candidateIds.Chunk(100))
+                    {
+                        ct.ThrowIfCancellationRequested();
                         using var scope = _scopes.CreateScope();
                         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                         var audit = scope.ServiceProvider.GetRequiredService<IAuditLogService>();
-                        var users = await db.Users.Where(x => x.PhoneLastVerifiedAtUtc != null)
-                            .OrderBy(x => x.Id).Skip(offset).Take(100).ToListAsync(ct);
-                        if (users.Count == 0) break;
+                        var users = await db.Users.Where(x => chunk.Contains(x.Id)).OrderBy(x => x.Id).ToListAsync(ct);
                         var now = _clock.GetUtcNow();
                         foreach (var user in users)
                         {
-                            var due = user.PhoneVerificationDueAtUtc!.Value;
-                            var grace = user.PhoneVerificationGraceEndsAtUtc!.Value;
-                            var state = now >= grace ? PhoneVerificationState.Restricted : now >= due
-                                ? PhoneVerificationState.GracePeriod : now >= due.AddDays(-14)
-                                    ? PhoneVerificationState.DueSoon : PhoneVerificationState.Verified;
+                            // A verified user without due dates (imported, edited by hand, an older release) used
+                            // to throw here and abort the whole tick, so nobody got a reminder until someone fixed
+                            // that one row. Derive the dates the way SetVerified would have and repair the row.
+                            var due = user.PhoneVerificationDueAtUtc ??=
+                                user.PhoneLastVerifiedAtUtc!.Value + PhoneVerificationPolicy.VerificationInterval;
+                            var grace = user.PhoneVerificationGraceEndsAtUtc ??= due + PhoneVerificationPolicy.GracePeriod;
+                            var state = PhoneVerificationPolicy.Evaluate(due, grace, now);
                             var previousState = user.PhoneVerificationState;
                             user.PhoneVerificationState = state;
                             if (state != previousState)
@@ -110,7 +144,6 @@ public sealed class PhoneVerificationHostedService : BackgroundService
                             }
                         }
                         await db.SaveChangesAsync(ct);
-                        offset += users.Count;
                     }
                 },
                 ct);

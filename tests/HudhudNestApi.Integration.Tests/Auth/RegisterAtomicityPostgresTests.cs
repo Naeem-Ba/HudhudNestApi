@@ -241,22 +241,15 @@ public sealed class RegisterAtomicityPostgresTests
         PostgresAuthTestFactory factory,
         object command)
     {
-        try
-        {
-            var result = await factory.InScopeAsync(
-                services =>
-                    AuthTestReflection.SendAsync(
-                        services,
-                        command));
+        // No catch: the loser of the race must come back as a conflict result, not as an
+        // exception (which the API would surface as HTTP 500). An exception here fails the test.
+        var result = await factory.InScopeAsync(
+            services =>
+                AuthTestReflection.SendAsync(
+                    services,
+                    command));
 
-            return AuthTestReflection.IsSucceeded(result);
-        }
-        catch
-        {
-            // In the concurrent case, the losing request may fail at the
-            // database unique constraint or another concurrency boundary.
-            return false;
-        }
+        return AuthTestReflection.IsSucceeded(result);
     }
 
     private static async Task<int> UserAccountCountAsync(

@@ -52,7 +52,13 @@ public static class SocialContentFactValidator
             var mentionsAnyNumberNearPriceMagnitude = false;
             var mentionsRealPrice = false;
 
-            foreach (Match match in NumberPattern.Matches(combinedText))
+            // Links are checked separately above — the digits inside a property link (its GUID id,
+            // the publication id in utm_content) are never a price claim, so scan the prose only.
+            // Without this, any GUID with 4+ consecutive digits made every link-bearing body
+            // (Facebook, Telegram) look like it quoted a wrong price.
+            var textWithoutUrls = UrlPattern.Replace(combinedText, " ");
+
+            foreach (Match match in NumberPattern.Matches(textWithoutUrls))
             {
                 var digitsOnly = match.Value.Replace(",", string.Empty).Replace(".", string.Empty);
                 if (!decimal.TryParse(digitsOnly, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))

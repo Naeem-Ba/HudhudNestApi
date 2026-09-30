@@ -34,6 +34,8 @@ public sealed class PropertyRepository : IPropertyRepository
             .Include(p => p.Images)
             .Include(p => p.PropertyAmenities)
                 .ThenInclude(pa => pa.Amenity)
+            .Include(p => p.PropertyType)
+            .Include(p => p.Governorate)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
     }
 
@@ -50,6 +52,11 @@ public sealed class PropertyRepository : IPropertyRepository
             .Include(property => property.Images.Where(image => !image.IsDeleted))
             .Include(property => property.PropertyAmenities)
                 .ThenInclude(propertyAmenity => propertyAmenity.Amenity)
+            // Phase 1 audit F-6: SocialDistribution's content generation (BuildFacts /
+            // SocialMediaAssetGenerator.BuildLocation) reads PropertyType/Governorate — without
+            // these, every generated caption fell back to "عقار ... في سوريا" for every listing.
+            .Include(property => property.PropertyType)
+            .Include(property => property.Governorate)
             .FirstOrDefaultAsync(
                 property =>
                     property.Id == id &&

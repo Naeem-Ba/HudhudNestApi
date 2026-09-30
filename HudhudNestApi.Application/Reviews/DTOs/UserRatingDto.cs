@@ -10,6 +10,8 @@ public sealed record UserRatingDto(
     int Safety,
     int ResponseSpeed,
     int Transparency,
+    int? InformationAccuracy,
+    int? Conduct,
     double OverallScore,
     string? Comment,
     DateTime CreatedAt
@@ -20,6 +22,8 @@ public sealed record UserRatingSummaryDto(
     double AverageSafety,
     double AverageResponseSpeed,
     double AverageTransparency,
+    double? AverageInformationAccuracy,
+    double? AverageConduct,
     double AverageOverall,
     int TotalCount,
     int Page,

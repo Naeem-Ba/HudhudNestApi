@@ -72,7 +72,23 @@ public sealed class AuditLogRetentionHostedService : BackgroundService
         do
         {
             if (_configuration.GetValue<bool>("AuditLogRetention:Enabled"))
-                await SweepAsync(stoppingToken);
+            {
+                try
+                {
+                    await SweepAsync(stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // A failed tick (database briefly unreachable, migration not applied yet, ...) must not
+                    // escape ExecuteAsync: the default BackgroundServiceExceptionBehavior.StopHost would take
+                    // the whole API process down. Log it and try again on the next tick.
+                    _logger.LogError(ex, "Audit log retention sweep failed; will retry on the next tick.");
+                }
+            }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }

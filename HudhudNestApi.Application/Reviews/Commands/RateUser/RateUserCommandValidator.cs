@@ -25,6 +25,17 @@ public sealed class RateUserCommandValidator : AbstractValidator<RateUserCommand
             .InclusiveBetween(1, 5)
             .WithMessage("تقييم الشفافية يجب أن يكون بين 1 و5.");
 
+        // المحوران الاختياريان: غائبان (null) من إصدارات التطبيق الأقدم، 1..5 عند إرسالهما.
+        RuleFor(x => x.InformationAccuracy)
+            .InclusiveBetween(1, 5)
+            .When(x => x.InformationAccuracy.HasValue)
+            .WithMessage("تقييم دقة المعلومات يجب أن يكون بين 1 و5.");
+
+        RuleFor(x => x.Conduct)
+            .InclusiveBetween(1, 5)
+            .When(x => x.Conduct.HasValue)
+            .WithMessage("تقييم حسن التعامل يجب أن يكون بين 1 و5.");
+
         RuleFor(x => x.Comment)
             .MaximumLength(1000)
             .When(x => x.Comment is not null);

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Common.Models;
+using HudhudNestApi.Application.Common.Security;
 using HudhudNestApi.Infrastructure.Email.Templates;
 using HudhudNestApi.Infrastructure.Identity.Entities;
 
@@ -44,7 +45,7 @@ public sealed class EmailVerificationService : IEmailVerificationService
         {
             _logger.LogWarning(
                 "Email verification requested for unknown email {Email}.",
-                email);
+                PiiMasking.MaskEmail(email));
 
             return;
         }

@@ -101,7 +101,8 @@ public sealed class ShortStayListingsController : ControllerBase
         var command = new CreateShortStayListingCommand(
             GetUserId(), dto.AccommodationTypeId, dto.Title, dto.Description, dto.Capacity, dto.Bedrooms,
             dto.Bathrooms, dto.CheckInTime, dto.CheckOutTime, dto.Latitude, dto.Longitude,
-            dto.DefaultBasePricePerNight, dto.PropertyId, dto.CurrencyCode);
+            dto.DefaultBasePricePerNight, dto.PropertyId, dto.CurrencyCode, dto.GovernorateId, dto.DistrictId,
+            dto.NeighborhoodId, dto.City, dto.LocationVisibility);
 
         var result = await _mediator.Send(command, ct);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
@@ -133,6 +134,8 @@ public sealed class ShortStayListingsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    // 409: the listing still has bookings in progress (pending .. checked out).
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
         var success = await _mediator.Send(
@@ -238,13 +241,15 @@ public sealed class ShortStayListingsController : ControllerBase
 
 public sealed record CreateShortStayListingRequest(
     int AccommodationTypeId, string Title, string Description, int Capacity, int Bedrooms, int Bathrooms,
-    TimeOnly CheckInTime, TimeOnly CheckOutTime, decimal Latitude, decimal Longitude,
-    decimal DefaultBasePricePerNight, Guid? PropertyId, string? CurrencyCode = null);
+    TimeOnly CheckInTime, TimeOnly CheckOutTime, decimal? Latitude, decimal? Longitude,
+    decimal DefaultBasePricePerNight, Guid? PropertyId, string? CurrencyCode = null,
+    int? GovernorateId = null, int? DistrictId = null, int? NeighborhoodId = null, string? City = null,
+    string? LocationVisibility = null);
 
 public sealed record UpdateShortStayListingRequest(
     string Title, string Description, int Capacity, int Bedrooms, int Bathrooms, TimeOnly CheckInTime,
     TimeOnly CheckOutTime, bool SelfCheckInEnabled, bool InstantBookingEnabled, bool RequestBookingEnabled,
-    decimal Latitude, decimal Longitude, int? GovernorateId, int? DistrictId, int? NeighborhoodId,
+    decimal? Latitude, decimal? Longitude, int? GovernorateId, int? DistrictId, int? NeighborhoodId,
     string? City, string LocationVisibility, string? PoolType, string? PoolLocation, bool? PoolIsSeasonal,
     bool? PoolIsHeated, decimal CleaningFee, decimal ExtraGuestFee, decimal ExtraBedFee, bool AllowsSmoking,
     bool AllowsParties, bool AllowsPets, TimeOnly? QuietHoursStart, TimeOnly? QuietHoursEnd,

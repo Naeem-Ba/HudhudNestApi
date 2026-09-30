@@ -20,13 +20,14 @@ public sealed class CreateBookingCommandHandlerTests
     {
         var listing = ShortStayListing.Create(
             ownerId, 1, "Test Listing", "desc", capacity, 2, 1,
-            new TimeOnly(14, 0), new TimeOnly(11, 0), 0m, 0m);
+            new TimeOnly(14, 0), new TimeOnly(11, 0), 33.5m, 36.3m);
         listing.UpdateBookingSettings(instantBooking, !instantBooking);
 
         var roomType = new RoomType { Name = "Default", BasePricePerNight = basePrice, ShortStayListing = listing };
         var unit = new AccommodationUnit { Label = "Unit 1", RoomType = roomType };
         roomType.Units.Add(unit);
         listing.RoomTypes.Add(roomType);
+        listing.UpdateLocation(33.5m, 36.3m, null, null, null, "دمشق", HudhudNestApi.Domain.ShortStay.Enums.LocationVisibility.Exact);
         listing.Publish();
 
         return (unit, listing);
@@ -70,7 +71,7 @@ public sealed class CreateBookingCommandHandlerTests
     {
         var owner = Guid.NewGuid();
         var listing = ShortStayListing.Create(owner, 1, "T", "d", 4, 2, 1,
-            new TimeOnly(14, 0), new TimeOnly(11, 0), 0m, 0m);
+            new TimeOnly(14, 0), new TimeOnly(11, 0), 33.5m, 36.3m);
         listing.UpdateBookingSettings(true, false);
         var roomType = new RoomType { Name = "Default", BasePricePerNight = 100m, ShortStayListing = listing };
         var unit = new AccommodationUnit { Label = "Unit 1", RoomType = roomType };
@@ -189,6 +190,7 @@ public sealed class CreateBookingCommandHandlerTests
         public Task<IReadOnlyList<Booking>> GetByHostIdAsync(Guid hostId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> HasCompletedBookingAsync(Guid bookingId, Guid guestId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<bool> HasReviewAsync(Guid bookingId, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<bool> HasActiveBookingsForListingAsync(Guid listingId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<IReadOnlyList<UnitBookingRange>> GetRangesForUnitAsync(Guid unitId, DateOnly from, DateOnly to, CancellationToken ct = default) => throw new NotImplementedException();
     }
 

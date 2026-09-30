@@ -12,7 +12,7 @@ public sealed class SetShortStayListingAmenitiesCommandHandlerTests
 {
     private static ShortStayListing CreateListing(Guid ownerId) =>
         ShortStayListing.Create(ownerId, 1, "شاليه", "desc", 4, 2, 1,
-            new TimeOnly(14, 0), new TimeOnly(11, 0), 0m, 0m);
+            new TimeOnly(14, 0), new TimeOnly(11, 0), 33.5m, 36.3m);
 
     [Fact]
     public async Task Handle_SetsAmenities_ForOwner()

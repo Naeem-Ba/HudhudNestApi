@@ -449,6 +449,13 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Property<int>("AttemptCount")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Sms");
+
                     b.Property<string>("CodeHash")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -467,6 +474,10 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
+
+                    b.Property<string>("ProviderRequestId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<int>("Purpose")
                         .HasColumnType("integer");
@@ -2598,6 +2609,9 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<int?>("Conduct")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
 
@@ -2606,6 +2620,9 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp without time zone");
+
+                    b.Property<int?>("InformationAccuracy")
+                        .HasColumnType("integer");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
@@ -3585,7 +3602,7 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Property<bool>("IsPublished")
                         .HasColumnType("boolean");
 
-                    b.Property<decimal>("Latitude")
+                    b.Property<decimal?>("Latitude")
                         .HasColumnType("decimal(9,6)");
 
                     b.Property<string>("LocationVisibility")
@@ -3593,7 +3610,7 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
-                    b.Property<decimal>("Longitude")
+                    b.Property<decimal?>("Longitude")
                         .HasColumnType("decimal(9,6)");
 
                     b.Property<int?>("NeighborhoodId")
@@ -4326,6 +4343,9 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Property<DateTime?>("LastRetryAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<DateTime?>("LeaseUntil")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<int>("MaxRetryCount")
                         .HasColumnType("integer");
 
@@ -4412,6 +4432,8 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("PropertyId", "SocialAccountId")
                         .IsUnique()
                         .HasFilter("\"DistributionRuleId\" IS NOT NULL AND \"Status\" <> 'Cancelled'");
+
+                    b.HasIndex("Status", "LeaseUntil");
 
                     b.ToTable("SocialPublications", (string)null);
                 });

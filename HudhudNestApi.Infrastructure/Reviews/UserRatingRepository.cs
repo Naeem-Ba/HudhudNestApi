@@ -41,38 +41,45 @@ public sealed class UserRatingRepository : IUserRatingRepository
             .AsNoTracking()
             .Where(r => r.RatedUserId == ratedUserId);
 
-        var totalCount = await query.CountAsync(ct);
+        // Single round-trip, aggregated in the database from the stored scores
+        // (previously every row was loaded into memory first). Average() over
+        // a nullable column skips nulls, so the optional criteria only average
+        // the ratings that actually scored them. Overall is the mean of each
+        // rating's own score, using the same formula as UserRating.OverallScore.
+        var aggregate = await query
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Count = g.Count(),
+                Credibility = g.Average(r => (double)r.Credibility),
+                Safety = g.Average(r => (double)r.Safety),
+                ResponseSpeed = g.Average(r => (double)r.ResponseSpeed),
+                Transparency = g.Average(r => (double)r.Transparency),
+                InformationAccuracy = g.Average(r => (double?)r.InformationAccuracy),
+                Conduct = g.Average(r => (double?)r.Conduct),
+                Overall = g.Average(r =>
+                    (r.Credibility + r.Safety + r.ResponseSpeed + r.Transparency
+                        + (r.InformationAccuracy ?? 0) + (r.Conduct ?? 0))
+                    / (4.0
+                        + (r.InformationAccuracy != null ? 1 : 0)
+                        + (r.Conduct != null ? 1 : 0)))
+            })
+            .FirstOrDefaultAsync(ct);
 
-        if (totalCount == 0)
+        if (aggregate is null || aggregate.Count == 0)
         {
-            return new UserRatingAverages(0, 0, 0, 0, 0, 0);
+            return new UserRatingAverages(0, 0, 0, 0, null, null, 0, 0);
         }
 
-        // Single round-trip: aggregate all four criteria averages together
-        // rather than four separate AverageAsync() queries.
-        var sums = await query
-            .Select(r => new
-            {
-                r.Credibility,
-                r.Safety,
-                r.ResponseSpeed,
-                r.Transparency
-            })
-            .ToListAsync(ct);
-
-        var credibility = sums.Average(s => s.Credibility);
-        var safety = sums.Average(s => s.Safety);
-        var responseSpeed = sums.Average(s => s.ResponseSpeed);
-        var transparency = sums.Average(s => s.Transparency);
-        var overall = (credibility + safety + responseSpeed + transparency) / 4.0;
-
         return new UserRatingAverages(
-            credibility,
-            safety,
-            responseSpeed,
-            transparency,
-            overall,
-            totalCount);
+            aggregate.Credibility,
+            aggregate.Safety,
+            aggregate.ResponseSpeed,
+            aggregate.Transparency,
+            aggregate.InformationAccuracy,
+            aggregate.Conduct,
+            aggregate.Overall,
+            aggregate.Count);
     }
 
     public async Task<(IReadOnlyList<UserRating> Ratings, int TotalCount)> GetByRatedUserIdAsync(

@@ -99,6 +99,7 @@ internal static class RepositoryInfrastructureRegistration
         // Short-Stay Accommodation subsystem
         services.AddScoped<IAccommodationTypeRepository, AccommodationTypeRepository>();
         services.AddScoped<IShortStayListingRepository, ShortStayListingRepository>();
+        services.AddScoped<IShortStayLocationResolver, ShortStayLocationResolver>();
         services.AddScoped<IRoomTypeRepository, RoomTypeRepository>();
         services.AddScoped<IAccommodationUnitRepository, AccommodationUnitRepository>();
         services.AddScoped<IPricingRuleRepository, PricingRuleRepository>();

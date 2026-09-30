@@ -4,6 +4,7 @@ using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
+using HudhudNestApi.Application.Listings.Events;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Domain.Listings.Entities;
 using HudhudNestApi.Domain.Users.Entities;
@@ -27,6 +28,7 @@ public sealed class CreatePropertyCommandHandler
     private readonly ILocationSuggestionService _locationSuggestions;
     private readonly IListingQuotaPolicy _quotaPolicy;
     private readonly IActiveListingCounter _activeListingCounter;
+    private readonly IPublisher _publisher;
     private readonly ILogger<CreatePropertyCommandHandler> _logger;
 
     public CreatePropertyCommandHandler(
@@ -37,6 +39,7 @@ public sealed class CreatePropertyCommandHandler
         ILocationSuggestionService locationSuggestions,
         IListingQuotaPolicy quotaPolicy,
         IActiveListingCounter activeListingCounter,
+        IPublisher publisher,
         ILogger<CreatePropertyCommandHandler> logger)
     {
         _repo = repo;
@@ -46,6 +49,7 @@ public sealed class CreatePropertyCommandHandler
         _locationSuggestions = locationSuggestions;
         _quotaPolicy = quotaPolicy;
         _activeListingCounter = activeListingCounter;
+        _publisher = publisher;
         _logger = logger;
     }
 
@@ -74,6 +78,8 @@ public sealed class CreatePropertyCommandHandler
         // runs after the property is already committed, and any exception
         // here is swallowed (with a log) rather than surfaced to the user.
         await TrySubmitLocationSuggestionsAsync(property, cancellationToken);
+
+        await TryPublishPropertyPublishedEventAsync(property, cancellationToken);
 
         return property.Id;
     }
@@ -302,6 +308,35 @@ public sealed class CreatePropertyCommandHandler
         throw new ConflictException(
             $"خطتكم الحالية تسمح بـ {limit} إعلاناً نشطاً كحد أقصى. لديكم حالياً {activeListings}. " +
             "احذفوا إعلاناً قائماً أو رقّوا خطتكم لإضافة إعلان جديد.");
+    }
+
+    /// <summary>
+    /// A listing created through the app is live immediately (Property.Create defaults to
+    /// published), so this is the "listing published" moment SocialDistribution has to hear
+    /// about — previously only the explicit PATCH /publish (drafts) raised it, so a new listing
+    /// was never auto-distributed. Raised strictly AFTER the commit and, like the location
+    /// suggestions above, best-effort: the listing already exists, and failing the request over
+    /// a side effect would just make the owner retry and create a duplicate. (The reconciliation
+    /// sweep in SocialDistribution is the safety net for a notification that never arrives.)
+    /// </summary>
+    private async Task TryPublishPropertyPublishedEventAsync(Property property, CancellationToken ct)
+    {
+        if (!property.IsPublished)
+            return;
+
+        try
+        {
+            await _publisher.Publish(
+                new PropertyPublishedEvent(property.Id, property.PublishedAt ?? DateTime.UtcNow, property.OwnerId),
+                ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to publish PropertyPublishedEvent for a newly created listing. PropertyId={PropertyId}",
+                property.Id);
+        }
     }
 
     private async Task TrySubmitLocationSuggestionsAsync(Property property, CancellationToken ct)

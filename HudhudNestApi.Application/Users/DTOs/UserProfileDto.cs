@@ -32,6 +32,10 @@ public sealed class UserProfileDto
     public double AverageSafety { get; set; }
     public double AverageResponseSpeed { get; set; }
     public double AverageTransparency { get; set; }
+    /// <summary>null حتى يُقيِّم أحدٌ هذا المحور الاختياري.</summary>
+    public double? AverageInformationAccuracy { get; set; }
+    /// <summary>null حتى يُقيِّم أحدٌ هذا المحور الاختياري.</summary>
+    public double? AverageConduct { get; set; }
     public double AverageOverall { get; set; }
     public int RatingsCount { get; set; }
 }

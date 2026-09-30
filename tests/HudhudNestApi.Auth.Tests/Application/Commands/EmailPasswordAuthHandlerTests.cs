@@ -702,6 +702,62 @@ public sealed class RegisterCommandHandlerTests
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
+
+    [Fact(
+        DisplayName =
+            "Losing the unique-index race for an email is a conflict and mails nothing")]
+    public async Task DuplicateEmailRace_ReturnsConflict_AndSendsNoEmail()
+    {
+        var identity =
+            new Mock<IRegisterIdentityService>();
+
+        identity
+            .Setup(
+                x => x.FindByEmailAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IdentityAccountSnapshot?)null);
+
+        identity
+            .Setup(
+                x => x.CreateAsync(
+                    It.IsAny<CreateIdentityAccount>(),
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                IdentityOperationResult.Failed(
+                    IdentityOperationResult.DuplicateEmailCode));
+
+        var emailVerification =
+            new Mock<IEmailVerificationService>();
+
+        var handler =
+            new RegisterCommandHandler(
+                identity.Object,
+                new Mock<IUserAccountRepository>().Object,
+                Mock.Of<IUnitOfWork>(),
+                emailVerification.Object,
+                Mock.Of<IConsentRecordRepository>(),
+                NullLogger<RegisterCommandHandler>.Instance);
+
+        var result =
+            await handler.Handle(
+                new RegisterCommand(
+                    "Naeem",
+                    "Bazzazeh",
+                    "  Naeem@Example.COM ",
+                    "Password123"),
+                CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.True(result.Conflict);
+
+        emailVerification.Verify(
+            x => x.SendVerificationLinkAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
 }
 
 [Trait("Category", "AuthCQRS")]

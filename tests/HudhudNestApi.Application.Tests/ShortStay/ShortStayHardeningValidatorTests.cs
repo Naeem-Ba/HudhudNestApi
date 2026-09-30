@@ -43,6 +43,33 @@ public sealed class ShortStayHardeningValidatorTests
         Assert.Equal(valid, new CreateShortStayListingCommandValidator().Validate(ValidCreate(currency)).IsValid);
     }
 
+    [Theory]
+    [InlineData(null, null, true)]     // draft without a location is allowed; publishing is what needs one
+    [InlineData(33.5, 36.3, true)]
+    [InlineData(0.0, 0.0, false)]      // the fake default a client sends when it has no pin
+    [InlineData(33.5, null, false)]
+    [InlineData(null, 36.3, false)]
+    [InlineData(91.0, 36.3, false)]
+    [InlineData(33.5, 181.0, false)]
+    public void Create_Coordinates_AreBothOrNeither_InRange_AndNeverZeroZero(double? lat, double? lng, bool valid)
+    {
+        var command = ValidCreate("USD") with { Latitude = (decimal?)lat, Longitude = (decimal?)lng };
+
+        Assert.Equal(valid, new CreateShortStayListingCommandValidator().Validate(command).IsValid);
+    }
+
+    [Theory]
+    [InlineData(null, null, true)]
+    [InlineData(33.5, 36.3, true)]
+    [InlineData(0.0, 0.0, false)]
+    [InlineData(33.5, null, false)]
+    public void Update_Coordinates_FollowTheSameRules(double? lat, double? lng, bool valid)
+    {
+        var command = ValidUpdate() with { Latitude = (decimal?)lat, Longitude = (decimal?)lng };
+
+        Assert.Equal(valid, new UpdateShortStayListingCommandValidator().Validate(command).IsValid);
+    }
+
     private static UpdateShortStayListingCommand ValidUpdate(
         string visibility = "Exact", string? poolType = null, string? poolLocation = null, decimal? deposit = null) => new(
         ListingId: Guid.NewGuid(), OwnerId: Guid.NewGuid(), Title: "t", Description: "d",

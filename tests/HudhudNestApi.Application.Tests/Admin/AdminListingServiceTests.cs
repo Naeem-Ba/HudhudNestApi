@@ -1,7 +1,9 @@
+using MediatR;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using HudhudNestApi.Application.Admin.Services;
 using HudhudNestApi.Application.Common.Interfaces;
+using HudhudNestApi.Application.Listings.Events;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Domain.Audit.Constants;
 using HudhudNestApi.Domain.Common.Exceptions;
@@ -38,6 +40,21 @@ public sealed class AdminListingServiceTests
         auditLogs.Verify(x => x.LogAsync(
             AdminId, AuditActions.ListingExtendedByAdmin, "127.0.0.1",
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExtendListingAsync_PublishesPropertyPublishedEvent_SoDistributionCanReRun()
+    {
+        var property = Property.Create("شقة للإيجار", "وصف", Guid.NewGuid(), ListingType.ForRent);
+        var properties = FakeProperties(property);
+        var publisher = new Mock<IPublisher>();
+        var service = BuildService(properties.Object, Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>(), publisher.Object);
+
+        await service.ExtendListingAsync(property.Id, 90, null, AdminId, null, CancellationToken.None);
+
+        publisher.Verify(
+            x => x.Publish(It.Is<PropertyPublishedEvent>(e => e.PropertyId == property.Id), It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
@@ -264,8 +281,8 @@ public sealed class AdminListingServiceTests
     }
 
     private static AdminListingService BuildService(
-        IPropertyRepository properties, IUnitOfWork unitOfWork, IAuditLogService auditLogs)
-        => new(properties, unitOfWork, auditLogs, NullLogger<AdminListingService>.Instance);
+        IPropertyRepository properties, IUnitOfWork unitOfWork, IAuditLogService auditLogs, IPublisher? publisher = null)
+        => new(properties, unitOfWork, auditLogs, publisher ?? Mock.Of<IPublisher>(), NullLogger<AdminListingService>.Instance);
 
     private static Mock<IPropertyRepository> FakeProperties(Property property)
     {

@@ -20,4 +20,7 @@ public enum DistributionRunTriggerType
 
     /// <summary>Reserved: re-running just the evaluation/creation step after a prior run failed outright (distinct from SocialPublication.RetryManually, which retries one already-created publication).</summary>
     Retry = 5,
+
+    /// <summary>The background reconciliation sweep found a recently published listing that no run had ever evaluated — see SocialDistributionReconciliationOptions.</summary>
+    Reconciliation = 6,
 }

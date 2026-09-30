@@ -51,6 +51,11 @@ public sealed class SocialPublicationConfiguration : IEntityTypeConfiguration<So
         builder.HasIndex(p => p.DistributionRuleId);
         builder.HasIndex(p => p.DistributionRunId);
 
+        // The lease reaper's own query (Status = Publishing AND LeaseUntil < now) — a tiny,
+        // almost-always-empty set in practice, but this index keeps every sweep's check for it
+        // effectively free regardless of table size.
+        builder.HasIndex(p => new { p.Status, p.LeaseUntil });
+
         // Phase 4 idempotency (spec §12): at most one non-Cancelled, rule-engine-created
         // publication per (property, account) pair at a time. A Cancelled row frees the slot for
         // re-distribution; a manually-created publication (DistributionRuleId null) is untouched

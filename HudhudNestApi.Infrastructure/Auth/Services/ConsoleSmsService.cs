@@ -137,6 +137,7 @@ public sealed class HttpSmsService : ISmsService
     private readonly string _apiUrl;
     private readonly string _apiKey;
     private readonly string _fromNumber;
+    private readonly TimeSpan _timeout;
     private readonly ILogger<HttpSmsService> _logger;
 
     public HttpSmsService(
@@ -150,6 +151,9 @@ public sealed class HttpSmsService : ISmsService
         _apiUrl = value.ApiUrl;
         _apiKey = value.ApiKey;
         _fromNumber = value.FromNumber;
+        // The send runs inside the send-OTP request: without its own limit a provider that never
+        // answers holds the request for the HttpClient default (100 s).
+        _timeout = TimeSpan.FromSeconds(Math.Clamp(value.TimeoutSeconds, 1, 60));
         _logger = logger;
     }
 
@@ -166,9 +170,12 @@ public sealed class HttpSmsService : ISmsService
             apiKey = _apiKey
         };
 
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(_timeout);
+
         try
         {
-            var response = await _httpClient.PostAsJsonAsync(_apiUrl, payload, ct);
+            var response = await _httpClient.PostAsJsonAsync(_apiUrl, payload, timeout.Token);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -182,7 +189,11 @@ public sealed class HttpSmsService : ISmsService
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("HTTP SMS sending was cancelled for {Phone}.", PiiMasking.MaskPhone(phoneNumber));
+            _logger.LogWarning(
+                ct.IsCancellationRequested
+                    ? "HTTP SMS sending was cancelled for {Phone}."
+                    : "HTTP SMS provider did not answer within the timeout for {Phone}.",
+                PiiMasking.MaskPhone(phoneNumber));
             return false;
         }
         catch (Exception ex)

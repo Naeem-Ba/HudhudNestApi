@@ -17,17 +17,26 @@ public sealed class PhoneOtpChallenge
     public DateTimeOffset? ReservedUntilUtc { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
+    /// <summary>The channel this challenge's code was created for. A code is only accepted for its own channel.</summary>
+    public OtpChannel Channel { get; private set; } = OtpChannel.Sms;
+
+    /// <summary>The provider's own id for the delivery (for example Telegram Gateway's request_id). Never the code.</summary>
+    public string? ProviderRequestId { get; private set; }
+
     public static PhoneOtpChallenge Create(string phone, string hash, OtpPurpose purpose,
-        DateTimeOffset now, Guid? userId = null) => new()
+        DateTimeOffset now, Guid? userId = null, OtpChannel channel = OtpChannel.Sms) => new()
         {
             Id = Guid.NewGuid(),
             UserId = userId,
             NormalizedPhoneNumber = phone,
             CodeHash = hash,
             Purpose = purpose,
+            Channel = channel,
             CreatedAtUtc = now,
             ExpiresAtUtc = now.AddMinutes(5)
         };
+
+    public void SetProviderRequestId(string? providerRequestId) => ProviderRequestId = providerRequestId;
 
     public void IncrementAttempts() => AttemptCount++;
 

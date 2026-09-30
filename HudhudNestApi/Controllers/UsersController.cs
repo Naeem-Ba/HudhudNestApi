@@ -123,7 +123,9 @@ public sealed class UsersController : ControllerBase
             Safety: dto.Safety,
             ResponseSpeed: dto.ResponseSpeed,
             Transparency: dto.Transparency,
-            Comment: dto.Comment
+            Comment: dto.Comment,
+            InformationAccuracy: dto.InformationAccuracy,
+            Conduct: dto.Conduct
         ), ct);
 
         return StatusCode(201, result);
@@ -438,4 +440,6 @@ public sealed record RateUserRequest(
     int Safety,
     int ResponseSpeed,
     int Transparency,
-    string? Comment);
+    string? Comment,
+    int? InformationAccuracy = null,
+    int? Conduct = null);

@@ -83,7 +83,12 @@ public sealed class TemplateSocialContentGenerator : ISocialContentGenerator
         if (facts.Price is > 0)
         {
             var currency = string.IsNullOrWhiteSpace(facts.Currency) ? string.Empty : $" {facts.Currency}";
-            parts.Add($"{FormatNumber(facts.Price.Value)}{currency}");
+            // Only for an unambiguous rent-only listing — a mixed ForRentAndSale's Price could be
+            // either figure (BuildFacts prefers PurchasePrice), so it is never labeled here.
+            var period = string.Equals(facts.TransactionType, "ForRent", StringComparison.OrdinalIgnoreCase)
+                ? (isArabic ? " شهرياً" : "/mo")
+                : string.Empty;
+            parts.Add($"{FormatNumber(facts.Price.Value)}{currency}{period}");
         }
 
         return string.Join(" - ", parts);

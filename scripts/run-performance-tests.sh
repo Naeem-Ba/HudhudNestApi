@@ -135,21 +135,60 @@ case "${profile}" in
     : "${PERF_TEST_DURATION:=60s}"
     : "${PERF_REQUIRE_APPROVED_BUDGETS:=true}"
     : "${PERF_REQUIRE_BASELINE:=true}"
+    : "${PERF_BASELINE_FILE:=performance/baselines/approved-baseline.json}"
     ;;
   staging)
     : "${PERF_DATASET_SIZE:=100000}"
     : "${PERF_VIRTUAL_USERS:=30}"
-    # Not reduced: unlike pr/release, this profile has not been evidenced as
-    # CPU-oversubscribed on its own runner and was out of scope for this fix
-    # (BUG-30b evidence is from pr/release runs only). Revisit if the same
-    # signature shows up here.
-    : "${PERF_BROWSE_VIRTUAL_USERS:=30}"
+    # BUG-34: this comment used to say this profile hadn't shown the
+    # BUG-30b/BUG-33 CPU-oversubscription signature and to "revisit if the
+    # same signature shows up here." It has now: run 36399031108 (scheduled
+    # staging run, commit c037e62) failed browse-cold/browse-warm on
+    # p95/p99/steady_requests with a 0% error rate and clean query plans
+    # (query-plans-summary.md: all five plans sub-10ms, index-only, zero seq
+    # scans -- captured later in this same script against an idle database)
+    # -- i.e. the query itself is fine, only the concurrent-load window is
+    # slow. container-resources-timeseries.jsonl
+    # for that run shows postgres sustained around 385-390% CPU throughout the
+    # browse-cold/browse-warm window (worse than BUG-30b/BUG-33's 177-182%),
+    # while api1/api2 stayed mostly under 100% -- the same standard 2-vCPU
+    # runner oversubscription, just more pronounced at this profile's larger
+    # 100k-row dataset and 5-minute duration. Applying the same fix as pr/release
+    # (a dedicated, lower VU count for just the browse scenarios -- the only
+    # ones that run api1, api2, postgres, and k6 all under concurrent load at
+    # once) at roughly the same ~0.6x ratio those profiles already validated.
+    : "${PERF_BROWSE_VIRTUAL_USERS:=18}"
     : "${PERF_TEST_DURATION:=5m}"
     : "${PERF_REQUIRE_APPROVED_BUDGETS:=true}"
     : "${PERF_REQUIRE_BASELINE:=true}"
+    # BUG-35: run 36399031108's "Relative approved-baseline comparison did not
+    # pass" was not a real regression either -- it was comparing this profile's
+    # 100k-row dataset against performance/baselines/approved-baseline.json,
+    # which performance/baselines/README.md documents as "the median of three
+    # comparable measured runs of the `release` profile" (25000 properties;
+    # its own "profile" field confirms "release"). compare.py's own
+    # datasetManifestHash check flagged the mismatch ("Non-comparable
+    # environment metadata: datasetManifestHash differs") but the script kept
+    # going and reported nonsense regressions (p95 +1815%, p99 +1388%) against
+    # an incomparable dataset instead of failing closed on that mismatch.
+    # There has never been an approved staging-profile baseline (the release
+    # one was always the only file, used for every profile that required
+    # one) -- per docs/performance/performance-baseline-policy.md a real one
+    # needs three successful staging runs plus service-owner/SRE approval,
+    # neither of which exists yet. Pointing staging at its own (currently
+    # absent) baseline file makes that honest: compare-performance-baseline.sh
+    # already fails closed with a clear "baseline is missing" error on a
+    # missing file, which is what performance-baseline-policy.md's "missing
+    # files fail closed" actually calls for here, instead of silently
+    # reusing release's incomparable one and printing four-digit percentages
+    # that look like a regression but aren't. Swap this for a real approved
+    # performance/baselines/approved-staging-baseline.json once three
+    # successful staging runs exist to build one from.
+    : "${PERF_BASELINE_FILE:=performance/baselines/approved-staging-baseline.json}"
     ;;
   *) fail "PERF_PROFILE must be pr, release, or staging." ;;
 esac
+: "${PERF_BASELINE_FILE:=performance/baselines/approved-baseline.json}"
 export PERF_BROWSE_VIRTUAL_USERS
 
 export PERF_PROFILE="${profile}"
@@ -378,7 +417,7 @@ if [ "${PERF_REQUIRE_BASELINE}" = "true" ]; then
   run_and_record "approved baseline comparison" \
     bash scripts/compare-performance-baseline.sh \
       "${artifacts}/summary.json" \
-      performance/baselines/approved-baseline.json \
+      "${PERF_BASELINE_FILE}" \
       "${artifacts}/baseline-comparison.json"
 fi
 

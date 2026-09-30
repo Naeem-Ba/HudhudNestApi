@@ -68,27 +68,40 @@ public sealed class BookingRepository : IBookingRepository
                 && b.CheckIn < checkOut && checkIn < b.CheckOut)
             .ToListAsync(ct);
 
+    // Both lists read the listing with its soft-delete filter off: a booking outlives its listing (dates,
+    // money, history), and with the filter on, the required Unit -> RoomType -> ShortStayListing chain is an
+    // inner join, so every booking of a deleted listing vanished from both the guest's and the host's list
+    // (ShortStayBookingsOfDeletedListingTests). The booking's own soft delete is still honoured explicitly.
     public async Task<IReadOnlyList<Booking>> GetByGuestIdAsync(Guid guestId, CancellationToken ct = default)
         => await _db.ShortStayBookings
+            .IgnoreQueryFilters()
             .Include(b => b.Unit)
                 .ThenInclude(u => u!.RoomType)
                     .ThenInclude(rt => rt.ShortStayListing)
-            .Where(b => b.GuestId == guestId)
+            .Where(b => !b.IsDeleted && b.GuestId == guestId)
             .OrderByDescending(b => b.CreatedAt)
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<Booking>> GetByHostIdAsync(Guid hostId, CancellationToken ct = default)
         => await _db.ShortStayBookings
+            .IgnoreQueryFilters()
             .Include(b => b.Unit)
                 .ThenInclude(u => u!.RoomType)
                     .ThenInclude(rt => rt.ShortStayListing)
-            .Where(b => b.Unit!.RoomType.ShortStayListing.OwnerId == hostId)
+            .Where(b => !b.IsDeleted && b.Unit!.RoomType.ShortStayListing.OwnerId == hostId)
             .OrderByDescending(b => b.CreatedAt)
             .ToListAsync(ct);
 
     public async Task<bool> HasCompletedBookingAsync(Guid bookingId, Guid guestId, CancellationToken ct = default)
         => await _db.ShortStayBookings.AnyAsync(
             b => b.Id == bookingId && b.GuestId == guestId && b.Status == BookingStatus.Completed, ct);
+
+    public async Task<bool> HasActiveBookingsForListingAsync(Guid listingId, CancellationToken ct = default)
+        => await _db.ShortStayBookings.AnyAsync(b =>
+            b.Unit!.RoomType.ShortStayListingId == listingId &&
+            (b.Status == BookingStatus.Pending || b.Status == BookingStatus.Approved ||
+             b.Status == BookingStatus.DepositPaid || b.Status == BookingStatus.Confirmed ||
+             b.Status == BookingStatus.CheckedIn || b.Status == BookingStatus.CheckedOut), ct);
 
     public async Task<bool> HasReviewAsync(Guid bookingId, CancellationToken ct = default)
         => await _db.ShortStayReviews.AnyAsync(r => r.BookingId == bookingId, ct);

@@ -199,7 +199,10 @@ public sealed class CachedSecurityStampValidator : IUserSecurityStampValidator
         SecurityStampSnapshot snapshot,
         string tokenSecurityStamp)
     {
-        if (snapshot.IsDeleted)
+        // A banned account must stop working on its existing access tokens, not only at login/refresh.
+        // The snapshot is cached for 5 minutes, so whatever bans an account must also invalidate
+        // IUserSecurityStampCacheInvalidator to make it immediate.
+        if (snapshot.IsDeleted || snapshot.IsBanned)
         {
             return SecurityStampValidationResult.Fail(
                 "The user account is disabled.");

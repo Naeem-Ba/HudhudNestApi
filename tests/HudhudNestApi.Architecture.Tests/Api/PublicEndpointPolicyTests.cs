@@ -45,6 +45,9 @@ public sealed class PublicEndpointPolicyTests
             // bounds abuse.
             "PhoneAuthController.ResendConfirmation",
 
+            // Public, read-only, rate-limited ("public-read"): which OTP delivery channels the picker offers for a calling
+            // code. Answers from configuration and the public prefix only, never from account or Telegram/WhatsApp state.
+            "PhonePasswordAuthController.Channels",
             "PhonePasswordAuthController.SendRegistrationOtp",
             "PhonePasswordAuthController.Register",
             "PhonePasswordAuthController.Login",

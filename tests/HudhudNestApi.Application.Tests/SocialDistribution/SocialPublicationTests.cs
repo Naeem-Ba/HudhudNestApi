@@ -241,6 +241,72 @@ public sealed class SocialPublicationTests
         Assert.Throws<InvalidStateTransitionException>(() => publication.StartPublishing(DateTime.UtcNow));
     }
 
+    [Fact]
+    public void StartPublishing_SetsLeaseUntil_ForTheReaperToFindLater()
+    {
+        var publication = MakePublicationWithContent();
+        publication.Queue(null, DateTime.UtcNow);
+        var now = DateTime.UtcNow;
+
+        publication.StartPublishing(now);
+
+        Assert.Equal(now.Add(SocialPublication.DefaultLeaseDuration), publication.LeaseUntil);
+    }
+
+    // ── ReleaseExpiredLease (Phase 1 audit F-8: recovering a crashed worker) ────────────────
+
+    [Fact]
+    public void ReleaseExpiredLease_PastDeadline_MovesToFailed_WithAmbiguousOutcome_NeverRetryable()
+    {
+        var publication = MakePublicationWithContent();
+        publication.Queue(null, DateTime.UtcNow);
+        var startedAt = DateTime.UtcNow;
+        publication.StartPublishing(startedAt);
+
+        publication.ReleaseExpiredLease(publication.LeaseUntil!.Value.AddSeconds(1));
+
+        Assert.Equal(SocialPublicationStatus.Failed, publication.Status);
+        Assert.Equal(SocialPublicationErrorCode.AmbiguousOutcome, publication.ErrorCode);
+        Assert.Null(publication.LeaseUntil);
+        Assert.Null(publication.NextRetryAt); // never auto-retried — could double-post a call that actually succeeded
+    }
+
+    [Fact]
+    public void ReleaseExpiredLease_BeforeDeadline_IsANoOp()
+    {
+        var publication = MakePublicationWithContent();
+        publication.Queue(null, DateTime.UtcNow);
+        var now = DateTime.UtcNow;
+        publication.StartPublishing(now);
+
+        publication.ReleaseExpiredLease(now); // exactly at StartedAt, well before LeaseUntil
+
+        Assert.Equal(SocialPublicationStatus.Publishing, publication.Status);
+    }
+
+    [Fact]
+    public void ReleaseExpiredLease_OnANonPublishingRow_IsANoOp()
+    {
+        var publication = MakePublicationWithContent();
+        publication.Queue(null, DateTime.UtcNow);
+
+        publication.ReleaseExpiredLease(DateTime.UtcNow.AddHours(1));
+
+        Assert.Equal(SocialPublicationStatus.Queued, publication.Status);
+    }
+
+    [Fact]
+    public void MarkPublished_ClearsLeaseUntil()
+    {
+        var publication = MakePublicationWithContent();
+        publication.Queue(null, DateTime.UtcNow);
+        publication.StartPublishing(DateTime.UtcNow);
+
+        publication.MarkPublished("ext-1", null, DateTime.UtcNow);
+
+        Assert.Null(publication.LeaseUntil);
+    }
+
     // ── MarkPublished ────────────────────────────────────────────────────────
 
     [Fact]

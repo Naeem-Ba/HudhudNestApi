@@ -29,6 +29,15 @@ public sealed class EmailOptions
     public bool EnableSsl { get; init; } = true;
 
     /// <summary>
+    /// True for exactly one address with no display name. The sender composes
+    /// "FromName &lt;From&gt;" itself, so a From that already carries a name or brackets
+    /// would produce a malformed header that Resend rejects only at send time.
+    /// </summary>
+    public static bool IsBareEmailAddress(string value)
+        => System.Net.Mail.MailAddress.TryCreate(value, out var address) &&
+           string.Equals(address.Address, value, StringComparison.Ordinal);
+
+    /// <summary>
     /// Fails fast in Production against the one deployment mistake startup validation
     /// otherwise cannot see: <see cref="From" /> left at its shipped placeholder domain.
     /// That address passes every other check -- it is non-empty, and nothing in this
