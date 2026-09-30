@@ -10,6 +10,7 @@ public sealed class CloudinaryMediaStorageService : IMediaStorageService
 {
     private readonly HttpClient _httpClient;
     private readonly Cloudinary _cloudinary;
+    private readonly string? _folderPrefix;
 
     public CloudinaryMediaStorageService(
         IOptions<CloudinaryOptions> options,
@@ -38,6 +39,7 @@ public sealed class CloudinaryMediaStorageService : IMediaStorageService
             value.ApiSecret);
 
         _cloudinary = new Cloudinary(account);
+        _folderPrefix = string.IsNullOrWhiteSpace(value.FolderPrefix) ? null : value.FolderPrefix;
     }
 
     public async Task<MediaUploadResult> UploadImageAsync(
@@ -72,7 +74,7 @@ public sealed class CloudinaryMediaStorageService : IMediaStorageService
         var uploadParams = new ImageUploadParams
         {
             File = new FileDescription(fileName, content),
-            Folder = folder,
+            Folder = _folderPrefix is null ? folder : $"{_folderPrefix}/{folder}",
             UseFilename = false,
             UniqueFilename = true,
             Overwrite = false
