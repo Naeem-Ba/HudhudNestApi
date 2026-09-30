@@ -25,9 +25,6 @@ public static class JwtAuthenticationRegistration
         // expire, so switching Jwt:Issuer/Jwt:Audience does not log everyone out. New tokens always carry
         // the primary values. Remove the Jwt:Additional* entries once the longest token lifetime
         // (RefreshTokenDays) has passed since the switch.
-        var validIssuers = BuildAcceptedValues(jwtSection, "Issuer", "AdditionalValidIssuers");
-        var validAudiences = BuildAcceptedValues(jwtSection, "Audience", "AdditionalValidAudiences");
-
         services
             .AddAuthentication(options =>
             {
@@ -45,8 +42,10 @@ public static class JwtAuthenticationRegistration
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    ValidIssuers = validIssuers,
-                    ValidAudiences = validAudiences,
+                    // Evaluated lazily (when the options are first resolved), not at registration:
+                    // hosts that layer extra configuration after Program.cs has run (test factories) must still win.
+                    ValidIssuers = BuildAcceptedValues(jwtSection, "Issuer", "AdditionalValidIssuers"),
+                    ValidAudiences = BuildAcceptedValues(jwtSection, "Audience", "AdditionalValidAudiences"),
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
