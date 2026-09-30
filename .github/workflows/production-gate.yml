@@ -1380,6 +1380,7 @@ jobs:
     # firing straight off a merge -- see docs/testing/staging-production-gate-checklist.md.
     if: >-
       github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/master' &&
       needs.build-test-container.result == 'success' &&
        needs.observability-validation.result == 'success' &&
        needs.redis-sentinel-ha.result == 'success' &&
@@ -1391,6 +1392,26 @@ jobs:
     environment: production
     timeout-minutes: 10
     steps:
+      # The deploy hook below tells Render to build whatever the Production service's tracked
+      # branch (master) points at *right now* -- it does not carry a commit SHA. Every gate above
+      # verified github.sha. If master moved after this run started (a merge landed while the
+      # gates were running), the hook would ship an UNTESTED commit. Refuse in that case.
+      - name: Assert the gated commit is still the tip of master
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tip="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/master" | jq -r .sha)"
+          if [ "${tip,,}" != "${GITHUB_SHA,,}" ]; then
+            echo "::error::master moved to ${tip} after this run started on ${GITHUB_SHA}. Production was NOT deployed: the hook would ship a commit that did not pass Staging. Re-run the workflow from the new tip."
+            exit 1
+          fi
+          echo "Gated commit ${GITHUB_SHA} is the current tip of master."
+
       - name: Assert mandatory staging gate succeeded
         shell: bash
         run: |
