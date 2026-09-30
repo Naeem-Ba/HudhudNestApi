@@ -19,6 +19,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddHudhudNestApiObservability();
 StagingEnvironmentGuard.Validate(builder.Configuration, builder.Environment);
+ProductionEnvironmentGuard.Validate(builder.Configuration, builder.Environment);
 
 builder.Services.AddTrustedForwardedHeaders(
     builder.Configuration,

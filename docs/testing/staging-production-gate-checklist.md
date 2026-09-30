@@ -83,3 +83,13 @@ mitigation, not equivalent to real required-reviewer protection: anyone with pus
 
 Production may be approved only when the real provider-hosted Staging job is successful. A local Docker
 pass is necessary evidence but is not sufficient to declare Production readiness.
+
+## Update (2026-09-30): environment separation audit
+
+See [environments-and-release-flow.md](../operations/environments-and-release-flow.md) for the full
+Staging/Production map, release steps, known gaps and the audit's live findings. Changes made:
+`deploy-production` now also requires `github.ref == 'refs/heads/master'` and refuses to run when
+`master` moved after the gated run started (the deploy hook ships the branch tip, not `github.sha`);
+Production now refuses to boot with Staging-shaped configuration (`ProductionEnvironmentGuard`);
+Staging uploads default to a `staging/` Cloudinary folder root; `GET /api/operational/version`
+(Admin) reports environment, version and commit in every environment.
