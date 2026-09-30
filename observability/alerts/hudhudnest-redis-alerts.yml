@@ -6,7 +6,7 @@ groups:
         for: 5m
         labels:
           severity: warning
-          service: propertyapi
+          service: hudhudnest
         annotations:
           summary: Redis timeout rate is elevated.
           description: Redis command timeouts exceeded the accepted threshold for HudhudNestApi.
@@ -16,27 +16,27 @@ groups:
         for: 5m
         labels:
           severity: warning
-          service: propertyapi
+          service: hudhudnest
         annotations:
           summary: Redis reconnects are elevated.
           description: Application Redis clients are reconnecting frequently; check failover or network stability.
 
       - alert: HudhudNestApiRedisFeatureDegraded
-        expr: increase(propertyapi_redis_feature_degraded_total[5m]) > 0
+        expr: increase(hudhudnest_redis_feature_degraded_total[5m]) > 0
         for: 2m
         labels:
           severity: warning
-          service: propertyapi
+          service: hudhudnest
         annotations:
           summary: A Redis-dependent feature is degraded.
           description: Inspect feature label and verify degradation matches the failure policy.
 
       - alert: HudhudNestApiRateLimiterFailClosed
-        expr: increase(propertyapi_rate_limiter_fail_closed_total[5m]) > 0
+        expr: increase(hudhudnest_rate_limiter_fail_closed_total[5m]) > 0
         for: 1m
         labels:
           severity: critical
-          service: propertyapi
+          service: hudhudnest
         annotations:
           summary: Security-sensitive rate limiting failed closed.
           description: Authentication or OTP traffic may be blocked because Redis-backed abuse protection is unavailable.
@@ -46,7 +46,7 @@ groups:
         for: 5m
         labels:
           severity: warning
-          service: propertyapi
+          service: hudhudnest
         annotations:
           summary: Redis replica lag is above target.
           description: Replica lag may increase data loss or failover recovery risk.
@@ -56,7 +56,7 @@ groups:
         for: 0m
         labels:
           severity: info
-          service: propertyapi
+          service: hudhudnest
         annotations:
           summary: Redis primary role changed.
           description: Validate application reconnect, fallback metrics, and post-failover recovery checks.

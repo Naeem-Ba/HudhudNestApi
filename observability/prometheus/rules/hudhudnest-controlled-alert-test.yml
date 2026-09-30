@@ -2,7 +2,7 @@ groups:
   - name: hudhudnest-controlled-alert-test
     rules:
       - alert: HudhudNestApiControlledObservabilityTest
-        expr: propertyapi_synthetic_alert_test_state > 0
+        expr: hudhudnest_synthetic_alert_test_state > 0
         for: 0s
         labels: { severity: test }
         annotations:
@@ -11,7 +11,7 @@ groups:
 
 # This rule is permanent and deployed as-is (locally and on Staging) -- it is never rewritten
 # at runtime. scripts/verify-observability.sh drives its firing/resolution by toggling the
-# propertyapi_synthetic_alert_test_state gauge through
+# hudhudnest_synthetic_alert_test_state gauge through
 # POST /internal/observability/synthetic/alert-test-state, a Staging-only, shared-secret-gated
 # endpoint (see HudhudNestApi/Controllers/ObservabilitySyntheticController.cs). The gauge is
 # always 0 -- and the alert never fires -- outside a controlled test invocation.

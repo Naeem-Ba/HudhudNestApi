@@ -7,28 +7,28 @@ groups:
         labels: { severity: page }
         annotations:
           summary: HudhudNestApi 5xx ratio is above 5%
-          runbook_url: docs/observability/alert-response-runbook.md#propertyapihigh5xxrate
+          runbook_url: docs/observability/alert-response-runbook.md#hudhudnestapihigh5xxrate
       - alert: HudhudNestApiHighP95Latency
         expr: histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="hudhudnest-api"}[5m]))) > 1
         for: 5m
         labels: { severity: ticket }
         annotations:
           summary: HudhudNestApi p95 latency is above one second
-          runbook_url: docs/observability/alert-response-runbook.md#propertyapihighp95latency
+          runbook_url: docs/observability/alert-response-runbook.md#hudhudnestapihighp95latency
       - alert: HudhudNestApiAuthenticationFailures
-        expr: sum(rate(propertyapi_auth_requests_total{outcome!="success"}[5m])) > 1
+        expr: sum(rate(hudhudnest_auth_requests_total{outcome!="success"}[5m])) > 1
         for: 5m
         labels: { severity: ticket }
         annotations:
           summary: Authentication failures are elevated
-          runbook_url: docs/observability/alert-response-runbook.md#propertyapiauthenticationfailures
+          runbook_url: docs/observability/alert-response-runbook.md#hudhudnestapiauthenticationfailures
       - alert: HudhudNestApiDependencyFailures
         expr: sum(rate(traces_span_metrics_calls_total{service_name="hudhudnest-api",status_code="STATUS_CODE_ERROR",span_kind="SPAN_KIND_CLIENT"}[5m])) > 0.1
         for: 5m
         labels: { severity: ticket }
         annotations:
           summary: A HudhudNestApi dependency is failing
-          runbook_url: docs/observability/alert-response-runbook.md#propertyapidependencyfailures
+          runbook_url: docs/observability/alert-response-runbook.md#hudhudnestapidependencyfailures
       - alert: OtelCollectorExportFailure
         expr: sum(rate(otelcol_exporter_send_failed_spans[5m])) + sum(rate(otelcol_exporter_send_failed_metric_points[5m])) > 0
         for: 2m
