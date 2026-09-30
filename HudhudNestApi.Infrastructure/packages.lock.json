@@ -131,9 +131,9 @@
       },
       "Twilio": {
         "type": "Direct",
-        "requested": "[8.0.1, )",
-        "resolved": "8.0.1",
-        "contentHash": "y5ueB/rf7HUVzbzkKVv+mG6oRnotW8J7EfdaMDw9r3+BDDmuMO7gCL0HRPzsiOuCy7UkiPosx5LpxeQH8x4UGg==",
+        "requested": "[8.0.2, )",
+        "resolved": "8.0.2",
+        "contentHash": "j0ZySonKd8WJvaDiUXy8dLeHvKx+T4YavG6ltNHPM2qmT72MUe9Hhrj9N0bbuV5+GfLB4Vo8BMyvtkSzOUJZkg==",
         "dependencies": {
           "Microsoft.IdentityModel.Tokens": "8.3.1",
           "Newtonsoft.Json": "13.0.1",
