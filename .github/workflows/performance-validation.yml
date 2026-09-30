@@ -75,7 +75,7 @@ jobs:
         (vars.PERFORMANCE_LARGER_RUNNERS_ENABLED == 'true' &&
          (inputs.profile == 'release' || inputs.profile == 'staging'))
         && 'ubuntu-latest-4-cores'
-        || 'ubuntu-latest'
+        || 'ubuntu-24.04'
       }}
     timeout-minutes: 180
     env:

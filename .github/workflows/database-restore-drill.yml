@@ -63,7 +63,7 @@ concurrency:
 jobs:
   restore-drill:
     name: Actual PostgreSQL 17 + PostGIS Restore
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production-recovery
     timeout-minutes: 120
     outputs:

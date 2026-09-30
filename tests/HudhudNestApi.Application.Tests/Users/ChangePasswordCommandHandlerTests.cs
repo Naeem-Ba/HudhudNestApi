@@ -817,12 +817,11 @@ It.Is<string?>(
             x => x.Log(
                 LogLevel.Warning,
                 It.IsAny<EventId>(),
-It.Is<It.IsAnyType>(
-    (state, _) =>
-        state.ToString() != null &&
-        state.ToString()!.Contains(
-            expectedMessage,
-            StringComparison.Ordinal)),
+                It.Is<It.IsAnyType>(
+                    (state, _) =>
+                        string.Concat(state).Contains(
+                            expectedMessage,
+                            StringComparison.Ordinal)),
                 It.IsAny<Exception?>(),
                 It.IsAny<
                     Func<
