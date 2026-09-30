@@ -100,7 +100,7 @@ services:
       Redis__Required: "true"
       DataProtection__PersistKeysToDatabase: "true"
       Jwt__Key: recovery-drill-only-64-character-key-never-use-in-production-12345678
-      Jwt__Issuer: PropertyApi.RecoveryDrill
+      Jwt__Issuer: HudhudNest.RecoveryDrill
       Jwt__Audience: HudhudNestApi.RecoveryDrill
       Cloudinary__CloudName: recovery-drill
       Cloudinary__ApiKey: recovery-drill

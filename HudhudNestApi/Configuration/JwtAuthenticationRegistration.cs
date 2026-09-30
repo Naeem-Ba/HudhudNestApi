@@ -21,6 +21,10 @@ public static class JwtAuthenticationRegistration
             ?? throw new InvalidOperationException(
                 "Jwt:Key is missing. Set it via User Secrets in Development or as an environment variable in Production.");
 
+        // Rebrand transition: tokens signed under the pre-rename issuer/audience stay valid until they
+        // expire, so switching Jwt:Issuer/Jwt:Audience does not log everyone out. New tokens always carry
+        // the primary values. Remove the Jwt:Additional* entries once the longest token lifetime
+        // (RefreshTokenDays) has passed since the switch.
         services
             .AddAuthentication(options =>
             {
@@ -38,8 +42,10 @@ public static class JwtAuthenticationRegistration
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    ValidIssuer = jwtSection["Issuer"],
-                    ValidAudience = jwtSection["Audience"],
+                    // Evaluated lazily (when the options are first resolved), not at registration:
+                    // hosts that layer extra configuration after Program.cs has run (test factories) must still win.
+                    ValidIssuers = BuildAcceptedValues(jwtSection, "Issuer", "AdditionalValidIssuers"),
+                    ValidAudiences = BuildAcceptedValues(jwtSection, "Audience", "AdditionalValidAudiences"),
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
@@ -147,5 +153,21 @@ public static class JwtAuthenticationRegistration
         });
 
         return services;
+    }
+
+    private static string[] BuildAcceptedValues(IConfigurationSection jwtSection, string primaryKey, string additionalKey)
+    {
+        var values = new List<string>();
+        var primary = jwtSection[primaryKey];
+        if (!string.IsNullOrWhiteSpace(primary))
+            values.Add(primary);
+
+        foreach (var extra in jwtSection.GetSection(additionalKey).GetChildren())
+        {
+            if (!string.IsNullOrWhiteSpace(extra.Value) && !values.Contains(extra.Value))
+                values.Add(extra.Value);
+        }
+
+        return values.ToArray();
     }
 }

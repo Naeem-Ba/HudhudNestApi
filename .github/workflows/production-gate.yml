@@ -81,8 +81,8 @@ jobs:
       Database__SeedOnStartup: "false"
 
       # Non-secret identifiers used by the test host.
-      Jwt__Issuer: PropertyApi
-      Jwt__Audience: PropertyApiClient
+      Jwt__Issuer: HudhudNest
+      Jwt__Audience: HudhudNestClient
 
       Cloudinary__CloudName: ci
       Cloudinary__ApiKey: ci
@@ -1076,7 +1076,7 @@ jobs:
           # configuration it never uses; schema + seed logic is environment-independent.
           export ASPNETCORE_ENVIRONMENT=Testing DOTNET_ENVIRONMENT=Testing
           export ConnectionStrings__DefaultConnection="${connection}"
-          export Jwt__Issuer=PropertyApi Jwt__Audience=PropertyApiClient
+          export Jwt__Issuer=HudhudNest Jwt__Audience=HudhudNestClient
           Jwt__Key="$(openssl rand -base64 48 | tr -d '\n')"
           OtpSettings__SecretKey="$(openssl rand -base64 48 | tr -d '\n')"
           Security__PhoneLookupHmacKey="$(openssl rand -base64 32 | tr -d '\n')"

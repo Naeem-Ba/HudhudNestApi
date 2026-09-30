@@ -33,22 +33,22 @@
       "title": "Feature degradation activations",
       "type": "timeseries",
       "targets": [
-        "propertyapi_redis_feature_degraded_total"
+        "hudhudnest_redis_feature_degraded_total"
       ]
     },
     {
       "title": "Rate limiter fallback/fail-closed decisions",
       "type": "timeseries",
       "targets": [
-        "propertyapi_rate_limiter_fallback_total",
-        "propertyapi_rate_limiter_fail_closed_total"
+        "hudhudnest_rate_limiter_fallback_total",
+        "hudhudnest_rate_limiter_fail_closed_total"
       ]
     },
     {
       "title": "SignalR backplane state",
       "type": "stat",
       "targets": [
-        "propertyapi_signalr_backplane_connected"
+        "hudhudnest_signalr_backplane_connected"
       ]
     },
     {

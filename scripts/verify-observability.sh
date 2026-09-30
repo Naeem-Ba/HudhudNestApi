@@ -195,7 +195,7 @@ auth_metric=false
 runtime_metric=false
 metric_seen 'http_server_request_duration_seconds_count{service_name="hudhudnest-api"}' && request_metric=true
 metric_seen 'http_server_request_duration_seconds_bucket{service_name="hudhudnest-api"}' && latency_metric=true
-metric_seen 'propertyapi_auth_requests_total' && auth_metric=true
+metric_seen 'hudhudnest_auth_requests_total' && auth_metric=true
 metric_seen 'process_memory_working_set_bytes{service_name="hudhudnest-api"}' && runtime_metric=true
 
 queries_valid=false
