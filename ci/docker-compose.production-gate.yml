@@ -216,7 +216,7 @@ services:
       Staging__TestSupport__UseInMemoryMedia: "true"
       DataProtection__PersistKeysToDatabase: "true"
       Jwt__Key: ci-only-64-character-development-key-change-before-any-real-deployment-1234
-      Jwt__Issuer: PropertyApi.CI
+      Jwt__Issuer: HudhudNest.CI
       Jwt__Audience: HudhudNestApi.CI
       Cloudinary__CloudName: ci
       Cloudinary__ApiKey: ci

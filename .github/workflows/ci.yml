@@ -98,8 +98,8 @@ jobs:
 
       RateLimiting__Redis__Enabled: 'true'
 
-      Jwt__Issuer: 'PropertyApi'
-      Jwt__Audience: 'PropertyApiClient'
+      Jwt__Issuer: 'HudhudNest'
+      Jwt__Audience: 'HudhudNestClient'
       Jwt__Key: 'TEST_ONLY_SECRET_KEY_1234567890_1234567890'
 
       OtpSettings__SecretKey: 'TEST_ONLY_OTP_SECRET_KEY_1234567890_1234567890'

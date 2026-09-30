@@ -24,8 +24,8 @@ x-api-environment: &api-environment
   RateLimiting__Redis__Policies__geo-search__PermitLimit: ${PERF_LIMIT_GEO_SEARCH:-10000}
   RateLimiting__Redis__Policies__geo-search__WindowSeconds: "5"
   RedisRateLimiting__ConnectionString: redis:6379,abortConnect=false
-  Jwt__Issuer: PropertyApi
-  Jwt__Audience: PropertyApiClient
+  Jwt__Issuer: HudhudNest
+  Jwt__Audience: HudhudNestClient
   Jwt__Key: ${PERF_JWT_KEY:?required}
   Jwt__AccessTokenMinutes: "30"
   Jwt__RefreshTokenDays: "30"
