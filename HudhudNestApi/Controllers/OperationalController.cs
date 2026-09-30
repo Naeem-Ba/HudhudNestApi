@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using HudhudNestApi.Domain.Users.Constants;
 using HudhudNestApi.Infrastructure.Persistence;
 using HudhudNestApi.Security.Staging;
 
@@ -33,6 +34,23 @@ public sealed class OperationalController : ControllerBase
     // is now gated exactly like StagingTestSupportController's cleanup endpoint: Staging only,
     // plus a constant-time secret compare, 404 rather than 401/403 so the endpoint's
     // existence is not confirmed to an unauthorized caller either.
+    // Answers "which environment / release am I actually talking to?" in EVERY environment
+    // (build-info above is Staging-only and secret-gated, so Production had no way at all to
+    // report its own version). Admin-only on purpose: the commit SHA pins the exact build, which
+    // is useful to an attacker choosing a known-vulnerable version, so it is not anonymous.
+    // Returns nothing sensitive -- no connection strings, hosts, markers or secrets.
+    [HttpGet("version")]
+    [Authorize(Roles = RoleNames.Admin)]
+    public IActionResult Version() => Ok(new
+    {
+        environment = _environment.EnvironmentName,
+        version = _configuration["Deployment:Version"] ?? "unknown",
+        commitSha = Environment.GetEnvironmentVariable("RENDER_GIT_COMMIT")
+            ?? _configuration["Deployment:CommitSha"]
+            ?? "unknown",
+        startedAtUtc = StartedAtUtc
+    });
+
     [HttpGet("build-info")]
     [AllowAnonymous]
     public async Task<IActionResult> BuildInfo(CancellationToken ct)

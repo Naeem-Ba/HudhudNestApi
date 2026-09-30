@@ -28,6 +28,8 @@ internal static class MediaInfrastructureRegistration
                 ApplyCloudinaryUrlFallback(
                     options,
                     configuration["CLOUDINARY_URL"]))
+            .PostConfigure(options =>
+                options.FolderPrefix = ResolveFolderPrefix(options.FolderPrefix, environment))
             .Validate(
                 options =>
                     !string.IsNullOrWhiteSpace(options.CloudName) &&
@@ -41,6 +43,19 @@ internal static class MediaInfrastructureRegistration
             sp.GetRequiredService<CloudinaryMediaStorageService>());
 
         return services;
+    }
+
+    // Staging shares Production's Cloudinary cloud on the free plan (credential-only isolation),
+    // so without a folder root Staging uploads land in the same folders as real user media.
+    // Defaulting here (instead of demanding a new env var) means the isolation is in force on
+    // the very next deploy with no dashboard step that could be forgotten.
+    internal static string? ResolveFolderPrefix(string? configured, IHostEnvironment environment)
+    {
+        var prefix = configured?.Trim().Trim('/');
+        if (!string.IsNullOrEmpty(prefix))
+            return prefix;
+
+        return environment.IsStaging() ? "staging" : null;
     }
 
     private static void ApplyCloudinaryUrlFallback(

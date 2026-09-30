@@ -82,6 +82,16 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         // real one at verify time (wrong code, attempt limit, expiry) but can never be satisfied, and
         // no SMS is sent. Past three challenges per hour every number is answered with its most
         // recent challenge, so the limit does not depend on eligibility either.
+        // The count-then-insert below is serialised per number and purpose with a transaction-scoped advisory
+        // lock, so a parallel burst cannot each read "two so far" and all create a challenge (and send an SMS).
+        // The lock is released when the transaction commits, before the message is sent.
+        await using var limitTx = _db.Database.IsNpgsql() ? await _db.Database.BeginTransactionAsync(ct) : null;
+        if (limitTx is not null)
+        {
+            var lockKey = $"otp-send:{(int)purpose}:{phone}";
+            await _db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))", ct);
+        }
+
         var cutoff = _clock.GetUtcNow().AddHours(-1);
         var recent = await _db.PhoneOtpChallenges
             .Where(x => x.NormalizedPhoneNumber == phone && x.Purpose == purpose && x.CreatedAtUtc >= cutoff)
@@ -101,6 +111,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             var decoy = PhoneOtpChallenge.Create(phone, UnsatisfiableHash(), purpose, _clock.GetUtcNow(), userId, channel);
             _db.PhoneOtpChallenges.Add(decoy);
             await _db.SaveChangesAsync(ct);
+            if (limitTx is not null) await limitTx.CommitAsync(ct);
             return new(true, Message: GenericSendMessage, ChallengeId: decoy.Id, Channel: channel);
         }
 
@@ -108,6 +119,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         var challenge = PhoneOtpChallenge.Create(phone, hash, purpose, _clock.GetUtcNow(), userId, channel);
         _db.PhoneOtpChallenges.Add(challenge);
         await _db.SaveChangesAsync(ct);
+        if (limitTx is not null) await limitTx.CommitAsync(ct);
         _logger.LogInformation("OTP challenge created for {Phone} on {Channel} ({Purpose}).",
             PiiMasking.MaskPhone(phone), channel, purpose);
         var sent = await _channels.SendAsync(channel, phone, code, ct);
