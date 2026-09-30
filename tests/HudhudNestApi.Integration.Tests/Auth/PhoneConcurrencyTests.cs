@@ -112,9 +112,9 @@ public sealed class PhoneConcurrencyTests : IClassFixture<PhoneLoginAuditFactory
         AssertNoServerErrors(replies);
         Assert.All(replies, r => Assert.Equal(HttpStatusCode.OK, r.Status));
         var sent = _factory.Sms.SendCount - before;
-        // The limit is enforced by a read-then-insert, so a parallel burst can slip a few extra
-        // through; what must hold is that it stays bounded and far below the burst size.
-        Assert.InRange(sent, 1, 8);
+        // The count-then-insert runs under a per-number advisory lock, so a parallel burst can never
+        // exceed the three-per-hour limit.
+        Assert.InRange(sent, 1, 3);
     }
 
     [Fact]
