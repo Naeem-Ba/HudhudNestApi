@@ -174,7 +174,7 @@ No native code was touched. The new flow is pure Angular/Capacitor-WebView UI (t
 
 `src/app/features/legal/account-deletion.page.ts`, routed at `/account-deletion` (public, no `AuthGuard`, no login required) — verified rendering correctly in a live browser check during this session (screenshot taken, RTL Arabic layout confirmed correct).
 
-Content: how to delete in-app/on-web, exactly what is deleted vs. retained (same wording as the in-app modal, kept consistent on purpose), the authentication requirements, an email fallback (`naeem.bazzazeh@gmail.com`, the same contact address already used on the existing privacy-policy page) for anyone who cannot log in, and a link to the privacy policy.
+Content: how to delete in-app/on-web, exactly what is deleted vs. retained (same wording as the in-app modal, kept consistent on purpose), the authentication requirements, an email fallback (`support@hudhudnest.com`, the same contact address used on the privacy-policy page) for anyone who cannot log in, and a link to the privacy policy.
 
 **No production domain exists anywhere in either repository** (confirmed by searching both codebases) — this repo only has local/staging URLs. Per the spec's explicit instruction, no domain was invented. **The Google Play Console / App Store Connect "account deletion URL" fields must be filled in manually once a production domain exists**, pointing at `https://YOUR_PRODUCTION_DOMAIN/account-deletion`.
 
