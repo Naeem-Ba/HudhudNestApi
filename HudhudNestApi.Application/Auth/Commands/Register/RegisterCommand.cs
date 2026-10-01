@@ -28,7 +28,11 @@ public sealed record RegisterCommand(
     // RegisterCommandHandler.RecordConsentIfAcceptedAsync.
     bool PrivacyPolicyAccepted = false,
     string? PrivacyPolicyVersion = null,
-    string? ConsentSource = null)
+    string? ConsentSource = null,
+    // Terms of Service acceptance, recorded next to the privacy consent so each document is
+    // provable on its own. Optional/additive like the privacy fields: older clients omit them.
+    bool TermsAccepted = false,
+    string? TermsVersion = null)
     : IRequest<RegisterResult>;
 
 public sealed record RegisterResult
@@ -361,10 +365,10 @@ public sealed class RegisterCommandHandler
             .ToLowerInvariant();
 
     /// <summary>
-    /// Adds a ConsentRecord to the same unit of work as the rest of registration, but
-    /// only when the caller actually sent a real acceptance: a missing/empty version or
-    /// an unrecognized source means an older client that predates the consent checkbox,
-    /// not a rejected consent, so it is silently skipped rather than failing the whole
+    /// Adds ConsentRecords to the same unit of work as the rest of registration, but only
+    /// for documents the caller actually sent a real acceptance for: a missing/empty version
+    /// or a false flag means an older client that predates the consent checkbox, not a
+    /// rejected consent, so it is silently skipped rather than failing the whole
     /// registration over an optional field an old build never knew to send.
     /// </summary>
     private void TryRecordConsent(
@@ -372,12 +376,6 @@ public sealed class RegisterCommandHandler
         RegisterCommand request,
         DateTime nowUtc)
     {
-        if (!request.PrivacyPolicyAccepted ||
-            string.IsNullOrWhiteSpace(request.PrivacyPolicyVersion))
-        {
-            return;
-        }
-
         var source = Enum.TryParse<ConsentSource>(
             request.ConsentSource,
             ignoreCase: true,
@@ -385,14 +383,29 @@ public sealed class RegisterCommandHandler
                 ? parsedSource
                 : ConsentSource.Web;
 
-        var consent = ConsentRecord.Create(
-            userId,
-            ConsentPolicyType.PrivacyPolicy,
-            request.PrivacyPolicyVersion,
-            source,
-            nowUtc);
+        AddConsentIfAccepted(
+            userId, ConsentPolicyType.PrivacyPolicy,
+            request.PrivacyPolicyAccepted, request.PrivacyPolicyVersion, source, nowUtc);
 
-        _consents.Add(consent);
+        AddConsentIfAccepted(
+            userId, ConsentPolicyType.TermsOfService,
+            request.TermsAccepted, request.TermsVersion, source, nowUtc);
+    }
+
+    private void AddConsentIfAccepted(
+        Guid userId,
+        ConsentPolicyType policyType,
+        bool accepted,
+        string? version,
+        ConsentSource source,
+        DateTime nowUtc)
+    {
+        if (!accepted || string.IsNullOrWhiteSpace(version))
+        {
+            return;
+        }
+
+        _consents.Add(ConsentRecord.Create(userId, policyType, version, source, nowUtc));
     }
 }
 
