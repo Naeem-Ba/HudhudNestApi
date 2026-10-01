@@ -61,7 +61,9 @@ public sealed class AuthController : ControllerBase
             Password: dto.Password,
             PrivacyPolicyAccepted: dto.PrivacyPolicyAccepted,
             PrivacyPolicyVersion: dto.PrivacyPolicyVersion,
-            ConsentSource: dto.ConsentSource), ct);
+            ConsentSource: dto.ConsentSource,
+            TermsAccepted: dto.TermsAccepted,
+            TermsVersion: dto.TermsVersion), ct);
 
         if (result.Conflict)
             return Conflict(new { message = result.Message });
@@ -417,7 +419,9 @@ public sealed record RegisterRequest(
     string Password,
     bool PrivacyPolicyAccepted = false,
     string? PrivacyPolicyVersion = null,
-    string? ConsentSource = null);
+    string? ConsentSource = null,
+    bool TermsAccepted = false,
+    string? TermsVersion = null);
 
 public sealed record LoginRequest(
     string Email,

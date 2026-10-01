@@ -485,6 +485,61 @@ public sealed class RegisterCommandHandlerTests
             Times.Never);
     }
 
+    [Theory(
+        DisplayName =
+            "Register records one ConsentRecord per accepted document")]
+    [InlineData(true, true, 2)]
+    [InlineData(true, false, 1)]
+    [InlineData(false, true, 1)]
+    [InlineData(false, false, 0)]
+    public async Task NewEmail_RecordsConsentPerAcceptedDocument(
+        bool privacyAccepted,
+        bool termsAccepted,
+        int expectedRecords)
+    {
+        var identity = new Mock<IRegisterIdentityService>();
+        identity
+            .Setup(x => x.FindByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IdentityAccountSnapshot?)null);
+        identity
+            .Setup(x => x.CreateAsync(It.IsAny<CreateIdentityAccount>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdentityOperationResult.Success());
+        identity
+            .Setup(x => x.AddToRoleAsync(It.IsAny<Guid>(), RoleNames.User, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdentityOperationResult.Success());
+        identity
+            .Setup(x => x.GenerateEmailConfirmationTokenAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("confirmation-token");
+
+        var consents = new Mock<IConsentRecordRepository>();
+
+        var handler = new RegisterCommandHandler(
+            identity.Object,
+            new Mock<IUserAccountRepository>().Object,
+            Mock.Of<IUnitOfWork>(),
+            Mock.Of<IEmailVerificationService>(),
+            consents.Object,
+            NullLogger<RegisterCommandHandler>.Instance);
+
+        var result = await handler.Handle(
+            new RegisterCommand(
+                "Naeem", "Bazzazeh", "naeem@example.com", "Password123",
+                PrivacyPolicyAccepted: privacyAccepted,
+                PrivacyPolicyVersion: "2026-10-01",
+                ConsentSource: "Web",
+                TermsAccepted: termsAccepted,
+                TermsVersion: "2026-10-01"),
+            CancellationToken.None);
+
+        Assert.True(result.Success);
+        consents.Verify(
+            x => x.Add(It.IsAny<ConsentRecord>()),
+            Times.Exactly(expectedRecords));
+        consents.Verify(
+            x => x.Add(It.Is<ConsentRecord>(c => c.PolicyType == ConsentPolicyType.TermsOfService)),
+            Times.Exactly(termsAccepted ? 1 : 0));
+    }
+
     [Fact(
         DisplayName =
             "Register creates identity and assigns User role")]
