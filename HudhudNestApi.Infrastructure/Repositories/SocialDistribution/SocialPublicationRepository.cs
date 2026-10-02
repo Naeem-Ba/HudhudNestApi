@@ -73,8 +73,20 @@ public sealed class SocialPublicationRepository : ISocialPublicationRepository
         };
     }
 
+    /// <summary>
+    /// The runtime "pause this platform" control: a publication whose account sits under a channel
+    /// that is no longer Active is simply not due — it stays Queued/Retrying untouched (no attempt,
+    /// no dead letter) and resumes the moment the channel is reactivated. Only a channel that
+    /// exists and is non-Active excludes a row, so a missing account/channel still reaches the
+    /// publish handler, which fails it explicitly as before.
+    /// </summary>
+    private IQueryable<SocialPublication> WithoutPausedChannel(IQueryable<SocialPublication> query) =>
+        query.Where(p => !_db.SocialAccounts.Any(a =>
+            a.Id == p.SocialAccountId &&
+            _db.SocialChannels.Any(c => c.Id == a.SocialChannelId && c.Status != SocialChannelStatus.Active)));
+
     public async Task<IReadOnlyList<SocialPublication>> GetDueToPublishAsync(DateTime utcNow, int take, CancellationToken ct = default) =>
-        await _db.SocialPublications
+        await WithoutPausedChannel(_db.SocialPublications)
             .Include(p => p.Content)
             .Where(p =>
                 p.Status == SocialPublicationStatus.Queued &&
@@ -84,7 +96,7 @@ public sealed class SocialPublicationRepository : ISocialPublicationRepository
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<SocialPublication>> GetDueForRetryAsync(DateTime utcNow, int take, CancellationToken ct = default) =>
-        await _db.SocialPublications
+        await WithoutPausedChannel(_db.SocialPublications)
             .Include(p => p.Content)
             .Where(p =>
                 p.Status == SocialPublicationStatus.Retrying &&

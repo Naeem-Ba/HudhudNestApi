@@ -27,15 +27,26 @@ public sealed class PropertyPublishedDistributionHandler : INotificationHandler<
 {
     private readonly IDistributionEngine _engine;
     private readonly ILogger<PropertyPublishedDistributionHandler> _logger;
+    private readonly ISocialDistributionSwitch? _distributionSwitch;
 
-    public PropertyPublishedDistributionHandler(IDistributionEngine engine, ILogger<PropertyPublishedDistributionHandler> logger)
+    public PropertyPublishedDistributionHandler(
+        IDistributionEngine engine, ILogger<PropertyPublishedDistributionHandler> logger, ISocialDistributionSwitch? distributionSwitch = null)
     {
         _engine = engine;
         _logger = logger;
+        _distributionSwitch = distributionSwitch;
     }
 
     public async Task Handle(PropertyPublishedEvent notification, CancellationToken cancellationToken)
     {
+        if (_distributionSwitch is { IsEnabled: false })
+        {
+            _logger.LogInformation(
+                "تم تخطي التوزيع الآلي للعقار {PropertyId}: التوزيع الاجتماعي موقوف (SocialDistribution:Enabled=false).",
+                notification.PropertyId);
+            return;
+        }
+
         try
         {
             var run = await _engine.RunAsync(

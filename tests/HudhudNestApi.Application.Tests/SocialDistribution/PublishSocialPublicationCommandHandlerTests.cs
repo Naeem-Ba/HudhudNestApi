@@ -136,6 +136,48 @@ public sealed class PublishSocialPublicationCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_PublisherRejectsTheCredential_MarksTheAccountExpired_SoTheDeadTokenStopsBeingUsed()
+    {
+        // A revoked/expired token never heals by itself: without this the next queued post for the
+        // same account would call the platform again with the same dead credential, forever.
+        var fixture = new Fixture();
+        var (publication, account) = MakeQueuedPublication();
+
+        fixture.Publications.Setup(x => x.GetByIdAsync(publication.Id, It.IsAny<CancellationToken>())).ReturnsAsync(publication);
+        fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+        fixture.Properties.Setup(x => x.IsPubliclyVisibleAsync(publication.PropertyId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        fixture.RegisterPublisher(new FakePublisher(
+            SocialPlatform.Facebook, _ => SocialPublishResult.Failure(SocialPublicationErrorCode.InvalidCredentials, "token rejected")));
+
+        var result = await fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
+
+        Assert.Equal(SocialPublicationStatus.Failed, result.Status);
+        Assert.Equal(SocialAccountStatus.Expired, account.Status);
+        fixture.Accounts.Verify(x => x.Update(account), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(SocialPublicationErrorCode.RateLimited)]
+    [InlineData(SocialPublicationErrorCode.NetworkError)]
+    [InlineData(SocialPublicationErrorCode.PermissionDenied)]
+    [InlineData(SocialPublicationErrorCode.InvalidContent)]
+    public async Task Handle_AnyOtherPublisherFailure_LeavesTheAccountActive(SocialPublicationErrorCode errorCode)
+    {
+        var fixture = new Fixture();
+        var (publication, account) = MakeQueuedPublication();
+
+        fixture.Publications.Setup(x => x.GetByIdAsync(publication.Id, It.IsAny<CancellationToken>())).ReturnsAsync(publication);
+        fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+        fixture.Properties.Setup(x => x.IsPubliclyVisibleAsync(publication.PropertyId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        fixture.RegisterPublisher(new FakePublisher(SocialPlatform.Facebook, _ => SocialPublishResult.Failure(errorCode, "failed")));
+
+        await fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
+
+        Assert.Equal(SocialAccountStatus.Active, account.Status);
+        fixture.Accounts.Verify(x => x.Update(It.IsAny<SocialAccount>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Handle_PublisherReturnsNonRetryableFailure_MovesToFailed()
     {
         var fixture = new Fixture();

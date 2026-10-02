@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,6 +8,7 @@ using HudhudNestApi.Application.Listings.Commands.DeleteProperty;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings.Enums;
 using HudhudNestApi.Domain.SocialDistribution.Enums;
+using HudhudNestApi.Domain.SocialDistribution.Models;
 using HudhudNestApi.Domain.Users.Constants;
 using HudhudNestApi.Infrastructure.Persistence;
 
@@ -323,5 +325,125 @@ public sealed class SocialDistributionE2eTests : IClassFixture<SocialDistributio
 
         var deadLetters = await SocialDistributionApiTestFactory.SendAsync(admin.GetAsync("/api/social-distribution/dead-letters"));
         Assert.Equal(1, deadLetters.GetProperty("totalCount").GetInt32());
+    }
+
+    // ── Kill-switch / pause / credential expiry (Phase 6 operations) ─────────────────────────
+
+    /// <summary>A manually created, queued publication for a freshly published listing — what a pause test needs: a Queued row the worker would pick up next sweep.</summary>
+    private async Task<(Guid PublicationId, Guid PropertyId)> QueueManualPublicationAsync(HttpClient admin, Guid ownerId, Guid accountId)
+    {
+        // Published "now": inside reconciliation's MinAge window, so the sweep never also
+        // auto-distributes it and muddies what these tests assert.
+        var propertyId = await _factory.SeedPublishedPropertyAsync(ownerId, publishedAtUtc: DateTime.UtcNow);
+        var created = await SocialDistributionApiTestFactory.SendAsync(admin.PostAsJsonAsync("/api/social-distribution/publications", new
+        {
+            propertyId,
+            socialAccountId = accountId,
+            title = "عنوان",
+            body = "نص يدوي للاختبار",
+            imageUrl = (string?)null,
+            hashtags = (string[]?)null,
+            language = "ar",
+        }));
+        var publicationId = created.GetProperty("id").GetGuid();
+        await SocialDistributionApiTestFactory.SendAsync(admin.PostAsJsonAsync($"/api/social-distribution/publications/{publicationId}/queue", new { scheduledAt = (DateTime?)null }));
+
+        return (publicationId, propertyId);
+    }
+
+    private static async Task<string?> PublicationStatusAsync(HttpClient admin, Guid publicationId)
+    {
+        var publication = await SocialDistributionApiTestFactory.SendAsync(admin.GetAsync($"/api/social-distribution/publications/{publicationId}"));
+        return publication.GetProperty("status").GetString();
+    }
+
+    [Fact]
+    public async Task KillSwitch_StopsReconciliationAndDispatch_AndResumesCleanlyWhenReEnabled()
+    {
+        var (admin, _, ownerId) = await SeedUsersAsync();
+        await _factory.ConfigurePlatformAsync(admin, SocialPlatform.Telegram);
+        var propertyId = await _factory.SeedPublishedPropertyAsync(ownerId, publishedAtUtc: DateTime.UtcNow.AddMinutes(-10));
+
+        _factory.Switch.IsEnabled = false;
+        await _factory.RunWorkerSweepAsync();
+
+        Assert.Empty(await _factory.GetPublicationsAsync(admin, propertyId)); // no publication was even created
+        Assert.Empty(_factory.Publishers[SocialPlatform.Telegram].Published);
+
+        _factory.Switch.IsEnabled = true;
+        await _factory.RunWorkerSweepAsync();
+
+        var publication = Assert.Single(await _factory.GetPublicationsAsync(admin, propertyId));
+        Assert.Equal("Published", publication.GetProperty("status").GetString()); // nothing was lost while paused
+    }
+
+    [Fact]
+    public async Task KillSwitch_LeavesAQueuedPublicationUntouched_AndRefusesManualPublishWith409()
+    {
+        var (admin, _, ownerId) = await SeedUsersAsync();
+        var accountId = await _factory.ConfigurePlatformAsync(admin, SocialPlatform.Telegram);
+        var (publicationId, _) = await QueueManualPublicationAsync(admin, ownerId, accountId);
+
+        _factory.Switch.IsEnabled = false;
+        await _factory.RunWorkerSweepAsync();
+        var manual = await admin.PostAsync($"/api/social-distribution/publications/{publicationId}/publish", null);
+
+        Assert.Equal(HttpStatusCode.Conflict, manual.StatusCode);
+        Assert.Equal("Queued", await PublicationStatusAsync(admin, publicationId));
+        Assert.Empty(_factory.Publishers[SocialPlatform.Telegram].Published);
+
+        _factory.Switch.IsEnabled = true;
+        await _factory.RunWorkerSweepAsync();
+
+        Assert.Equal("Published", await PublicationStatusAsync(admin, publicationId));
+    }
+
+    [Fact]
+    public async Task DeactivatedChannel_PausesItsQueuedPublications_WithoutDeadLettersOrCalls_AndResumesOnReactivation()
+    {
+        // The runtime "pause one platform" control (no redeploy): the engine only checked the
+        // channel when it CREATED a publication; the worker never looked at it again, so a
+        // deactivated channel kept publishing everything already queued.
+        var (admin, _, ownerId) = await SeedUsersAsync();
+        var accountId = await _factory.ConfigurePlatformAsync(admin, SocialPlatform.Telegram);
+        var account = await SocialDistributionApiTestFactory.SendAsync(admin.GetAsync($"/api/social-distribution/accounts/{accountId}"));
+        var channelId = account.GetProperty("socialChannelId").GetGuid();
+        var (publicationId, _) = await QueueManualPublicationAsync(admin, ownerId, accountId);
+
+        await SocialDistributionApiTestFactory.SendAsync(admin.PostAsync($"/api/social-distribution/channels/{channelId}/deactivate", null));
+        await _factory.RunWorkerSweepAsync();
+
+        Assert.Equal("Queued", await PublicationStatusAsync(admin, publicationId));
+        Assert.Empty(_factory.Publishers[SocialPlatform.Telegram].Published);
+        var deadLetters = await SocialDistributionApiTestFactory.SendAsync(admin.GetAsync("/api/social-distribution/dead-letters"));
+        Assert.Equal(0, deadLetters.GetProperty("totalCount").GetInt32());
+
+        await SocialDistributionApiTestFactory.SendAsync(admin.PostAsync($"/api/social-distribution/channels/{channelId}/activate", null));
+        await _factory.RunWorkerSweepAsync();
+
+        Assert.Equal("Published", await PublicationStatusAsync(admin, publicationId));
+    }
+
+    [Fact]
+    public async Task RejectedCredential_ExpiresTheAccount_SoItIsTakenOutOfRotation()
+    {
+        var (admin, _, ownerId) = await SeedUsersAsync();
+        var accountId = await _factory.ConfigurePlatformAsync(admin, SocialPlatform.Facebook);
+        _factory.Publishers[SocialPlatform.Facebook].OnPublish = _ =>
+            SocialPublishResult.Failure(SocialPublicationErrorCode.InvalidCredentials, "token rejected by the platform");
+        var propertyId = await _factory.SeedPublishedPropertyAsync(ownerId, publishedAtUtc: DateTime.UtcNow.AddMinutes(-10));
+
+        await _factory.RunWorkerSweepAsync();
+
+        var publication = Assert.Single(await _factory.GetPublicationsAsync(admin, propertyId));
+        Assert.Equal("Failed", publication.GetProperty("status").GetString());
+        var account = await SocialDistributionApiTestFactory.SendAsync(admin.GetAsync($"/api/social-distribution/accounts/{accountId}"));
+        Assert.Equal("Expired", account.GetProperty("status").GetString());
+
+        // A second listing now never even reaches the platform with the dead credential.
+        var secondProperty = await _factory.SeedPublishedPropertyAsync(ownerId, publishedAtUtc: DateTime.UtcNow.AddMinutes(-10));
+        await _factory.RunWorkerSweepAsync();
+        Assert.Single(_factory.Publishers[SocialPlatform.Facebook].Published);
+        Assert.Empty(await _factory.GetPublicationsAsync(admin, secondProperty)); // skipped by the engine: account is no longer Active
     }
 }
