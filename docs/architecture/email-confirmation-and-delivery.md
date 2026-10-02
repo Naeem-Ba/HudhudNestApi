@@ -176,12 +176,15 @@ fallback was corrected to the registered `#/auth/reset-password` path, and
 `appsettings.Development.example.json`, and `.env.example`. `PasswordResetUrlBuilderTests`
 was added — the class had no test coverage at all before this fix.
 
-**Still open, by design:** dropping hash routing and adding an SPA fallback rule in hosting
-(Option A) remains the better long-term answer — it also fixes link sharing and SEO — but was
-deliberately deferred rather than mixed into the same release as this fix. **Every deployed
-environment's `Frontend:PasswordResetUrl` still needs updating outside this repo**, and this
-still is not closed by a unit test: it requires an actual click on a link delivered to a real
-inbox in Staging, for both the confirmation and reset-password flows. Tracked as **B-14**.
+**✅ Superseded (2026-10-02):** the frontend has since dropped hash routing entirely (Option A,
+applied as part of the Production SEO project — see `ARD-HudhudNest.md` ADR-001-R in the frontend
+repo). `ConfirmationPath` is back to `auth/verify-email` with no `#`, `PasswordResetUrlBuilder`'s
+development fallback dropped the `#` too, and `Frontend:PasswordResetUrl` in `appsettings.json`/
+`appsettings.Development.example.json`/`.env.example` no longer carries one either. **Every
+deployed environment's `Frontend:PasswordResetUrl` needs updating again outside this repo — this
+time to *remove* the `#/` it was given for B-14 — or confirmation/reset links will break again,
+the opposite way.** Still not closed by a unit test for the same reason as before: it requires an
+actual click on a link delivered to a real inbox in Staging, for both flows. Tracked as **B-14**.
 
 ## Configuration keys
 
@@ -194,6 +197,6 @@ inbox in Staging, for both the confirmation and reset-password flows. Tracked as
 | `Email:Resend:BaseUrl` | optional | defaults to `https://api.resend.com` |
 | `Email:Resend:TimeoutSeconds` | optional | defaults to 10; 1–120 |
 | `Frontend:BaseUrl` | **Production** | absolute HTTPS; boot fails without it |
-| `Frontend:PasswordResetUrl` | Production | must include the `#/` hash-routing prefix (see B-14 above) |
+| `Frontend:PasswordResetUrl` | Production | a plain path, no `#/` prefix (hash routing was removed — see B-14 above) |
 
 Local setup: `docs/user-secrets.md`.

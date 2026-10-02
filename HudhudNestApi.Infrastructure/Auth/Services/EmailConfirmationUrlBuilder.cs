@@ -18,7 +18,7 @@ public sealed class EmailConfirmationUrlBuilder : IEmailConfirmationUrlBuilder
 {
     private const string DevelopmentFallbackBaseUrl = "http://localhost:4200";
 
-    private const string ConfirmationPath = "#/auth/verify-email";
+    private const string ConfirmationPath = "auth/verify-email";
 
     private readonly IConfiguration _configuration;
     private readonly IHostEnvironment _environment;

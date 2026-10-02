@@ -1,8 +1,10 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
+using HudhudNestApi.Configuration;
 using HudhudNestApi.Application.Listings.DTOs;
 using HudhudNestApi.Application.Listings.Commands.ConfirmFeaturedListingPayment;
 using HudhudNestApi.Application.Listings.Commands.ConfirmListingExtensionPayment;
@@ -52,11 +54,18 @@ public sealed class PropertiesController : ControllerBase
     [HttpGet]
     [AllowAnonymous]
     [EnableRateLimiting("public-search")]
+    [OutputCache(PolicyName = OutputCacheRegistration.PublicPropertyListPolicy)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] PropertyFilterDto filter,
         CancellationToken ct)
     {
+        // [OutputCache] caches server-side (Redis) but never sends Cache-Control to the
+        // browser/CDN (see AnalyticsController's doc comment) -- set explicitly here, same
+        // duration as the policy's own Expire() (see OutputCacheRegistration.PublicPropertyListMaxAge
+        // for why reusing that exact duration doesn't add staleness exposure).
+        SetPublicCacheControl(OutputCacheRegistration.PublicPropertyListMaxAge);
+
         var result = await _mediator.Send(new GetPropertiesListQuery(filter), ct);
         return Ok(result);
     }
@@ -79,12 +88,24 @@ public sealed class PropertiesController : ControllerBase
     [HttpGet("{id:guid}")]
     [AllowAnonymous]
     [EnableRateLimiting("public-read")]
+    [OutputCache(PolicyName = OutputCacheRegistration.PublicPropertyDetailsPolicy)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
+        SetPublicCacheControl(OutputCacheRegistration.PublicPropertyDetailsMaxAge);
+
         var result = await _mediator.Send(new GetPropertyByIdQuery(id), ct);
         return result is null ? NotFound() : Ok(result);
+    }
+
+    private void SetPublicCacheControl(TimeSpan maxAge)
+    {
+        Response.GetTypedHeaders().CacheControl = new Microsoft.Net.Http.Headers.CacheControlHeaderValue
+        {
+            Public = true,
+            MaxAge = maxAge
+        };
     }
 
     [HttpGet("mine")]
