@@ -33,6 +33,9 @@ public abstract class PlatformNotConfiguredPublisherBase : ISocialPublisher
 
     public abstract SocialPlatform Platform { get; }
 
+    /// <summary>A placeholder never posts anything — see the class remarks.</summary>
+    public bool IsLive => false;
+
     protected PlatformNotConfiguredPublisherBase(ILogger logger) => _logger = logger;
 
     public abstract SocialPublisherCapabilities GetCapabilities();
