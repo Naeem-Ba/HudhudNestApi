@@ -66,4 +66,25 @@ public sealed class PropertiesCacheAndCompressionTests : IClassFixture<TestAppli
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("gzip", response.Content.Headers.ContentEncoding);
     }
+
+    [Fact(DisplayName = "A second identical request, served from the OutputCache hit, still carries the same Cache-Control")]
+    public async Task GetAll_Second_Request_Served_From_Cache_Still_Has_CacheControl()
+    {
+        // Round-3 audit verification: Cache-Control is set by the controller action itself, not
+        // by [OutputCache] -- worth confirming it survives on a CACHE HIT too (the action method
+        // body does not even run the second time), not just on the first request that populates
+        // the cache. OutputCache replays the whole captured response (status, headers, body) on
+        // a hit, so this should hold, but it is exactly the kind of subtlety worth a real
+        // assertion rather than an assumption.
+        using var client = _factory.CreateClient();
+
+        var first = await client.GetAsync("/api/properties?page=1&pageSize=5");
+        var second = await client.GetAsync("/api/properties?page=1&pageSize=5");
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        Assert.NotNull(second.Headers.CacheControl);
+        Assert.True(second.Headers.CacheControl!.Public);
+        Assert.Equal(OutputCacheRegistration.PublicPropertyListMaxAge, second.Headers.CacheControl.MaxAge);
+    }
 }
