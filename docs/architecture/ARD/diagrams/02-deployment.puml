@@ -14,13 +14,13 @@ cloud "Netlify" {
 
 cloud "Render.com — My project (prj-d5b6uk2li9vc73bhpe20)" {
   node "بيئة Production" as RenderProd {
-    node "Web Service\nHudhudNest (Render service name: hudhudnest-api)\n(Docker: dotnet/aspnet:8.0-jammy-chiseled-extra)\nASPNETCORE_HTTP_PORTS=8080" as ApiProd
-    database "hudhudnest-production-db\n(PostgreSQL + PostGIS)" as DbProd
+    node "Web Service\nwohnungen-api.onrender.com\nنطاق مخصّص: api.hudhudnest.com\n(Docker: aspnet:8.0-jammy-chiseled-extra)\nنشر يدوي فقط (workflow_dispatch)" as ApiProd
+    database "قاعدة Production\n(PostgreSQL + PostGIS)\nDATABASE_URL" as DbProd
   }
 
   node "بيئة Staging (معزولة)" as RenderStage {
-    node "Web Service\nhudhudnest-staging-api\n(srv-dacpbgf40ujc73epheig)\nDocker, Free plan, فرع master\nAuto-Deploy: off" as ApiStage
-    database "hudhudnest-staging-db\n(PostgreSQL 18, Free،\nبدون نسخ احتياطي، صلاحية ~30 يومًا)" as DbStage
+    node "Web Service\npropertyapi-staging-api.onrender.com\n(srv-dacpbgf40ujc73epheig)\nنطاق مخصّص: staging-api.hudhudnest.com\nDocker, Free plan, فرع master\nAuto-Deploy: off" as ApiStage
+    database "propertyapi-staging-db\n(PostgreSQL 18, Free،\nبدون نسخ احتياطي، صلاحية ~30 يومًا)" as DbStage
   }
 }
 
@@ -31,10 +31,10 @@ cloud "Upstash" {
 node "Render Redis (Valkey 8)\nhudhudnest-redis\n(معاد استخدامه لبيئة Staging)" as RedisStage
 
 cloud "خدمات SaaS خارجية" {
-  [Cloudinary\n(صور — بيئة إنتاج مشتركة،\nمفاتيح API منفصلة لكل بيئة)] as Cloudinary
+  [Cloudinary\n(cloud مشترك؛ العزل بمجلد جذر:\nstaging/ في Staging، hudhudnest/ في Production)] as Cloudinary
   [Resend\n(دومين موثّق واحد: hudhudnest.com\nمفاتيح API منفصلة لكل بيئة)] as Resend
   [Google / Apple OAuth] as OAuthProviders
-  [بوابة SMS] as Sms
+  [SMS / Telegram Gateway / WhatsApp\n+ Telegram Bot / Meta Graph (نشر)] as Sms
 }
 
 node "مجموعة المراقبة (Observability Stack)\ndocker-compose.observability.yml" as ObsStack {
@@ -73,8 +73,8 @@ ApiProd --> ObsStack : OTLP/gRPC
 ApiStage --> ObsStack : OTLP/gRPC
 
 Gate --> Build
-Build --> ApiStage : نشر عبر Deploy Hook\n(يدوي، بعد نجاح البوابة)
-Gate ..> DbProd : لا نشر تلقائي على Production\n(بوابة تحقق فقط)
+Build --> ApiStage : staging-smoke: هجرة القاعدة ثم Deploy Hook\n(تلقائي بعد الدمج في master)
+Gate --> ApiProd : deploy-production (يدوي)\nworkflow_dispatch من master فقط
 
 note bottom of RenderStage
   ForwardedHeaders__Enabled=false على Staging

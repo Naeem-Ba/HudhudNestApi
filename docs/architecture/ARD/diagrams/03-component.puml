@@ -7,7 +7,7 @@ skinparam componentStyle rectangle
 title مخطط المكوّنات (Component Diagram) — الطبقات المعمارية لمشروع HudhudNestApi
 
 package "HudhudNestApi (طبقة العرض / API Layer)" as ApiLayer {
-  [Controllers\n(41 وحدة تحكم: Auth, Agencies,\nProperties, Reviews, Visits,\nAdmin, ShortStay, Services,\nValuation, Investments,\nSocialDistribution ...)] as Controllers
+  [Controllers\n(43 وحدة تحكم: Auth, Agencies,\nProperties, Reviews, Visits,\nAdmin, ShortStay, Services,\nValuation, Investments,\nSocialDistribution ...)] as Controllers
   [Middleware\n(Exception, PhoneVerification,\nSecurity Headers, CSRF)] as Middleware
   [Security\n(JWT, CSRF, Rate Limiting,\nForwardedHeaders, Staging Guard)] as Security
   [Observability\n(OpenTelemetry bootstrap)] as ObsBootstrap
@@ -30,7 +30,7 @@ package "HudhudNestApi.Domain (طبقة النطاق)" as DomainLayer {
 }
 
 package "HudhudNestApi.Infrastructure (طبقة البنية التحتية)" as InfraLayer {
-  [Persistence\n(AppDbContext — EF Core / Npgsql,\nUnitOfWork, 57 Migrations)] as Persistence
+  [Persistence\n(AppDbContext — EF Core / Npgsql,\nUnitOfWork, 74 DbSet, 64 Migrations)] as Persistence
   [Repositories] as Repos
   [Auth Infrastructure\n(Identity, JWT issuing,\nRefreshToken store, SMS, Apple/Google\ntoken verification)] as AuthInfra
   [Media\n(CloudinaryMediaStorageService,\nStagingSmokeMediaStorageService)] as Media
@@ -39,13 +39,15 @@ package "HudhudNestApi.Infrastructure (طبقة البنية التحتية)" as
   [Notifications\n(SignalR + persisted Notification)] as NotifInfra
   [Health & Performance\n(health checks, DB diagnostics)] as HealthInfra
   [Valuation Infra\n(Repositories,\nValuationInquiryExpiryHostedService)] as ValuationInfra
+  [Social Distribution Infra\n(Telegram/Facebook/Instagram Publishers,\nDispatchHostedService, Lease/Reaper,\nSocialPublisherRegistry)] as SocialInfra
+  [OTP Channels\n(SmsOtpProvider, TelegramGatewayOtpProvider,\nWhatsAppCloudOtpProvider, OtpChannelService)] as OtpInfra
 }
 
 database "PostgreSQL + PostGIS" as Db
 database "Redis" as Redis
 cloud "Cloudinary" as Cloudinary
 cloud "Resend / SMTP" as EmailExt
-cloud "بوابة SMS" as SmsExt
+cloud "SMS / Telegram / WhatsApp / Meta Graph" as SmsExt
 cloud "Google / Apple" as OAuthExt
 cloud "OpenTelemetry Collector" as OtelExt
 
@@ -76,6 +78,9 @@ Repos --> Persistence
 CQRS --> Repos
 ValuationInfra --> Persistence
 ValuationInfra --> ValuationEntities
+SocialInfra --> SmsExt : نشر
+OtpInfra --> SmsExt : OTP
+SocialInfra --> Persistence
 
 AuthInfra --> Db
 AuthInfra --> SmsExt

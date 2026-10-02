@@ -25,7 +25,11 @@ package "أنظمة خارجية (External Systems)" {
   database "Redis\n(تحديد المعدل، التخزين المؤقت،\nSignalR backplane)" as Redis
   [Cloudinary\n(تخزين ومعالجة الصور)] as Cloudinary
   [Resend / SMTP\n(بريد إلكتروني معاملاتي)] as Email
-  [بوابة SMS\n(HTTP SMS Gateway)] as Sms
+  [مزوّدو SMS\n(Twilio / D7 / Unimatrix / HTTP)] as Sms
+  [Telegram Gateway\n(OTP عبر تيليغرام)] as TgGateway
+  [WhatsApp Cloud API\n(OTP — معطّل افتراضيًا)] as WaCloud
+  [Telegram Bot API\n(نشر اجتماعي)] as TgBot
+  [Meta Graph API\n(فيسبوك / إنستغرام — نشر)] as Meta
   [Google Identity\n(OAuth / One Tap)] as Google
   [Apple Sign In] as Apple
   [Have I Been Pwned\nAPI v3 (k-anonymity)] as HIBP
@@ -48,6 +52,10 @@ System --> Redis : StackExchange.Redis\n(rate limit, cache, pub/sub)
 System --> Cloudinary : REST API\n(رفع/حذف صور العقارات، الشعارات،\nالصور الرمزية)
 System --> Email : REST (Resend) أو SMTP\n(تأكيد الحساب، استعادة كلمة المرور،\nتنبيهات أمنية)
 System --> Sms : REST\n(رموز OTP للهاتف)
+System --> TgGateway : REST (Bearer)\nOTP بقناة Telegram
+System --> WaCloud : REST\nقالب AUTHENTICATION
+System --> TgBot : نشر المنشورات الآلية
+System --> Meta : نشر المنشورات الآلية\n(توكن في جسم POST)
 System --> Google : تحقق من ID Token
 System --> Apple : تحقق من Identity Token
 System --> HIBP : فحص كلمات مرور مخترقة\n(SHA-1 k-anonymity range query)
