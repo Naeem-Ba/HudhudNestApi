@@ -52,7 +52,11 @@ public static class SocialDistributionInfrastructureRegistration
         var telegramBotToken = configuration[$"{TelegramBotOptions.SectionName}:BotToken"];
         if (!string.IsNullOrWhiteSpace(telegramBotToken))
         {
-            services.AddHttpClient(TelegramBotPublisher.HttpClientName);
+            // The Bot API forces the token into the URL path (/bot<TOKEN>/method), and the default
+            // IHttpClientFactory handlers log that full URI at Information level (redacting only
+            // the query string) — so without this the token reaches the log stream on every post.
+            // Same remedy UnimatrixSmsService already applies; pinned by SocialPublisherHttpLoggingTests.
+            services.AddHttpClient(TelegramBotPublisher.HttpClientName).RemoveAllLoggers();
             services.AddSingleton<ISocialPublisher, TelegramBotPublisher>();
         }
 
