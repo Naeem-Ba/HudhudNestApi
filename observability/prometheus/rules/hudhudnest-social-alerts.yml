@@ -1,0 +1,25 @@
+groups:
+  - name: hudhudnest-social-distribution
+    rules:
+      # A rejected credential is a one-shot event: the account is marked Expired on the first
+      # rejection, so no second attempt ever increments the counter again. increase() alone would
+      # miss it (a series that first appears at 1 has no earlier sample), hence the second branch:
+      # "series that did not exist 15 minutes ago".
+      - alert: HudhudNestSocialCredentialRejected
+        expr: >-
+          (increase(hudhudnest_social_publication_attempts_total{failure_reason_category="InvalidCredentials"}[15m]) > 0)
+          or
+          (hudhudnest_social_publication_attempts_total{failure_reason_category="InvalidCredentials"}
+            unless hudhudnest_social_publication_attempts_total{failure_reason_category="InvalidCredentials"} offset 15m)
+        for: 0m
+        labels: { severity: page }
+        annotations:
+          summary: A social platform rejected our credential; the account is Expired and posting to it has stopped
+          runbook_url: docs/observability/alert-response-runbook.md#hudhudnestsocialcredentialrejected
+      - alert: HudhudNestSocialPublishFailuresElevated
+        expr: sum by (platform) (increase(hudhudnest_social_publication_attempts_total{outcome="failed"}[1h])) >= 3
+        for: 5m
+        labels: { severity: ticket }
+        annotations:
+          summary: Social publications are failing repeatedly on one platform
+          runbook_url: docs/observability/alert-response-runbook.md#hudhudnestsocialpublishfailureselevated

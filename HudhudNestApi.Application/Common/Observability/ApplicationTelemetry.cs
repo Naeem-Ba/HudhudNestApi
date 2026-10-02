@@ -93,6 +93,33 @@ public static class ApplicationTelemetry
             new KeyValuePair<string, object?>("channel", channel),
             new KeyValuePair<string, object?>("outcome", outcome));
 
+    private static readonly Counter<long> SocialPublicationAttemptCounter =
+        Meter.CreateCounter<long>(
+            "hudhudnest.social.publication.attempts",
+            description:
+                "Finished social publish attempts by platform and outcome (published, retrying, failed). " +
+                "A non-published outcome also carries failure_reason_category = the SocialPublicationErrorCode " +
+                "name (a fixed enum). Never labelled with an account, property or publication id.");
+
+    /// <summary>Platform and failure_reason_category are fixed enum names and outcome is one of three values, so the label cardinality stays bounded.</summary>
+    public static void RecordSocialPublicationAttempt(string platform, string outcome, string? failureReasonCategory)
+    {
+        if (failureReasonCategory is null)
+        {
+            SocialPublicationAttemptCounter.Add(
+                1,
+                new KeyValuePair<string, object?>("platform", platform),
+                new KeyValuePair<string, object?>("outcome", outcome));
+            return;
+        }
+
+        SocialPublicationAttemptCounter.Add(
+            1,
+            new KeyValuePair<string, object?>("platform", platform),
+            new KeyValuePair<string, object?>("outcome", outcome),
+            new KeyValuePair<string, object?>("failure_reason_category", failureReasonCategory));
+    }
+
     private static readonly Counter<long> BreachScreeningCounter =
         Meter.CreateCounter<long>(
             "auth.password_breach_screening",
