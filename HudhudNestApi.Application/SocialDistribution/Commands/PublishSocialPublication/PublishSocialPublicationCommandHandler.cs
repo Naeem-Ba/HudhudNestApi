@@ -266,7 +266,9 @@ public sealed class PublishSocialPublicationCommandHandler
         CredentialReference = account.CredentialReference,
         Title = publication.Content!.Title,
         Body = publication.Content.Body,
-        ImageUrl = publication.Content.ImageUrl,
+        // Only the request handed to the publisher is normalised (JPEG, bounded width) — the stored
+        // content keeps the original URL. See SocialImageUrlTransformer for why.
+        ImageUrl = SocialImageUrlTransformer.ForPublishing(publication.Content.ImageUrl),
         TargetUrl = publication.Content.TargetUrl,
         Hashtags = publication.Content.HashtagList,
         Language = publication.Content.Language,

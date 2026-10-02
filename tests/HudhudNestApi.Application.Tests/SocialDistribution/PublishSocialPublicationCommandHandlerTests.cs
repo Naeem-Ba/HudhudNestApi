@@ -79,7 +79,8 @@ public sealed class PublishSocialPublicationCommandHandlerTests
     }
 
     private static (SocialPublication publication, SocialAccount account) MakeQueuedPublication(
-        SocialPlatform platform = SocialPlatform.Facebook, Guid? distributionRuleId = null)
+        SocialPlatform platform = SocialPlatform.Facebook, Guid? distributionRuleId = null,
+        string imageUrl = "https://cdn.example.com/img.jpg")
     {
         var channelId = Guid.NewGuid();
         var account = SocialAccount.Create(channelId, platform, "Page", "ext-1", SocialAccountType.Page);
@@ -88,7 +89,7 @@ public sealed class PublishSocialPublicationCommandHandlerTests
         var publication = SocialPublication.Create(
             Guid.NewGuid(), account.Id, Guid.NewGuid(), platform, distributionRuleId: distributionRuleId, distributionRunId: distributionRuleId is null ? null : Guid.NewGuid());
         var content = SocialPostContent.Create(
-            publication.Id, platform, "عنوان", "نص", "https://cdn.example.com/img.jpg",
+            publication.Id, platform, "عنوان", "نص", imageUrl,
             "https://hudhudnest.com/properties/p1", null, "ar");
         publication.AttachContent(content);
         publication.Queue(null, DateTime.UtcNow);
@@ -307,6 +308,36 @@ public sealed class PublishSocialPublicationCommandHandlerTests
         Assert.Equal(SocialPublicationStatus.Published, result.Status);
         Assert.Equal(originalImageUrl, capturedRequest!.ImageUrl);
         fixture.AssetGenerator.Verify(x => x.GenerateAsync(It.IsAny<GenerateSocialAssetRequest>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_CloudinaryPhoto_IsSentToThePublisherAsABoundedJpeg_WhileTheStoredContentKeepsTheOriginal()
+    {
+        // Instagram accepts JPEG only and Telegram's sendPhoto-by-URL caps the file at 5 MB, but
+        // the owner's upload can be a large PNG/WebP/HEIC: normalise at publish time only — the
+        // stored SocialPostContent (what the admin sees and what a retry rebuilds from) is untouched.
+        const string original = "https://res.cloudinary.com/demo/image/upload/v1/property-images/abc.png";
+        var fixture = new Fixture();
+        var (publication, account) = MakeQueuedPublication(imageUrl: original);
+
+        fixture.Publications.Setup(x => x.GetByIdAsync(publication.Id, It.IsAny<CancellationToken>())).ReturnsAsync(publication);
+        fixture.Accounts.Setup(x => x.GetByIdAsync(account.Id, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+        fixture.Properties.Setup(x => x.IsPubliclyVisibleAsync(publication.PropertyId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+
+        SocialPublishRequest? capturedRequest = null;
+        fixture.RegisterPublisher(new FakePublisher(SocialPlatform.Facebook, req =>
+        {
+            capturedRequest = req;
+            return SocialPublishResult.Success("ext-1");
+        }));
+
+        var result = await fixture.BuildHandler().Handle(new PublishSocialPublicationCommand(publication.Id), CancellationToken.None);
+
+        Assert.Equal(SocialPublicationStatus.Published, result.Status);
+        Assert.Equal(
+            "https://res.cloudinary.com/demo/image/upload/f_jpg,q_auto,w_1440,c_limit/v1/property-images/abc.jpg",
+            capturedRequest!.ImageUrl);
+        Assert.Equal(original, publication.Content!.ImageUrl);
     }
 
     [Fact]
