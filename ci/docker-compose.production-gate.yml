@@ -7,7 +7,7 @@ name: hudhudnest-production-gate
 # or export it in the shell / GitHub Actions env before running this file.
 # ---------------------------------------------------------------------------
 
-x-db-name: &db-name ${HUDHUDNEST_GATE_DB:-propertyapi_gate}
+x-db-name: &db-name ${HUDHUDNEST_GATE_DB:-hudhudnest_gate}
 
 services:
   postgres:
@@ -22,7 +22,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - pg_isready -U ${HUDHUDNEST_GATE_DB_USER:-postgres} -d ${HUDHUDNEST_GATE_DB:-propertyapi_gate}
+        - pg_isready -U ${HUDHUDNEST_GATE_DB_USER:-postgres} -d ${HUDHUDNEST_GATE_DB:-hudhudnest_gate}
       interval: 5s
       timeout: 3s
       retries: 20
@@ -180,7 +180,7 @@ services:
     environment:
       DOTNET_ENVIRONMENT: Staging
       ASPNETCORE_ENVIRONMENT: Staging
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${HUDHUDNEST_GATE_DB:-propertyapi_gate};Username=${HUDHUDNEST_GATE_DB_USER:-postgres};Password=${HUDHUDNEST_GATE_DB_PASSWORD:-postgres}
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${HUDHUDNEST_GATE_DB:-hudhudnest_gate};Username=${HUDHUDNEST_GATE_DB_USER:-postgres};Password=${HUDHUDNEST_GATE_DB_PASSWORD:-postgres}
       Redis__Required: "false"
     depends_on:
       postgres:
@@ -195,7 +195,7 @@ services:
       DOTNET_ENVIRONMENT: Staging
       ASPNETCORE_ENVIRONMENT: Staging
       ASPNETCORE_HTTP_PORTS: "8080"
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${HUDHUDNEST_GATE_DB:-propertyapi_gate};Username=${HUDHUDNEST_GATE_DB_USER:-postgres};Password=${HUDHUDNEST_GATE_DB_PASSWORD:-postgres}
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${HUDHUDNEST_GATE_DB:-hudhudnest_gate};Username=${HUDHUDNEST_GATE_DB_USER:-postgres};Password=${HUDHUDNEST_GATE_DB_PASSWORD:-postgres}
       ConnectionStrings__Redis: redis:6379,abortConnect=false
       Redis__ConnectionString: redis:6379,abortConnect=false
       Redis__Required: "true"
@@ -205,7 +205,7 @@ services:
       Deployment__ProductionBaseUrl: https://production.invalid
       Staging__AllowHttpLocal: "true"
       Staging__EnvironmentId: local-isolated-staging
-      Staging__DatabaseNameMarker: ${HUDHUDNEST_GATE_DB:-propertyapi_gate}
+      Staging__DatabaseNameMarker: ${HUDHUDNEST_GATE_DB:-hudhudnest_gate}
       Staging__RedisIsolationMarker: local-staging-redis
       Staging__StorageIsolationMarker: local-in-memory-smoke-media
       Staging__ExternalNotificationsDisabled: "true"

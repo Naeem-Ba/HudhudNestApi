@@ -4,7 +4,7 @@ param(
     [int] $Port = 5432,
     [string] $AdminUser = "postgres",
     [string] $AdminPassword = $env:PGPASSWORD,
-    [string] $Database = "propertyapi_testing",
+    [string] $Database = "hudhudnest_testing",
     [string] $PsqlPath = "C:\Program Files\PostgreSQL\18\bin\psql.exe"
 )
 

@@ -44,7 +44,7 @@
 - خمس تدفقات عمل جوهرية موثَّقة بمخططات تسلسلية: المصادقة، إدارة العقارات، رفع الصور، التقييمات، الزيارات.
 
 **ما لا تغطيه هذه الوثيقة:**
-- الشيفرة الداخلية للواجهة الأمامية Angular SPA (مستودع Git منفصل تمامًا: `Naeem-Ba/Wohnungsmieten`) — تُذكر هنا فقط من زاوية العقد الذي تتبادله مع الـ API (REST/JSON، الكوكيز، CORS، CSRF).
+- الشيفرة الداخلية للواجهة الأمامية Angular SPA (مستودع Git منفصل تمامًا: `Naeem-Ba/HudhudNest`) — تُذكر هنا فقط من زاوية العقد الذي تتبادله مع الـ API (REST/JSON، الكوكيز، CORS، CSRF).
 - تطبيق الجوال (Capacitor) بتفاصيله الداخلية — يُعامَل كعميل HTTP آخر للـ API.
 - كل وحدات العمل الفرعية بتفصيل متساوٍ: التركيز الأعمق على المصادقة والعقارات والوسائط والتقييمات والزيارات (الوحدات المطلوبة صراحة من الإصدار الأول) **وعلى وحدة التقييم العقاري (Valuation)** المُضافة في هذا التحديث (v1.1)، مع نظرة عامة أخفّ على: المكاتب العقارية (Agencies)، الإقامات القصيرة (ShortStay)، سوق الخدمات (Services Marketplace)، الإدارة (Admin)، الاستثمار العقاري (Investments)، التوزيع الآلي على وسائل التواصل الاجتماعي (Social Distribution)، والتسويق ما قبل الإطلاق (Leads/Offers/Surveys).
 
@@ -282,7 +282,7 @@ Controller → IMediator.Send(Command|Query)
 | خدمة الويب | `HudhudNest` (اسم خدمة Render السابق: `hudhudnest-api`) | `hudhudnest-staging-api` (`srv-dacpbgf40ujc73epheig`) |
 | قاعدة البيانات | PostgreSQL + PostGIS مخصَّصة | `hudhudnest-staging-db` (PostgreSQL 18، خطة Free، بلا نسخ احتياطي، صلاحية ~30 يومًا) |
 | Redis | Upstash (مُدار خارجيًا) | `hudhudnest-redis` (Valkey 8 على Render، مُعاد استخدامه) |
-| الواجهة الأمامية | `hudhudnest.com` (Netlify، فرع `main`) | `staging--bizorealestateworld.netlify.app` (فرع `staging`) |
+| الواجهة الأمامية | `hudhudnest.com` (Netlify، فرع `main`) | `staging--hudhudnest.netlify.app` (فرع `staging`) |
 | النشر التلقائي | — (بوابة تحقق فقط، لا نشر آلي مباشر موثَّق في هذه الوثيقة) | مُعطَّل (Auto-Deploy: off) — نشر عبر Deploy Hook يدويًا بعد نجاح `production-gate.yml` |
 | ترحيلات قاعدة البيانات | يدوية عبر `tools/HudhudNestApi.Migrator` | يدوية عبر `tools/HudhudNestApi.Migrator` (لا تطبيق تلقائي عند الإقلاع في أي بيئة) |
 | رؤوس الوكيل الموثوقة (`ForwardedHeaders`) | مفعّلة، مع `KnownNetworks` صريحة | **معطَّلة** (`ForwardedHeaders__Enabled=false`) — Render لا ينشر نطاق IP وكيل موثَّق، ولا تتوفر صلاحية Shell على الخطة المجانية للتحقق التجريبي |

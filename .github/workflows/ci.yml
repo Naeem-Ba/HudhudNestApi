@@ -49,13 +49,13 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: propertyapi_testing
+          POSTGRES_DB: hudhudnest_testing
 
         ports:
           - 5432:5432
 
         options: >-
-          --health-cmd="pg_isready -U postgres -d propertyapi_testing"
+          --health-cmd="pg_isready -U postgres -d hudhudnest_testing"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
@@ -79,14 +79,14 @@ jobs:
       ConnectionStrings__DefaultConnection: >-
         Host=localhost;
         Port=5432;
-        Database=propertyapi_testing;
+        Database=hudhudnest_testing;
         Username=postgres;
         Password=postgres
 
       TEST_POSTGRES_CONNECTION_STRING: >-
         Host=localhost;
         Port=5432;
-        Database=propertyapi_testing;
+        Database=hudhudnest_testing;
         Username=postgres;
         Password=postgres
 
@@ -217,7 +217,7 @@ jobs:
             -v ON_ERROR_STOP=1 \
             -h localhost \
             -U postgres \
-            -d propertyapi_testing \
+            -d hudhudnest_testing \
             -c "SELECT version();"
 
       - name: Verify PostGIS and pg_trgm extensions
@@ -226,7 +226,7 @@ jobs:
             -v ON_ERROR_STOP=1 \
             -h localhost \
             -U postgres \
-            -d propertyapi_testing <<'SQL'
+            -d hudhudnest_testing <<'SQL'
           CREATE EXTENSION IF NOT EXISTS postgis;
           CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
@@ -256,7 +256,7 @@ jobs:
             -v ON_ERROR_STOP=1 \
             -h localhost \
             -U postgres \
-            -d propertyapi_testing <<'SQL'
+            -d hudhudnest_testing <<'SQL'
 
           SELECT
               "MigrationId",

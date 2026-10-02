@@ -82,7 +82,7 @@ jobs:
       RESTORE_TARGET_ENVIRONMENT: recovery-drill
       RESTORE_TARGET_DISPOSABLE: "true"
       ALLOW_DESTRUCTIVE_RESTORE: "true"
-      RESTORE_TARGET_DATABASE_URL: postgresql://postgres:postgres@restore-postgres:5432/propertyapi_restore_drill?sslmode=disable
+      RESTORE_TARGET_DATABASE_URL: postgresql://postgres:postgres@restore-postgres:5432/hudhudnest_restore_drill?sslmode=disable
       RESTORE_ADMIN_DATABASE_URL: postgresql://postgres:postgres@restore-postgres:5432/postgres?sslmode=disable
       BACKUP_OUTPUT_DIR: /workspace/artifacts/database-recovery
       RESTORE_RESULT_DIR: /workspace/artifacts/database-recovery
@@ -248,7 +248,7 @@ jobs:
       - name: Run application-level database verification
         shell: bash
         env:
-          ConnectionStrings__DefaultConnection: Host=127.0.0.1;Port=55433;Database=propertyapi_restore_drill;Username=postgres;Password=postgres
+          ConnectionStrings__DefaultConnection: Host=127.0.0.1;Port=55433;Database=hudhudnest_restore_drill;Username=postgres;Password=postgres
           # Pre-deploy backups lack the release's new migrations; rehearse applying them on this
           # disposable, loopback-only restored copy (see DatabaseRecoveryVerifier/Program.cs).
           RECOVERY_APPLY_PENDING_MIGRATIONS: "true"

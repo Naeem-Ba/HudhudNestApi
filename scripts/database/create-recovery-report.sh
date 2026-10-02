@@ -28,7 +28,7 @@ VALIDATION_SECONDS="$(jq -r '.durationSeconds' "${RESULT_DIR}/database-verificat
 jq -n \
   --arg result passed \
   --arg backupId "${BACKUP_ID}" \
-  --arg restoreTarget propertyapi_restore_drill \
+  --arg restoreTarget hudhudnest_restore_drill \
   --arg backupCreatedAtUtc "${BACKUP_CREATED_AT}" \
   --arg drillStartedAtUtc "$(date -u -d "@${DRILL_STARTED_EPOCH}" +%Y-%m-%dT%H:%M:%SZ)" \
   --arg drillCompletedAtUtc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \

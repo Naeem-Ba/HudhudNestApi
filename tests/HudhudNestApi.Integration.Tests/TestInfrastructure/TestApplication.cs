@@ -67,7 +67,7 @@ public sealed class TestApplication : WebApplicationFactory<Program>
         {
             Environment.SetEnvironmentVariable(
                 "DATABASE_URL",
-                "Host=localhost;Port=5432;Database=propertyapi_test;Username=postgres;Password=postgres;SSL Mode=Require;");
+                "Host=localhost;Port=5432;Database=hudhudnest_test;Username=postgres;Password=postgres;SSL Mode=Require;");
 
             // Program.cs reads ForwardedHeaders immediately after CreateBuilder().
             // WebApplicationFactory.ConfigureAppConfiguration runs too late for that startup guard,
@@ -98,9 +98,9 @@ public sealed class TestApplication : WebApplicationFactory<Program>
                 // point -- CreateDefaultConfiguration's in-memory override of the same key
                 // (used by the InMemory-database swap in ConfigureTestServices below) applies
                 // too late for the guard, exactly like every other key here. Must contain
-                // Staging__DatabaseNameMarker below ("test" is inside "propertyapi_test").
+                // Staging__DatabaseNameMarker below ("test" is inside "hudhudnest_test").
                 ["ConnectionStrings__DefaultConnection"] =
-                    "Host=localhost;Port=5432;Database=propertyapi_test;Username=postgres;Password=not-used;Trust Server Certificate=true",
+                    "Host=localhost;Port=5432;Database=hudhudnest_test;Username=postgres;Password=not-used;Trust Server Certificate=true",
                 // Same early-guard timing issue (StagingEnvironmentGuard.ValidateRedis) --
                 // this only needs to be a non-empty configured value for the guard, since
                 // CacheInfrastructureRegistration's AddStackExchangeRedisCache connects lazily
@@ -149,7 +149,7 @@ public sealed class TestApplication : WebApplicationFactory<Program>
     /// right after WebApplication.CreateBuilder (Program.cs), so the constructor above sets
     /// every key that guard requires as a real environment variable -- not just test setup
     /// boilerplate, the host fails to start without them. "test" (the DatabaseNameMarker)
-    /// intentionally matches the "propertyapi_test" database name CreateDefaultConfiguration
+    /// intentionally matches the "hudhudnest_test" database name CreateDefaultConfiguration
     /// already sets, and CookieCsrf is left at the Testing defaults (disabled) like the base
     /// "Testing" host -- callers that need it layer CookieCsrf:Enabled=true through
     /// configurationOverrides same as CreateTesting callers do.
@@ -256,7 +256,7 @@ public sealed class TestApplication : WebApplicationFactory<Program>
     {
         var settings = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
         {
-            ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=propertyapi_test;Username=postgres;Password=not-used;Trust Server Certificate=true",
+            ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=hudhudnest_test;Username=postgres;Password=not-used;Trust Server Certificate=true",
             ["ConnectionStrings:Redis"] = "localhost:6379",
             ["Redis:ConnectionString"] = "localhost:6379",
 

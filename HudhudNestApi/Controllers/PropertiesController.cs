@@ -31,10 +31,10 @@ using HudhudNestApi.Domain.Users.Constants;
 namespace HudhudNestApi.Controllers;
 
 /// <summary>
-/// Replaces the old WohnungenController.
+/// Property listing endpoints (replaced the legacy listings controller).
 ///
 /// CHANGES from old controller:
-/// 1. Uses MediatR instead of IWohnungService directly
+/// 1. Uses MediatR instead of calling a service directly
 /// 2. Uses Guid IDs everywhere (old used int IDs)
 /// 3. Structured query parameters via [FromQuery] PropertyFilterDto
 /// 4. Proper 404 / 403 / 200 response handling
