@@ -128,7 +128,7 @@ public sealed class OptionsValidationGuardTests
         var settings = new Dictionary<string, string?>
         {
             ["ConnectionStrings:DefaultConnection"] =
-                "Host=localhost;Database=propertyapi;Username=test;Password=test",
+                "Host=localhost;Database=hudhudnest;Username=test;Password=test",
 
             ["Jwt:Key"] =
                 "0123456789abcdef0123456789abcdef",

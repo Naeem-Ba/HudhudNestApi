@@ -206,8 +206,8 @@ export PERF_FIXED_OTP="${PERF_FIXED_OTP:-$(printf '%06d' $((RANDOM % 1000000)))}
 export PERF_TEST_PHONE_PREFIX="${PERF_TEST_PHONE_PREFIX:-+155590}"
 export PERF_TEST_PASSWORD="${PERF_TEST_PASSWORD:-Performance-$(openssl rand -hex 12)!}"
 export PERF_CLEANUP_SECRET="${PERF_CLEANUP_SECRET:-$(openssl rand -base64 48 | tr -d '\r\n')}"
-export PERF_DATABASE_CONNECTION_STRING="Host=localhost;Port=55432;Database=propertyapi_performance;Username=postgres;Password=${PERF_POSTGRES_PASSWORD};Pooling=true;Maximum Pool Size=20;Timeout=15;Command Timeout=60"
-export PERF_DATABASE_URL="postgresql://postgres:${PERF_POSTGRES_PASSWORD}@localhost:55432/propertyapi_performance"
+export PERF_DATABASE_CONNECTION_STRING="Host=localhost;Port=55432;Database=hudhudnest_performance;Username=postgres;Password=${PERF_POSTGRES_PASSWORD};Pooling=true;Maximum Pool Size=20;Timeout=15;Command Timeout=60"
+export PERF_DATABASE_URL="postgresql://postgres:${PERF_POSTGRES_PASSWORD}@localhost:55432/hudhudnest_performance"
 export PERF_DATASET_MANIFEST="${artifacts}/dataset-manifest.json"
 export PERF_ARTIFACTS_DIR="${artifacts}"
 export PERF_EXPECTED_SCENARIO_REPORTS=17

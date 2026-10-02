@@ -4,7 +4,7 @@ x-api-environment: &api-environment
   ASPNETCORE_ENVIRONMENT: Staging
   DOTNET_ENVIRONMENT: Staging
   ASPNETCORE_URLS: http://+:8080
-  ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=propertyapi_performance;Username=postgres;Password=${PERF_POSTGRES_PASSWORD:?required};Pooling=true;Maximum Pool Size=40;Timeout=15;Command Timeout=60
+  ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=hudhudnest_performance;Username=postgres;Password=${PERF_POSTGRES_PASSWORD:?required};Pooling=true;Maximum Pool Size=40;Timeout=15;Command Timeout=60
   ConnectionStrings__Redis: redis:6379,abortConnect=false
   Redis__ConnectionString: redis:6379,abortConnect=false
   RateLimiting__Redis__Enabled: "true"
@@ -34,7 +34,7 @@ x-api-environment: &api-environment
   DataProtection__PersistKeysToDatabase: "true"
   Staging__AllowHttpLocal: "true"
   Staging__EnvironmentId: hudhudnest-performance
-  Staging__DatabaseNameMarker: propertyapi_performance
+  Staging__DatabaseNameMarker: hudhudnest_performance
   Staging__RedisIsolationMarker: hudhudnest-performance
   Staging__StorageIsolationMarker: hudhudnest-performance
   Staging__ExternalNotificationsDisabled: "true"
@@ -107,11 +107,11 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${PERF_POSTGRES_PASSWORD:?required}
-      POSTGRES_DB: propertyapi_performance
+      POSTGRES_DB: hudhudnest_performance
     ports:
       - "55432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d propertyapi_performance"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hudhudnest_performance"]
       interval: 5s
       timeout: 5s
       retries: 30

@@ -16,9 +16,9 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: propertyapi_source
+      POSTGRES_DB: hudhudnest_source
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d propertyapi_source"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hudhudnest_source"]
       interval: 3s
       timeout: 3s
       retries: 30
@@ -58,7 +58,7 @@ services:
     environment:
       DOTNET_ENVIRONMENT: RecoveryDrill
       ASPNETCORE_ENVIRONMENT: RecoveryDrill
-      ConnectionStrings__DefaultConnection: Host=source-postgres;Port=5432;Database=propertyapi_source;Username=postgres;Password=postgres
+      ConnectionStrings__DefaultConnection: Host=source-postgres;Port=5432;Database=hudhudnest_source;Username=postgres;Password=postgres
       Redis__Required: "false"
     depends_on:
       source-postgres:
@@ -70,9 +70,9 @@ services:
       context: ..
       dockerfile: ci/Dockerfile.database-recovery
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@source-postgres:5432/propertyapi_source?sslmode=disable
+      DATABASE_URL: postgresql://postgres:postgres@source-postgres:5432/hudhudnest_source?sslmode=disable
       RESTORE_ADMIN_DATABASE_URL: postgresql://postgres:postgres@restore-postgres:5432/postgres?sslmode=disable
-      RESTORE_TARGET_DATABASE_URL: postgresql://postgres:postgres@restore-postgres:5432/propertyapi_restore_drill?sslmode=disable
+      RESTORE_TARGET_DATABASE_URL: postgresql://postgres:postgres@restore-postgres:5432/hudhudnest_restore_drill?sslmode=disable
       RESTORE_TARGET_ENVIRONMENT: recovery-drill
       RESTORE_TARGET_DISPOSABLE: "true"
       ALLOW_DESTRUCTIVE_RESTORE: "true"
@@ -95,7 +95,7 @@ services:
       DOTNET_ENVIRONMENT: RecoveryDrill
       ASPNETCORE_ENVIRONMENT: RecoveryDrill
       ASPNETCORE_HTTP_PORTS: "8080"
-      ConnectionStrings__DefaultConnection: Host=restore-postgres;Port=5432;Database=propertyapi_restore_drill;Username=postgres;Password=postgres
+      ConnectionStrings__DefaultConnection: Host=restore-postgres;Port=5432;Database=hudhudnest_restore_drill;Username=postgres;Password=postgres
       ConnectionStrings__Redis: redis:6379,abortConnect=false
       Redis__Required: "true"
       DataProtection__PersistKeysToDatabase: "true"

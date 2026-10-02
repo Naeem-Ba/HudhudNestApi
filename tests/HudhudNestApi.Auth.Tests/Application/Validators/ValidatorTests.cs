@@ -13,7 +13,7 @@ public sealed class AddEmailCommandValidatorTests
 
     [Theory(DisplayName = "Valid email passes")]
     [InlineData("user@example.com")]
-    [InlineData("ahmed.shamri@bizorealestateworld.com")]
+    [InlineData("ahmed.shamri@example.com")]
     [InlineData("test+tag@domain.org")]
     public void ValidEmail_ShouldPass(string email)
     {

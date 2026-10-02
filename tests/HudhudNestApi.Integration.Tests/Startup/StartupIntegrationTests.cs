@@ -293,7 +293,7 @@ public sealed class StartupIntegrationTests : IAsyncLifetime
             {
                 var settings = new Dictionary<string, string?>
                 {
-                    ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=propertyapi_testing;Username=postgres;Password=postgres;Trust Server Certificate=true",
+                    ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Port=5432;Database=hudhudnest_testing;Username=postgres;Password=postgres;Trust Server Certificate=true",
                     ["Database:ApplyMigrationsOnStartup"] = "false",
                     ["Database:SeedOnStartup"] = "false",
                     ["RateLimiting:Redis:Enabled"] = "false",

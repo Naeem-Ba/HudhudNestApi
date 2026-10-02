@@ -26,7 +26,7 @@ docker compose -f "${COMPOSE_FILE}" run --rm --no-deps \
     set -Eeuo pipefail
     stable_reads=0
     for attempt in $(seq 1 60); do
-      if PGPASSWORD=postgres psql -X -h source-postgres -U postgres -d propertyapi_source -tAc "SELECT 1" | grep -q 1; then
+      if PGPASSWORD=postgres psql -X -h source-postgres -U postgres -d hudhudnest_source -tAc "SELECT 1" | grep -q 1; then
         stable_reads=$((stable_reads + 1))
       else
         stable_reads=0
@@ -55,7 +55,7 @@ docker compose -f "${COMPOSE_FILE}" run --rm \
   -e MANIFEST_FILE="${MANIFEST_FILE}" \
   recovery-toolbox bash scripts/database/verify-restored-database.sh
 
-export ConnectionStrings__DefaultConnection='Host=127.0.0.1;Port=55433;Database=propertyapi_restore_drill;Username=postgres;Password=postgres'
+export ConnectionStrings__DefaultConnection='Host=127.0.0.1;Port=55433;Database=hudhudnest_restore_drill;Username=postgres;Password=postgres'
 export RECOVERY_APPLY_PENDING_MIGRATIONS=true
 dotnet run --project "${REPOSITORY_ROOT}/tools/HudhudNestApi.DatabaseRecoveryVerifier/HudhudNestApi.DatabaseRecoveryVerifier.csproj" \
   --configuration Release --no-restore

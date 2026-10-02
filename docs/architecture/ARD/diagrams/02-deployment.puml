@@ -9,7 +9,7 @@ node "جهاز المستخدم\n(Browser / Mobile)" as Client
 
 cloud "Netlify" {
   node "Production Frontend\nhudhudnest.com\n(main branch)" as FeProd
-  node "Staging Frontend\nstaging--bizorealestateworld\n.netlify.app (staging branch)" as FeStage
+  node "Staging Frontend\nstaging--hudhudnest\n.netlify.app (staging branch)" as FeStage
 }
 
 cloud "Render.com — My project (prj-d5b6uk2li9vc73bhpe20)" {

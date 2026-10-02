@@ -2,7 +2,7 @@
 
 Audit date: 2026-09-05. Scope: authentication end-to-end — ASP.NET Core / Clean
 Architecture backend (`HudhudNestApi`), the Angular + Capacitor frontend (separate repo,
-`Naeem-Ba/Wohnungsmieten`) only for auth-related code, and the Google/Apple social-login
+`Naeem-Ba/HudhudNest`) only for auth-related code, and the Google/Apple social-login
 integration specifically (not previously covered in depth by the general security audit
 below). Method: full repository inventory of every login method actually implemented
 (not assumed), reading of every social-auth source file end-to-end, a live `dotnet test`
