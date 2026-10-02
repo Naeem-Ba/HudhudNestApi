@@ -47,6 +47,7 @@ public sealed class SocialPublicationDispatchHostedService : BackgroundService
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<SocialPublicationDispatchHostedService> _logger;
+    private bool? _lastKnownEnabled;
 
     public SocialPublicationDispatchHostedService(
         IServiceScopeFactory scopeFactory,
@@ -106,6 +107,12 @@ public sealed class SocialPublicationDispatchHostedService : BackgroundService
                     // racing this same sweep's own dispatch pass.
                     await ReapExpiredLeasesAsync(scope.ServiceProvider, uow, deadLetters, ct);
 
+                    // Kill-switch (SocialDistribution:Enabled=false): nothing new is created and
+                    // nothing is sent. Rows are left exactly as they are, so re-enabling resumes
+                    // cleanly. The reaper above still ran — it only touches the database.
+                    if (!IsDistributionEnabled(scope.ServiceProvider))
+                        return;
+
                     // Before dequeuing, so a listing the sweep just distributed is dispatched in
                     // this same pass instead of waiting another interval.
                     await ReconcileAsync(scope.ServiceProvider, ct);
@@ -149,6 +156,29 @@ public sealed class SocialPublicationDispatchHostedService : BackgroundService
         {
             await db.Database.CloseConnectionAsync();
         }
+    }
+
+    /// <summary>Reads the kill-switch and logs only when it changes, so a paused system is visible in the logs without a line every two minutes.</summary>
+    private bool IsDistributionEnabled(IServiceProvider services)
+    {
+        var enabled = services.GetService<ISocialDistributionSwitch>()?.IsEnabled ?? true;
+
+        if (_lastKnownEnabled != enabled)
+        {
+            if (!enabled)
+            {
+                _logger.LogWarning(
+                    "Social distribution is DISABLED (SocialDistribution:Enabled=false): the dispatch worker is creating and sending nothing.");
+            }
+            else if (_lastKnownEnabled == false)
+            {
+                _logger.LogInformation("Social distribution was re-enabled: the dispatch worker is running normally again.");
+            }
+
+            _lastKnownEnabled = enabled;
+        }
+
+        return enabled;
     }
 
     /// <summary>

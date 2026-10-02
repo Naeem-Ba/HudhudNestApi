@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Events;
 using HudhudNestApi.Application.SocialDistribution.Interfaces;
+using HudhudNestApi.Application.SocialDistribution.Services;
 using HudhudNestApi.Domain.SocialDistribution.Entities;
 using HudhudNestApi.Domain.SocialDistribution.Enums;
 using HudhudNestApi.Domain.SocialDistribution.Models;
@@ -31,6 +32,7 @@ public sealed class PropertyStatusChangedDistributionHandler :
     private readonly ISocialPublisherRegistry _registry;
     private readonly IUnitOfWork _uow;
     private readonly ILogger<PropertyStatusChangedDistributionHandler> _logger;
+    private readonly ISocialDistributionSwitch? _distributionSwitch;
 
     public PropertyStatusChangedDistributionHandler(
         ISocialPublicationRepository publications,
@@ -38,7 +40,8 @@ public sealed class PropertyStatusChangedDistributionHandler :
         ISocialPublicationStatusHistoryRepository history,
         ISocialPublisherRegistry registry,
         IUnitOfWork uow,
-        ILogger<PropertyStatusChangedDistributionHandler> logger)
+        ILogger<PropertyStatusChangedDistributionHandler> logger,
+        ISocialDistributionSwitch? distributionSwitch = null)
     {
         _publications = publications;
         _accounts = accounts;
@@ -46,10 +49,14 @@ public sealed class PropertyStatusChangedDistributionHandler :
         _registry = registry;
         _uow = uow;
         _logger = logger;
+        _distributionSwitch = distributionSwitch;
     }
 
     public async Task Handle(PropertyStatusChangedEvent notification, CancellationToken ct)
     {
+        if (IsDistributionPaused(notification.PropertyId))
+            return;
+
         var action = SocialPublicationLifecyclePolicy.Resolve(notification.PreviousStatus, notification.NewStatus);
         if (action == SocialPublicationLifecycleAction.NoOp)
             return; // Nothing to evaluate at all — don't even load the publications.
@@ -79,6 +86,9 @@ public sealed class PropertyStatusChangedDistributionHandler :
     /// </summary>
     public async Task Handle(PropertyDeletedEvent notification, CancellationToken ct)
     {
+        if (IsDistributionPaused(notification.PropertyId))
+            return;
+
         try
         {
             var transitionTag = $"PropertyDeleted:{notification.PropertyId}";
@@ -94,6 +104,18 @@ public sealed class PropertyStatusChangedDistributionHandler :
                 "فشلت معالجة حذف العقار {PropertyId} على مستوى التوزيع الاجتماعي. لن يؤثر ذلك على حذف العقار نفسه.",
                 notification.PropertyId);
         }
+    }
+
+    /// <summary>Kill-switch: with distribution paused no lifecycle call (edit/comment/delete) may leave the process. Anything missed while paused is not replayed — see the runbook.</summary>
+    private bool IsDistributionPaused(Guid propertyId)
+    {
+        if (_distributionSwitch is not { IsEnabled: false })
+            return false;
+
+        _logger.LogInformation(
+            "تم تخطي إجراء دورة الحياة للعقار {PropertyId}: التوزيع الاجتماعي موقوف (SocialDistribution:Enabled=false).",
+            propertyId);
+        return true;
     }
 
     private async Task ApplyToOnePublicationAsync(

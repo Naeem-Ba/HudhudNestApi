@@ -18,6 +18,7 @@ using HudhudNestApi.Application.Auth.Models;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Common.Models;
 using HudhudNestApi.Application.SocialDistribution.Interfaces;
+using HudhudNestApi.Application.SocialDistribution.Services;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings.Entities;
 using HudhudNestApi.Domain.SocialDistribution.Enums;
@@ -51,6 +52,9 @@ public sealed class SocialDistributionApiTestFactory : WebApplicationFactory<Pro
             "or ConnectionStrings__DefaultConnection.");
 
     public RecordingMediaStorage Storage { get; } = new();
+
+    /// <summary>The kill-switch the host consults — flip it at runtime to prove a paused system sends nothing and resumes cleanly.</summary>
+    public TestSocialDistributionSwitch Switch { get; } = new();
 
     public IReadOnlyDictionary<SocialPlatform, ScriptedSocialPublisher> Publishers { get; } =
         new Dictionary<SocialPlatform, ScriptedSocialPublisher>
@@ -94,6 +98,9 @@ public sealed class SocialDistributionApiTestFactory : WebApplicationFactory<Pro
             services.RemoveAll<IMediaStorageService>();
             services.AddSingleton<IMediaStorageService>(Storage);
 
+            services.RemoveAll<ISocialDistributionSwitch>();
+            services.AddSingleton<ISocialDistributionSwitch>(Switch);
+
             // Registered AFTER the placeholders: SocialPublisherRegistry lets the last
             // registration for a platform win — exactly how a real publisher will be swapped in.
             foreach (var publisher in Publishers.Values)
@@ -135,6 +142,7 @@ public sealed class SocialDistributionApiTestFactory : WebApplicationFactory<Pro
             "\"SocialChannels\", \"SocialMediaAssets\", \"Properties\" RESTART IDENTITY CASCADE;");
 
         Storage.Uploads.Clear();
+        Switch.IsEnabled = true;
         foreach (var publisher in Publishers.Values)
             publisher.Reset();
     }
@@ -277,6 +285,11 @@ public sealed class SocialDistributionApiTestFactory : WebApplicationFactory<Pro
 }
 
 public sealed record SeededSocialUser(Guid Id, string Email, string AccessToken);
+
+public sealed class TestSocialDistributionSwitch : ISocialDistributionSwitch
+{
+    public bool IsEnabled { get; set; } = true;
+}
 
 /// <summary>Cloudinary stand-in that records what would have been uploaded.</summary>
 public sealed class RecordingMediaStorage : IMediaStorageService

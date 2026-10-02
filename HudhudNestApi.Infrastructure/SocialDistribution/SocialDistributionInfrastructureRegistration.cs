@@ -103,6 +103,11 @@ public static class SocialDistributionInfrastructureRegistration
         services.AddOptions<HudhudNestApi.Application.SocialDistribution.Options.SocialDistributionReconciliationOptions>()
             .Bind(configuration.GetSection(HudhudNestApi.Application.SocialDistribution.Options.SocialDistributionReconciliationOptions.SectionName));
 
+        // Kill-switch (SocialDistribution:Enabled, default true) — see SocialDistributionSwitchOptions.
+        services.AddOptions<HudhudNestApi.Application.SocialDistribution.Options.SocialDistributionSwitchOptions>()
+            .Bind(configuration.GetSection(HudhudNestApi.Application.SocialDistribution.Options.SocialDistributionSwitchOptions.SectionName));
+        services.AddSingleton<ISocialDistributionSwitch, ConfiguredSocialDistributionSwitch>();
+
         // Phase 7: Social Media Asset Generation
         services.AddOptions<BrandOptions>().Bind(configuration.GetSection(BrandOptions.SectionName));
         services.AddScoped<IBrandIdentityProvider, ConfiguredBrandIdentityProvider>();

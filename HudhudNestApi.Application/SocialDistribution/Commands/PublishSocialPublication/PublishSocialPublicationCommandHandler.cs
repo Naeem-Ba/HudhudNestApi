@@ -58,6 +58,7 @@ public sealed class PublishSocialPublicationCommandHandler
     private readonly ILogger<PublishSocialPublicationCommandHandler> _logger;
     private readonly SocialDistributionRetryOptions _retryOptions;
     private readonly SocialDistributionAssetGenerationOptions _assetGenerationOptions;
+    private readonly ISocialDistributionSwitch? _distributionSwitch;
 
     public PublishSocialPublicationCommandHandler(
         ISocialPublicationRepository publications,
@@ -69,7 +70,8 @@ public sealed class PublishSocialPublicationCommandHandler
         IUnitOfWork uow,
         ILogger<PublishSocialPublicationCommandHandler> logger,
         IOptions<SocialDistributionRetryOptions>? retryOptions = null,
-        IOptions<SocialDistributionAssetGenerationOptions>? assetGenerationOptions = null)
+        IOptions<SocialDistributionAssetGenerationOptions>? assetGenerationOptions = null,
+        ISocialDistributionSwitch? distributionSwitch = null)
     {
         _publications = publications;
         _history = history;
@@ -84,10 +86,16 @@ public sealed class PublishSocialPublicationCommandHandler
         // hardcoded defaults exactly like before this option existed.
         _retryOptions = retryOptions?.Value ?? new SocialDistributionRetryOptions();
         _assetGenerationOptions = assetGenerationOptions?.Value ?? new SocialDistributionAssetGenerationOptions();
+        _distributionSwitch = distributionSwitch;
     }
 
     public async Task<SocialPublicationDto> Handle(PublishSocialPublicationCommand request, CancellationToken ct)
     {
+        // Kill-switch: refused before anything is loaded or moved to Publishing, so the row stays
+        // exactly as it was and resumes normally once distribution is re-enabled.
+        if (_distributionSwitch is { IsEnabled: false })
+            throw new ConflictException("النشر الاجتماعي موقوف حالياً (SocialDistribution:Enabled=false). أعد تفعيله ثم أعد المحاولة.");
+
         var publication = await _publications.GetByIdAsync(request.PublicationId, ct)
             ?? throw new NotFoundException("منشور التوزيع غير موجود.");
 
@@ -205,6 +213,20 @@ public sealed class PublishSocialPublicationCommandHandler
                     publication.RetryCount, _retryOptions.BaseDelay, _retryOptions.MaxDelay, _retryOptions.MaxJitterMilliseconds);
                 publication.MarkFailed(result.ErrorCode!.Value, result.ErrorMessage ?? "فشل غير معروف.", now, retryDelay);
                 note = publication.ErrorMessage;
+
+                // A rejected credential (revoked/expired token) never heals by itself: leaving the
+                // account Active would send every following post to the platform with the same
+                // dead token. Expired takes it out of rotation (CanPublish() is false) and shows
+                // up in the admin list; reconnecting with a fresh credential makes it Active again.
+                if (result.ErrorCode == SocialPublicationErrorCode.InvalidCredentials)
+                {
+                    account.MarkExpired();
+                    _accounts.Update(account);
+                    note += " — عُلِّم الحساب «منتهي الصلاحية»؛ أعد ربطه ببيانات اعتماد جديدة ثم أعد إدراج المنشور.";
+                    _logger.LogWarning(
+                        "Social account {AccountId} ({Platform}) marked Expired after its credential was rejected.",
+                        account.Id, account.Platform);
+                }
             }
         }
 
