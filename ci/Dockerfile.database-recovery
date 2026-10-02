@@ -13,8 +13,19 @@ FROM postgis/postgis:17-3.5
 # a source we still rely on). None of the packages installed below are
 # security-suite-exclusive. Revisit this once postgis/postgis publishes a
 # 17-3.5 tag on a non-EOL Debian base.
+#
+# BUG (Production Gate run #487, 2026-10-02): the base image also ships a
+# pgdg.list apt source (bullseye-pgdg, apt.postgresql.org) for installing
+# PostgreSQL packages from PGDG -- but apt.postgresql.org has stopped
+# serving that suite entirely (confirmed 404 on its Release file from two
+# independent edge nodes, reproduced on two separate CI runs minutes
+# apart, so this is PGDG dropping bullseye, not a transient mirror blip).
+# We never actually install anything from pgdg here -- postgis/postgres
+# binaries already come baked into the base image, and every package below
+# is a plain Debian package -- so the fix is to drop that source too
+# instead of waiting on an archive that is not coming back.
 RUN find /etc/apt/sources.list /etc/apt/sources.list.d/ -type f 2>/dev/null \
-      -exec sed -i '/bullseye-security/d' {} + \
+      -exec sed -i -e '/bullseye-security/d' -e '/apt\.postgresql\.org/d' {} + \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
         awscli \
