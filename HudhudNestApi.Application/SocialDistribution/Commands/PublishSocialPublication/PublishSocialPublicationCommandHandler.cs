@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
+using HudhudNestApi.Application.Common.Observability;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.SocialDistribution.DTOs;
 using HudhudNestApi.Application.SocialDistribution.Interfaces;
@@ -214,6 +215,18 @@ public sealed class PublishSocialPublicationCommandHandler
             ct);
 
         await _uow.SaveChangesAsync(ct);
+
+        // Counted only once the outcome is durable, so the metric never claims an attempt the database lost.
+        ApplicationTelemetry.RecordSocialPublicationAttempt(
+            publication.Content.Platform.ToString(),
+            publication.Status switch
+            {
+                SocialPublicationStatus.Published => "published",
+                SocialPublicationStatus.Retrying => "retrying",
+                SocialPublicationStatus.Failed => "failed",
+                _ => "other",
+            },
+            publication.ErrorCode?.ToString());
 
         return SocialDistributionMapper.ToDto(publication);
     }
