@@ -14,7 +14,8 @@ public sealed class MiddlewareOrderGuardTests
         AssertBefore(source, "app.UseForwardedHeaders", "app.UseMiddleware<ExceptionHandlingMiddleware>");
 
         AssertBefore(source, "app.UseMiddleware<ExceptionHandlingMiddleware>", "app.UseHudhudNestApiSecurityHeaders");
-        AssertBefore(source, "app.UseHudhudNestApiSecurityHeaders", "app.UseStaticFiles");
+        AssertBefore(source, "app.UseHudhudNestApiSecurityHeaders", "app.UseResponseCompression");
+        AssertBefore(source, "app.UseResponseCompression", "app.UseStaticFiles");
         AssertBefore(source, "app.UseStaticFiles", "app.UseRouting");
 
         AssertBefore(source, "app.UseRouting", "app.UseCors");

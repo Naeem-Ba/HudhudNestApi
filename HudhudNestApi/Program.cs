@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.Configuration;
 using StackExchange.Redis;
 using HudhudNestApi.Application;
@@ -113,6 +114,22 @@ else
     // Development/Testing fallback only. Production is guarded above.
     builder.Services.AddDistributedMemoryCache();
 }
+
+// Audit finding (2026-10): uncompressed JSON for GET /api/properties (many listings + image
+// URL arrays per item) slows page load for both real users and crawlers, hurting Core Web
+// Vitals/crawl budget. Production is likely already mitigated by Cloudflare's own edge
+// compression in front of it, but Staging -- served directly off Render's edge, no CDN -- got
+// none at all. EnableForHttps=true is safe here specifically because the one endpoint that
+// returns a secret (CsrfController.GetCsrfToken) never also reflects attacker-controlled input
+// in the same response, so the BREACH precondition (a secret compressed alongside
+// attacker-influenced content, measured across many requests) does not apply to this API.
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+    options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Append("application/json");
+});
 
 builder.Services.AddHudhudNestApiSecurityHeaders(builder.Configuration);
 builder.Services.AddHudhudNestApiAntiforgery(builder.Configuration, builder.Environment);
@@ -237,17 +254,26 @@ app.UsePerformanceInstanceHeader(app.Environment, app.Configuration);
 app.UsePerformanceDatabaseDiagnostics(app.Environment, app.Configuration);
 app.UseHudhudNestApiObservability();
 
-if (app.Environment.IsProduction())
+if (app.Environment.IsProduction() || app.Environment.IsStaging())
 {
+    // Staging previously fell into the UseHttpsRedirection()-only branch below, so it never sent
+    // Strict-Transport-Security at all -- easy to miss since AddHsts() above is already
+    // unconditional, only the middleware that actually emits the header was Production-only.
+    // Staging is reachable over the public internet (see the Request.Scheme comment above) with
+    // no Cloudflare in front of it, unlike Production, so it benefits from HSTS at least as much.
     app.UseHsts();
 }
-else
+
+if (!app.Environment.IsProduction())
 {
     app.UseHttpsRedirection();
 }
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHudhudNestApiSecurityHeaders();
+// Must run before anything that writes the response body it should compress (Swagger's static
+// JSON, static files, and every controller response below) -- see AddResponseCompression above.
+app.UseResponseCompression();
 
 var swaggerEnabled = app.Environment.IsDevelopment()
     || isTestingOrCi
