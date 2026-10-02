@@ -60,16 +60,21 @@ public static class JwtAuthenticationRegistration
                         var tokenSecurityStamp = context.Principal?
                             .FindFirstValue(CustomClaimTypes.SecurityStamp);
 
-                        if (!Guid.TryParse(userIdText, out var userId) ||
-                            string.IsNullOrWhiteSpace(tokenSecurityStamp))
-                        {
-                            context.Fail("The token does not contain valid user data.");
-                            return;
-                        }
-
                         var logger = context.HttpContext.RequestServices
                             .GetRequiredService<ILoggerFactory>()
                             .CreateLogger("JwtSecurityStampValidation");
+
+                        // context.Fail(reason) alone answers a bare 401 and writes nothing, so a
+                        // correctly-signed token that is rejected here ("login works, the next call
+                        // is 401") was undiagnosable from the logs. Only the reason and the account
+                        // id are logged — never the token.
+                        if (!Guid.TryParse(userIdText, out var userId) ||
+                            string.IsNullOrWhiteSpace(tokenSecurityStamp))
+                        {
+                            logger.LogWarning("JWT rejected after signature validation: the token does not contain valid user data (user id claim or security stamp claim missing).");
+                            context.Fail("The token does not contain valid user data.");
+                            return;
+                        }
 
                         try
                         {
@@ -83,7 +88,11 @@ public static class JwtAuthenticationRegistration
 
                             if (!validationResult.IsValid)
                             {
-                                context.Fail(validationResult.FailureMessage ?? "The token is no longer valid.");
+                                var failureMessage = validationResult.FailureMessage ?? "The token is no longer valid.";
+                                logger.LogWarning(
+                                    "JWT rejected after signature validation for user {UserId}: {Reason}",
+                                    userId, failureMessage);
+                                context.Fail(failureMessage);
                             }
                         }
                         catch (OperationCanceledException) when (context.HttpContext.RequestAborted.IsCancellationRequested)
