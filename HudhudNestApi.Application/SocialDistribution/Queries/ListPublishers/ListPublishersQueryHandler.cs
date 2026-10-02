@@ -13,7 +13,11 @@ public sealed class ListPublishersQueryHandler : IRequestHandler<ListPublishersQ
     public Task<IReadOnlyList<SocialPublisherInfoDto>> Handle(ListPublishersQuery request, CancellationToken ct)
     {
         IReadOnlyList<SocialPublisherInfoDto> result = _registry.SupportedPlatforms
-            .Select(platform => new SocialPublisherInfoDto(platform, _registry.TryGetPublisher(platform)!.GetCapabilities()))
+            .Select(platform =>
+            {
+                var publisher = _registry.TryGetPublisher(platform)!;
+                return new SocialPublisherInfoDto(platform, publisher.GetCapabilities(), publisher.IsLive);
+            })
             .ToList();
 
         return Task.FromResult(result);

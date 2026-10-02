@@ -18,6 +18,13 @@ public interface ISocialPublisher
     SocialPlatform Platform { get; }
 
     /// <summary>
+    /// True when this adapter really talks to the platform; false for the safe placeholder that
+    /// only ever answers <c>PlatformNotConfigured</c>. Lets the admin UI offer just the platforms
+    /// that can actually post. Defaults to true so a real adapter (or a test double) needs no code.
+    /// </summary>
+    bool IsLive => true;
+
+    /// <summary>
     /// What this platform actually supports — checked by the caller before a job is even created
     /// for a capability the platform lacks (spec §7).
     /// </summary>

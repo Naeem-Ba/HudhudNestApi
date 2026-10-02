@@ -16,6 +16,6 @@ public sealed class GetPublisherCapabilitiesQueryHandler : IRequestHandler<GetPu
         var publisher = _registry.TryGetPublisher(request.Platform)
             ?? throw new NotFoundException($"لا يوجد Publisher مسجل لمنصة {request.Platform}.");
 
-        return Task.FromResult(new SocialPublisherInfoDto(request.Platform, publisher.GetCapabilities()));
+        return Task.FromResult(new SocialPublisherInfoDto(request.Platform, publisher.GetCapabilities(), publisher.IsLive));
     }
 }
