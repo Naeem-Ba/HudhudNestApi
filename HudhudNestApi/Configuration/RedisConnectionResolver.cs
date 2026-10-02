@@ -47,7 +47,7 @@ public static class RedisConnectionResolver
             ?? configuration["REDIS_URL"];
     }
 
-    private static string? NormalizeRedisConnectionString(string? value)
+    internal static string? NormalizeRedisConnectionString(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
@@ -65,9 +65,13 @@ public static class RedisConnectionResolver
             return trimmed;
         }
 
+        // Uri.Port is -1 (not the scheme default) for redis:// and rediss://, which .NET does not
+        // know, so a URL written without an explicit port would otherwise become "host:-1".
+        var port = uri.Port > 0 ? uri.Port : 6379;
+
         var parts = new List<string>
         {
-            $"{uri.Host}:{uri.Port}",
+            $"{uri.Host}:{port}",
             "abortConnect=false",
             "connectRetry=3",
             "connectTimeout=5000",
@@ -82,13 +86,25 @@ public static class RedisConnectionResolver
                 ? userInfo[(separatorIndex + 1)..]
                 : userInfo;
 
+            // "default" is Redis's implicit ACL user and is what password-only servers expect,
+            // so it is left out; any other user is an ACL account and must be sent explicitly.
+            var user = separatorIndex > 0 ? userInfo[..separatorIndex] : null;
+            if (!string.IsNullOrWhiteSpace(user) &&
+                !user.Equals("default", StringComparison.OrdinalIgnoreCase))
+            {
+                parts.Add($"user={user}");
+            }
+
             if (!string.IsNullOrWhiteSpace(password))
             {
                 parts.Add($"password={password}");
             }
         }
 
-        if (uri.Scheme.Equals("rediss", StringComparison.OrdinalIgnoreCase))
+        // Same TLS rule as RedisConfigurationOptionsFactory.BuildFromUri: Upstash only accepts TLS,
+        // so a plain redis:// URL pointing at it still has to use ssl.
+        if (uri.Scheme.Equals("rediss", StringComparison.OrdinalIgnoreCase) ||
+            uri.Host.Contains("upstash.io", StringComparison.OrdinalIgnoreCase))
         {
             parts.Add("ssl=true");
         }
