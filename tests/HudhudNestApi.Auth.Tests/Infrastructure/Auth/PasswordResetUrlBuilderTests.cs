@@ -6,9 +6,9 @@ namespace HudhudNestApi.Auth.Tests.Infrastructure.Auth;
 
 /// <summary>
 /// Unlike <see cref="EmailConfirmationUrlBuilder" />, this builder does not assemble a path
-/// itself -- the whole frontend URL, hash-routing prefix included, comes from
-/// Frontend:PasswordResetUrl. These tests pin the query-string assembly and the same
-/// fail-loud rules the confirmation builder enforces for its own configured origin.
+/// itself -- the whole frontend URL comes from Frontend:PasswordResetUrl. These tests pin the
+/// query-string assembly and the same fail-loud rules the confirmation builder enforces for its
+/// own configured origin.
 /// </summary>
 public sealed class PasswordResetUrlBuilderTests
 {
@@ -16,13 +16,13 @@ public sealed class PasswordResetUrlBuilderTests
     public void Build_AppendsEmailAndTokenToTheConfiguredUrl()
     {
         var builder = CreateBuilder(
-            "https://app.example.com/#/auth/reset-password",
+            "https://app.example.com/auth/reset-password",
             Environments.Production);
 
         var url = builder.Build("user@example.com", "plain-token", requestScheme: null, requestHost: null);
 
         Assert.Equal(
-            "https://app.example.com/#/auth/reset-password?email=user%40example.com&token=plain-token",
+            "https://app.example.com/auth/reset-password?email=user%40example.com&token=plain-token",
             url);
     }
 
@@ -30,7 +30,7 @@ public sealed class PasswordResetUrlBuilderTests
     public void Build_UsesAmpersand_WhenTheConfiguredUrlAlreadyHasAQueryString()
     {
         var builder = CreateBuilder(
-            "https://app.example.com/#/auth/reset-password?lang=de",
+            "https://app.example.com/auth/reset-password?lang=de",
             Environments.Production);
 
         var url = builder.Build("user@example.com", "token", requestScheme: null, requestHost: null);
@@ -42,7 +42,7 @@ public sealed class PasswordResetUrlBuilderTests
     public void Build_EscapesTheEmailAndToken()
     {
         var builder = CreateBuilder(
-            "https://app.example.com/#/auth/reset-password",
+            "https://app.example.com/auth/reset-password",
             Environments.Production);
 
         var url = builder.Build("a b@example.com", "CfDJ8A+b/c=", requestScheme: null, requestHost: null);
@@ -55,7 +55,7 @@ public sealed class PasswordResetUrlBuilderTests
     public void Build_IgnoresTheRequestSchemeAndHost()
     {
         var builder = CreateBuilder(
-            "https://app.example.com/#/auth/reset-password",
+            "https://app.example.com/auth/reset-password",
             Environments.Production);
 
         var url = builder.Build(
@@ -64,7 +64,7 @@ public sealed class PasswordResetUrlBuilderTests
             requestScheme: "http",
             requestHost: "attacker.example");
 
-        Assert.StartsWith("https://app.example.com/#/auth/reset-password", url, StringComparison.Ordinal);
+        Assert.StartsWith("https://app.example.com/auth/reset-password", url, StringComparison.Ordinal);
         Assert.DoesNotContain("attacker.example", url, StringComparison.Ordinal);
     }
 
@@ -76,7 +76,7 @@ public sealed class PasswordResetUrlBuilderTests
             Environments.Development);
 
         Assert.StartsWith(
-            "http://localhost:4200/#/auth/reset-password",
+            "http://localhost:4200/auth/reset-password",
             builder.Build("user@example.com", "token", requestScheme: null, requestHost: null),
             StringComparison.Ordinal);
     }
@@ -98,7 +98,7 @@ public sealed class PasswordResetUrlBuilderTests
     public void Build_Throws_WhenProductionIsConfiguredWithPlainHttp()
     {
         var builder = CreateBuilder(
-            "http://app.example.com/#/auth/reset-password",
+            "http://app.example.com/auth/reset-password",
             Environments.Production);
 
         var exception = Assert.Throws<InvalidOperationException>(

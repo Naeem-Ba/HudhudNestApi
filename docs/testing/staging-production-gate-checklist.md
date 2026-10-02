@@ -73,8 +73,8 @@ mitigation, not equivalent to real required-reviewer protection: anyone with pus
 - [ ] `Email:From` is an address on a domain verified in the Resend dashboard.
 - [ ] `Email__Resend__ApiKey` is a real key from an environment variable, not a file.
 - [ ] `Frontend:BaseUrl` is the deployed frontend origin, HTTPS.
-- [ ] `Frontend:PasswordResetUrl` includes the `#/` hash-routing prefix (see
-      `docs/architecture/email-confirmation-and-delivery.md`, B-14).
+- [ ] `Frontend:PasswordResetUrl` is a plain path with **no** `#/` prefix (hash routing was
+      removed; see `docs/architecture/email-confirmation-and-delivery.md`, B-14).
 - [ ] `Cors:AllowedOrigins` includes the deployed frontend origin.
 - [ ] A real account was registered in Staging and the confirmation email was confirmed
       to arrive in an external inbox -- not just a "Resend accepted" log line.
