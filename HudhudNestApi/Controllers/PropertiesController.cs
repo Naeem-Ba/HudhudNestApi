@@ -1,8 +1,10 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
+using HudhudNestApi.Configuration;
 using HudhudNestApi.Application.Listings.DTOs;
 using HudhudNestApi.Application.Listings.Commands.ConfirmFeaturedListingPayment;
 using HudhudNestApi.Application.Listings.Commands.ConfirmListingExtensionPayment;
@@ -52,6 +54,7 @@ public sealed class PropertiesController : ControllerBase
     [HttpGet]
     [AllowAnonymous]
     [EnableRateLimiting("public-search")]
+    [OutputCache(PolicyName = OutputCacheRegistration.PublicPropertyListPolicy)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] PropertyFilterDto filter,
@@ -79,6 +82,7 @@ public sealed class PropertiesController : ControllerBase
     [HttpGet("{id:guid}")]
     [AllowAnonymous]
     [EnableRateLimiting("public-read")]
+    [OutputCache(PolicyName = OutputCacheRegistration.PublicPropertyDetailsPolicy)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)

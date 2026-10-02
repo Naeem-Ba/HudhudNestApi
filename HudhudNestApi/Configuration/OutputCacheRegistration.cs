@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.OutputCaching;
+using HudhudNestApi.Application.Common.Caching;
 
 namespace HudhudNestApi.Configuration;
 
@@ -9,7 +10,6 @@ public static class OutputCacheRegistration
     public const string PublicPropertyDetailsPolicy = "public-property-details";
 
     public const string AnalyticsTag = "analytics";
-    public const string PropertiesTag = "properties";
 
     public static IServiceCollection AddScaleOutOutputCaching(
         this IServiceCollection services,
@@ -102,12 +102,12 @@ public static class OutputCacheRegistration
                     "amenityIds",
                     "sortBy",
                     "sortDescending")
-                .Tag(PropertiesTag));
+                .Tag(OutputCacheTags.Properties));
 
         options.AddPolicy(
             PublicPropertyDetailsPolicy,
             policy => policy
                 .Expire(TimeSpan.FromSeconds(60))
-                .Tag(PropertiesTag));
+                .Tag(OutputCacheTags.Properties));
     }
 }

@@ -2,8 +2,10 @@
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using HudhudNestApi.Application.Common.Caching;
 using HudhudNestApi.Domain.Agencies.Entities;
 using HudhudNestApi.Domain.Audit.Entities;
 using HudhudNestApi.Domain.Listings.Entities;
@@ -42,13 +44,16 @@ public sealed class AppDbContext
     : IdentityDbContext<ApplicationUser, IdentityApplicationRole, Guid>
 {
     private readonly IDataProtectionProvider _dataProtectionProvider;
+    private readonly IOutputCacheStore? _outputCacheStore;
 
     public AppDbContext(
         DbContextOptions<AppDbContext> options,
-        IDataProtectionProvider dataProtectionProvider)
+        IDataProtectionProvider dataProtectionProvider,
+        IOutputCacheStore? outputCacheStore = null)
         : base(options)
     {
         _dataProtectionProvider = dataProtectionProvider;
+        _outputCacheStore = outputCacheStore;
     }
 
     public AppDbContext(DbContextOptions<AppDbContext> options)
@@ -308,6 +313,7 @@ public sealed class AppDbContext
         CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
+        var propertyCacheDirty = false;
 
         foreach (var entry in ChangeTracker.Entries())
         {
@@ -336,9 +342,31 @@ public sealed class AppDbContext
                         deletedAt.CurrentValue = now;
                 }
             }
+
+            // Output-cache invalidation (see PropertiesController's [OutputCache] policies on
+            // GetAll/GetById, and OutputCacheRegistration). A Property row, its images, or its
+            // amenity links changing in ANY way -- a new listing, an edit, publish/unpublish, an
+            // image upload/delete, a soft-delete above -- must not be served stale from the
+            // public list/detail cache for the rest of that policy's TTL. Checked after the
+            // soft-delete flip above so a deleted row is correctly seen as Modified here, not
+            // Deleted; EvictByTagAsync below is cheap (a no-op tag miss) when nothing is cached
+            // yet, so there is no cost to checking broadly rather than trying to enumerate every
+            // write path precisely.
+            if (entry.Entity is Property or PropertyImage or PropertyAmenity &&
+                entry.State is EntityState.Added or EntityState.Modified)
+            {
+                propertyCacheDirty = true;
+            }
         }
 
-        return await base.SaveChangesAsync(cancellationToken);
+        var result = await base.SaveChangesAsync(cancellationToken);
+
+        if (propertyCacheDirty && _outputCacheStore is not null)
+        {
+            await _outputCacheStore.EvictByTagAsync(OutputCacheTags.Properties, cancellationToken);
+        }
+
+        return result;
     }
 }
 
