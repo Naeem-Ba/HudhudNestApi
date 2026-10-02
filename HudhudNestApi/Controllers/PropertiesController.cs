@@ -60,6 +60,12 @@ public sealed class PropertiesController : ControllerBase
         [FromQuery] PropertyFilterDto filter,
         CancellationToken ct)
     {
+        // [OutputCache] caches server-side (Redis) but never sends Cache-Control to the
+        // browser/CDN (see AnalyticsController's doc comment) -- set explicitly here, same
+        // duration as the policy's own Expire() (see OutputCacheRegistration.PublicPropertyListMaxAge
+        // for why reusing that exact duration doesn't add staleness exposure).
+        SetPublicCacheControl(OutputCacheRegistration.PublicPropertyListMaxAge);
+
         var result = await _mediator.Send(new GetPropertiesListQuery(filter), ct);
         return Ok(result);
     }
@@ -87,8 +93,19 @@ public sealed class PropertiesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
+        SetPublicCacheControl(OutputCacheRegistration.PublicPropertyDetailsMaxAge);
+
         var result = await _mediator.Send(new GetPropertyByIdQuery(id), ct);
         return result is null ? NotFound() : Ok(result);
+    }
+
+    private void SetPublicCacheControl(TimeSpan maxAge)
+    {
+        Response.GetTypedHeaders().CacheControl = new Microsoft.Net.Http.Headers.CacheControlHeaderValue
+        {
+            Public = true,
+            MaxAge = maxAge
+        };
     }
 
     [HttpGet("mine")]
