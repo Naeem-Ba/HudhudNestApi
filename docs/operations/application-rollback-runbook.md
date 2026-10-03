@@ -6,10 +6,12 @@ Database and application rollback are independent. HudhudNestApi uses Render ext
 
 Render must be configured to wait for the GitHub `Production Deployment Gate` check on `main`/`master`. The protected `production-release`, `production-recovery`, and `production-rollback` GitHub environments require reviewers. Auto-deploy must be paused during an incident so the bad commit is not immediately redeployed.
 
+> **Audit 2026-10-03** ([report](../audit/CICD-FAIL-CLOSED-AUDIT-2026-10-03.md)): the `production-rollback` environment did not exist yet (GitHub would auto-create it unprotected and without secrets), and the Production Render service was found with Auto-Deploy = `commit`. The Production Deployment Gate now fails unless Auto-Deploy is `off`/`checksPass`. `PRODUCTION_BASE_URL` is read as a variable (`vars.`) first, then as a secret.
+
 ## Prerequisites
 
 - Incident ID, named approver, reason in the incident record, target known-good deploy ID, and database compatibility decision.
-- `RENDER_API_KEY`, `RENDER_SERVICE_ID`, and `PRODUCTION_BASE_URL` secrets.
+- `RENDER_API_KEY` and `RENDER_SERVICE_ID` secrets, and `PRODUCTION_BASE_URL` (variable or secret), all on the `production-rollback` environment. The workflow only runs from `master`.
 - The previous deploy is `live` or `deactivated`, retained by Render, and compatible with the current schema.
 - If a destructive migration completed, first execute the new-database recovery procedure; do not start with application rollback against an incompatible schema.
 

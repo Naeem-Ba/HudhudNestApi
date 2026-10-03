@@ -31,6 +31,8 @@ workflow by hand, rather than firing automatically off a merge with zero human g
 mitigation, not equivalent to real required-reviewer protection: anyone with push access can still run
 `workflow_dispatch` alone. Revisit if/when the billing plan changes.
 
+> **Update 2026-10-03:** the repository is now **public**, so required reviewers and branch protection are available on every plan; the billing reason above no longer applies. Live state and the commands to enable them: `docs/audit/CICD-FAIL-CLOSED-AUDIT-2026-10-03.md` §3 and §6.
+
 ## Infrastructure
 
 - [ ] Stable external HTTPS Staging URL exists.
