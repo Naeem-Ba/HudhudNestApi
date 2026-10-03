@@ -77,3 +77,7 @@ CI uploads:
 - `artifacts/vulnerability/**`
 - `artifacts/production-gate/**`
 - `production-gate-containers.log`
+
+### Retention
+
+The two per-run bundles (`ci-quality-gate-reports-*` and `production-gate-results-*`, ~45-60 MB each) are kept for **3 days**. At 14 days they reached ~19 GB and the account hit GitHub's artifact storage quota on 2026-10-03; after that every `upload-artifact` step (including Gitleaks') failed and the Production Gate failed with it, although no test had failed. If the quota error returns, list usage with `gh api --paginate repos/<owner>/<repo>/actions/artifacts`, delete the oldest bundles, and remember usage is only recalculated every 6-12 hours.

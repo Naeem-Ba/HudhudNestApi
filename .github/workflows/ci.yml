@@ -587,7 +587,12 @@ jobs:
         with:
           name: ci-quality-gate-reports-${{ github.sha }}-${{ github.run_id }}
           if-no-files-found: warn
-          retention-days: 14
+          # This artifact is ~45-60 MB per run and every push/PR produces one. At 14 days they added up to
+          # ~19 GB and the account hit GitHub's artifact storage quota (2026-10-03): every later
+          # upload-artifact -- including Gitleaks' own report -- failed with "Artifact storage quota has
+          # been hit", which failed CI and cascaded into the Production Gate. 3 days is enough to
+          # investigate a red run; keep it short.
+          retention-days: 3
           path: |
             artifacts/test-results/**
             artifacts/coverage/**
