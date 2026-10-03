@@ -67,3 +67,6 @@
 Dockerfile text eol=lf
 Dockerfile.* text eol=lf
 .dockerignore text eol=lf
+
+# DR scripts read these line-by-line in bash; a CRLF checkout makes every entry fail the identifier regex.
+scripts/database/*.txt text eol=lf
