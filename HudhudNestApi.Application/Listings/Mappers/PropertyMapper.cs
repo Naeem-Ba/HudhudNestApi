@@ -76,6 +76,7 @@ public static class PropertyMapper
         RentalDurationType = p.RentalDurationType?.ToString(),
         LegalStatus = p.LegalStatus.ToString(),
         FurnishingStatus = p.FurnishingStatus.ToString(),
+        HeatingType = p.HeatingType.ToString(),
 
         // Features
         HasBalcony = p.HasBalcony,

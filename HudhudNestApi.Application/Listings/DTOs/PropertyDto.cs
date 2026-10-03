@@ -64,6 +64,9 @@ public sealed class PropertyDto
 
     public string FurnishingStatus { get; set; } = string.Empty;
 
+    // Enum name (e.g. "Gas"), like FurnishingStatus. The edit form needs it to show and preserve the stored value.
+    public string HeatingType { get; set; } = string.Empty;
+
     // Features
     public bool HasBalcony { get; set; }
     public bool HasElevator { get; set; }
