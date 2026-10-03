@@ -74,6 +74,7 @@ public sealed class PropertiesController : ControllerBase
     [HttpGet("geo-search")]
     [AllowAnonymous]
     [EnableRateLimiting("geo-search")]
+    [OutputCache(PolicyName = OutputCacheRegistration.PublicPropertyGeoSearchPolicy)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> SearchNearby(
@@ -81,6 +82,11 @@ public sealed class PropertiesController : ControllerBase
     CancellationToken ct)
     {
         var result = await _mediator.Send(new SearchPropertiesNearbyQuery(filter), ct);
+
+        // Same browser/CDN window as the list: the server-side TTL already defines the staleness
+        // every visitor accepts (see OutputCacheRegistration.PublicPropertyListMaxAge). Set only
+        // after the query succeeded so a rejected request (400) is never marked cacheable.
+        SetPublicCacheControl(OutputCacheRegistration.PublicPropertyListMaxAge);
         return Ok(result);
     }
 
