@@ -277,8 +277,16 @@ EF entity or a "just add the field" DTO:
   **server-derived** boolean from the validated JWT's role claims — as an explicit
   parameter; a client cannot send `"isAdmin": true` in a body to get the same effect.
 
-No overpostable protected field (OwnerId, Role, IsAdmin, Status/IsPublished bypass,
-ApprovedBy, SecurityStamp) was found reachable from any request DTO.
+> **Correction (security audit 2026-10-03, F-01).** The claim above was too strong for
+> `UpdatePropertyCommand`: it is bound straight from the PUT body and also carried `ExpiresAt`,
+> which the handler wrote to the entity. That let an owner extend (or revive) their own listing without
+> the paid, admin-confirmed extension flow. The handler now ignores `ExpiresAt`
+> (`UpdatePropertyCommandHandlerSecurityTests`). The rule going forward: a command bound from a body may
+> only carry fields the *caller* is allowed to set; lifecycle fields (`ExpiresAt`, featured window,
+> publication timestamps) move only through their own commands.
+
+No other overpostable protected field (OwnerId, Role, IsAdmin, ApprovedBy, SecurityStamp) was found
+reachable from any request DTO.
 
 ## 11. SQL Injection
 
@@ -352,6 +360,12 @@ equivalent both passed against a real Redis container, asserting an actual `429
 TooManyRequests` after the policy's request budget is exhausted. Combined with Identity's
 5-attempt/15-minute lockout (§2), both the "many requests" and "many wrong passwords for
 one account" brute-force vectors are covered.
+
+**Authenticated writes (audit 2026-10-03, F-06/F-02).** Policies `user-write` (60/min per user)
+and `auth-password-change` (5/hour per user) now cover message sending, listing create/update/delete,
+property-image/avatar/short-stay-photo uploads, profile update and `POST /api/users/me/change-password`.
+Both are defined in `RateLimitingRegistration` (in-memory) and `RedisRateLimitingDefaults` (Redis) and must
+be changed together. `change-password` also counts wrong current passwords towards Identity lockout.
 
 ## 16. Security Headers
 

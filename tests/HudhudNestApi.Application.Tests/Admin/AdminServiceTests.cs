@@ -153,7 +153,7 @@ public sealed class AdminServiceTests
 
         var userId = Guid.NewGuid();
 
-        var result = await service.DisableUserAsync(userId, CancellationToken.None);
+        var result = await service.DisableUserAsync(userId, Guid.NewGuid(), "127.0.0.1", CancellationToken.None);
 
         Assert.True(result.Succeeded);
         Assert.Equal(userId, identity.LastUserId);
@@ -248,6 +248,8 @@ public sealed class AdminServiceTests
 
         public Task<AdminOperationResult> DisableUserAsync(
             Guid userId,
+            Guid performedByUserId,
+            string? ipAddress,
             CancellationToken ct = default)
         {
             LastUserId = userId;

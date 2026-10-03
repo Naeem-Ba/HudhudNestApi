@@ -44,7 +44,11 @@ internal static class RedisRateLimitingDefaults
             ["data-export"] = Policy(5, TimeSpan.FromHours(24)),
             // Valuation Stage 7 — see RateLimitingRegistration's in-memory fallback policy for
             // the full rationale (same cadence as visits/service-requests).
-            ["valuation-inquiries"] = Policy(10, TimeSpan.FromHours(1))
+            ["valuation-inquiries"] = Policy(10, TimeSpan.FromHours(1)),
+            // Security audit 2026-10-03 (F-06, F-02) — see RateLimitingRegistration's in-memory
+            // fallback policies for the full rationale.
+            ["user-write"] = Policy(60, TimeSpan.FromMinutes(1)),
+            ["auth-password-change"] = Policy(5, TimeSpan.FromHours(1))
         };
 
     private static RedisFixedWindowRateLimitPolicyOptions Policy(

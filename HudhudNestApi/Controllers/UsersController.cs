@@ -21,6 +21,7 @@ using HudhudNestApi.Application.Users.Queries.GetMyConsents;
 using HudhudNestApi.Application.Users.Queries.GetUserById;
 using HudhudNestApi.Application.Users.Queries.GetUserProfile;
 using HudhudNestApi.Domain.Enums;
+using HudhudNestApi.Domain.Users.Constants;
 
 namespace HudhudNestApi.Controllers;
 
@@ -52,7 +53,22 @@ public sealed class UsersController : ControllerBase
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
         var user = await _sender.Send(new GetUserByIdQuery(id), ct);
-        return user is null ? NotFound() : Ok(user);
+        if (user is null)
+            return NotFound();
+
+        // Security audit 2026-10-03, F-13: any signed-in user could read any other user's role list
+        // here, which singles out the administrators. The Admin role is only shown to admins (and to
+        // the account itself); the other roles (agent, agency owner…) are public marketplace facts.
+        var isSelf = TryGetCurrentUserId(out var currentUserId) && currentUserId == id;
+        if (!isSelf && !User.IsInRole(RoleNames.Admin))
+        {
+            user.Roles = user.Roles
+                .Where(role => !string.Equals(role, RoleNames.Admin, StringComparison.OrdinalIgnoreCase))
+                .ToList()
+                .AsReadOnly();
+        }
+
+        return Ok(user);
     }
 
     // ── الصفحة الشخصية العامة (Public Profile) ──────────────────────────
@@ -142,6 +158,7 @@ public sealed class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [EnableRateLimiting("user-write")]
     public async Task<IActionResult> UpdateProfile(
         [FromBody] UpdateProfileRequest dto,
         CancellationToken ct)
@@ -178,6 +195,7 @@ public sealed class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [EnableRateLimiting("user-write")]
     public async Task<IActionResult> UploadAvatar(
         // No [FromForm] here: Swashbuckle throws "[FromForm] attribute used with IFormFile"
         // and fails the whole /swagger/v1/swagger.json document. IFormFile already binds from
@@ -232,6 +250,7 @@ public sealed class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [EnableRateLimiting("auth-password-change")]
     public async Task<IActionResult> ChangePassword(
         [FromBody] ChangePasswordRequest dto,
         CancellationToken ct)

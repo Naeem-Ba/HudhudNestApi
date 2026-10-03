@@ -74,7 +74,7 @@ public sealed record UpdatePropertyCommand(
 
     // Dates
     DateTime? AvailableFrom,
-    DateTime? ExpiresAt,
+    DateTime? ExpiresAt,           // Ignored by the handler — see UpdatePropertyCommandHandler (F-01)
 
     // Publishing — triggers domain methods Publish()/Unpublish()
     bool? IsPublished

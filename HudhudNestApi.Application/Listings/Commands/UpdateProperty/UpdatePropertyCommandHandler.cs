@@ -127,7 +127,9 @@ public sealed class UpdatePropertyCommandHandler
         if (request.Condition.HasValue) property.Condition = request.Condition.Value;
         if (request.EnergyEfficiency.HasValue) property.EnergyEfficiency = request.EnergyEfficiency.Value;
         if (request.AvailableFrom.HasValue) property.AvailableFrom = request.AvailableFrom;
-        if (request.ExpiresAt.HasValue) property.ExpiresAt = request.ExpiresAt;
+        // request.ExpiresAt is deliberately NOT applied: the command is bound straight from the
+        // PUT body, and the listing lifetime may only move through publishing or a paid, admin-
+        // confirmed extension (security audit 2026-10-03, F-01).
 
         if (request.Status.HasValue)
             property.ChangeStatus(request.Status.Value);

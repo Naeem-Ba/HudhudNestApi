@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Application.Auth.Models;
+using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Infrastructure.Identity.Entities;
 
 namespace HudhudNestApi.Infrastructure.Identity.Services;
@@ -11,15 +12,18 @@ public sealed class IdentityCredentialService
     private readonly UserManager<ApplicationUser> _users;
     private readonly IPhoneNumberLookupHasher _phoneLookupHasher;
     private readonly IPhoneNumberNormalizer _phoneNumberNormalizer;
+    private readonly IUserSecurityStampCacheInvalidator _stampCache;
 
     public IdentityCredentialService(
         UserManager<ApplicationUser> users,
         IPhoneNumberLookupHasher phoneLookupHasher,
-        IPhoneNumberNormalizer phoneNumberNormalizer)
+        IPhoneNumberNormalizer phoneNumberNormalizer,
+        IUserSecurityStampCacheInvalidator stampCache)
     {
         _users = users;
         _phoneLookupHasher = phoneLookupHasher;
         _phoneNumberNormalizer = phoneNumberNormalizer;
+        _stampCache = stampCache;
     }
 
     public async Task<IdentityOperationResult> ConfirmPhoneNumberAsync(
@@ -35,7 +39,18 @@ public sealed class IdentityCredentialService
     public async Task<IdentityOperationResult> UpdateSecurityStampAsync(Guid id, CancellationToken ct)
     {
         var user = await Load(id, ct);
-        return Result(await _users.UpdateSecurityStampAsync(user));
+        var result = Result(await _users.UpdateSecurityStampAsync(user));
+
+        // JwtBearer validates the stamp claim against a 5-minute cached snapshot
+        // (CachedSecurityStampValidator). Rotating the stamp without dropping that entry leaves every
+        // access token issued before the rotation usable for up to five more minutes -- exactly the
+        // window a password change / reset exists to close (security audit 2026-10-03, F-03).
+        if (result.Succeeded)
+        {
+            await _stampCache.InvalidateAsync(id, ct);
+        }
+
+        return result;
     }
 
     public async Task<string> GeneratePasswordResetTokenAsync(Guid id, CancellationToken ct) =>
@@ -66,8 +81,29 @@ public sealed class IdentityCredentialService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(currentPassword);
         ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
-        return Result(await _users.ChangePasswordAsync(
-            await Load(id, ct), currentPassword, newPassword));
+        var user = await Load(id, ct);
+
+        // UserManager.ChangePasswordAsync verifies the current password without ever touching the
+        // access-failure counter, and the endpoint has no rate-limit policy: a stolen access token
+        // could guess the real password without limit (security audit 2026-10-03, F-02). Count the
+        // failure exactly like every login path does, and refuse while the account is locked out.
+        if (await _users.IsLockedOutAsync(user))
+        {
+            return IdentityOperationResult.Failed("Account is temporarily locked. Try again later.");
+        }
+
+        if (!await _users.CheckPasswordAsync(user, currentPassword))
+        {
+            await _users.AccessFailedAsync(user);
+            return Result(IdentityResult.Failed(_users.ErrorDescriber.PasswordMismatch()));
+        }
+
+        if (user.AccessFailedCount > 0)
+        {
+            await _users.ResetAccessFailedCountAsync(user);
+        }
+
+        return Result(await _users.ChangePasswordAsync(user, currentPassword, newPassword));
     }
 
     public async Task<IdentityOperationResult> RecordCredentialChangeAsync(

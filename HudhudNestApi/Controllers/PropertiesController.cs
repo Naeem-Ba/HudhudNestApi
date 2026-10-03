@@ -179,6 +179,7 @@ public sealed class PropertiesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    [EnableRateLimiting("user-write")]
     public async Task<IActionResult> Create(
         [FromBody] CreatePropertyCommand command,
         CancellationToken ct)
@@ -209,6 +210,7 @@ public sealed class PropertiesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [EnableRateLimiting("user-write")]
     public async Task<IActionResult> Update(
         Guid id,
         [FromBody] UpdatePropertyCommand command,
@@ -233,6 +235,7 @@ public sealed class PropertiesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [EnableRateLimiting("user-write")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
         var userId = GetCurrentUserId();

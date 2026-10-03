@@ -22,6 +22,16 @@ public sealed class AddInvestmentDocumentCommandHandler : IRequestHandler<AddInv
         "application/pdf", "image/jpeg", "image/png", "image/webp",
     };
 
+    // Security audit 2026-10-03, F-07: the declared Content-Type is client-controlled, so each type is
+    // pinned to the extensions it may carry (the same rule every other upload applies).
+    private static readonly Dictionary<string, string[]> ExtensionsByContentType = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["application/pdf"] = [".pdf"],
+        ["image/jpeg"] = [".jpg", ".jpeg"],
+        ["image/png"] = [".png"],
+        ["image/webp"] = [".webp"],
+    };
+
     private readonly IInvestmentProjectRepository _projects;
     private readonly IInvestmentDocumentRepository _documents;
     private readonly IMediaStorageService _storage;
@@ -65,6 +75,10 @@ public sealed class AddInvestmentDocumentCommandHandler : IRequestHandler<AddInv
         }
 
         var bytes = buffer.ToArray();
+
+        if (!HasMatchingExtension(file.FileName, file.ContentType) || !HasValidSignature(bytes, file.ContentType))
+            throw new ValidationException(nameof(file.ContentType), "محتوى الملف لا يطابق نوعه المعلن.");
+
         var hash = Convert.ToHexString(SHA256.HashData(bytes));
 
         using var uploadStream = new MemoryStream(bytes);
@@ -95,4 +109,20 @@ public sealed class AddInvestmentDocumentCommandHandler : IRequestHandler<AddInv
 
         return document.Id;
     }
+
+    private static bool HasMatchingExtension(string fileName, string contentType) =>
+        ExtensionsByContentType.TryGetValue(contentType, out var extensions) &&
+        extensions.Contains(Path.GetExtension(fileName), StringComparer.OrdinalIgnoreCase);
+
+    private static bool HasValidSignature(byte[] bytes, string contentType) =>
+        contentType.ToLowerInvariant() switch
+        {
+            "application/pdf" => bytes.Length >= 5 && bytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8),
+            "image/jpeg" => bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF,
+            "image/png" => bytes.Length >= 8 &&
+                bytes.AsSpan(0, 8).SequenceEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }),
+            "image/webp" => bytes.Length >= 12 &&
+                bytes.AsSpan(0, 4).SequenceEqual("RIFF"u8) && bytes.AsSpan(8, 4).SequenceEqual("WEBP"u8),
+            _ => false,
+        };
 }

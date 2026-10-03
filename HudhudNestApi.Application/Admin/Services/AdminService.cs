@@ -109,8 +109,10 @@ public sealed class AdminService : IAdminService
 
     public Task<AdminOperationResult> DisableUserAsync(
         Guid userId,
+        Guid performedByUserId,
+        string? ipAddress,
         CancellationToken ct = default)
-        => _identity.DisableUserAsync(userId, ct);
+        => _identity.DisableUserAsync(userId, performedByUserId, ipAddress, ct);
 
     private static string? NormalizeRoleOrNull(string? role)
     {

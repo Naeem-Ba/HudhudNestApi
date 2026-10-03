@@ -35,13 +35,16 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     private readonly TimeProvider _clock;
     private readonly IAuditLogService _audit;
     private readonly string[] _allowedCountryCodes;
+    private readonly IUserSecurityStampCacheInvalidator _stampCache;
 
     public PhoneAuthenticationWorkflow(AppDbContext db, UserManager<ApplicationUser> users,
         SignInManager<ApplicationUser> signIn, IPhoneNumberNormalizer normalizer, IOtpService otp,
         IOtpChannelService channels, ITokenService tokens, IRefreshTokenRepository refreshTokens,
         IPhoneVerificationPolicy policy, TimeProvider clock, IAuditLogService audit,
-        IOptions<SmsProviderOptions> smsOptions, ILogger<PhoneAuthenticationWorkflow> logger)
+        IOptions<SmsProviderOptions> smsOptions, ILogger<PhoneAuthenticationWorkflow> logger,
+        IUserSecurityStampCacheInvalidator stampCache)
     {
+        _stampCache = stampCache;
         _allowedCountryCodes = smsOptions.Value.AllowedCountryCodes
             .Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToArray();
         _db = db; _users = users; _signIn = signIn; _normalizer = normalizer; _otp = otp;
@@ -277,6 +280,9 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         await _users.ResetAccessFailedCountAsync(user);
         await _users.SetLockoutEndDateAsync(user, null);
         await _users.UpdateSecurityStampAsync(user);
+        // Drop the cached stamp snapshot so tokens from before the reset stop working now, not in
+        // up to five minutes (security audit 2026-10-03, F-03).
+        await _stampCache.InvalidateAsync(user.Id, ct);
         await _refreshTokens.RevokeActiveTokensForUserAsync(user.Id, _clock.GetUtcNow().UtcDateTime, ipAddress, ct);
         await _audit.LogAsync(user.Id, AuditActions.PhonePasswordResetCompleted, ipAddress,
             newValue: "{\"outcome\":\"succeeded\"}", ct: ct);
@@ -342,6 +348,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             await ReleaseAsync(challenge.Id, ct);
             return Fail("PHONE_NUMBER_ALREADY_IN_USE");
         }
+        await _stampCache.InvalidateAsync(user.Id, ct);
         await _refreshTokens.RevokeActiveTokensForUserAsync(user.Id, _clock.GetUtcNow().UtcDateTime, ipAddress, ct);
         await _audit.LogAsync(user.Id, AuditActions.PhoneNumberChanged, ipAddress,
             newValue: "{\"outcome\":\"succeeded\"}", ct: ct);

@@ -27,5 +27,7 @@ public interface IAdminIdentityService
 
     Task<AdminOperationResult> DisableUserAsync(
         Guid userId,
+        Guid performedByUserId,
+        string? ipAddress,
         CancellationToken ct = default);
 }

@@ -16,17 +16,20 @@ public sealed class AdminIdentityService : IAdminIdentityService
     private readonly AppDbContext _db;
     private readonly IAuditLogService _auditLogs;
     private readonly ILogger<AdminIdentityService> _logger;
+    private readonly IUserSecurityStampCacheInvalidator _stampCache;
 
     public AdminIdentityService(
         UserManager<ApplicationUser> userManager,
         AppDbContext db,
         IAuditLogService auditLogs,
-        ILogger<AdminIdentityService> logger)
+        ILogger<AdminIdentityService> logger,
+        IUserSecurityStampCacheInvalidator stampCache)
     {
         _userManager = userManager;
         _db = db;
         _auditLogs = auditLogs;
         _logger = logger;
+        _stampCache = stampCache;
     }
 
     public async Task<AdminOperationResult> SetSingleRoleAsync(
@@ -162,11 +165,18 @@ public sealed class AdminIdentityService : IAdminIdentityService
 
     public async Task<AdminOperationResult> DisableUserAsync(
         Guid userId,
+        Guid performedByUserId,
+        string? ipAddress,
         CancellationToken ct = default)
     {
         var user = await FindActiveUserAsync(userId);
         if (user is null)
             return AdminOperationResult.UserNotFound();
+
+        // Security audit 2026-10-03, F-10: an admin could lock themselves out. The caller is by
+        // definition an active admin, so refusing self-disable also guarantees an admin always remains.
+        if (userId == performedByUserId)
+            return AdminOperationResult.BadRequest("You cannot disable your own account.");
 
         user.IsDeleted = true;
         user.DeletedAt = DateTime.UtcNow;
@@ -176,6 +186,18 @@ public sealed class AdminIdentityService : IAdminIdentityService
         var updateResult = await _userManager.UpdateAsync(user);
         if (!updateResult.Succeeded)
             return MapFailure("Could not disable the user.", updateResult);
+
+        // The JWT pipeline trusts a 5-minute cached stamp snapshot; without this the disabled
+        // account keeps working until it expires (security audit 2026-10-03, F-03).
+        await _stampCache.InvalidateAsync(user.Id, ct);
+
+        await _auditLogs.LogAsync(
+            userId: performedByUserId,
+            action: AuditActions.UserDisabled,
+            ipAddress: ipAddress,
+            oldValue: null,
+            newValue: JsonSerializer.Serialize(new { targetUserId = user.Id, timestamp = DateTime.UtcNow }),
+            ct: ct);
 
         return AdminOperationResult.Ok("User disabled.");
     }
@@ -191,6 +213,10 @@ public sealed class AdminIdentityService : IAdminIdentityService
         var updateResult = await _userManager.UpdateAsync(user);
         if (!updateResult.Succeeded)
             return MapFailure("Could not update the user.", updateResult);
+
+        // Same reason as DisableUserAsync: a demoted admin must not keep the old roles claim alive
+        // behind the stamp cache.
+        await _stampCache.InvalidateAsync(user.Id);
 
         return AdminOperationResult.Ok("User updated.");
     }
