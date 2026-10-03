@@ -96,6 +96,94 @@ Assert-Contains $performanceRunner "PERF_REQUIRE_APPROVED_BUDGETS" "Release perf
 Assert-Contains $performanceRunner "capture-pg-stat-statements.sh" "Performance runner must capture pg_stat_statements."
 Assert-Contains $performanceRunner "capture-query-plans.sh" "Performance runner must capture EXPLAIN ANALYZE plans."
 
+# --- Release-path invariants -------------------------------------------------------------------
+# The Assert-Contains checks above match anywhere in the file, so a comment (or an unrelated job)
+# satisfies them. These are scoped to one job at a time, ignore comments, and use ordinal matching
+# (`[` and `]` in shell tests are -like wildcards).
+function Get-JobBlock {
+    param([string] $WorkflowText, [string] $Job)
+
+    $block = New-Object System.Collections.Generic.List[string]
+    $inside = $false
+    foreach ($line in ($WorkflowText -split "`r?`n")) {
+        if ($line -match '^  ([A-Za-z0-9_-]+):\s*$') {
+            $inside = ($Matches[1] -eq $Job)
+            continue
+        }
+        if ($inside -and $line -notmatch '^\s*#') { $block.Add($line) }
+    }
+    if ($block.Count -eq 0) { $failures.Add("Workflow job '$Job' is missing.") }
+    return ($block -join "`n")
+}
+
+function Assert-Has {
+    param([string] $Source, [string] $Needle, [string] $Description)
+    if (-not $Source.Contains($Needle)) { $failures.Add($Description) }
+}
+
+function Assert-Lacks {
+    param([string] $Source, [string] $Needle, [string] $Description)
+    if ($Source.Contains($Needle)) { $failures.Add($Description) }
+}
+
+$deploy = Get-JobBlock $workflow "deploy-production"
+$releaseGate = Get-JobBlock $workflow "production-deployment-gate"
+$stagingJob = Get-JobBlock $workflow "staging-smoke"
+
+$deployCondition = ""
+if ($deploy -match '(?s)\n    if: >-\n(.*?)\n    runs-on:') { $deployCondition = $Matches[1] }
+if ([string]::IsNullOrWhiteSpace($deployCondition)) { $failures.Add("deploy-production must have an explicit if: condition.") }
+
+# Production is reachable only by an explicit dispatch from master...
+Assert-Has $deployCondition "github.event_name == 'workflow_dispatch'" "deploy-production must run only on workflow_dispatch."
+Assert-Has $deployCondition "github.ref == 'refs/heads/master'" "deploy-production must run only from refs/heads/master."
+Assert-Lacks $deployCondition "push" "deploy-production must not be reachable from a push."
+Assert-Lacks $deployCondition "refs/heads/main" "deploy-production must not accept any ref other than master."
+Assert-Lacks $deployCondition "||" "deploy-production's condition must be a pure conjunction; an OR can bypass a gate."
+Assert-Lacks $deploy "always()" "deploy-production must not use always(); a failed or skipped gate would no longer block it."
+Assert-Lacks $deploy "cancelled()" "deploy-production must not use cancelled(); it removes the implicit success() check."
+Assert-Lacks $deploy "continue-on-error" "deploy-production must not continue on error."
+Assert-Has $deploy "environment: production" "deploy-production must use the production environment."
+
+# ...only when every gate reported success (in `if:` and in `needs:`)...
+foreach ($gate in @(
+        "build-test-container", "observability-validation", "redis-sentinel-ha", "staging-smoke",
+        "redis-staging-failover", "performance-validation", "production-deployment-gate")) {
+    Assert-Has $deployCondition "needs.$gate.result == 'success'" "deploy-production must require needs.$gate.result == 'success'."
+    Assert-Has $deploy "      - $gate" "deploy-production must list $gate in needs."
+}
+
+# ...only for the commit that was gated, re-checked before the deploy hook fires...
+Assert-Has $deploy "commits/master" "deploy-production must compare the gated commit with master's current tip."
+Assert-Has $deploy 'GITHUB_SHA,,' "deploy-production must compare against the gated commit (GITHUB_SHA)."
+$tipCheckAt = $deploy.IndexOf("Assert the gated commit is still the tip of master")
+$hookAt = $deploy.IndexOf("Trigger production deployment")
+if ($tipCheckAt -lt 0 -or $hookAt -lt 0 -or $tipCheckAt -gt $hookAt) {
+    $failures.Add("The tip-of-master assertion must run before the production deploy hook is triggered.")
+}
+Assert-Has $deploy "PRODUCTION_DEPLOY_HOOK_URL is required" "The production deploy hook must fail closed when it is not configured."
+
+# The release gate must accept nothing but success from each upstream job, and must verify that
+# Render cannot deploy Production around this workflow.
+foreach ($result in @("BUILD_RESULT", "STAGING_RESULT", "RECOVERY_RESULT")) {
+    Assert-Has $releaseGate ('[ "${' + $result + '}" = "success" ]') "production-deployment-gate must require $result to be exactly 'success'."
+}
+Assert-Has $releaseGate "autoDeployTrigger" "production-deployment-gate must verify the Render auto-deploy trigger."
+Assert-Has $releaseGate "RENDER_SERVICE_ID is not set or is not in the expected" "production-deployment-gate must validate RENDER_SERVICE_ID."
+Assert-Lacks $releaseGate "continue-on-error" "production-deployment-gate must not continue on error."
+
+# Staging proof is only valid when it names the commit under test and never skips configuration.
+Assert-Has $stagingJob "bash scripts/smoke-staging.sh --validate-only" "staging-smoke must validate its mandatory configuration first."
+Assert-Has $stagingJob "STAGING_DATABASE_URL is not set" "staging-smoke must fail closed without STAGING_DATABASE_URL."
+Assert-Has $stagingJob 'deployed_sha,,' "staging-smoke must compare the deployed commit with the expected one."
+Assert-Lacks $stagingJob "continue-on-error" "staging-smoke must not continue on error."
+
+# Rollback is a protected, master-only, confirmed operation.
+$rollback = Read-RepositoryFile @(".github", "workflows", "rollback-production.yml")
+Assert-Has $rollback "environment: production-rollback" "Rollback must run in the production-rollback environment."
+Assert-Has $rollback "refs/heads/master" "Rollback must be restricted to master."
+Assert-Has $rollback "confirm_autodeploy_disabled" "Rollback must require the auto-deploy confirmation."
+
 $status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
 
 $report = @(

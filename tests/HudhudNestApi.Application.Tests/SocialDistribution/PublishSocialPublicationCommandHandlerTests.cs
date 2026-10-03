@@ -16,6 +16,9 @@ using HudhudNestApi.Domain.SocialDistribution.Models;
 
 namespace HudhudNestApi.Application.Tests.SocialDistribution;
 
+// hudhudnest.social.publication.attempts is a process-wide static Meter; the metrics tests assert on it, so
+// every class that publishes through the handler shares one (serial) collection.
+[Collection(SocialPublicationMetricsCollection.Name)]
 public sealed class PublishSocialPublicationCommandHandlerTests
 {
     private sealed class Fixture

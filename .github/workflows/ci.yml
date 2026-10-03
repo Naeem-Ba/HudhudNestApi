@@ -20,7 +20,8 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
+  # Read-only: Gitleaks lists the PR's commits on pull_request runs. Nothing in this workflow writes to PRs.
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}

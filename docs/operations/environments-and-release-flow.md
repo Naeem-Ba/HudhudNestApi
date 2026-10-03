@@ -88,8 +88,8 @@ git push origin origin/main:staging      # staging لا يحوي أي commit ف�
 
 | # | الفجوة | الخطورة | الحالة |
 |---|---|---|---|
-| 1 | حماية `master` غير مفعّلة (المستودع خاص، الخطة لا تدعم Branch protection/Rulesets) وبيئات GitHub بلا Required reviewers | P1 | يتطلب ترقية الخطة؛ التخفيف: `workflow_dispatch` فقط + `master` فقط |
-| 2 | Render الإنتاج قد يكون بـ Auto-Deploy "بعد نجاح فحوص CI" على `master` (يذكره `application-rollback-runbook.md`) — عندها الدمج قد ينشر بلا أمر يدوي | P1 | **[غير مُتحقَّق]**: Render → خدمة الإنتاج → Settings → Build & Deploy → Auto-Deploy؛ الأسلم `Off` |
+| 1 | حماية `master` غير مفعّلة وبيئات GitHub بلا Required reviewers. **تحقق حي 2026-10-03:** المستودع صار **عامًا** (`visibility: public`) فسبب «الخطة لا تدعم» لم يعد قائمًا؛ `GET /branches/master/protection` → 404، `rulesets` → `[]`، والبيئات `production`/`production-release`/`production-recovery`/`staging` بلا `protection_rules` وبلا `deployment_branch_policy`، والبيئة `production-rollback` **غير موجودة** (سيُنشئها GitHub بلا حماية عند أول تشغيل). أسرار الإنتاج الحرجة (`DATABASE_URL`, مفاتيح النسخ الاحتياطي) على مستوى المستودع فيقرؤها أي workflow على أي فرع | P1 | يتطلب قرار المالك — الأوامر في تقرير تدقيق CI/CD؛ التخفيف المؤقت: `workflow_dispatch` فقط + `master` فقط + فحص tip-of-master |
+| 2 | Render الإنتاج قد يكون بـ Auto-Deploy "بعد نجاح فحوص CI" على `master` (يذكره `application-rollback-runbook.md`) — عندها الدمج قد ينشر بلا أمر يدوي | P1 | **صار مفروضًا آليًا (2026-10-03):** `production-deployment-gate` يقرأ خدمة Render ويفشل إن لم يكن `autoDeployTrigger` ∈ {`off`,`checksPass`} أو كان الفرع المتتبَّع غير `master`. يبقى قرار المالك: `Off` (نشر يدوي فقط) أم `checksPass` (نشر تلقائي بعد نجاح الفحوص) |
 | 3 | خدمتا Render (Staging والإنتاج) تتبعان `master`؛ الفصل بالـ pipeline لا بالفرع | P2 | مقبول مع الحارس أعلاه |
 | 4 | نشر الواجهة للإنتاج (`main`) لا يمر بـ Staging | P2 | التخفيف: معاينة الـ PR على Staging API |
 | 5 | فرع الواجهة `staging` متأخر عن `main` بـ 148 commit → موقع Staging لا يعكس الكود الحالي | P2 | نفّذ أمر §3 |
