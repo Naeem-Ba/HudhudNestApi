@@ -34,7 +34,9 @@ public sealed class FavoriteRepository : IFavoriteRepository
                     favorite.Property.Images
                         .Where(image => image.IsMain)
                         .Select(image => image.Url)
-                        .FirstOrDefault())))
+                        .FirstOrDefault(),
+                    favorite.Property.WarmRent,
+                    favorite.Property.CurrencyCode)))
             .ToListAsync(ct);
     }
 
