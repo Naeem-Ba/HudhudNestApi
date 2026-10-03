@@ -37,6 +37,16 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # A step (not a job-level if:) on purpose: a skipped rollback shows up green, and during an
+      # incident that reads as "rolled back". This only guards against dispatching a stale or wrong
+      # ref; the real control over who can run this with the production secrets is the
+      # production-rollback environment's required reviewers and branch policy.
+      - name: Require the rollback workflow to run from master
+        if: ${{ github.ref != 'refs/heads/master' }}
+        run: |
+          echo "::error::Rollback must be dispatched from master (got ${GITHUB_REF})."
+          exit 1
+
       - name: Require explicit rollback confirmation
         if: ${{ inputs.confirm_autodeploy_disabled != true }}
         run: |
@@ -48,7 +58,11 @@ jobs:
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
-          PRODUCTION_BASE_URL: ${{ secrets.PRODUCTION_BASE_URL }}
+          # The production base URL is public, and the repository already keeps it as a *variable*
+          # (the staging smoke gate reads vars.PRODUCTION_BASE_URL). Reading only secrets.* resolved to
+          # an empty string, so require_env aborted every rollback. The secrets fallback keeps the
+          # layout the runbook documents working.
+          PRODUCTION_BASE_URL: ${{ vars.PRODUCTION_BASE_URL || secrets.PRODUCTION_BASE_URL }}
           TARGET_DEPLOY_ID: ${{ inputs.target_deploy_id }}
           INCIDENT_ID: ${{ inputs.incident_id }}
           APPROVED_BY: ${{ inputs.approved_by }}

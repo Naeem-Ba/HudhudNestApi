@@ -1383,6 +1383,8 @@ jobs:
     # move required-reviewer protection elsewhere), restricting the trigger to an explicit,
     # deliberate workflow_dispatch is the only available guard against an unattended deploy
     # firing straight off a merge -- see docs/testing/staging-production-gate-checklist.md.
+    # (Re-checked 2026-10-03: the repository is now public, where required reviewers and branch
+    # protection are available on every plan -- see docs/operations/environments-and-release-flow.md §7.)
     if: >-
       github.event_name == 'workflow_dispatch' &&
       github.ref == 'refs/heads/master' &&
@@ -1488,6 +1490,7 @@ jobs:
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          ALLOW_FIRST_PRODUCTION_RELEASE: ${{ vars.ALLOW_FIRST_PRODUCTION_RELEASE }}
         run: |
           set -euo pipefail
 
@@ -1512,14 +1515,44 @@ jobs:
             exit 1
           fi
 
+          # Render itself must not be able to ship Production outside this gate. The deploy hook
+          # (deploy-production) is the only intended trigger, so a service that auto-deploys on every
+          # commit makes every check in this workflow advisory. `checksPass` is accepted because Render
+          # then waits for this workflow's checks; anything else -- including a response with neither
+          # field, or a service tracking another branch -- is treated as unsafe (fail closed).
+          if ! curl --fail --silent --show-error --config "${auth_file}" \
+            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}" > render-service.json; then
+            echo "::error::Could not read Render service ${RENDER_SERVICE_ID}; cannot verify its auto-deploy policy."
+            exit 1
+          fi
+          auto_deploy_trigger="$(jq -r '.autoDeployTrigger // (if .autoDeploy == "yes" then "commit" elif .autoDeploy == "no" then "off" else empty end) // empty' render-service.json)"
+          service_branch="$(jq -r '.branch // empty' render-service.json)"
+          echo "Render service auto-deploy trigger: ${auto_deploy_trigger:-<unknown>}; tracked branch: ${service_branch:-<unknown>}"
+          case "${auto_deploy_trigger}" in
+            off|checksPass) ;;
+            *)
+              echo "::error::Render service ${RENDER_SERVICE_ID} auto-deploy trigger is '${auto_deploy_trigger:-unknown}'. Production must deploy only through this gate: set Auto-Deploy to 'After CI Checks Pass' or 'Off' in Render."
+              exit 1
+              ;;
+          esac
+          if [ "${service_branch}" != "master" ]; then
+            echo "::error::Render service ${RENDER_SERVICE_ID} tracks branch '${service_branch:-unknown}', but the gated commit is always master's tip. Refusing."
+            exit 1
+          fi
+
           previous_deploy_id="$(jq -r '[.. | objects | select(.status? == "live" or .status? == "deactivated") | .id? | select(. != null)] | first // empty' render-deploys.json)"
 
           if [ -z "${previous_deploy_id}" ]; then
-            # No prior live/deactivated deploy exists yet. Treat this as the
-            # first-ever production release for this service instead of
-            # permanently blocking deployment (a previous "known-good" deploy
-            # can never exist before the first one happens).
-            echo "::warning::No previous live/deactivated Render deploy was found for ${RENDER_SERVICE_ID}. Treating this run as the first production release."
+            # No rollback target means a bad release cannot be undone with rollback-production.yml.
+            # Production already has live deploys, so an empty list here is far more likely a wrong
+            # RENDER_SERVICE_ID / under-scoped RENDER_API_KEY than a genuine first release -- and the
+            # old behaviour (warn, then pass) let exactly that misconfiguration through. A real first
+            # release must opt in explicitly with the ALLOW_FIRST_PRODUCTION_RELEASE repository variable.
+            if [ "${ALLOW_FIRST_PRODUCTION_RELEASE:-}" != "true" ]; then
+              echo "::error::No previous live/deactivated Render deploy was found for ${RENDER_SERVICE_ID}, so there is no rollback target. Verify RENDER_API_KEY/RENDER_SERVICE_ID, or set the ALLOW_FIRST_PRODUCTION_RELEASE repository variable to 'true' for a genuine first release."
+              exit 1
+            fi
+            echo "::warning::No previous live/deactivated Render deploy for ${RENDER_SERVICE_ID}; allowed by ALLOW_FIRST_PRODUCTION_RELEASE=true."
             previous_deploy_id="none-first-deploy"
           fi
 
