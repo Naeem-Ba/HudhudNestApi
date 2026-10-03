@@ -24,6 +24,9 @@ namespace HudhudNestApi.Application.Tests.SocialDistribution;
 /// pinned here at its own choke point; the worker and the real-database behaviour are covered by
 /// the end-to-end suite.
 /// </summary>
+// hudhudnest.social.publication.attempts is a process-wide static Meter; the metrics tests assert on it, so
+// every class that publishes through the handler shares one (serial) collection.
+[Collection(SocialPublicationMetricsCollection.Name)]
 public sealed class SocialDistributionKillSwitchTests
 {
     private sealed class FakeSwitch(bool enabled) : ISocialDistributionSwitch

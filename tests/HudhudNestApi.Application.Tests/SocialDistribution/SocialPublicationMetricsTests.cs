@@ -19,6 +19,9 @@ namespace HudhudNestApi.Application.Tests.SocialDistribution;
 /// reading logs. Labels are the metric-cardinality policy's bounded kind only: a platform enum,
 /// an outcome, and the error-code enum name — never an account, property or publication id.
 /// </summary>
+// hudhudnest.social.publication.attempts is a process-wide static Meter; the metrics tests assert on it, so
+// every class that publishes through the handler shares one (serial) collection.
+[Collection(SocialPublicationMetricsCollection.Name)]
 public sealed class SocialPublicationMetricsTests
 {
     private const string InstrumentName = "hudhudnest.social.publication.attempts";
