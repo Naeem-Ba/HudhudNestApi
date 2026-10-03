@@ -269,7 +269,14 @@ public sealed class AuthController : ControllerBase
             IpAddress: GetClientIp()), ct);
 
         if (!result.Success)
+        {
+            // The cookie the browser holds is expired, revoked or unknown: it can never work again.
+            // Left in place, CookieCsrfProtectionMiddleware keeps treating every later unsafe request
+            // (including the anonymous login) as cookie-authenticated and demands a CSRF header the
+            // SPA no longer has, so the user is locked out with 403 until the cookie expires.
+            RefreshTokenCookie.Clear(Response);
             return Unauthorized(new { message = result.Message, errorCode = result.ErrorCode });
+        }
 
         RefreshTokenCookie.Attach(Response, result.RefreshToken, _jwtSettings.RefreshTokenDays);
 
