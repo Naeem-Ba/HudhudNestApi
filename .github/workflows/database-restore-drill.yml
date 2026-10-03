@@ -36,14 +36,20 @@ on:
       # (a few lines down) still hard-fails the job if neither secret resolves.
       PRODUCTION_DATABASE_URL:
         required: false
+      # Same reasoning as above for the four below. The recovery secrets now live on the
+      # `production-recovery` *environment* (repository scope was readable by a workflow on any
+      # branch). `secrets: inherit` forwards only repository/organization secrets, so `required: true`
+      # would reject the call before the job -- which is where the environment's secrets resolve --
+      # ever started. Absence is still fatal: "Require production recovery configuration" fails the
+      # job when any of them is empty.
       BACKUP_ENCRYPTION_KEY:
-        required: true
+        required: false
       BACKUP_STORAGE_URI:
-        required: true
+        required: false
       BACKUP_AWS_ACCESS_KEY_ID:
-        required: true
+        required: false
       BACKUP_AWS_SECRET_ACCESS_KEY:
-        required: true
+        required: false
       BACKUP_AWS_REGION:
         required: false
       BACKUP_S3_ENDPOINT_URL:

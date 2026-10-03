@@ -184,6 +184,12 @@ Assert-Has $rollback "environment: production-rollback" "Rollback must run in th
 Assert-Has $rollback "refs/heads/master" "Rollback must be restricted to master."
 Assert-Has $rollback "confirm_autodeploy_disabled" "Rollback must require the auto-deploy confirmation."
 
+# The recovery secrets are optional at workflow_call level (they resolve from the production-recovery
+# environment inside the job), so the job's own check is the only thing that fails closed on a missing one.
+$restoreDrill = Read-RepositoryFile @(".github", "workflows", "database-restore-drill.yml")
+Assert-Has $restoreDrill "for name in PRODUCTION_DATABASE_URL BACKUP_ENCRYPTION_KEY BACKUP_STORAGE_URI AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do" "The restore drill must fail closed when a required recovery secret is missing."
+Assert-Has $restoreDrill "environment: production-recovery" "The restore drill must run in the production-recovery environment."
+
 $status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
 
 $report = @(
