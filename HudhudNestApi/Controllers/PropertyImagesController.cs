@@ -29,6 +29,7 @@ public sealed class PropertyImagesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [EnableRateLimiting("user-write")]
     public async Task<IActionResult> Upload(
         Guid propertyId,
         [FromForm] IFormFileCollection files,
@@ -88,6 +89,7 @@ public sealed class PropertyImagesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [EnableRateLimiting("user-write")]
     public async Task<IActionResult> SetMain(
         Guid propertyId,
         Guid imageId,
@@ -109,6 +111,7 @@ public sealed class PropertyImagesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [EnableRateLimiting("user-write")]
     public async Task<IActionResult> Delete(
         Guid propertyId,
         Guid imageId,

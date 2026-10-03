@@ -345,7 +345,7 @@ public sealed class AdminControllerTests
     public async Task DisableUser_Missing_ReturnsNotFound()
     {
         var admin = new Mock<IAdminService>();
-        admin.Setup(x => x.DisableUserAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+        admin.Setup(x => x.DisableUserAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(AdminOperationResult.UserNotFound());
 
         var controller = CreateController(admin.Object);
@@ -359,7 +359,7 @@ public sealed class AdminControllerTests
     public async Task DisableUser_Failed_ReturnsBadRequest()
     {
         var admin = new Mock<IAdminService>();
-        admin.Setup(x => x.DisableUserAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+        admin.Setup(x => x.DisableUserAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(AdminOperationResult.BadRequest("Cannot disable the last admin."));
 
         var controller = CreateController(admin.Object);
@@ -373,7 +373,7 @@ public sealed class AdminControllerTests
     public async Task DisableUser_Succeeded_ReturnsNoContent()
     {
         var admin = new Mock<IAdminService>();
-        admin.Setup(x => x.DisableUserAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+        admin.Setup(x => x.DisableUserAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(AdminOperationResult.Ok("Disabled."));
 
         var controller = CreateController(admin.Object);

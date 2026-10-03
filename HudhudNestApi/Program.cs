@@ -21,6 +21,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddHudhudNestApiObservability();
 StagingEnvironmentGuard.Validate(builder.Configuration, builder.Environment);
 ProductionEnvironmentGuard.Validate(builder.Configuration, builder.Environment);
+TestEnvironmentGuard.Validate(builder.Environment);
 
 builder.Services.AddTrustedForwardedHeaders(
     builder.Configuration,
@@ -313,6 +314,10 @@ app.UseCookieCsrfProtection();
 app.UseAuthorization();
 
 app.UseOutputCache();
+// Bounds the DB/Redis probe behind the anonymous readiness endpoint -- see the middleware's remarks.
+app.UseWhen(
+    context => context.Request.Path.Equals("/health/ready", StringComparison.OrdinalIgnoreCase),
+    branch => branch.UseMiddleware<ReadinessResponseCacheMiddleware>());
 app.MapOperationalHealthEndpoints();
 app.MapControllers();
 app.MapHub<NotificationHub>("/notificationHub");

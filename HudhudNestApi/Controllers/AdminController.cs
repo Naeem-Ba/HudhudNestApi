@@ -309,7 +309,11 @@ public sealed class AdminController : ControllerBase
         Guid id,
         CancellationToken ct)
     {
-        var result = await _admin.DisableUserAsync(id, ct);
+        var actorId = GetCurrentUserId();
+        if (actorId is null)
+            return Unauthorized();
+
+        var result = await _admin.DisableUserAsync(id, actorId.Value, GetClientIp(), ct);
 
         if (result.NotFound)
             return NotFound(new { message = result.Message });

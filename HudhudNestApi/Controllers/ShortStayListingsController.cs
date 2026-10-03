@@ -96,6 +96,7 @@ public sealed class ShortStayListingsController : ControllerBase
     [HttpPost]
     [Authorize]
     [ProducesResponseType(typeof(ShortStayListingDto), StatusCodes.Status201Created)]
+    [EnableRateLimiting("user-write")]
     public async Task<IActionResult> Create([FromBody] CreateShortStayListingRequest dto, CancellationToken ct)
     {
         var command = new CreateShortStayListingCommand(
@@ -113,6 +114,7 @@ public sealed class ShortStayListingsController : ControllerBase
     [ProducesResponseType(typeof(ShortStayListingDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [EnableRateLimiting("user-write")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateShortStayListingRequest dto, CancellationToken ct)
     {
         var command = new UpdateShortStayListingCommand(
@@ -168,6 +170,7 @@ public sealed class ShortStayListingsController : ControllerBase
     [ProducesResponseType(typeof(IReadOnlyList<string>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [EnableRateLimiting("user-write")]
     public async Task<IActionResult> UploadPhotos(Guid id, [FromForm] IFormFileCollection files, CancellationToken ct)
     {
         var uploadFiles = (files ?? new FormFileCollection())

@@ -347,6 +347,36 @@ public static class RateLimitingRegistration
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                         QueueLimit = 0
                     }));
+
+            // Security audit 2026-10-03, F-06: authenticated write endpoints (messages, listings,
+            // uploads) had no limit at all, so one registered account could flood another user's
+            // notifications or burn the Cloudinary quota. Partitioned per user (see
+            // GetClientRateLimitPartitionKey), generous enough for real use (a listing form with
+            // image uploads is a handful of calls), tight enough to stop scripted abuse.
+            options.AddPolicy("user-write", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 60,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
+            // Security audit 2026-10-03, F-02: changing the password re-verifies the current one, so it
+            // is a password-guessing oracle for anyone holding a stolen access token. Same tight cadence
+            // as the other credential flows; Identity lockout (5 failures / 15 min) is the second layer.
+            options.AddPolicy("auth-password-change", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 5,
+                        Window = TimeSpan.FromHours(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
         });
 
         return services;

@@ -9,16 +9,12 @@ internal static class HealthCheckResponseWriter
     {
         context.Response.ContentType = "application/json; charset=utf-8";
 
+        // Status only. The endpoints are anonymous, and per-dependency names and timings
+        // fingerprint the backing stack for nobody's benefit (security audit 2026-10-03, F-08);
+        // the HTTP status code already carries what orchestrators and gates act on.
         var response = new
         {
-            status = report.Status.ToString(),
-            durationMs = Math.Round(report.TotalDuration.TotalMilliseconds, 2),
-            checks = report.Entries.Select(entry => new
-            {
-                name = entry.Key,
-                status = entry.Value.Status.ToString(),
-                durationMs = Math.Round(entry.Value.Duration.TotalMilliseconds, 2)
-            })
+            status = report.Status.ToString()
         };
 
         await JsonSerializer.SerializeAsync(

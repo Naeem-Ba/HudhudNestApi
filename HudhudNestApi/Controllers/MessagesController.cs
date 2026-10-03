@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using HudhudNestApi.Application.Users.Messaging.Commands.MarkConversationRead;
 using HudhudNestApi.Application.Users.Messaging.Commands.SendMessage;
 using HudhudNestApi.Application.Users.Messaging.Queries.GetConversations;
@@ -50,6 +51,7 @@ public sealed class MessagesController : ControllerBase
     }
 
     [HttpPost]
+    [EnableRateLimiting("user-write")]
     public async Task<IActionResult> SendMessage(
         [FromBody] SendMessageCommand command, CancellationToken ct)
     {
