@@ -75,14 +75,22 @@ public sealed class PropertyRepositoryGetPagedTests : IAsyncLifetime
 
         var all = await GetAsync(new PropertyFilterDto
         {
-            Page = 1, PageSize = 10, SearchTerm = _marker, SortBy = "ColdRent", SortDescending = false
+            Page = 1,
+            PageSize = 10,
+            SearchTerm = _marker,
+            SortBy = "ColdRent",
+            SortDescending = false
         });
         var paged = new List<Guid>();
         for (var page = 1; page <= 3; page++)
         {
             var slice = await GetAsync(new PropertyFilterDto
             {
-                Page = page, PageSize = 2, SearchTerm = _marker, SortBy = "ColdRent", SortDescending = false
+                Page = page,
+                PageSize = 2,
+                SearchTerm = _marker,
+                SortBy = "ColdRent",
+                SortDescending = false
             });
             paged.AddRange(slice.Items.Select(p => p.Id));
         }
@@ -115,12 +123,16 @@ public sealed class PropertyRepositoryGetPagedTests : IAsyncLifetime
             if (i == 0)
                 property.Images.Add(new PropertyImage
                 {
-                    Url = "https://cdn.example.test/p0-main.jpg", PublicId = "p0-main", IsMain = true
+                    Url = "https://cdn.example.test/p0-main.jpg",
+                    PublicId = "p0-main",
+                    IsMain = true
                 });
             if (i == 1)
                 property.Images.Add(new PropertyImage
                 {
-                    Url = "https://cdn.example.test/p1-extra.jpg", PublicId = "p1-extra", IsMain = false
+                    Url = "https://cdn.example.test/p1-extra.jpg",
+                    PublicId = "p1-extra",
+                    IsMain = false
                 });
             db.Properties.Add(property);
         }
