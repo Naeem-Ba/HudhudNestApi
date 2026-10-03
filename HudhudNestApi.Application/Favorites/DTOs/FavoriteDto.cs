@@ -11,5 +11,7 @@ public sealed record FavoritePropertyDto(
     string CountryCode,
     decimal? ColdRent,
     decimal? PurchasePrice,
-    string? MainImageUrl);
+    string? MainImageUrl,
+    decimal? WarmRent,
+    string CurrencyCode);
 
