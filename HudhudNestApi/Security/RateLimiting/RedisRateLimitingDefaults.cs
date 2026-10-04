@@ -48,7 +48,9 @@ internal static class RedisRateLimitingDefaults
             // Security audit 2026-10-03 (F-06, F-02) — see RateLimitingRegistration's in-memory
             // fallback policies for the full rationale.
             ["user-write"] = Policy(60, TimeSpan.FromMinutes(1)),
-            ["auth-password-change"] = Policy(5, TimeSpan.FromHours(1))
+            ["auth-password-change"] = Policy(5, TimeSpan.FromHours(1)),
+            // Agency invite by e-mail/phone — see RateLimitingRegistration's in-memory fallback.
+            ["agency-invite"] = Policy(20, TimeSpan.FromHours(1))
         };
 
     private static RedisFixedWindowRateLimitPolicyOptions Policy(
