@@ -7,27 +7,32 @@ using Microsoft.AspNetCore.RateLimiting;
 using HudhudNestApi.Application.Agencies.Commands.AcceptAgencyInvitation;
 using HudhudNestApi.Application.Agencies.Commands.CreateAgency;
 using HudhudNestApi.Application.Agencies.Commands.CreateAgencyInvitation;
+using HudhudNestApi.Application.Agencies.Commands.CreateAgencyInvitationByContact;
 using HudhudNestApi.Application.Agencies.Commands.DeactivateAgency;
 using HudhudNestApi.Application.Agencies.Commands.DeclineAgencyInvitation;
+using HudhudNestApi.Application.Agencies.Commands.ReactivateAgency;
 using HudhudNestApi.Application.Agencies.Commands.RemoveAgencyMember;
 using HudhudNestApi.Application.Agencies.Commands.SetAgencyLogo;
 using HudhudNestApi.Application.Agencies.Commands.TransferAgencyOwnership;
 using HudhudNestApi.Application.Agencies.Commands.UpdateAgency;
 using HudhudNestApi.Application.Agencies.DTOs;
 using HudhudNestApi.Application.Agencies.Queries.GetAgencyBySlug;
+using HudhudNestApi.Application.Agencies.Queries.GetAgencySentInvitations;
 using HudhudNestApi.Application.Agencies.Queries.GetMyAgency;
 using HudhudNestApi.Application.Agencies.Queries.GetMyAgencyInvitations;
-using HudhudNestApi.Domain.Users.Constants;
 
 namespace HudhudNestApi.Controllers;
 
 /// <summary>
 /// Real-estate offices: registration, membership and the public agency page.
 ///
-/// Authorization note — the AgencyOwner role gates the route, but it is never the whole
-/// check. Every handler behind these routes also compares the caller to the target
-/// agency's OwnerUserId, because holding the role says a user owns *an* agency, not
-/// *this* one.
+/// Authorization note — owner-only routes are plain [Authorize], not
+/// [Authorize(Roles = AgencyOwner)]. Every handler behind them compares the caller to the
+/// target agency's OwnerUserId (ADR-006), which is the real gate: holding the role only
+/// says a user owns *an* agency, not *this* one. The role gate added nothing on top of that
+/// and did harm: roles travel inside the access token, so a user who had just created an
+/// agency or been handed ownership got 403 on every owner action until their token was
+/// refreshed. AgencyOwnerRoutesTests pins this so the role gate does not creep back.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -116,7 +121,7 @@ public sealed class AgenciesController : ControllerBase
     // Owner-only profile edit. RELEASE-BLOCKERS-AR.md B-4: Agency.UpdateProfile already
     // existed on the domain entity — this is the missing thin command layer around it.
     [HttpPut("{agencyId:guid}")]
-    [Authorize(Roles = RoleNames.AgencyOwner)]
+    [Authorize]
     [ProducesResponseType(typeof(AgencyDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -149,7 +154,7 @@ public sealed class AgenciesController : ControllerBase
     // "Delete" maps to the agency's existing reversible Deactivate() — see B-4's decision
     // note on DeactivateAgencyCommand. Idempotent: deactivating twice is not an error.
     [HttpDelete("{agencyId:guid}")]
-    [Authorize(Roles = RoleNames.AgencyOwner)]
+    [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -165,13 +170,32 @@ public sealed class AgenciesController : ControllerBase
         return NoContent();
     }
 
+    // ── POST /api/agencies/{agencyId}/reactivate ──────────────────
+    // Owner-only reversal of the DELETE above. Idempotent, same as Deactivate.
+    [HttpPost("{agencyId:guid}/reactivate")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Reactivate(Guid agencyId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await _mediator.Send(
+            new ReactivateAgencyCommand(AgencyId: agencyId, RequestingUserId: userId.Value),
+            ct);
+
+        return NoContent();
+    }
+
     // ── POST /api/agencies/{agencyId}/transfer-ownership ──────────
     // Owner-only. B-4b: Agency.TransferOwnership already existed on the domain entity —
     // this is the missing thin command layer, same shape as Update above. The new owner
     // must already be a member of this agency (see the command's doc comment) — nothing
     // here can attach a new member on its own.
     [HttpPost("{agencyId:guid}/transfer-ownership")]
-    [Authorize(Roles = RoleNames.AgencyOwner)]
+    [Authorize]
     [ProducesResponseType(typeof(AgencyDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -202,7 +226,7 @@ public sealed class AgenciesController : ControllerBase
     // POST /api/Users/me/avatar (UsersController): IFormFile → DTO that does not know
     // ASP.NET → Command → Handler validates and uploads via IMediaStorageService.
     [HttpPost("{agencyId:guid}/logo")]
-    [Authorize(Roles = RoleNames.AgencyOwner)]
+    [Authorize]
     [RequestSizeLimit(2_500_000)]
     [ProducesResponseType(typeof(AgencyDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -248,7 +272,7 @@ public sealed class AgenciesController : ControllerBase
     // only ever creates a Pending AgencyInvitation — see AcceptInvitation for the step
     // that actually creates the membership.
     [HttpPost("{agencyId:guid}/invitations")]
-    [Authorize(Roles = RoleNames.AgencyOwner)]
+    [Authorize]
     [ProducesResponseType(typeof(AgencyInvitationDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -270,6 +294,57 @@ public sealed class AgenciesController : ControllerBase
             ct);
 
         return StatusCode(StatusCodes.Status201Created, invitation);
+    }
+
+    // ── POST /api/agencies/{agencyId}/invitations/by-contact ──────
+    // Same as CreateInvitation, but the owner names the person by the e-mail address or
+    // phone number they registered with instead of an opaque user id. Rate-limited on its
+    // own policy because, unlike the id route, it answers "is there an account with this
+    // contact" — see CreateAgencyInvitationByContactCommand's doc comment.
+    [HttpPost("{agencyId:guid}/invitations/by-contact")]
+    [Authorize]
+    [EnableRateLimiting("agency-invite")]
+    [ProducesResponseType(typeof(AgencyInvitationDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> CreateInvitationByContact(
+        Guid agencyId,
+        [FromBody] CreateAgencyInvitationByContactRequest request,
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var invitation = await _mediator.Send(
+            new CreateAgencyInvitationByContactCommand(
+                AgencyId: agencyId,
+                Email: request.Email,
+                PhoneNumber: request.PhoneNumber,
+                RequestingUserId: userId.Value,
+                IpAddress: GetClientIp()),
+            ct);
+
+        return StatusCode(StatusCodes.Status201Created, invitation);
+    }
+
+    // ── GET /api/agencies/{agencyId}/invitations ──────────────────
+    // Owner-only: the invitations this agency has sent that are still waiting for an answer.
+    [HttpGet("{agencyId:guid}/invitations")]
+    [Authorize]
+    [ProducesResponseType(typeof(IReadOnlyList<AgencySentInvitationDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSentInvitations(Guid agencyId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var invitations = await _mediator.Send(
+            new GetAgencySentInvitationsQuery(agencyId, userId.Value), ct);
+
+        return Ok(invitations);
     }
 
     // ── GET /api/agencies/invitations/mine ────────────────────────
@@ -395,6 +470,12 @@ public sealed record CreateAgencyRequest(
 
 /// <summary>Request body for POST .../invitations — who the owner wants to invite.</summary>
 public sealed record CreateAgencyInvitationRequest(Guid UserId);
+
+/// <summary>
+/// Request body for POST .../invitations/by-contact — exactly one of the two (enforced by
+/// CreateAgencyInvitationByContactCommandValidator).
+/// </summary>
+public sealed record CreateAgencyInvitationByContactRequest(string? Email, string? PhoneNumber);
 
 /// <summary>
 /// Request body for POST .../transfer-ownership — who the new owner is. Deliberately the

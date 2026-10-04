@@ -353,6 +353,20 @@ public static class RateLimitingRegistration
             // notifications or burn the Cloudinary quota. Partitioned per user (see
             // GetClientRateLimitPartitionKey), generous enough for real use (a listing form with
             // image uploads is a handful of calls), tight enough to stop scripted abuse.
+            // Agency invite by e-mail/phone: answers whether an account exists for a contact,
+            // so it gets its own tight cadence per user rather than user-write's 60/minute.
+            // Real use is a handful of invites when an office onboards its team.
+            options.AddPolicy("agency-invite", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 20,
+                        Window = TimeSpan.FromHours(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
             options.AddPolicy("user-write", httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
                     partitionKey: GetClientRateLimitPartitionKey(httpContext),
