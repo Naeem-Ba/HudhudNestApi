@@ -40,6 +40,7 @@ public sealed class CICDPipelineTests
         var pinnedActionPattern = new System.Text.RegularExpressions.Regex(
             @"uses:\s+[^@\s]+@[0-9a-f]{40}\s+#\s+v",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var usesLinePattern = new System.Text.RegularExpressions.Regex(@"^\s*(-\s+)?uses:\s");
 
         foreach (var workflowFile in workflowFiles)
         {
@@ -54,7 +55,21 @@ public sealed class CICDPipelineTests
             Assert.DoesNotContain("@main", yaml);
             Assert.DoesNotContain("@master", yaml);
             Assert.DoesNotContain("@latest", yaml);
-            Assert.True(pinnedActionPattern.IsMatch(yaml), $"Workflow does not contain pinned action references: {workflowFile}");
+
+            // Every action reference must be pinned, not just one per file. A workflow that uses no
+            // actions at all (e.g. cleanup-artifacts.yml, plain `gh api` calls) has nothing to pin;
+            // local reusable workflows (`uses: ./...`) are versioned with the repo itself.
+            var actionReferences = yaml
+                .Split('\n')
+                .Where(line => usesLinePattern.IsMatch(line))
+                .Where(line => !line.Contains("uses: ./", StringComparison.Ordinal));
+
+            foreach (var line in actionReferences)
+            {
+                Assert.True(
+                    pinnedActionPattern.IsMatch(line),
+                    $"Workflow contains an action not pinned to an immutable SHA: {workflowFile}: {line.Trim()}");
+            }
         }
 
         var ciYaml = File.ReadAllText(Path.Combine(repoRoot, ".github", "workflows", "ci.yml"));

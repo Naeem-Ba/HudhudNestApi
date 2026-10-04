@@ -1,0 +1,75 @@
+name: Cleanup old artifacts
+
+# Actions artifact storage is one quota for the whole account (all private repos together).
+# When it fills up, every upload-artifact step fails with "Artifact storage quota has been hit"
+# even though the build itself passed. This deletes this repository's artifacts once they are
+# older than KEEP_DAYS, so the quota never fills up again. Artifacts whose names match
+# PROTECTED_PATTERN are skipped and expire on their own retention-days.
+#
+# Note: GitHub recalculates storage usage every 6-12 hours, so freed space shows up (and uploads
+# start working again) only after the next recalculation, not right after this job runs.
+
+on:
+  schedule:
+    - cron: "41 2 * * *"   # daily, 02:41 UTC
+  workflow_dispatch:
+    inputs:
+      keep_days:
+        description: "Delete artifacts older than this many days"
+        required: false
+        default: "3"
+      dry_run:
+        description: "Only list what would be deleted"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  actions: write
+
+concurrency:
+  group: cleanup-old-artifacts
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Delete artifacts older than the keep window
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Delete old artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          KEEP_DAYS: ${{ inputs.keep_days || '3' }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+          PROTECTED_PATTERN: '^(production-release-recovery-metadata-|production-rollback-)'
+        run: |
+          set -euo pipefail
+          if ! [[ "$KEEP_DAYS" =~ ^[0-9]+$ ]]; then
+            echo "::error::keep_days must be a whole number, got '$KEEP_DAYS'"
+            exit 1
+          fi
+          cutoff=$(date -u -d "-${KEEP_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)
+          echo "Deleting artifacts created before $cutoff (dry run: $DRY_RUN)"
+          echo "Protected names: $PROTECTED_PATTERN"
+
+          gh api --paginate "repos/$REPO/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.expired | not) | [.id, .created_at, .size_in_bytes, .name] | @tsv' \
+            > artifacts.tsv
+
+          deleted=0; freed=0; kept=0
+          while IFS=$'\t' read -r id created size name; do
+            if [[ "$created" > "$cutoff" ]] || [[ "$name" =~ $PROTECTED_PATTERN ]]; then
+              kept=$((kept + 1)); continue
+            fi
+            echo "delete  $name  ($((size / 1024)) KiB, $created)"
+            if [[ "$DRY_RUN" != "true" ]]; then
+              gh api -X DELETE "repos/$REPO/actions/artifacts/$id" > /dev/null
+            fi
+            deleted=$((deleted + 1)); freed=$((freed + size))
+          done < artifacts.tsv
+
+          summary="Artifacts deleted: $deleted ($((freed / 1024 / 1024)) MiB), kept: $kept, dry run: $DRY_RUN"
+          echo "$summary"
+          echo "$summary" >> "$GITHUB_STEP_SUMMARY"
