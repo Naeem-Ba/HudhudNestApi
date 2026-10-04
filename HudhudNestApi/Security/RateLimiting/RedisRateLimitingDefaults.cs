@@ -50,7 +50,14 @@ internal static class RedisRateLimitingDefaults
             ["user-write"] = Policy(60, TimeSpan.FromMinutes(1)),
             ["auth-password-change"] = Policy(5, TimeSpan.FromHours(1)),
             // Agency invite by e-mail/phone — see RateLimitingRegistration's in-memory fallback.
-            ["agency-invite"] = Policy(20, TimeSpan.FromHours(1))
+            ["agency-invite"] = Policy(20, TimeSpan.FromHours(1)),
+            // Social Sharing / UTM attribution / Social Distribution — see
+            // RateLimitingRegistration's in-memory fallback policies for the full rationale.
+            // Without an entry here the Redis limiter answered these endpoints with 500
+            // ("Rate limit policy is not configured") whenever Redis rate limiting was on.
+            ["property-share-events"] = Policy(20, TimeSpan.FromMinutes(1)),
+            ["property-attribution-events"] = Policy(40, TimeSpan.FromMinutes(1)),
+            ["social-distribution-write"] = Policy(30, TimeSpan.FromMinutes(1))
         };
 
     private static RedisFixedWindowRateLimitPolicyOptions Policy(
