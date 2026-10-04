@@ -456,6 +456,28 @@ public sealed class CICDPipelineTests
         Assert.DoesNotContain("continue-on-error: true", yaml);
     }
 
+    [Fact(DisplayName = "Staging deploy hook must be pinned to the gated commit")]
+    public void ProductionGate_Should_Pin_The_Staging_Deploy_Hook_To_The_Gated_Commit()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var yaml = File.ReadAllText(Path.Combine(repoRoot, ".github", "workflows", "production-gate.yml"));
+
+        // Without `ref` Render deploys whatever master points at when it handles the request, so a
+        // merge landing while the gate runs puts another commit on Staging and fails the proof.
+        var start = yaml.IndexOf("- name: Trigger staging deployment", StringComparison.Ordinal);
+        var end = yaml.IndexOf("- name: Wait for intended staging release", StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start, "The Staging deployment trigger step was not found.");
+
+        var step = yaml[start..end];
+
+        Assert.Contains("[0-9a-f]{40}", step);
+        Assert.Contains("ref=${GITHUB_SHA}", step);
+        Assert.Contains("\"${pinned_hook_url}\"", step);
+        Assert.DoesNotContain(
+            step.Split('\n'),
+            line => line.Trim() == "\"${STAGING_DEPLOY_HOOK_URL}\"");
+    }
+
     [Fact(DisplayName = "Performance gate must use two instances and block on query and concurrency evidence")]
     public void PerformanceGate_Should_Be_Concurrent_MultiInstance_And_FailClosed()
     {

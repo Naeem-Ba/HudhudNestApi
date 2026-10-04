@@ -180,6 +180,10 @@ Assert-Lacks $releaseGate "continue-on-error" "production-deployment-gate must n
 Assert-Has $stagingJob "bash scripts/smoke-staging.sh --validate-only" "staging-smoke must validate its mandatory configuration first."
 Assert-Has $stagingJob "STAGING_DATABASE_URL is not set" "staging-smoke must fail closed without STAGING_DATABASE_URL."
 Assert-Has $stagingJob 'deployed_sha,,' "staging-smoke must compare the deployed commit with the expected one."
+# ...and the Staging hook must deploy exactly that commit: without `ref` Render builds whatever the
+# tracked branch points at, so a merge landing while the gate runs fails the proof for no real reason.
+Assert-Has $stagingJob 'ref=${GITHUB_SHA}' "The Staging deploy hook must be pinned to the gated commit with ref=`${GITHUB_SHA}."
+Assert-Has $stagingJob '"${pinned_hook_url}"' "staging-smoke must call the commit-pinned hook URL, not the bare STAGING_DEPLOY_HOOK_URL."
 Assert-Lacks $stagingJob "continue-on-error" "staging-smoke must not continue on error."
 
 # Rollback is a protected, master-only, confirmed operation.
