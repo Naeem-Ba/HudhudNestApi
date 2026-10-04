@@ -1450,12 +1450,37 @@ jobs:
             echo "::error::PRODUCTION_DEPLOY_HOOK_URL is required."
             exit 1
           fi
+          if [[ "${PRODUCTION_DEPLOY_HOOK_URL}" != https://* ]]; then
+            echo "::error::PRODUCTION_DEPLOY_HOOK_URL must be an https:// URL."
+            exit 1
+          fi
+          # A hook without `ref` deploys whatever the tracked branch points at when Render handles the
+          # request. The tip-of-master check above is only a point-in-time read, so a merge landing
+          # between that check and this call (or while Render queues the deploy) would ship a commit
+          # that never passed a gate. `ref=<sha>` makes Render deploy exactly the gated commit, and
+          # Render answers 404 if it does not know that commit (curl --fail then fails the step).
+          if [[ ! "${GITHUB_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::GITHUB_SHA is not a full 40-character commit id; refusing to deploy."
+            exit 1
+          fi
+          case "${PRODUCTION_DEPLOY_HOOK_URL}" in
+            *[?\&]ref=*)
+              echo "::error::PRODUCTION_DEPLOY_HOOK_URL must not carry its own ref; the gated commit is appended by this workflow."
+              exit 1
+              ;;
+          esac
+          separator='?'
+          case "${PRODUCTION_DEPLOY_HOOK_URL}" in *\?*) separator='&' ;; esac
+          pinned_hook_url="${PRODUCTION_DEPLOY_HOOK_URL}${separator}ref=${GITHUB_SHA}"
+          response_file="$(mktemp)"
+          trap 'rm -f "${response_file}"' EXIT
           curl --fail --silent --show-error \
             --request POST \
             --max-time 30 \
-            --output /dev/null \
-            "${PRODUCTION_DEPLOY_HOOK_URL}"
-          echo "Production deployment was triggered after successful Staging verification."
+            --output "${response_file}" \
+            "${pinned_hook_url}"
+          deployment_id="$(jq -r '.deploy.id // empty' "${response_file}" 2>/dev/null || true)"
+          echo "Production deployment of ${GITHUB_SHA} was triggered after successful Staging verification (provider deployment id: ${deployment_id:-not returned})."
   database-recovery:
     name: Production Database Recovery Gate
     needs:
