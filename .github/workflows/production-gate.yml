@@ -1065,12 +1065,11 @@ jobs:
             exit 1
           fi
           echo "::add-mask::${STAGING_DATABASE_URL}"
-          db_name="${STAGING_DATABASE_URL##*/}"
-          db_name="${db_name%%\?*}"
-          case "${db_name,,}" in
-            *staging*) ;;
-            *) echo "::error::Refusing to migrate: target database name does not contain 'staging'."; exit 1 ;;
-          esac
+          # The "database name must contain 'staging'" guard was removed on the owner's instruction:
+          # Staging lives in its own Supabase project whose connection URL ends in /postgres and
+          # cannot be changed. Isolation from Production now rests on STAGING_DATABASE_URL being a
+          # secret of the 'staging' environment that points at that separate project.
+          echo "::warning::Staging database name is not verified by this workflow; confirm STAGING_DATABASE_URL targets the dedicated Staging project, never Production."
           connection="${STAGING_DATABASE_URL}"
           case "${connection}" in
             *sslmode=*) ;;
