@@ -35,7 +35,9 @@ jobs:
   cleanup:
     name: Delete artifacts older than the keep window
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # The first runs on a full quota had thousands of artifacts at ~2 deletions/second; 10 minutes
+    # was not enough. Steady state (one day of artifacts) takes seconds.
+    timeout-minutes: 120
     steps:
       - name: Delete old artifacts
         env:
