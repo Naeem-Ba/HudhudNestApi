@@ -4,7 +4,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 
@@ -36,12 +36,54 @@ def count_spdx_components(sbom: dict) -> int:
     return len(sbom.get("packages") or [])
 
 
-def summarize_trivy_findings(scan: dict, exceptions: dict):
-    exception_ids = {
-        str(item.get("id") or item.get("vulnerabilityId") or "").upper()
-        for item in exceptions.get("container", [])
-    }
+def accepted_container_exception_ids(exceptions: dict, today: date, failures: list[str]) -> set[str]:
+    """Return the vulnerability ids that may be waived today.
 
+    ci/vulnerability-exceptions.json declares that every exception needs an owner, a remediation
+    issue and an end date, but nothing applied that to the `container` list: an entry kept
+    suppressing a HIGH/CRITICAL finding forever after it "expired". An entry that breaks the policy
+    grants no waiver (so the finding blocks again) and is reported as a failure of its own. The
+    policy is always enforced; the file's `policy` flags cannot switch it off.
+    """
+    accepted: set[str] = set()
+
+    for index, item in enumerate(exceptions.get("container") or []):
+        vulnerability_id = str(item.get("id") or item.get("vulnerabilityId") or "").strip().upper()
+        label = vulnerability_id or f"#{index + 1}"
+        problems = []
+
+        if not vulnerability_id:
+            problems.append("has no id")
+        elif any(wildcard in vulnerability_id for wildcard in "*?%"):
+            problems.append("uses a wildcard")
+
+        if not str(item.get("owner") or "").strip():
+            problems.append("has no owner")
+
+        if not str(item.get("remediationIssue") or "").strip():
+            problems.append("has no remediationIssue")
+
+        raw_expiry = str(item.get("expires") or item.get("expiresOn") or "").strip()
+        try:
+            expires = datetime.strptime(raw_expiry, "%Y-%m-%d").date()
+        except ValueError:
+            problems.append("has no valid expiry date (expected YYYY-MM-DD in 'expires')")
+        else:
+            if expires < today:
+                problems.append(f"expired on {raw_expiry}")
+
+        if problems:
+            failures.append(
+                f"Container vulnerability exception {label} {', '.join(problems)}; "
+                "it grants no waiver. Fix the finding or renew the exception with a new date and rationale."
+            )
+        else:
+            accepted.add(vulnerability_id)
+
+    return accepted
+
+
+def summarize_trivy_findings(scan: dict, exception_ids: set[str]):
     counts = {
         "CRITICAL": 0,
         "HIGH": 0,
@@ -173,7 +215,8 @@ def main() -> int:
         exceptions = {"container": []}
         failures.append(str(error))
 
-    finding_counts, blocking_findings = summarize_trivy_findings(container_scan, exceptions)
+    exception_ids = accepted_container_exception_ids(exceptions, datetime.now(timezone.utc).date(), failures)
+    finding_counts, blocking_findings = summarize_trivy_findings(container_scan, exception_ids)
     if blocking_findings:
         failures.append(f"Container scan has {len(blocking_findings)} unaccepted CRITICAL/HIGH findings.")
 
