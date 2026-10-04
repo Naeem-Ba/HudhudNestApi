@@ -46,6 +46,21 @@ public sealed class AgencyInvitationRepository : IAgencyInvitationRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<AgencyInvitation>> GetActionableForAgencyAsync(
+        Guid agencyId,
+        CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+
+        return await _db.AgencyInvitations
+            .AsNoTracking()
+            .Where(i => i.AgencyId == agencyId
+                && i.Status == AgencyInvitationStatus.Pending
+                && i.ExpiresAt > now)
+            .OrderByDescending(i => i.CreatedAt)
+            .ToListAsync(ct);
+    }
+
     public async Task ReloadAsync(AgencyInvitation invitation, CancellationToken ct = default)
         => await _db.Entry(invitation).ReloadAsync(ct);
 }

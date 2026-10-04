@@ -1053,6 +1053,7 @@ jobs:
         shell: bash
         env:
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_DATABASE_MARKER: ${{ vars.STAGING_DATABASE_MARKER }}
         run: |
           set -euo pipefail
           # The API never migrates on startup (see docs/DATABASE-PRODUCTION-READINESS.md), and
@@ -1067,11 +1068,40 @@ jobs:
             exit 1
           fi
           echo "::add-mask::${STAGING_DATABASE_URL}"
-          # The "database name must contain 'staging'" guard was removed on the owner's instruction:
-          # Staging lives in its own Supabase project whose connection URL ends in /postgres and
-          # cannot be changed. Isolation from Production now rests on STAGING_DATABASE_URL being a
-          # secret of the 'staging' environment that points at that separate project.
-          echo "::warning::Staging database name is not verified by this workflow; confirm STAGING_DATABASE_URL targets the dedicated Staging project, never Production."
+          # Same rule as StagingEnvironmentGuard at API startup: the marker must appear in the
+          # database name, the user or the host. Supabase fixes the database name to "postgres",
+          # so for a Supabase Staging project the marker is its project ref, which appears in the
+          # pooler user (postgres.<ref>) and the direct host (db.<ref>.supabase.co). Keep this
+          # variable equal to Staging__DatabaseNameMarker on the Render Staging service.
+          marker="${STAGING_DATABASE_MARKER:-}"
+          if [ -z "${marker}" ]; then
+            echo "::error::STAGING_DATABASE_MARKER is not set. Add it as a variable on the 'staging' GitHub environment, equal to Staging__DatabaseNameMarker on the Render Staging service."
+            exit 1
+          fi
+          if [ "${marker,,}" = "postgres" ]; then
+            echo "::error::STAGING_DATABASE_MARKER must identify the Staging database; 'postgres' matches every database."
+            exit 1
+          fi
+          rest="${STAGING_DATABASE_URL#*://}"
+          authority="${rest%%/*}"
+          db_name="${rest#*/}"
+          [ "${db_name}" = "${rest}" ] && db_name=""
+          db_name="${db_name%%\?*}"
+          db_user=""
+          if [ "${authority}" != "${authority#*@}" ]; then
+            userinfo="${authority%@*}"
+            db_user="${userinfo%%:*}"
+          fi
+          db_host="${authority##*@}"
+          db_host="${db_host%%:*}"
+          matched=false
+          for part in "${db_name}" "${db_user}" "${db_host}"; do
+            case "${part,,}" in *"${marker,,}"*) matched=true ;; esac
+          done
+          if [ "${matched}" != true ]; then
+            echo "::error::Refusing to migrate: STAGING_DATABASE_MARKER is not in the target database name, user or host."
+            exit 1
+          fi
           connection="${STAGING_DATABASE_URL}"
           case "${connection}" in
             *sslmode=*) ;;

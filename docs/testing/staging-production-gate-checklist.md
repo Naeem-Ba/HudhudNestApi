@@ -35,7 +35,7 @@ mitigation, not equivalent to real required-reviewer protection: anyone with pus
 
 - [ ] Stable external HTTPS Staging URL exists.
 - [ ] Staging service is distinct from Production.
-- [ ] Dedicated PostgreSQL/PostGIS database (a separate project from Production). The workflow no longer checks the database name; `STAGING_DATABASE_URL` must be a secret of the `staging` environment pointing at that project. The API still enforces `Staging:DatabaseNameMarker` at startup.
+- [ ] Dedicated PostgreSQL/PostGIS database (a separate project from Production). `STAGING_DATABASE_URL` is a secret of the `staging` environment pointing at that project. Both the workflow (`STAGING_DATABASE_MARKER` variable) and the API at startup (`Staging:DatabaseNameMarker`) require the marker in the database name, user or host; for Supabase it is the Staging project ref.
 - [ ] Dedicated Redis resource or namespace is configured.
 - [ ] Dedicated image-storage account/folder is configured.
 - [ ] Staging secrets are distinct from Production.

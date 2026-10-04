@@ -34,6 +34,14 @@ public interface IAgencyInvitationRepository
         CancellationToken ct = default);
 
     /// <summary>
+    /// The agency's actionable invitations — Pending and not yet past ExpiresAt, newest
+    /// first. Read-only, same semantics as GetActionableForTargetAsync from the other side.
+    /// </summary>
+    Task<IReadOnlyList<AgencyInvitation>> GetActionableForAgencyAsync(
+        Guid agencyId,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Re-reads this tracked invitation's current column values from the database, in
     /// place. Used after acquiring an AgencyInvitationLock advisory lock: the entity may
     /// have been loaded (and its Status cached in memory) before the lock was acquired, and

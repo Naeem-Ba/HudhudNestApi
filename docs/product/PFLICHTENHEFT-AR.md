@@ -14,7 +14,7 @@
 | الإصدار | التاريخ | الوصف |
 |---|---|---|
 | 1.0 | 2026-10-02 | الإصدار الأول: متطلبات مستخلَصة من النظام القائم، بحالة تحقّق مثبتة بالدليل |
-| 1.1 | 2026-10-04 | واجهة حذف الحساب وتصدير البيانات (HudhudNest#125): /F-USR-06..08/ و/UI-07/ و/R03/ مكتملة |
+| 1.1 | 2026-10-04 | شاشات المكتب (HudhudNest#124): /UI-06/؛ وواجهة حذف الحساب وتصدير البيانات (HudhudNest#125): /F-USR-06..08/ و/UI-07/ و/R03/ — مكتملة |
 
 ### مفتاح الحالة والأولوية
 
@@ -207,10 +207,10 @@
 | المعرّف | المتطلّب | الوصول | نقاط النهاية | أ | الحالة | الدليل |
 |---|---|---|---|:-:|:-:|---|
 | /F-AGY-01/ | إنشاء/عرض/تعديل المكتب (slug ثابت) | م / مالك | `POST /api/Agencies`, `GET /me`, `PUT /{id}` | S | ✅ | |
-| /F-AGY-02/ | دعوة الأعضاء وقبولها ورفضها (الحد 50) | مالك/م | `POST /{id}/invitations`, `GET /invitations/mine`, `POST /invitations/{id}/accept|decline` | S | ✅ خلفية / ⛔ واجهة | لا شاشة |
-| /F-AGY-03/ | إزالة عضو / مغادرة | مالك/م | `DELETE /{id}/members/{memberUserId}` | S | ✅ خلفية / ⛔ واجهة | |
-| /F-AGY-04/ | نقل الملكية، الشعار، التعطيل | مالك | `POST /{id}/transfer-ownership`, `/logo`, `DELETE /{id}` | K | ✅ خلفية / ⛔ واجهة | |
-| /F-AGY-05/ | الصفحة العامة بالرابط القصير | ز | `GET /api/Agencies/{slug}` | S | ✅ خلفية / ⛔ واجهة | لا مسار واجهة |
+| /F-AGY-02/ | دعوة الأعضاء (بالمعرّف أو بالبريد/الهاتف) وقبولها ورفضها (الحد 50)، وقائمة الدعوات المعلّقة للمالك | مالك/م | `POST /{id}/invitations`, `POST /{id}/invitations/by-contact` (حد `agency-invite` 20/ساعة), `GET /{id}/invitations`, `GET /invitations/mine`, `POST /invitations/{id}/accept|decline` | S | ✅ | واجهة HudhudNest#124 (`/my-agency`)؛ لا إلغاء لدعوة معلّقة بعد |
+| /F-AGY-03/ | إزالة عضو / مغادرة | مالك/م | `DELETE /{id}/members/{memberUserId}` | S | ✅ | HudhudNest#124 |
+| /F-AGY-04/ | نقل الملكية، الشعار، التعطيل وإعادة التفعيل | مالك | `POST /{id}/transfer-ownership`, `/logo`, `DELETE /{id}`, `POST /{id}/reactivate` | K | ✅ | HudhudNest#124؛ نقاط المالك `[Authorize]` والتحقق بـ OwnerUserId في المعالج (لا بوابة دور، كي لا يُرفض مالك جديد برمز قديم) — `AgencyOwnerRoutesTests` |
+| /F-AGY-05/ | الصفحة العامة بالرابط القصير | ز | `GET /api/Agencies/{slug}` | S | ✅ | مسار الواجهة `/agencies/:slug` (HudhudNest#124) |
 | /F-AGY-06/ | الدور ليس كافيًا: المقارنة مع `AgencyId` الفعلي في كل معالج | م | ضمني | M | ✅ | ADR-006؛ لا عزل صفوف |
 
 ### 4.7 الإقامة القصيرة (SHS)
@@ -408,7 +408,7 @@
 ### 8.1 المسارات الرئيسية وحمايتها (`app.routes.ts`)
 | المجموعة | المسارات | الحماية |
 |---|---|---|
-| عامة | `/home`، `/landing`، `/properties`، `/properties/:id`، `/short-stay`، `/short-stay/:id`، `/investments`، `/investments/:id`، `/valuation`، `/pricing`، `/kontakt`، `/reviews`، `/users/:id`، `/privacy-policy`، `/terms-of-service`، `/account-deletion`، `/offline`، `/not-found`، `/not-authorized` | — |
+| عامة | `/home`، `/landing`، `/properties`، `/properties/:id`، `/short-stay`، `/short-stay/:id`، `/investments`، `/investments/:id`، `/valuation`، `/pricing`، `/kontakt`، `/reviews`، `/users/:id`، `/agencies/:slug`، `/privacy-policy`، `/terms-of-service`، `/account-deletion`، `/offline`، `/not-found`، `/not-authorized` | — |
 | المصادقة | `/login`، `/auth/login|register|forgot-password|reset-password|verify-email|phone-register|phone-password-reset`، `/language` | — |
 | مسجَّل | `/my-listings`، `/my-agency`، `/favorites`، `/saved-searches`، `/notifications`، `/visits`، `/messages[/:propertyId]`، `/my-services`، `/analytics`، `/profile`، `/profile/phone-reverify|phone-change`، `/checkout/:kind/:propertyId`، `/investments/watchlist`، `/short-stay/bookings|manage[/new|/:id]` | `AuthGuard` |
 | إنشاء إعلان | `/property-form` | `AuthGuard` + `ListingEligibilityGuard` |
@@ -424,8 +424,8 @@
 | /UI-03/ | تصميم متجاوب للجوال + Capacitor | M | ✅ |
 | /UI-04/ | شارة بيئة (🟠 STAGING للجميع، 🟢 PRODUCTION للمسؤول) | S | ✅ |
 | /UI-05/ | نافذة تحديث التطبيق (اختياري/إلزامي) | S | ✅ |
-| /UI-06/ | شاشات لإدارة المكتب (دعوات/أعضاء/شعار) والصفحة العامة للمكتب | S | ⛔ |
-| /UI-07/ | شاشة إلغاء الحذف وتصدير البيانات + تصحيح نص «فورًا» في نافذة الحذف | M | ✅ |
+| /UI-06/ | شاشات لإدارة المكتب (دعوات/أعضاء/شعار) والصفحة العامة للمكتب | S | ✅ HudhudNest#124 |
+| /UI-07/ | شاشة إلغاء الحذف وتصدير البيانات + تصحيح نص «فورًا» في نافذة الحذف | M | ✅ HudhudNest#125 |
 | /UI-08/ | حقل تغيير حالة العقار (محجوز/مباع/مؤجَّر) في الواجهة | S | ❓ |
 
 ---
@@ -488,7 +488,7 @@
 | **TP-3 الفرص والنمو** | INV، MKT، ADM-05 | ✅ |
 | **TP-4 التوزيع الاجتماعي** | SOC | ✅ برمجيًا / ❓ حقيقيًا |
 | **TP-5 التشغيل والجودة** | E01–E10، Q01–Q16 | 🟡 بنود مالك مفتوحة |
-| **المرحلة التالية المقترحة** | (1) تدوير الأسرار /Q06/ ← (2) ترحيل Lease /F-SOC-17/ ← (3) أول نشر حقيقي تيليغرام ← (4) حسم SMS لسوريا /Q15/ ← (5) شاشات المكتب /UI-06/ ← (6) توفيق RPO مع النسخ اليومي /Q07/ | ⏳ |
+| **المرحلة التالية المقترحة** | (1) تدوير الأسرار /Q06/ ← (2) ترحيل Lease /F-SOC-17/ ← (3) أول نشر حقيقي تيليغرام ← (4) حسم SMS لسوريا /Q15/ ← (5) توفيق RPO مع النسخ اليومي /Q07/ (شاشات المكتب /UI-06/ والحذف /UI-07/ ✅) | ⏳ |
 
 ---
 
@@ -535,7 +535,7 @@
 | R17 إزالة قيم JWT القديمة | /F-AUTH-07/ | بعد ≥ 30 يومًا |
 | R18 تحويل الواجهة للنطاقات المخصّصة | /E10/ | مالك |
 
-**فجوات واجهة/خلفية مكتشفة أثناء إعداد هذه الوثيقة:** (أ) ~~نص نافذة حذف الحساب «فورًا» لا يطابق التأجيل 30 يومًا، ولا شاشات لإلغاء الحذف/تصدير البيانات~~ — أُغلقت في 2026-10-04 (HudhudNest#125)؛ (ب) لا شاشات لدعوات المكتب وأعضائه وشعاره وصفحته العامة؛ (ج) `check-duplicate` بلا مستهلك في الواجهة؛ (د) نصّا `docs/SUBSCRIPTION-PAGE-REPORT-AR.md` في مستودع الواجهة قديمان (يقولان «لا باك-إند للاشتراكات») بينما `PlansController` و`SelectPlan` موجودان.
+**فجوات واجهة/خلفية مكتشفة أثناء إعداد هذه الوثيقة:** (أ) ~~نص نافذة حذف الحساب «فورًا» لا يطابق التأجيل 30 يومًا، ولا شاشات لإلغاء الحذف/تصدير البيانات~~ — أُغلقت في 2026-10-04 (HudhudNest#125)؛ (ب) ~~لا شاشات لدعوات المكتب وأعضائه وشعاره وصفحته العامة~~ أُغلقت بـ HudhudNest#124؛ (ج) `check-duplicate` بلا مستهلك في الواجهة؛ (د) نصّا `docs/SUBSCRIPTION-PAGE-REPORT-AR.md` في مستودع الواجهة قديمان (يقولان «لا باك-إند للاشتراكات») بينما `PlansController` و`SelectPlan` موجودان.
 
 ---
 
