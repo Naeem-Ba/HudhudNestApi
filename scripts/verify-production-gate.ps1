@@ -162,6 +162,10 @@ if ($tipCheckAt -lt 0 -or $hookAt -lt 0 -or $tipCheckAt -gt $hookAt) {
     $failures.Add("The tip-of-master assertion must run before the production deploy hook is triggered.")
 }
 Assert-Has $deploy "PRODUCTION_DEPLOY_HOOK_URL is required" "The production deploy hook must fail closed when it is not configured."
+# ...and the hook itself must be pinned to that commit: without `ref` Render builds whatever the
+# tracked branch points at when it handles the request, which the tip check cannot guarantee.
+Assert-Has $deploy 'ref=${GITHUB_SHA}' "The production deploy hook must be pinned to the gated commit with ref=`${GITHUB_SHA}."
+Assert-Has $deploy '"${pinned_hook_url}"' "deploy-production must call the commit-pinned hook URL, not the bare PRODUCTION_DEPLOY_HOOK_URL."
 
 # The release gate must accept nothing but success from each upstream job, and must verify that
 # Render cannot deploy Production around this workflow.

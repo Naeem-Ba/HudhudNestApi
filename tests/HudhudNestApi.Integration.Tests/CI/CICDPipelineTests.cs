@@ -258,6 +258,23 @@ public sealed class CICDPipelineTests
         Assert.Contains("staleAdvisories", gate, StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "Container vulnerability exceptions must expire and be owned")]
+    public void ContainerVulnerabilityExceptions_Should_Be_Governed_By_TheManifestGate()
+    {
+        // The `container` list of vulnerability-exceptions.json is consumed only by
+        // generate-release-security-manifest.py (check-vulnerable-packages.ps1 governs the NuGet
+        // baseline). That script used to take every listed id as a permanent waiver, so an
+        // exception kept hiding a HIGH/CRITICAL image finding long after its end date.
+        var repoRoot = FindRepositoryRoot();
+        var script = File.ReadAllText(
+            Path.Combine(repoRoot, "scripts", "generate-release-security-manifest.py"));
+
+        Assert.Contains("def accepted_container_exception_ids", script, StringComparison.Ordinal);
+        Assert.Contains("expires < today", script, StringComparison.Ordinal);
+        Assert.Contains("has no owner", script, StringComparison.Ordinal);
+        Assert.Contains("has no remediationIssue", script, StringComparison.Ordinal);
+    }
+
     [Fact(DisplayName = "Every accepted advisory must carry owner, expiry and remediation issue")]
     public void VulnerabilityBaseline_Entries_Should_Be_FullyGoverned()
     {

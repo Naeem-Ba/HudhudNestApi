@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "verifiedAtUtc": "2026-10-03T12:43:11Z",
+  "latestEfMigration": "20260927134149_AddUserRatingOptionalCriteria",
+  "postgisVersion": "3.5.2",
+  "spatialDistanceMeters": 130.35,
+  "durationSeconds": 4,
+  "backupAgeSeconds": 37,
+  "rpoTargetSeconds": 3600,
+  "rtoTargetSeconds": 7200,
+  "rpoPass": true,
+  "primaryKeyCount": 83,
+  "foreignKeyCount": 119,
+  "uniqueConstraintCount": 0,
+  "uniqueIndexCount": 36
+}
