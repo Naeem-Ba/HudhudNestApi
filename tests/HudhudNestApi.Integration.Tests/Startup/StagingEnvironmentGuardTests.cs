@@ -3,13 +3,15 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using HudhudNestApi.Configuration;
 
-namespace HudhudNestApi.Architecture.Tests.Api;
+namespace HudhudNestApi.Integration.Tests.Startup;
 
 /// <summary>
 /// Pins the Staging side of Staging/Production isolation for the database: the isolation marker
 /// may identify the Staging database by name, user or host (a Supabase project ref lives in the
 /// user and host, never in the fixed "postgres" database name), and a marker that matches every
 /// database is refused.
+/// Lives in the integration suite (no database needed) because that suite runs with coverage and
+/// the changed-code coverage gate counts the guard's lines only from instrumented suites.
 /// </summary>
 public sealed class StagingEnvironmentGuardTests
 {
@@ -66,7 +68,7 @@ public sealed class StagingEnvironmentGuardTests
     private sealed class TestHostEnvironment(string name) : IHostEnvironment
     {
         public string EnvironmentName { get; set; } = name;
-        public string ApplicationName { get; set; } = "HudhudNestApi.Architecture.Tests";
+        public string ApplicationName { get; set; } = "HudhudNestApi.Integration.Tests";
         public string ContentRootPath { get; set; } = Directory.GetCurrentDirectory();
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
