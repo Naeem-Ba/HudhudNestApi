@@ -1,4 +1,5 @@
 using System.Reflection;
+using HudhudNestApi.Application.Listings.DTOs;
 using HudhudNestApi.Application.Properties.DTOs;
 using HudhudNestApi.Configuration;
 using Xunit;
@@ -60,5 +61,31 @@ public sealed class OutputCacheVaryByQueryTests
             $"PropertyFilterDto no longer has: {string.Join(", ", stale)}. Harmless for " +
             "correctness (an unused vary key just never varies), but likely dead from a rename " +
             "-- check whether the new property name needs the entry instead.");
+    }
+
+    [Fact]
+    public void Every_bindable_GeoPropertySearchRequestDto_property_has_a_vary_by_query_entry()
+    {
+        // Same guard as above for geo-search: a bindable property missing from the vary list
+        // would let two searches that differ only in it share one cached response.
+        var expectedQueryNames = typeof(GeoPropertySearchRequestDto)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanWrite)
+            .Select(p => char.ToLowerInvariant(p.Name[0]) + p.Name[1..])
+            .ToList();
+
+        var actualQueryNames = OutputCacheRegistration.PublicPropertyGeoSearchVaryByQueryParams;
+
+        var missing = expectedQueryNames.Except(actualQueryNames, StringComparer.Ordinal).ToList();
+        var stale = actualQueryNames.Except(expectedQueryNames, StringComparer.Ordinal).ToList();
+
+        Assert.True(
+            missing.Count == 0,
+            "GeoPropertySearchRequestDto gained a property with no matching entry in " +
+            $"OutputCacheRegistration.PublicPropertyGeoSearchVaryByQueryParams: {string.Join(", ", missing)}.");
+        Assert.True(
+            stale.Count == 0,
+            "OutputCacheRegistration.PublicPropertyGeoSearchVaryByQueryParams lists a query param " +
+            $"GeoPropertySearchRequestDto no longer has: {string.Join(", ", stale)}.");
     }
 }

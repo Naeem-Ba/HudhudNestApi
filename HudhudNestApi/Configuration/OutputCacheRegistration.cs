@@ -8,6 +8,7 @@ public static class OutputCacheRegistration
     public const string MarketInsightsPolicy = "market-insights";
     public const string PublicPropertyListPolicy = "public-property-list";
     public const string PublicPropertyDetailsPolicy = "public-property-details";
+    public const string PublicPropertyGeoSearchPolicy = "public-property-geo-search";
 
     public const string AnalyticsTag = "analytics";
 
@@ -66,6 +67,39 @@ public static class OutputCacheRegistration
         "agencyId",
         "sortBy",
         "sortDescending"
+    ];
+
+    /// <summary>
+    /// Every camelCase query-string name GeoPropertySearchRequestDto binds from SearchNearby's
+    /// [FromQuery] parameter. Same contract as <see cref="PublicPropertyListVaryByQueryParams"/>:
+    /// SetVaryByQuery ignores any parameter missing from this list, so two requests differing only
+    /// in an omitted one would be served each other's cached response.
+    /// OutputCacheVaryByQueryTests reflects over GeoPropertySearchRequestDto to keep the two in sync.
+    /// </summary>
+    public static readonly string[] PublicPropertyGeoSearchVaryByQueryParams =
+    [
+        "latitude",
+        "longitude",
+        "radiusKm",
+        "page",
+        "pageSize",
+        "countryCode",
+        "city",
+        "region",
+        "listingType",
+        "status",
+        "condition",
+        "minPrice",
+        "maxPrice",
+        "currencyCode",
+        "minRooms",
+        "maxRooms",
+        "minArea",
+        "maxArea",
+        "hasBalcony",
+        "hasElevator",
+        "hasParkingSpace",
+        "ownerId"
     ];
 
     public static IServiceCollection AddScaleOutOutputCaching(
@@ -138,6 +172,16 @@ public static class OutputCacheRegistration
             policy => policy
                 .Expire(PublicPropertyListMaxAge)
                 .SetVaryByQuery(PublicPropertyListVaryByQueryParams)
+                .Tag(OutputCacheTags.Properties));
+
+        // Same TTL and the same "properties" tag as the list, so every property write that
+        // evicts the list also evicts this. The key is the exact query string (coordinates
+        // included), so only byte-identical requests share an entry.
+        options.AddPolicy(
+            PublicPropertyGeoSearchPolicy,
+            policy => policy
+                .Expire(PublicPropertyListMaxAge)
+                .SetVaryByQuery(PublicPropertyGeoSearchVaryByQueryParams)
                 .Tag(OutputCacheTags.Properties));
 
         options.AddPolicy(
