@@ -40,7 +40,7 @@ Then `/health/ready` and a property list read. Confirm the Migrator reports "No 
 6. **Rollback:** restore the old `ConnectionStrings__DefaultConnection` value and redeploy. The old database is unchanged, but writes made after cut-over exist only on Supabase.
 
 ## 5. Staging
-Repeat with a separate `hudhudnest-staging` project. The Staging isolation guard requires `Staging__DatabaseNameMarker` to appear inside the database name of the connection string — change `Staging__EnvironmentId`, `…DatabaseNameMarker`, `…RedisIsolationMarker`, `…StorageIsolationMarker` **together** with the database/Redis they describe, and keep them different from production.
+Repeat with a separate `hudhudnest-staging` project. The Staging isolation guard requires `Staging__DatabaseNameMarker` to appear in the database name, user or host of the connection string (Supabase's database is always `postgres`, so use the Staging project ref; `postgres` itself is refused) and the gate requires the same value in the `STAGING_DATABASE_MARKER` variable — change `Staging__EnvironmentId`, `…DatabaseNameMarker`, `…RedisIsolationMarker`, `…StorageIsolationMarker` **together** with the database/Redis they describe, and keep them different from production.
 
 ## 6. After
 - Keep the old Render database read-only for ≥ 7 days, then delete it.

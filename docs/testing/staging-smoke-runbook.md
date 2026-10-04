@@ -27,11 +27,14 @@ Secrets:
 - `STAGING_SMOKE_PASSWORD`
 - `STAGING_SMOKE_FIXED_OTP`
 - `STAGING_SMOKE_CLEANUP_SECRET`
-- `STAGING_DATABASE_URL` — external connection string of the Render Staging Postgres
-  (`postgresql://user:pass@host/propertyapi_staging`; `sslmode=require` is appended if absent).
+- `STAGING_DATABASE_URL` — connection string of the dedicated Staging Postgres
+  (for Supabase: `postgresql://postgres.<staging-ref>:pass@<region>.pooler.supabase.com:5432/postgres`;
+  `sslmode=require` is appended if absent).
   The gate applies pending EF migrations to it with `tools/HudhudNestApi.Migrator` **before** the deploy
   hook, because the API does not migrate on startup and Render Free has no pre-deploy command. The step
-  refuses any database whose name does not contain `staging`.
+  refuses any database whose name, user and host all lack `STAGING_DATABASE_MARKER`.
+- `STAGING_DATABASE_MARKER` (variable, not secret) — must equal `Staging__DatabaseNameMarker` on the
+  Render Staging service. For Supabase use the Staging project ref; `postgres` is refused.
 
 Evidence: every run uploads `staging-release-verification.json` (expected vs deployed commit SHA, branch,
 migration state, readiness, timestamps) and, even when earlier steps fail, failure-status
@@ -52,7 +55,7 @@ Deployment__Version=<release version>
 Deployment__PublicBaseUrl=https://<staging-host>
 Deployment__ProductionBaseUrl=https://<production-host>
 Staging__EnvironmentId=<staging identifier>
-Staging__DatabaseNameMarker=staging
+Staging__DatabaseNameMarker=<text found in the Staging database name, user or host; the Supabase project ref>
 Staging__RedisIsolationMarker=<dedicated redis identifier>
 Staging__StorageIsolationMarker=<dedicated storage identifier>
 Staging__ExternalNotificationsDisabled=true

@@ -61,18 +61,48 @@ public static class StagingEnvironmentGuard
                 "Staging and Production hostnames must be different.");
     }
 
+    // The marker must appear in the database name, the user or the host. Supabase fixes the
+    // database name to "postgres" but puts the project ref in both the pooler user
+    // ("postgres.<ref>") and the direct host ("db.<ref>.supabase.co"), so a Staging project is
+    // identified by its ref there. "postgres" itself is refused as a marker: every Supabase
+    // database (Production included) would match it.
     private static void ValidateDatabase(IConfiguration configuration)
     {
         var raw = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException(
                 "ConnectionStrings:DefaultConnection is required in Staging.");
         var marker = Require(configuration, "Staging:DatabaseNameMarker");
-        var database = new NpgsqlConnectionStringBuilder(raw).Database;
 
-        if (string.IsNullOrWhiteSpace(database) ||
-            !database.Contains(marker, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(marker.Trim(), "postgres", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException(
-                "The Staging database name does not contain the configured isolation marker.");
+                "Staging:DatabaseNameMarker must identify the Staging database; 'postgres' matches every database.");
+
+        var (database, username, host) = ParseConnectionIdentity(raw);
+        var matches = new[] { database, username, host }.Any(part =>
+            !string.IsNullOrWhiteSpace(part) &&
+            part.Contains(marker, StringComparison.OrdinalIgnoreCase));
+
+        if (!matches)
+            throw new InvalidOperationException(
+                "The Staging database name, user and host do not contain the configured isolation marker.");
+    }
+
+    private static (string? Database, string? Username, string? Host) ParseConnectionIdentity(string raw)
+    {
+        var value = raw.Trim().Trim('"', '\'');
+
+        if (value.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
+            value.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+        {
+            var uri = new Uri(value);
+            return (
+                Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/')),
+                Uri.UnescapeDataString(uri.UserInfo.Split(':', 2)[0]),
+                uri.Host);
+        }
+
+        var builder = new NpgsqlConnectionStringBuilder(value);
+        return (builder.Database, builder.Username, builder.Host);
     }
 
     private static void ValidateRedis(IConfiguration configuration)
