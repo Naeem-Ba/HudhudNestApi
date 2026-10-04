@@ -145,6 +145,39 @@ public sealed class RateLimitingGuardTests
         Assert.Equal(expectedPolicy, attribute.PolicyName);
     }
 
+    /// <summary>
+    /// RedisRateLimitingMiddleware answers 500 for any [EnableRateLimiting] policy name it has no
+    /// options for, and those options come only from configuration plus
+    /// RedisRateLimitingDefaults. A policy added to RateLimitingRegistration and a controller
+    /// but not to the defaults therefore works locally (in-memory limiter) and breaks wherever
+    /// Redis rate limiting is on -- which happened to the share, attribution and social
+    /// distribution endpoints.
+    /// </summary>
+    [Fact(DisplayName = "Every [EnableRateLimiting] policy has a Redis default")]
+    public void Every_Used_Policy_Should_Have_A_Redis_Default()
+    {
+        var defaultsType = ApiAssembly.GetType("HudhudNestApi.Security.RateLimiting.RedisRateLimitingDefaults", throwOnError: true)!;
+        var defaults = (IReadOnlyDictionary<string, HudhudNestApi.Security.RateLimiting.RedisFixedWindowRateLimitPolicyOptions>)
+            defaultsType.GetProperty("Policies", BindingFlags.Public | BindingFlags.Static)!.GetValue(null)!;
+
+        var missing = ApiAssembly.GetTypes()
+            .Where(type => typeof(ControllerBase).IsAssignableFrom(type) && !type.IsAbstract)
+            .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .Select(method => method.GetCustomAttribute<EnableRateLimitingAttribute>(inherit: true))
+                .Append(type.GetCustomAttribute<EnableRateLimitingAttribute>(inherit: true)))
+            .Where(attribute => attribute?.PolicyName is not null)
+            .Select(attribute => attribute!.PolicyName!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(policy => !defaults.ContainsKey(policy))
+            .OrderBy(policy => policy, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(
+            missing.Count == 0,
+            "These [EnableRateLimiting] policies have no entry in RedisRateLimitingDefaults, so the " +
+            "Redis limiter answers them with 500: " + string.Join(", ", missing));
+    }
+
     [Fact(DisplayName = "Program.cs must define local fallback auth policies and enable Redis rate limiting")]
     public void Program_Should_Define_Auth_RateLimit_Policies()
     {
