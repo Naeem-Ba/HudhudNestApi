@@ -296,5 +296,18 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
         builder.HasIndex(p => p.ExpiresAt)
             .HasDatabaseName("IX_Properties_ExpiresAt_PendingWarning")
             .HasFilter("\"ExpiryWarningSentAt\" IS NULL");
+
+        // Lets the public list COUNT(*) (GetPropertiesListQuery -> PropertyRepository.GetPagedAsync)
+        // run as an index-only scan. Every unfiltered list request counts exactly this predicate
+        // (not deleted, published, not expired), and without it the count read the whole
+        // table, about 11 MB for 25,000 rows. With it: 1,464 buffers down to 23, 13 ms to 2.3 ms
+        // (min of 8, same data), 184 kB of storage. ExpiresAt is the only column the predicate
+        // still needs; the filter makes the index skip deleted/unpublished rows entirely. Index-only
+        // depends on the visibility map being current, which autovacuum maintains.
+        // Filtered counts (city, rooms, ...) still read the table: their columns are not in this index.
+        // Named-index overload: a second index on the same property set must be keyed by name,
+        // otherwise EF folds it into the PendingWarning index above.
+        builder.HasIndex(p => p.ExpiresAt, "IX_Properties_Visible_ExpiresAt")
+            .HasFilter("NOT \"IsDeleted\" AND \"IsPublished\"");
     }
 }

@@ -1476,6 +1476,9 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("CountryCode", "City", "Status", "IsPublished", "IsDeleted")
                         .HasDatabaseName("IX_Properties_Search");
 
+                    b.HasIndex(new[] { "ExpiresAt" }, "IX_Properties_Visible_ExpiresAt")
+                        .HasFilter("NOT \"IsDeleted\" AND \"IsPublished\"");
+
                     b.ToTable("Properties", null, t =>
                         {
                             t.HasCheckConstraint("CK_Properties_Area_PositiveOrNull", "\"Area\" IS NULL OR \"Area\" > 0");
