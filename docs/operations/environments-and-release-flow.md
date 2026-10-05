@@ -51,7 +51,7 @@ gh pr create --base master
 ```
 
 - على الـ PR يعمل `Production Gate` (build + اختبارات + أداء) و`CI` — لا نشر.
-- بعد الدمج في `master`: `Production Gate` يعمل كاملًا: … → `staging-smoke` (يهاجر قاعدة Staging، يستدعي Deploy Hook، ينتظر أن يعيد `build-info` نفس الـ commit والبيئة `Staging`، ثم E2E) → استرداد القاعدة → `production-deployment-gate`.
+- بعد الدمج في `master`: `Production Gate` يعمل كاملًا: … → `staging-smoke` (يهاجر قاعدة Staging، يستدعي Deploy Hook مثبّتًا على الـ commit المفحوص عبر `ref=<sha>` فلا يستطيع دمج لاحق استبداله، ينتظر أن يعيد `build-info` نفس الـ commit والبيئة `Staging`، ثم E2E) → استرداد القاعدة → `production-deployment-gate`.
 - تابع: `gh run list --workflow "Production Gate" --branch master --limit 3` ثم `gh run watch`.
 - اكتمل Staging عندما ينجح `staging-smoke`. اختبر يدويًا على الواجهة `staging--hudhudnest.netlify.app`.
 

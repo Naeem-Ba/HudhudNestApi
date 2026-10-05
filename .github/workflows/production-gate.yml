@@ -1132,17 +1132,35 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/staging-smoke
+          # A hook without `ref` deploys whatever the tracked branch points at when Render handles the
+          # request. A merge that lands while this gate is queued or running then puts a different
+          # commit on Staging than the one under test, and "Wait for intended staging release" fails
+          # on the SHA mismatch for a reason unrelated to quality. `ref=<sha>` makes Render deploy
+          # exactly the gated commit, as deploy-production already does.
+          if [[ ! "${GITHUB_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::GITHUB_SHA is not a full 40-character commit id; refusing to deploy Staging."
+            exit 1
+          fi
+          case "${STAGING_DEPLOY_HOOK_URL}" in
+            *[?\&]ref=*)
+              echo "::error::STAGING_DEPLOY_HOOK_URL must not carry its own ref; the gated commit is appended by this workflow."
+              exit 1
+              ;;
+          esac
+          separator='?'
+          case "${STAGING_DEPLOY_HOOK_URL}" in *\?*) separator='&' ;; esac
+          pinned_hook_url="${STAGING_DEPLOY_HOOK_URL}${separator}ref=${GITHUB_SHA}"
           response_file="$(mktemp)"
           trap 'rm -f "${response_file}"' EXIT
           curl --fail --silent --show-error \
             --request POST \
             --max-time 30 \
             --output "${response_file}" \
-            "${STAGING_DEPLOY_HOOK_URL}"
+            "${pinned_hook_url}"
           deployment_id="$(jq -r '.deploy.id // .id // empty' "${response_file}" 2>/dev/null || true)"
           if [ -n "${deployment_id}" ]; then
             echo "deployment_id=${deployment_id}" >> "${GITHUB_ENV}"
-            echo "Staging deployment was triggered (provider deployment id captured)."
+            echo "Staging deployment of ${GITHUB_SHA} was triggered (provider deployment id captured)."
           else
             echo "Staging deployment was triggered; the hook returned no deployment id."
           fi

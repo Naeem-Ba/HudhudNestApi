@@ -23,7 +23,9 @@ Variables:
 
 Secrets:
 
-- `STAGING_DEPLOY_HOOK_URL`
+- `STAGING_DEPLOY_HOOK_URL` — the Render deploy hook of the Staging service, **without** a `ref` parameter
+  (the gate refuses a hook that already carries one). The gate appends `ref=<gated commit sha>`, so Staging
+  runs exactly the commit under test and a merge landing while the gate is queued or running cannot swap it.
 - `STAGING_SMOKE_PASSWORD`
 - `STAGING_SMOKE_FIXED_OTP`
 - `STAGING_SMOKE_CLEANUP_SECRET`
