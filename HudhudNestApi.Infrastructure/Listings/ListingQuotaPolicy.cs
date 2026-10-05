@@ -4,6 +4,8 @@ using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Plans.Interfaces;
 using HudhudNestApi.Domain.Users.Entities;
 
+using HudhudNestApi.Domain.Plans.Constants;
+
 namespace HudhudNestApi.Infrastructure.Listings;
 
 /// <summary>
@@ -97,7 +99,7 @@ internal sealed class ListingQuotaPolicy : IListingQuotaPolicy
 
         if (!account.HasActivePlanBenefits(DateTime.UtcNow))
         {
-            var freePlan = await _plans.GetByTierAsync(FreeTier, ct)
+            var freePlan = await _plans.GetByTierAsync(PlanTiers.Free, ct)
                 ?? throw new ConflictException("تعذّر العثور على الخطة المجانية.");
 
             return freePlan.ListingLimit ?? int.MaxValue;
@@ -112,5 +114,4 @@ internal sealed class ListingQuotaPolicy : IListingQuotaPolicy
         return plan.ListingLimit ?? int.MaxValue;
     }
 
-    private const string FreeTier = "free";
 }

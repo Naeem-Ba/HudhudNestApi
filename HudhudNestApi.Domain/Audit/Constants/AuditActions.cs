@@ -31,6 +31,9 @@ public static class AuditActions
     public const string PlanActivatedByAdmin = "PlanActivatedByAdmin";
     public const string PlanExtendedByAdmin = "PlanExtendedByAdmin";
     public const string PlanCancelledByAdmin = "PlanCancelledByAdmin";
+    public const string PlanRequestApprovedByAdmin = "PlanRequestApprovedByAdmin";
+    public const string PlanRequestRejectedByAdmin = "PlanRequestRejectedByAdmin";
+    public const string FeaturedRequestRejectedByAdmin = "FeaturedRequestRejectedByAdmin";
 
     // -- Admin dashboard: listing lifecycle --------------------------------
     public const string ListingFeaturedByAdmin = "ListingFeaturedByAdmin";

@@ -20,6 +20,7 @@ public sealed class CreateAgencyInvitationCommandHandler
 {
     private readonly IAgencyRepository _agencies;
     private readonly IAgencyInvitationRepository _invitations;
+    private readonly IAgencyEligibilityPolicy _eligibility;
     private readonly IUnitOfWork _unitOfWork;
     private readonly INotificationService _notifications;
     private readonly ILogger<CreateAgencyInvitationCommandHandler> _logger;
@@ -27,12 +28,14 @@ public sealed class CreateAgencyInvitationCommandHandler
     public CreateAgencyInvitationCommandHandler(
         IAgencyRepository agencies,
         IAgencyInvitationRepository invitations,
+        IAgencyEligibilityPolicy eligibility,
         IUnitOfWork unitOfWork,
         INotificationService notifications,
         ILogger<CreateAgencyInvitationCommandHandler> logger)
     {
         _agencies = agencies;
         _invitations = invitations;
+        _eligibility = eligibility;
         _unitOfWork = unitOfWork;
         _notifications = notifications;
         _logger = logger;
@@ -57,6 +60,13 @@ public sealed class CreateAgencyInvitationCommandHandler
             throw new ConflictException(
                 "المكتب غير مفعّل حالياً ولا يمكن دعوة أعضاء إليه.");
         }
+
+        // Growing the office is the one owner action gated on the plan, because it is what
+        // the plan sells: seats. An owner whose plan lapsed (or who predates this rule on the
+        // free tier) keeps their agency and can still edit it, change its logo, transfer it
+        // or deactivate it — nothing existing is taken away — but cannot add members until
+        // the plan is in force again.
+        await _eligibility.EnsurePaidPlanAsync(request.RequestingUserId, cancellationToken);
 
         if (request.TargetUserId == request.RequestingUserId)
         {

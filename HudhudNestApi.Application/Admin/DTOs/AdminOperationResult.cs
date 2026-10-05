@@ -1,4 +1,4 @@
-﻿namespace HudhudNestApi.Application.Admin.DTOs;
+namespace HudhudNestApi.Application.Admin.DTOs;
 
 public sealed record AdminOperationResult
 {
@@ -19,6 +19,13 @@ public sealed record AdminOperationResult
         Succeeded = false,
         NotFound = true,
         Message = "User not found."
+    };
+
+    public static AdminOperationResult NotFoundResult(string message) => new()
+    {
+        Succeeded = false,
+        NotFound = true,
+        Message = message
     };
 
     public static AdminOperationResult BadRequest(

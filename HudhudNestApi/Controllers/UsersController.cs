@@ -228,11 +228,17 @@ public sealed class UsersController : ControllerBase
         };
     }
 
-    // POST /api/Users/me/plan — records the caller's explicit plan choice (including
-    // "free"). Gates listing creation/publishing — see CreatePropertyCommandHandler.
+    // POST /api/Users/me/plan — the caller's explicit plan choice.
+    //   free  → in force immediately            → 204 No Content
+    //   paid  → recorded as a PENDING REQUEST   → 202 Accepted { requestId, tier, status }
+    // A paid plan is activated only by an administrator after payment is confirmed
+    // (POST /api/admin/payment-requests/plans/{id}/approve); until then the account keeps
+    // its current plan. Gates listing creation/publishing — see CreatePropertyCommandHandler.
     [HttpPost("me/plan")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> SelectPlan(
         [FromBody] SelectPlanRequest dto,
@@ -243,7 +249,17 @@ public sealed class UsersController : ControllerBase
 
         var result = await _sender.Send(new SelectPlanCommand(userId, dto.Tier), ct);
 
-        return result ? NoContent() : Unauthorized();
+        return result.Outcome switch
+        {
+            SelectPlanOutcome.Activated => NoContent(),
+            SelectPlanOutcome.PendingAdminApproval => Accepted(new
+            {
+                requestId = result.RequestId,
+                tier = result.Tier,
+                status = "pending"
+            }),
+            _ => Unauthorized()
+        };
     }
 
     [HttpPost("me/change-password")]

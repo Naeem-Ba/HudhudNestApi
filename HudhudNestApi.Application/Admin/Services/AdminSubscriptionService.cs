@@ -7,6 +7,7 @@ using HudhudNestApi.Application.Plans.Interfaces;
 using HudhudNestApi.Application.Users;
 using HudhudNestApi.Application.Users.Interfaces;
 using HudhudNestApi.Domain.Audit.Constants;
+using HudhudNestApi.Domain.Plans.Enums;
 using HudhudNestApi.Domain.Users;
 using HudhudNestApi.Domain.Users.Entities;
 
@@ -26,6 +27,7 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
 {
     private readonly IUserAccountRepository _accounts;
     private readonly IPlanRepository _plans;
+    private readonly IPlanRequestRepository _planRequests;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAuditLogService _auditLogs;
     private readonly ILogger<AdminSubscriptionService> _logger;
@@ -33,12 +35,14 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
     public AdminSubscriptionService(
         IUserAccountRepository accounts,
         IPlanRepository plans,
+        IPlanRequestRepository planRequests,
         IUnitOfWork unitOfWork,
         IAuditLogService auditLogs,
         ILogger<AdminSubscriptionService> logger)
     {
         _accounts = accounts;
         _plans = plans;
+        _planRequests = planRequests;
         _unitOfWork = unitOfWork;
         _auditLogs = auditLogs;
         _logger = logger;
@@ -220,6 +224,152 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
             userId, performedByUserId);
 
         return AdminOperationResult.Ok("Subscription cancelled.");
+    }
+
+    public async Task<AdminOperationResult> ApprovePlanRequestAsync(
+        Guid requestId,
+        int durationDays,
+        string? reason,
+        Guid performedByUserId,
+        string? ipAddress,
+        CancellationToken ct = default)
+    {
+        if (!IsValidDuration(durationDays, out var durationError))
+        {
+            return AdminOperationResult.BadRequest(durationError);
+        }
+
+        var planRequest = await _planRequests.GetByIdAsync(requestId, ct);
+        if (planRequest is null)
+        {
+            return AdminOperationResult.NotFoundResult("Plan request was not found.");
+        }
+
+        if (planRequest.Status != PlanRequestStatus.Pending)
+        {
+            return AdminOperationResult.ConflictResult(
+                $"This request is already {planRequest.Status}.");
+        }
+
+        var account = await _accounts.GetByIdAsync(planRequest.UserId, ct);
+        if (account is null)
+        {
+            return AdminOperationResult.UserNotFound();
+        }
+
+        var plan = await _plans.GetByIdAsync(planRequest.PlanId, ct);
+        if (plan is null)
+        {
+            return AdminOperationResult.BadRequest("The requested plan no longer exists.");
+        }
+
+        var oldSnapshot = SnapshotSubscription(account);
+
+        var now = DateTime.UtcNow;
+        var expiresAt = now.AddDays(durationDays);
+
+        await _unitOfWork.BeginTransactionAsync(ct);
+        try
+        {
+            await _unitOfWork.AcquireAdvisoryLockAsync(UserSubscriptionLock.ForUser(account.Id), ct);
+
+            // Re-read under the lock: another admin (or the user replacing the request) may
+            // have resolved it while this one waited, and a request must grant a plan once.
+            await _planRequests.ReloadAsync(planRequest, ct);
+            if (planRequest.Status != PlanRequestStatus.Pending)
+            {
+                await _unitOfWork.RollbackTransactionAsync(ct);
+                return AdminOperationResult.ConflictResult(
+                    $"This request is already {planRequest.Status}.");
+            }
+
+            account.ActivatePlanByAdmin(plan.Id, expiresAt, performedByUserId, now);
+            planRequest.Approve(performedByUserId, reason, now);
+
+            await _unitOfWork.SaveChangesAsync(ct);
+            await _unitOfWork.CommitTransactionAsync(ct);
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
+
+        await LogAsync(
+            AuditActions.PlanRequestApprovedByAdmin,
+            performedByUserId,
+            ipAddress,
+            account.Id,
+            reason,
+            oldSnapshot,
+            SnapshotSubscription(account),
+            ct);
+
+        _logger.LogInformation(
+            "Plan request approved. RequestId={RequestId}, UserId={UserId}, Tier={Tier}, ExpiresAt={ExpiresAt}, ApprovedBy={ApprovedBy}",
+            requestId, account.Id, plan.Tier, expiresAt, performedByUserId);
+
+        return AdminOperationResult.Ok($"Plan '{plan.Tier}' activated until {expiresAt:O}.");
+    }
+
+    public async Task<AdminOperationResult> RejectPlanRequestAsync(
+        Guid requestId,
+        string? reason,
+        Guid performedByUserId,
+        string? ipAddress,
+        CancellationToken ct = default)
+    {
+        var planRequest = await _planRequests.GetByIdAsync(requestId, ct);
+        if (planRequest is null)
+        {
+            return AdminOperationResult.NotFoundResult("Plan request was not found.");
+        }
+
+        if (planRequest.Status != PlanRequestStatus.Pending)
+        {
+            return AdminOperationResult.ConflictResult(
+                $"This request is already {planRequest.Status}.");
+        }
+
+        await _unitOfWork.BeginTransactionAsync(ct);
+        try
+        {
+            await _unitOfWork.AcquireAdvisoryLockAsync(UserSubscriptionLock.ForUser(planRequest.UserId), ct);
+
+            await _planRequests.ReloadAsync(planRequest, ct);
+            if (planRequest.Status != PlanRequestStatus.Pending)
+            {
+                await _unitOfWork.RollbackTransactionAsync(ct);
+                return AdminOperationResult.ConflictResult(
+                    $"This request is already {planRequest.Status}.");
+            }
+
+            planRequest.Reject(performedByUserId, reason, DateTime.UtcNow);
+
+            await _unitOfWork.SaveChangesAsync(ct);
+            await _unitOfWork.CommitTransactionAsync(ct);
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
+
+        await LogAsync(
+            AuditActions.PlanRequestRejectedByAdmin,
+            performedByUserId,
+            ipAddress,
+            planRequest.UserId,
+            reason,
+            new { requestId, status = nameof(PlanRequestStatus.Pending) },
+            new { requestId, status = planRequest.Status.ToString() },
+            ct);
+
+        _logger.LogInformation(
+            "Plan request rejected. RequestId={RequestId}, UserId={UserId}, RejectedBy={RejectedBy}",
+            requestId, planRequest.UserId, performedByUserId);
+
+        return AdminOperationResult.Ok("Plan request rejected.");
     }
 
     private static bool IsValidDuration(int days, out string error)

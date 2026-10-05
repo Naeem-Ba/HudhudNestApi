@@ -35,6 +35,19 @@ public sealed class ListingFeeRepository : IListingFeeRepository
             .FirstOrDefaultAsync(ct);
     }
 
+    public async Task<IReadOnlyList<Transaction>> GetPendingFeesByPayerAsync(
+        Guid payerId,
+        TransactionType transactionType,
+        CancellationToken ct = default)
+        => await _db.Transactions
+            .AsNoTracking()
+            .Where(t =>
+                t.PayerId == payerId &&
+                t.TransactionType == transactionType &&
+                t.Status == TransactionStatus.Pending)
+            .OrderByDescending(t => t.TransactedAt)
+            .ToListAsync(ct);
+
     public async Task<Transaction?> GetByIdAsync(Guid transactionId, CancellationToken ct = default)
     {
         return await _db.Transactions

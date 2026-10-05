@@ -24,17 +24,20 @@ public sealed class CreateAgencyCommandHandler
 {
     private readonly IAgencyRepository _agencies;
     private readonly IAdminIdentityService _identity;
+    private readonly IAgencyEligibilityPolicy _eligibility;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<CreateAgencyCommandHandler> _logger;
 
     public CreateAgencyCommandHandler(
         IAgencyRepository agencies,
         IAdminIdentityService identity,
+        IAgencyEligibilityPolicy eligibility,
         IUnitOfWork unitOfWork,
         ILogger<CreateAgencyCommandHandler> logger)
     {
         _agencies = agencies;
         _identity = identity;
+        _eligibility = eligibility;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -61,6 +64,14 @@ public sealed class CreateAgencyCommandHandler
             throw new ConflictException(
                 "تملك مكتباً عقارياً بالفعل. لا يمكن امتلاك أكثر من مكتب واحد.");
         }
+
+        // Eligibility last among the rejections above, first among the work below: an owner
+        // who already has an agency should be told that, not sent to buy a plan. A verified
+        // account and a paid plan in force are both required to register an agency — the free
+        // tier deliberately does not cover offices (see IAgencyEligibilityPolicy). Existing
+        // agencies are untouched by this: it gates the create action only.
+        await _eligibility.EnsureVerifiedAccountAsync(request.RequestingUserId, cancellationToken);
+        await _eligibility.EnsurePaidPlanAsync(request.RequestingUserId, cancellationToken);
 
         // Normalise before the uniqueness check, so "Damascus Homes" and "damascus-homes"
         // cannot both be accepted and then collide on the unique index.

@@ -272,6 +272,60 @@ public sealed class AgencyTests
     }
 
     [Fact]
+    public async Task CreateAgency_WithAnUnverifiedAccount_IsRejectedBeforeAnythingIsWritten()
+    {
+        var account = BuildAccount();
+        var repo = BuildRepository(account);
+
+        var policy = EligibleCaller();
+        policy
+            .Setup(x => x.EnsureVerifiedAccountAsync(account.Id, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ForbiddenException("not verified", "AGENCY_ACCOUNT_NOT_VERIFIED"));
+
+        var handler = new CreateAgencyCommandHandler(
+            repo.Object,
+            BuildIdentity().Object,
+            policy.Object,
+            Mock.Of<IUnitOfWork>(),
+            NullLogger<CreateAgencyCommandHandler>.Instance);
+
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(
+            BuildCreateCommand(account.Id, "Sham Realty"),
+            CancellationToken.None));
+
+        Assert.Equal("AGENCY_ACCOUNT_NOT_VERIFIED", ex.Code);
+        repo.Verify(x => x.AddAsync(It.IsAny<Agency>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Null(account.AgencyId);
+    }
+
+    [Fact]
+    public async Task CreateAgency_OnTheFreePlan_IsRejectedBeforeAnythingIsWritten()
+    {
+        var account = BuildAccount();
+        var repo = BuildRepository(account);
+
+        var policy = EligibleCaller();
+        policy
+            .Setup(x => x.EnsurePaidPlanAsync(account.Id, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ForbiddenException("free plan", "AGENCY_PAID_PLAN_REQUIRED"));
+
+        var handler = new CreateAgencyCommandHandler(
+            repo.Object,
+            BuildIdentity().Object,
+            policy.Object,
+            Mock.Of<IUnitOfWork>(),
+            NullLogger<CreateAgencyCommandHandler>.Instance);
+
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(
+            BuildCreateCommand(account.Id, "Sham Realty"),
+            CancellationToken.None));
+
+        Assert.Equal("AGENCY_PAID_PLAN_REQUIRED", ex.Code);
+        repo.Verify(x => x.AddAsync(It.IsAny<Agency>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Null(account.AgencyId);
+    }
+
+    [Fact]
     public async Task CreateAgency_WhenAlreadyAMemberSomewhere_IsRejected()
     {
         var account = BuildAccount();
@@ -1065,12 +1119,30 @@ public sealed class AgencyTests
         return identity;
     }
 
+
+    /// <summary>
+    /// A caller who is verified and on a paid plan — the eligibility gate is covered by its
+    /// own tests (AgencyEligibilityTests); these cases are about the handler's own rules.
+    /// </summary>
+    private static Mock<IAgencyEligibilityPolicy> EligibleCaller()
+    {
+        var policy = new Mock<IAgencyEligibilityPolicy>();
+        policy
+            .Setup(x => x.EnsureVerifiedAccountAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        policy
+            .Setup(x => x.EnsurePaidPlanAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        return policy;
+    }
+
     private static CreateAgencyCommandHandler CreateHandler(
         Mock<IAgencyRepository> repo,
         Mock<IAdminIdentityService> identity)
         => new(
             repo.Object,
             identity.Object,
+            EligibleCaller().Object,
             Mock.Of<IUnitOfWork>(),
             NullLogger<CreateAgencyCommandHandler>.Instance);
 

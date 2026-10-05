@@ -56,6 +56,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IAdminUserQueryRepository, AdminUserQueryRepository>();
+        services.AddScoped<IAdminPaymentRequestQueryRepository, AdminPaymentRequestQueryRepository>();
         services.AddScoped<IAdminIdentityService, AdminIdentityService>();
         services.AddScoped<IPropertyGeoSearchRepository, PropertyGeoSearchRepository>();
         services.AddScoped<IAnalyticsReadRepository, AnalyticsReadRepository>();
@@ -86,6 +87,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IAccountDataExportRepository, HudhudNestApi.Infrastructure.Users.AccountDataExportRepository>();
         services.AddScoped<IMessageRepository, MessageRepository>();
         services.AddScoped<IPlanRepository, PlanRepository>();
+        services.AddScoped<IPlanRequestRepository, PlanRequestRepository>();
 
         // HudhudNest Services Marketplace
         services.AddScoped<IServiceProviderRepository, ServiceProviderRepository>();

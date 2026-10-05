@@ -33,4 +33,25 @@ public interface IAdminSubscriptionService
         Guid performedByUserId,
         string? ipAddress,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Approves a user's pending paid-plan request after payment was confirmed offline:
+    /// activates the requested tier for <paramref name="durationDays"/> (same effect as
+    /// <see cref="ActivatePlanAsync"/>) and marks the request Approved, as one unit.
+    /// </summary>
+    Task<AdminOperationResult> ApprovePlanRequestAsync(
+        Guid requestId,
+        int durationDays,
+        string? reason,
+        Guid performedByUserId,
+        string? ipAddress,
+        CancellationToken ct = default);
+
+    /// <summary>Declines a pending request (payment not received, …). Changes nothing on the account.</summary>
+    Task<AdminOperationResult> RejectPlanRequestAsync(
+        Guid requestId,
+        string? reason,
+        Guid performedByUserId,
+        string? ipAddress,
+        CancellationToken ct = default);
 }

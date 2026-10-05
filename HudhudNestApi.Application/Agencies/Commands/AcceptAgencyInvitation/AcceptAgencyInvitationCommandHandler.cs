@@ -31,6 +31,7 @@ public sealed class AcceptAgencyInvitationCommandHandler
     private readonly IAgencyRepository _agencies;
     private readonly IAgencyInvitationRepository _invitations;
     private readonly IAdminIdentityService _identity;
+    private readonly IAgencyEligibilityPolicy _eligibility;
     private readonly IUnitOfWork _unitOfWork;
     private readonly INotificationService _notifications;
     private readonly ILogger<AcceptAgencyInvitationCommandHandler> _logger;
@@ -39,6 +40,7 @@ public sealed class AcceptAgencyInvitationCommandHandler
         IAgencyRepository agencies,
         IAgencyInvitationRepository invitations,
         IAdminIdentityService identity,
+        IAgencyEligibilityPolicy eligibility,
         IUnitOfWork unitOfWork,
         INotificationService notifications,
         ILogger<AcceptAgencyInvitationCommandHandler> logger)
@@ -46,6 +48,7 @@ public sealed class AcceptAgencyInvitationCommandHandler
         _agencies = agencies;
         _invitations = invitations;
         _identity = identity;
+        _eligibility = eligibility;
         _unitOfWork = unitOfWork;
         _notifications = notifications;
         _logger = logger;
@@ -64,6 +67,15 @@ public sealed class AcceptAgencyInvitationCommandHandler
         // any other caller who happens to know the id.
         if (invitation.TargetUserId != request.RequestingUserId)
             throw new ForbiddenException("This invitation was not sent to you.");
+
+        // Joining an office requires a verified account, same rule as registering one — the
+        // invitation is the agency's word that it wants this person, not a substitute for the
+        // person having confirmed who they are. Checked before the lock: it depends only on
+        // the caller's own account, so there is nothing to serialize, and a rejected caller
+        // never takes the lock. No paid plan is required of a member: the agency's listing
+        // quota comes from the owner's plan (IListingQuotaPolicy), so a member's own tier
+        // governs nothing here.
+        await _eligibility.EnsureVerifiedAccountAsync(request.RequestingUserId, cancellationToken);
 
         Agency agency;
         Domain.Users.Entities.UserAccount member;

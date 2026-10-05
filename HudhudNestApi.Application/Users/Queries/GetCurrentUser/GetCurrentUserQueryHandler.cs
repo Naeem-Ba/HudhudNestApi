@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Application.Auth.Models;
 using HudhudNestApi.Application.Plans.Interfaces;
@@ -14,12 +14,15 @@ public sealed class GetCurrentUserQueryHandler
     private readonly IUserIdentityReadService _identity;
     private readonly IUserAccountRepository _accounts;
     private readonly IPlanRepository _plans;
+    private readonly IPlanRequestRepository _planRequests;
 
     public GetCurrentUserQueryHandler(
         IUserIdentityReadService identity,
         IUserAccountRepository accounts,
-        IPlanRepository plans)
+        IPlanRepository plans,
+        IPlanRequestRepository planRequests)
     {
+        _planRequests = planRequests;
         _identity = identity;
         _accounts = accounts;
         _plans = plans;
@@ -55,14 +58,20 @@ public sealed class GetCurrentUserQueryHandler
             ? (await _plans.GetByIdAsync(planId, cancellationToken))?.Tier
             : null;
 
-        return MapToDto(account, identity, roles, planTier);
+        var pendingRequest = await _planRequests.GetPendingForUserAsync(account.Id, cancellationToken);
+        var pendingPlanTier = pendingRequest is null
+            ? null
+            : (await _plans.GetByIdAsync(pendingRequest.PlanId, cancellationToken))?.Tier;
+
+        return MapToDto(account, identity, roles, planTier, pendingPlanTier);
     }
 
     private static UserDto MapToDto(
         UserAccount account,
         IdentityAccountSnapshot identity,
         IReadOnlyList<string> roles,
-        string? planTier)
+        string? planTier,
+        string? pendingPlanTier)
     {
         return new UserDto
         {
@@ -80,6 +89,7 @@ public sealed class GetCurrentUserQueryHandler
             PhoneConfirmed = identity.PhoneConfirmed,
             HasPassword = identity.HasPassword,
             PlanTier = planTier,
+            PendingPlanTier = pendingPlanTier,
             PlanSelectedAt = account.PlanSelectedAt,
             CreatedAt = account.CreatedAt,
             DeletionScheduledFor = account.DeletionScheduledFor,
