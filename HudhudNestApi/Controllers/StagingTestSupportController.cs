@@ -102,7 +102,8 @@ public sealed class StagingTestSupportController : ControllerBase
 
         await _db.Transactions.IgnoreQueryFilters()
             .Where(x => propertyIds.Contains(x.PropertyId) ||
-                userIds.Contains(x.PayerId) || userIds.Contains(x.ReceiverId))
+                userIds.Contains(x.PayerId) ||
+                (x.ReceiverId != null && userIds.Contains(x.ReceiverId.Value)))
             .ExecuteDeleteAsync(ct);
         await _db.PropertyReviews.IgnoreQueryFilters()
             .Where(x => propertyIds.Contains(x.PropertyId) || userIds.Contains(x.ReviewerId))

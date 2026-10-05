@@ -29,11 +29,11 @@ public sealed class RequestFeaturedListingCommandHandler
     : IRequestHandler<RequestFeaturedListingCommand, FeaturedListingQuoteDto>
 {
     /// <summary>
-    /// Receiver of a platform fee. There is no platform UserAccount row, and
-    /// Transaction.ReceiverId carries no foreign key, so Guid.Empty is the platform
-    /// sentinel — the same one RequestListingExtensionCommandHandler uses.
+    /// A platform fee has no receiving user: there is no platform UserAccount row, and
+    /// Transaction.ReceiverId has a foreign key to UserAccounts, so a sentinel Guid would be
+    /// rejected by the database. Null means "the platform".
     /// </summary>
-    private static readonly Guid PlatformReceiverId = Guid.Empty;
+    private static readonly Guid? PlatformReceiverId = null;
 
     private readonly IPropertyRepository _properties;
     private readonly IListingFeeRepository _fees;

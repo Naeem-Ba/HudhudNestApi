@@ -4527,7 +4527,7 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Property<Guid>("PropertyId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("ReceiverId")
+                    b.Property<Guid?>("ReceiverId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ReferenceNumber")
@@ -6195,8 +6195,7 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
                         .WithMany()
                         .HasForeignKey("ReceiverId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.Users.Entities.ConsentRecord", b =>

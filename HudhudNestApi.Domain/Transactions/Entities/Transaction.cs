@@ -21,7 +21,12 @@ public class Transaction : BaseEntity
     public Guid? BookingId { get; private set; }
     public Guid PropertyId { get; private set; }
     public Guid PayerId { get; private set; }
-    public Guid ReceiverId { get; private set; }
+    /// <summary>
+    /// The user who receives the money, or null when the platform itself does (listing fees).
+    /// Null rather than a sentinel Guid: the column has a foreign key to UserAccounts, and no
+    /// platform account row exists for a sentinel to point at.
+    /// </summary>
+    public Guid? ReceiverId { get; private set; }
 
     public TransactionType TransactionType { get; private set; }
 
@@ -51,7 +56,7 @@ public class Transaction : BaseEntity
     public static Transaction Create(
         Guid propertyId,
         Guid payerId,
-        Guid receiverId,
+        Guid? receiverId,
         TransactionType transactionType,
         decimal amount,
         int currencyId,
@@ -69,7 +74,8 @@ public class Transaction : BaseEntity
         {
             PropertyId = propertyId,
             PayerId = payerId,
-            ReceiverId = receiverId,
+            // Guid.Empty was the platform marker before the column became nullable.
+            ReceiverId = receiverId == Guid.Empty ? null : receiverId,
             TransactionType = transactionType,
             Amount = amount,
             CurrencyId = currencyId,
