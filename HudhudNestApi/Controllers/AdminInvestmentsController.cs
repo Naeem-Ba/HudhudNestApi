@@ -187,7 +187,10 @@ public sealed class AdminInvestmentsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AddDocument(
         Guid id,
-        [FromForm] IFormFile file,
+        // No [FromForm] on the file: Swashbuckle throws "[FromForm] attribute used with IFormFile"
+        // and fails the whole /swagger/v1/swagger.json document. IFormFile binds from
+        // multipart/form-data without it (same as UsersController.UploadAvatar).
+        IFormFile file,
         [FromForm] Domain.Investments.Enums.InvestmentDocumentType documentType,
         [FromForm] bool isPublic,
         CancellationToken ct)
