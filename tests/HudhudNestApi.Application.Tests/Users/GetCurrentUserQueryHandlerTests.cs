@@ -38,7 +38,8 @@ public sealed class GetCurrentUserQueryHandlerTests
                     ["User"]),
                 new StubUserAccountRepository(
                     account),
-                new StubPlanRepository());
+                new StubPlanRepository(),
+                new Moq.Mock<HudhudNestApi.Application.Plans.Interfaces.IPlanRequestRepository>().Object);
 
         // Act
         var result =
@@ -106,7 +107,8 @@ public sealed class GetCurrentUserQueryHandlerTests
                     ["User"]),
                 new StubUserAccountRepository(
                     CreateUserAccount(id)),
-                new StubPlanRepository());
+                new StubPlanRepository(),
+                new Moq.Mock<HudhudNestApi.Application.Plans.Interfaces.IPlanRequestRepository>().Object);
 
         // Act
         var result =
@@ -132,7 +134,8 @@ public sealed class GetCurrentUserQueryHandlerTests
                     roles: []),
                 new StubUserAccountRepository(
                     CreateUserAccount(id)),
-                new StubPlanRepository());
+                new StubPlanRepository(),
+                new Moq.Mock<HudhudNestApi.Application.Plans.Interfaces.IPlanRequestRepository>().Object);
 
         // Act
         var result =
@@ -169,7 +172,8 @@ public sealed class GetCurrentUserQueryHandlerTests
                     ["User"]),
                 new StubUserAccountRepository(
                     null),
-                new StubPlanRepository());
+                new StubPlanRepository(),
+                new Moq.Mock<HudhudNestApi.Application.Plans.Interfaces.IPlanRequestRepository>().Object);
 
         // Act
         var result =

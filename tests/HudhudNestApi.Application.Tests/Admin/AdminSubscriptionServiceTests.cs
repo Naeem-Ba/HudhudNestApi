@@ -286,7 +286,7 @@ public sealed class AdminSubscriptionServiceTests
         IPlanRepository plans,
         IUnitOfWork unitOfWork,
         IAuditLogService auditLogs)
-        => new(accounts, plans, unitOfWork, auditLogs, NullLogger<AdminSubscriptionService>.Instance);
+        => new(accounts, plans, Mock.Of<IPlanRequestRepository>(), unitOfWork, auditLogs, NullLogger<AdminSubscriptionService>.Instance);
 
     private static Mock<IUserAccountRepository> FakeAccounts(Guid userId, UserAccount account)
     {

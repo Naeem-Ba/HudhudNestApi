@@ -35,6 +35,16 @@ public interface IListingFeeRepository
         TransactionType transactionType,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Every outstanding (Pending) fee of the given type this user owes, newest first — what
+    /// "my listings" needs to show which listings already have a request waiting for payment
+    /// confirmation, without one lookup per listing.
+    /// </summary>
+    Task<IReadOnlyList<Transaction>> GetPendingFeesByPayerAsync(
+        Guid payerId,
+        TransactionType transactionType,
+        CancellationToken ct = default);
+
     Task<Transaction?> GetByIdAsync(Guid transactionId, CancellationToken ct = default);
 
     Task AddAsync(Transaction transaction, CancellationToken ct = default);

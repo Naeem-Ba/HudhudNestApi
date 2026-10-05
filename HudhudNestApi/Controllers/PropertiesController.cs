@@ -11,6 +11,7 @@ using HudhudNestApi.Application.Listings.Commands.ConfirmListingExtensionPayment
 using HudhudNestApi.Application.Listings.Commands.ConfirmPropertyAvailability;
 using HudhudNestApi.Application.Listings.Commands.CreateProperty;
 using HudhudNestApi.Application.Listings.Commands.RequestFeaturedListing;
+using HudhudNestApi.Application.Listings.Queries.GetMyPendingFeaturedRequests;
 using HudhudNestApi.Application.Listings.Commands.RequestListingExtension;
 using HudhudNestApi.Application.Listings.Commands.TrackPropertyShareEvent;
 using HudhudNestApi.Application.Listings.Commands.TrackPropertyAttributionEvent;
@@ -458,6 +459,20 @@ public sealed class PropertiesController : ControllerBase
             ct);
 
         return Accepted(quote);
+    }
+
+    // ── GET /api/properties/featured/pending ─────────────────────
+    // The caller's featured requests still waiting for an administrator to confirm payment —
+    // lets "my listings" show which listings already have one without a call per listing.
+    [HttpGet("featured/pending")]
+    [Authorize]
+    [ProducesResponseType(typeof(IReadOnlyList<PendingFeaturedRequestSummaryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMyPendingFeatured(CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        return Ok(await _mediator.Send(new GetMyPendingFeaturedRequestsQuery(userId.Value), ct));
     }
 
     // ── POST /api/properties/featured/{transactionId}/confirm ────

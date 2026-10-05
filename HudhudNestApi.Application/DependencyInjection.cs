@@ -63,6 +63,7 @@ public static class DependencyInjection
         services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<IAdminSubscriptionService, AdminSubscriptionService>();
         services.AddScoped<IAdminListingService, AdminListingService>();
+        services.AddScoped<IAdminPaymentRequestService, AdminPaymentRequestService>();
         services.AddScoped<IAdminValuationInquiryService, AdminValuationInquiryService>();
         services.AddScoped<IPropertyOwnershipService, PropertyOwnershipService>();
 

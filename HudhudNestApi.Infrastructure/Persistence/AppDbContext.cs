@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -66,6 +66,7 @@ public sealed class AppDbContext
     public DbSet<Agency> Agencies => Set<Agency>();
     public DbSet<AgencyInvitation> AgencyInvitations => Set<AgencyInvitation>();
     public DbSet<Plan> Plans => Set<Plan>();
+    public DbSet<PlanRequest> PlanRequests => Set<PlanRequest>();
     public DbSet<Property> Properties => Set<Property>();
     public DbSet<PropertyPriceHistory> PropertyPriceHistories => Set<PropertyPriceHistory>();
     public DbSet<PropertyImage> PropertyImages => Set<PropertyImage>();

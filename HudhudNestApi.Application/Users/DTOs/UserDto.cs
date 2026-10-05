@@ -1,4 +1,4 @@
-﻿namespace HudhudNestApi.Application.Users.DTOs;
+namespace HudhudNestApi.Application.Users.DTOs;
 
 /// <summary>
 /// Data Transfer Object for user profile responses.
@@ -44,6 +44,13 @@ public sealed class UserDto
     public string? PlanTier { get; set; }
 
     public DateTime? PlanSelectedAt { get; set; }
+
+    /// <summary>
+    /// The paid tier this user asked for and an administrator has not activated yet (payment
+    /// not confirmed). It grants nothing: PlanTier above is what is actually in force. Null
+    /// when there is no outstanding request.
+    /// </summary>
+    public string? PendingPlanTier { get; set; }
 
     public DateTime CreatedAt { get; set; }
 
