@@ -182,6 +182,10 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             {
                 await transaction.RollbackAsync(ct);
                 await ReleaseAsync(challenge.Id, ct);
+                // A racing registration can commit between the phone lookup above and Identity's own username
+                // lookup; that is the same "already registered" outcome as the unique-index case below.
+                if (created.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.DuplicateUserName)))
+                    return Fail("PHONE_ALREADY_REGISTERED");
                 return IdentityFail(created, "USER_CREATE_FAILED");
             }
             var role = await _users.AddToRoleAsync(user, RoleNames.User);

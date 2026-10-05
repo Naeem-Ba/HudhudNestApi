@@ -323,6 +323,24 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
     }
 
     [Fact]
+    public async Task C7b_UsernameAlreadyTaken_ButPhoneLookupMisses_ReportsPhoneAlreadyRegistered()
+    {
+        // Identity checks the username in its own query, after the workflow's NormalizedPhoneNumber check, so
+        // a racing registration that commits in between reaches CreateAsync. Emptying the lookup column of an
+        // existing account puts the second request in that state without depending on timing.
+        var (phone, _, _) = await RegisterUser();
+        await SetUser(phone, u => u.NormalizedPhoneNumber = null);
+        var (_, challengeId, code) = await SendRegistrationOtp(phone);
+
+        var reply = await Post("/api/auth/phone/registration/verify",
+            new { challengeId, code, password = Password, firstName = "A", lastName = "B" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, reply.Status);
+        Assert.Equal("PHONE_ALREADY_REGISTERED", reply.Code);
+        await WithDb(async db => Assert.Equal(1, await db.Users.IgnoreQueryFilters().CountAsync(u => u.UserName == phone)));
+    }
+
+    [Fact]
     public async Task C8_SmsProviderFailure_IsReported_AndLeavesNoUsableChallenge()
     {
         _factory.Sms.Fail = true;
