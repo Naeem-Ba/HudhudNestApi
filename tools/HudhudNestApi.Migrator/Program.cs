@@ -36,6 +36,19 @@ builder.Services.AddInfrastructure(
     builder.Configuration,
     builder.Environment);
 
+// AddInfrastructure registers services whose dependencies live in the API host
+// (IHubContext<NotificationHub>, IPhoneVerificationPolicy, IMediaFolderBuilder, ...).
+// This tool only needs AppDbContext, the seeders and the backfill, so it must not
+// validate the whole container: in the Development environment the host builds the
+// provider with ValidateOnBuild and crashed before the first migration ran.
+builder.ConfigureContainer(
+    new DefaultServiceProviderFactory(
+        new ServiceProviderOptions
+        {
+            ValidateOnBuild = false,
+            ValidateScopes = false
+        }));
+
 using var host =
     builder.Build();
 
