@@ -1,4 +1,5 @@
 using Moq;
+using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Application.Auth.Models;
 using HudhudNestApi.Application.Common.Exceptions;
@@ -7,6 +8,7 @@ using HudhudNestApi.Application.Plans.Interfaces;
 using HudhudNestApi.Application.Users.Commands.SelectPlan;
 using HudhudNestApi.Application.Users.Interfaces;
 using HudhudNestApi.Domain.Plans.Entities;
+using HudhudNestApi.Domain.Agencies.Entities;
 using HudhudNestApi.Domain.Users.Entities;
 
 namespace HudhudNestApi.Application.Tests.Users;
@@ -30,7 +32,7 @@ public sealed class SelectPlanCommandHandlerTests
         var unitOfWork = new Mock<IUnitOfWork>();
 
         var handler = new SelectPlanCommandHandler(
-            identity.Object, accounts.Object, plans.Object, unitOfWork.Object);
+            identity.Object, accounts.Object, plans.Object, NoOwnedAgency().Object, unitOfWork.Object);
 
         var result = await handler.Handle(
             new SelectPlanCommand(userId, "free"), CancellationToken.None);
@@ -57,7 +59,7 @@ public sealed class SelectPlanCommandHandlerTests
             .ReturnsAsync((Plan?)null);
 
         var handler = new SelectPlanCommandHandler(
-            identity.Object, accounts.Object, plans.Object, Mock.Of<IUnitOfWork>());
+            identity.Object, accounts.Object, plans.Object, NoOwnedAgency().Object, Mock.Of<IUnitOfWork>());
 
         var ex = await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(
             new SelectPlanCommand(userId, "not-a-real-tier"), CancellationToken.None));
@@ -80,6 +82,7 @@ public sealed class SelectPlanCommandHandlerTests
             identity.Object,
             Mock.Of<IUserAccountRepository>(),
             Mock.Of<IPlanRepository>(),
+            NoOwnedAgency().Object,
             Mock.Of<IUnitOfWork>());
 
         var result = await handler.Handle(
@@ -100,12 +103,87 @@ public sealed class SelectPlanCommandHandlerTests
             .ReturnsAsync((UserAccount?)null);
 
         var handler = new SelectPlanCommandHandler(
-            identity.Object, accounts.Object, Mock.Of<IPlanRepository>(), Mock.Of<IUnitOfWork>());
+            identity.Object,
+            accounts.Object,
+            Mock.Of<IPlanRepository>(),
+            NoOwnedAgency().Object,
+            Mock.Of<IUnitOfWork>());
 
         var result = await handler.Handle(
             new SelectPlanCommand(userId, "free"), CancellationToken.None);
 
         Assert.False(result);
+    }
+
+    [Fact]
+    public async Task Handle_FreeTier_WhenCallerOwnsAnAgency_ThrowsForbiddenWithCode()
+    {
+        var userId = Guid.NewGuid();
+        var account = UserAccount.Create(userId, "Naeem", "User", DateTime.UtcNow);
+        var plan = BuildPlan("free");
+
+        var identity = BuildConfirmedIdentity(userId);
+        var accounts = new Mock<IUserAccountRepository>();
+        accounts.Setup(x => x.GetByIdAsync(userId, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+
+        var plans = new Mock<IPlanRepository>();
+        plans.Setup(x => x.GetByTierAsync("free", It.IsAny<CancellationToken>())).ReturnsAsync(plan);
+
+        var agencies = new Mock<IAgencyRepository>();
+        agencies
+            .Setup(x => x.GetByOwnerAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Agency.Create("مكتب الشام", "sham-realty", userId, "SY", DateTime.UtcNow));
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+
+        var handler = new SelectPlanCommandHandler(
+            identity.Object, accounts.Object, plans.Object, agencies.Object, unitOfWork.Object);
+
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(
+            new SelectPlanCommand(userId, "free"), CancellationToken.None));
+
+        Assert.Equal(SelectPlanCommandHandler.AgencyFreePlanNotAllowedCode, ex.Code);
+        Assert.Null(account.PlanId);
+        unitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_PaidTier_WhenCallerOwnsAnAgency_IsAllowed()
+    {
+        var userId = Guid.NewGuid();
+        var account = UserAccount.Create(userId, "Naeem", "User", DateTime.UtcNow);
+        var plan = BuildPlan("premium");
+
+        var identity = BuildConfirmedIdentity(userId);
+        var accounts = new Mock<IUserAccountRepository>();
+        accounts.Setup(x => x.GetByIdAsync(userId, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+
+        var plans = new Mock<IPlanRepository>();
+        plans.Setup(x => x.GetByTierAsync("premium", It.IsAny<CancellationToken>())).ReturnsAsync(plan);
+
+        var agencies = new Mock<IAgencyRepository>();
+        agencies
+            .Setup(x => x.GetByOwnerAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Agency.Create("مكتب الشام", "sham-realty", userId, "SY", DateTime.UtcNow));
+
+        var handler = new SelectPlanCommandHandler(
+            identity.Object, accounts.Object, plans.Object, agencies.Object, Mock.Of<IUnitOfWork>());
+
+        var result = await handler.Handle(
+            new SelectPlanCommand(userId, "premium"), CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Equal(plan.Id, account.PlanId);
+    }
+
+    /// <summary>A caller who owns no agency — the free tier stays open to them.</summary>
+    private static Mock<IAgencyRepository> NoOwnedAgency()
+    {
+        var agencies = new Mock<IAgencyRepository>();
+        agencies
+            .Setup(x => x.GetByOwnerAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Agency?)null);
+        return agencies;
     }
 
     private static Mock<IUserIdentityReadService> BuildConfirmedIdentity(Guid userId)

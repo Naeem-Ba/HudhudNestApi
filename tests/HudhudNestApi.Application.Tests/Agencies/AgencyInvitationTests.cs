@@ -159,6 +159,69 @@ public sealed class AgencyInvitationTests
         Assert.Equal(AgencyInvitationStatus.Expired, stale.Status);
     }
 
+    [Fact]
+    public async Task Accept_ByAnUnverifiedUser_IsForbidden_AndNoMembershipIsCreated()
+    {
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        var target = BuildAccount();
+        var invitation = AgencyInvitation.Create(agency.Id, ownerId, target.Id, DateTime.UtcNow);
+
+        var policy = EligibleCaller();
+        policy
+            .Setup(x => x.EnsureVerifiedAccountAsync(target.Id, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ForbiddenException("not verified", "AGENCY_ACCOUNT_NOT_VERIFIED"));
+
+        var handler = new AcceptAgencyInvitationCommandHandler(
+            BuildAgencyRepository(agency, BuildAccount(ownerId), target).Object,
+            BuildInvitationRepository(invitation).Object,
+            BuildIdentity().Object,
+            policy.Object,
+            Mock.Of<IUnitOfWork>(),
+            Mock.Of<INotificationService>(),
+            NullLogger<AcceptAgencyInvitationCommandHandler>.Instance);
+
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(
+            new AcceptAgencyInvitationCommand(invitation.Id, target.Id, null),
+            CancellationToken.None));
+
+        Assert.Equal("AGENCY_ACCOUNT_NOT_VERIFIED", ex.Code);
+        Assert.Null(target.AgencyId);
+        Assert.Equal(AgencyInvitationStatus.Pending, invitation.Status);
+    }
+
+    [Fact]
+    public async Task Invite_WhenTheOwnersPlanIsNotPaid_IsForbidden_AndNoInvitationIsCreated()
+    {
+        var ownerId = Guid.NewGuid();
+        var agency = BuildAgency(ownerId);
+        var target = BuildAccount();
+
+        var invitations = BuildInvitationRepository();
+
+        var policy = EligibleCaller();
+        policy
+            .Setup(x => x.EnsurePaidPlanAsync(ownerId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ForbiddenException("free plan", "AGENCY_PAID_PLAN_REQUIRED"));
+
+        var handler = new CreateAgencyInvitationCommandHandler(
+            BuildAgencyRepository(agency, BuildAccount(ownerId), target).Object,
+            invitations.Object,
+            policy.Object,
+            Mock.Of<IUnitOfWork>(),
+            Mock.Of<INotificationService>(),
+            NullLogger<CreateAgencyInvitationCommandHandler>.Instance);
+
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(
+            new CreateAgencyInvitationCommand(agency.Id, target.Id, ownerId, null),
+            CancellationToken.None));
+
+        Assert.Equal("AGENCY_PAID_PLAN_REQUIRED", ex.Code);
+        invitations.Verify(
+            x => x.AddAsync(It.IsAny<AgencyInvitation>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
     // ── Accept ───────────────────────────────────────────────────
 
     [Fact]
@@ -509,6 +572,23 @@ public sealed class AgencyInvitationTests
         return identity;
     }
 
+
+    /// <summary>
+    /// A caller who is verified and on a paid plan — the eligibility gate is covered by its
+    /// own tests (AgencyEligibilityTests); these cases are about the handler's own rules.
+    /// </summary>
+    private static Mock<IAgencyEligibilityPolicy> EligibleCaller()
+    {
+        var policy = new Mock<IAgencyEligibilityPolicy>();
+        policy
+            .Setup(x => x.EnsureVerifiedAccountAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        policy
+            .Setup(x => x.EnsurePaidPlanAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        return policy;
+    }
+
     private static CreateAgencyInvitationCommandHandler CreateHandler(
         Mock<IAgencyRepository> agencies,
         Mock<IAgencyInvitationRepository> invitations,
@@ -516,6 +596,7 @@ public sealed class AgencyInvitationTests
         => new(
             agencies.Object,
             invitations.Object,
+            EligibleCaller().Object,
             Mock.Of<IUnitOfWork>(),
             notifications.Object,
             NullLogger<CreateAgencyInvitationCommandHandler>.Instance);
@@ -529,6 +610,7 @@ public sealed class AgencyInvitationTests
             agencies.Object,
             invitations.Object,
             identity.Object,
+            EligibleCaller().Object,
             Mock.Of<IUnitOfWork>(),
             notifications.Object,
             NullLogger<AcceptAgencyInvitationCommandHandler>.Instance);

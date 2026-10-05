@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using HudhudNestApi.Application.Common.Behaviors;
@@ -65,6 +65,11 @@ public static class DependencyInjection
         services.AddScoped<IAdminListingService, AdminListingService>();
         services.AddScoped<IAdminValuationInquiryService, AdminValuationInquiryService>();
         services.AddScoped<IPropertyOwnershipService, PropertyOwnershipService>();
+
+        // Agency eligibility (verified account + paid plan) — a plain policy service asked by
+        // three different agency handlers, so it is registered explicitly here rather than
+        // scanned as a MediatR handler (mirrors IPropertyOwnershipService above).
+        services.AddScoped<Agencies.Interfaces.IAgencyEligibilityPolicy, Agencies.Services.AgencyEligibilityPolicy>();
 
         // Media storage folder layout (Cloudinary today) — deterministic/pure (no I/O), so a
         // singleton is safe, same reasoning as PwnedPasswordsCircuitBreaker below. Every upload

@@ -207,6 +207,8 @@
 | المعرّف | المتطلّب | الوصول | نقاط النهاية | أ | الحالة | الدليل |
 |---|---|---|---|:-:|:-:|---|
 | /F-AGY-01/ | إنشاء/عرض/تعديل المكتب (slug ثابت) | م / مالك | `POST /api/Agencies`, `GET /me`, `PUT /{id}` | S | ✅ | |
+| /F-AGY-07/ | أهلية المكتب: الإنشاء يتطلب حسابًا موثّقًا (بريد أو هاتف مؤكَّد) وخطة مدفوعة سارية، والانضمام يتطلب حسابًا موثّقًا، ودعوة عضو تتطلب خطة مالك سارية | م / مالك | 403 `AGENCY_ACCOUNT_NOT_VERIFIED` / `AGENCY_PAID_PLAN_REQUIRED` | S | ✅ | `IAgencyEligibilityPolicy`؛ لا خطة للعضو (حصة المكتب من خطة المالك) |
+| /F-AGY-08/ | الخطة المجانية لا تشمل المكاتب: مالك مكتب لا يستطيع اختيار `free` | مالك | `POST /api/Users/me/plan` → 403 `AGENCY_FREE_PLAN_NOT_ALLOWED` | S | ✅ | المكاتب القائمة على `free` تبقى كما هي؛ تُحجب الأفعال الجديدة فقط |
 | /F-AGY-02/ | دعوة الأعضاء (بالمعرّف أو بالبريد/الهاتف) وقبولها ورفضها (الحد 50)، وقائمة الدعوات المعلّقة للمالك | مالك/م | `POST /{id}/invitations`, `POST /{id}/invitations/by-contact` (حد `agency-invite` 20/ساعة), `GET /{id}/invitations`, `GET /invitations/mine`, `POST /invitations/{id}/accept|decline` | S | ✅ | واجهة HudhudNest#124 (`/my-agency`)؛ لا إلغاء لدعوة معلّقة بعد |
 | /F-AGY-03/ | إزالة عضو / مغادرة | مالك/م | `DELETE /{id}/members/{memberUserId}` | S | ✅ | HudhudNest#124 |
 | /F-AGY-04/ | نقل الملكية، الشعار، التعطيل وإعادة التفعيل | مالك | `POST /{id}/transfer-ownership`, `/logo`, `DELETE /{id}`, `POST /{id}/reactivate` | K | ✅ | HudhudNest#124؛ نقاط المالك `[Authorize]` والتحقق بـ OwnerUserId في المعالج (لا بوابة دور، كي لا يُرفض مالك جديد برمز قديم) — `AgencyOwnerRoutesTests` |
