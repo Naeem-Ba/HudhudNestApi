@@ -58,8 +58,8 @@
       },
       "MessagePack.Annotations": {
         "type": "Transitive",
-        "resolved": "2.5.305",
-        "contentHash": "hNIdrxc3BFjI7UYKLTOryKsG2Z7b8yk33pZUpgs8haWebuiVHX+jxjy5/+r5a7TscD964rqtQbABQjeMd53Pig=="
+        "resolved": "2.5.307",
+        "contentHash": "kIGiwydfCKWRim1ZoFbZ1qVHDHrQfXdJ+FEFVPEqse/XzvPT7lVUjIb1LOuocP3Tx1+PtFEdEandRhxB64Xd4A=="
       },
       "Microsoft.AspNetCore.Cryptography.Internal": {
         "type": "Transitive",
@@ -1074,7 +1074,7 @@
           "HudhudNestApi.Application": "[1.0.0, )",
           "HudhudNestApi.Infrastructure": "[1.0.0, )",
           "MediatR": "[12.5.0, )",
-          "MessagePack": "[2.5.305, )",
+          "MessagePack": "[2.5.307, )",
           "Microsoft.AspNetCore.Authentication.JwtBearer": "[8.0.31, )",
           "Microsoft.AspNetCore.OutputCaching.StackExchangeRedis": "[8.0.31, )",
           "Microsoft.AspNetCore.SignalR.StackExchangeRedis": "[8.0.31, )",
@@ -1174,11 +1174,11 @@
       },
       "MessagePack": {
         "type": "CentralTransitive",
-        "requested": "[2.5.305, )",
-        "resolved": "2.5.305",
-        "contentHash": "oDs+yCq8oQmIIExX22lSuSYrT4peQcoZEAfsS/lxFAzk4vP+oqNZ5c4JY7TyiB9LIBu3TfC2NQyC60InRXJz7A==",
+        "requested": "[2.5.307, )",
+        "resolved": "2.5.307",
+        "contentHash": "P9LNJ2bz/wx8J5W0EQW4Bh7G5BiEikXiiDqGvw/WOMRyRI0QcxVvRM4XkqhidGJG6uzMT7iF89o0uYGLwmGifQ==",
         "dependencies": {
-          "MessagePack.Annotations": "2.5.305",
+          "MessagePack.Annotations": "2.5.307",
           "Microsoft.NET.StringTools": "17.6.3"
         }
       },
