@@ -582,12 +582,15 @@ jobs:
             cat artifacts/coverage/report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      # Only a red run or a master push needs the bundle: a green PR/branch run already printed its
-      # coverage summary to the step summary. Uploading ~55 MB for every green push/PR (each PR push
-      # runs twice: `push` on fix/** and `pull_request`) used up the artifact quota again within three
-      # days of the retention cut below (6 GB in <3 days, 2026-10-04: the Android release upload failed).
+      # Only a red run needs the bundle: a green run already printed its coverage summary to the step
+      # summary. Uploading ~55 MB for every green push/PR (each PR push runs twice: `push` on fix/**
+      # and `pull_request`) used up the artifact quota again within three days of the retention cut
+      # below (6 GB in <3 days, 2026-10-04: the Android release upload failed). Green master pushes
+      # were dropped too on 2026-10-05: five merges on 2026-10-04 alone left ~600 MB of bundles from
+      # this job and the production gate, more than the whole account quota, and the Android
+      # release upload failed again.
       - name: Upload CI reports
-        if: ${{ failure() || (github.event_name == 'push' && github.ref == 'refs/heads/master') }}
+        if: ${{ failure() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-quality-gate-reports-${{ github.sha }}-${{ github.run_id }}

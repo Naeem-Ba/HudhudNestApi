@@ -814,10 +814,10 @@ jobs:
             --remove-orphans \
             || true
 
-      # Same reasoning as "Upload CI reports" in ci.yml: keep the bundle for red runs and master pushes
-      # only, not for every green PR/branch run.
+      # Same reasoning as "Upload CI reports" in ci.yml: keep the bundle for red runs only, not for
+      # green PR, branch or master runs.
       - name: Upload production gate results
-        if: ${{ failure() || (github.event_name == 'push' && github.ref == 'refs/heads/master') }}
+        if: ${{ failure() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: production-gate-results-${{ github.sha }}-${{ github.run_id }}
