@@ -182,7 +182,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             {
                 await transaction.RollbackAsync(ct);
                 await ReleaseAsync(challenge.Id, ct);
-                return IdentityFail(created, "USER_CREATE_FAILED");
+                return IdentityFail(created, RegistrationFailureCode(created));
             }
             var role = await _users.AddToRoleAsync(user, RoleNames.User);
             if (!role.Succeeded)
@@ -517,6 +517,16 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         var hash = _dummyPasswordHash ??= _users.PasswordHasher.HashPassword(dummy, "Dummy-Password-9D6A4E01");
         _users.PasswordHasher.VerifyHashedPassword(dummy, hash, password);
     }
+
+    /// <summary>
+    /// Two registrations for the same number can both pass the "already registered" check; the one that
+    /// loses the race then fails Identity's own duplicate-user-name validation. That is the same outcome
+    /// as finding the number taken up front, so it gets the same code instead of a generic create failure.
+    /// </summary>
+    internal static string RegistrationFailureCode(IdentityResult created) =>
+        created.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.DuplicateUserName))
+            ? "PHONE_ALREADY_REGISTERED"
+            : "USER_CREATE_FAILED";
 
     private static PhoneWorkflowResult Fail(string code) => new(false, code, "The request could not be completed.");
     private static PhoneWorkflowResult IdentityFail(IdentityResult result, string fallback) =>
