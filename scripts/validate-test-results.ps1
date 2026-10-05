@@ -19,7 +19,7 @@ $failures = New-Object System.Collections.Generic.List[string]
 $resultReports = New-Object System.Collections.Generic.List[object]
 
 if (-not (Test-Path $TestResultsRoot)) {
-    throw "Test results root was not found: $TestResultsRoot"
+    throw "Test results root was not found: $TestResultsRoot. No test step wrote results, so an earlier step in this job failed first; that step is the real failure."
 }
 
 $trxFiles = Get-ChildItem -Path $TestResultsRoot -Recurse -Filter "*.trx" -File

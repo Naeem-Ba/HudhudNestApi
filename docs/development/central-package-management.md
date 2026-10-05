@@ -34,6 +34,8 @@ dotnet restore HudhudNestApi.sln --locked-mode
 
 Any dependency graph change must update the relevant `packages.lock.json` files intentionally.
 
+Dependabot updates only the lock file of the project that references the package directly. Test projects that reach it through `HudhudNestApi.csproj` record it as `CentralTransitive` and are left stale, so `--locked-mode` fails with NU1004 (MessagePack 2.5.307, PR #285). Such a bump lands through a branch that runs `dotnet restore HudhudNestApi.sln --force-evaluate` and commits every changed lock file.
+
 ## NuGet Source Policy
 
 The repository `NuGet.config` clears inherited package sources and allows only:
@@ -47,7 +49,7 @@ No package source credentials may be committed. If private packages are introduc
 ## Security Updates
 
 1. Update the central version in `Directory.Packages.props`.
-2. Run `dotnet restore HudhudNestApi.sln --use-lock-file`.
+2. Run `dotnet restore HudhudNestApi.sln --force-evaluate` so every lock file that records the package is rewritten, including test projects that only see it as `CentralTransitive`.
 3. Run `dotnet restore HudhudNestApi.sln --locked-mode`.
 4. Run the full test suite and vulnerability gate.
 5. Document any temporary exception in `ci/vulnerability-exceptions.json` with owner, expiration, and remediation issue.
