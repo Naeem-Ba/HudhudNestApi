@@ -85,7 +85,6 @@
 | إدارة تحديثات التطبيق | `docs/app-update-management.md` |
 | SLO والمراقبة | `docs/observability/slo-definition.md`، `observability-architecture.md` |
 | الخصوصية وجرد البيانات | `docs/privacy/data-inventory.md`، `docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md` |
-| تدقيق الكود الشامل | `docs/audit/FULL-CODE-AUDIT-REPORT.md` |
 | بوابة الإصدار | `docs/testing/staging-production-gate-checklist.md` |
 | دليل المستخدم / Pflichtenheft (مُشتقّان من هذه الوثيقة) | `docs/product/USER-GUIDE-AR.md`، `docs/product/PFLICHTENHEFT-AR.md` |
 

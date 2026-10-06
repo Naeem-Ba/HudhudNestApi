@@ -232,8 +232,7 @@ if (app.Environment.IsProduction() || app.Environment.IsStaging())
     // Must run immediately after UseForwardedHeaders() so it wins over whatever that middleware
     // concluded, and before anything else in the pipeline reads Request.IsHttps.
     //
-    // Extended to Staging (2026-09-18, same day, found live via a Playwright E2E run — see
-    // docs/audit/CURRENT-ISSUES-VERIFICATION.md): Staging has the exact same structural cause,
+    // Extended to Staging (2026-09-18, same day, found live via a Playwright E2E run): Staging has the exact same structural cause,
     // arguably more reliably so -- its `propertyapi-staging-api.onrender.com` origin is served
     // directly off Render's own TLS-terminating edge (no custom domain/Cloudflare in front of
     // it the way Production has), and `ForwardedHeaders__Enabled=false` there (see
