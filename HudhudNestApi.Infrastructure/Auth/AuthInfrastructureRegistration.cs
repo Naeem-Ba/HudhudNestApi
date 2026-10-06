@@ -104,6 +104,7 @@ internal static class AuthInfrastructureRegistration
 
         services.AddScoped<IdentityAccountReader>();
         services.AddScoped<IdentityAccountCreator>();
+        services.AddScoped<SystemRoleGuarantee>();
         services.AddScoped<IdentityAccessService>();
         services.AddScoped<IdentityCredentialService>();
 

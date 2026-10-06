@@ -11,7 +11,13 @@ namespace HudhudNestApi.Infrastructure.Identity.Services;
 public sealed class IdentityAccessService
 {
     private readonly UserManager<ApplicationUser> _users;
-    public IdentityAccessService(UserManager<ApplicationUser> users) => _users = users;
+    private readonly SystemRoleGuarantee _roles;
+
+    public IdentityAccessService(UserManager<ApplicationUser> users, SystemRoleGuarantee roles)
+    {
+        _users = users;
+        _roles = roles;
+    }
 
     /// <summary>
     /// A throwaway user carrying a real password hash, used only to spend the same
@@ -121,6 +127,7 @@ public sealed class IdentityAccessService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(role);
         var user = await IdentityAdapterMapping.RequireAsync(_users, id, ct);
+        await _roles.EnsureExistsAsync(role);
         return IdentityAdapterMapping.Result(await _users.AddToRoleAsync(user, role));
     }
 

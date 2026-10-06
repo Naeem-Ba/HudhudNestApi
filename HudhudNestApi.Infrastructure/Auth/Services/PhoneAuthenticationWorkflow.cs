@@ -14,6 +14,7 @@ using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Users.Constants;
 using HudhudNestApi.Domain.Users.Entities;
 using HudhudNestApi.Infrastructure.Identity.Entities;
+using HudhudNestApi.Infrastructure.Identity.Services;
 using HudhudNestApi.Infrastructure.Persistence;
 using HudhudNestApi.Domain.Audit.Constants;
 
@@ -36,15 +37,17 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     private readonly IAuditLogService _audit;
     private readonly string[] _allowedCountryCodes;
     private readonly IUserSecurityStampCacheInvalidator _stampCache;
+    private readonly SystemRoleGuarantee _roles;
 
     public PhoneAuthenticationWorkflow(AppDbContext db, UserManager<ApplicationUser> users,
         SignInManager<ApplicationUser> signIn, IPhoneNumberNormalizer normalizer, IOtpService otp,
         IOtpChannelService channels, ITokenService tokens, IRefreshTokenRepository refreshTokens,
         IPhoneVerificationPolicy policy, TimeProvider clock, IAuditLogService audit,
         IOptions<SmsProviderOptions> smsOptions, ILogger<PhoneAuthenticationWorkflow> logger,
-        IUserSecurityStampCacheInvalidator stampCache)
+        IUserSecurityStampCacheInvalidator stampCache, SystemRoleGuarantee roles)
     {
         _stampCache = stampCache;
+        _roles = roles;
         _allowedCountryCodes = smsOptions.Value.AllowedCountryCodes
             .Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToArray();
         _db = db; _users = users; _signIn = signIn; _normalizer = normalizer; _otp = otp;
@@ -188,6 +191,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
                     return Fail("PHONE_ALREADY_REGISTERED");
                 return IdentityFail(created, "USER_CREATE_FAILED");
             }
+            await _roles.EnsureExistsAsync(RoleNames.User);
             var role = await _users.AddToRoleAsync(user, RoleNames.User);
             if (!role.Succeeded)
             {
