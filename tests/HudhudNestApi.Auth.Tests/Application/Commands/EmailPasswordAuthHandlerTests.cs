@@ -607,7 +607,8 @@ public sealed class RegisterCommandHandlerTests
                     "Naeem",
                     "Bazzazeh",
                     "Naeem@Example.com",
-                    "Password123"),
+                    "Password123",
+                    Language: "de"),
                 CancellationToken.None);
 
         // Assert
@@ -659,11 +660,13 @@ public sealed class RegisterCommandHandlerTests
                 It.IsAny<CancellationToken>()),
             Times.Once);
 
-        // The link goes to the normalized address, not the mixed-case one typed in.
+        // The link goes to the normalized address, not the mixed-case one typed in, and the
+        // mail is written in the language the person was using.
         emailVerification.Verify(
             x => x.SendVerificationLinkAsync(
                 "naeem@example.com",
                 "confirmation-token",
+                "de",
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -723,6 +726,7 @@ public sealed class RegisterCommandHandlerTests
                 x => x.SendVerificationLinkAsync(
                     It.IsAny<string>(),
                     It.IsAny<string>(),
+                    It.IsAny<string?>(),
                     It.IsAny<CancellationToken>()))
             .ThrowsAsync(
                 new InvalidOperationException(
@@ -759,6 +763,7 @@ public sealed class RegisterCommandHandlerTests
             x => x.SendVerificationLinkAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -815,6 +820,7 @@ public sealed class RegisterCommandHandlerTests
             x => x.SendVerificationLinkAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
     }

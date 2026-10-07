@@ -63,10 +63,11 @@ public sealed class AuthController : ControllerBase
             PrivacyPolicyVersion: dto.PrivacyPolicyVersion,
             ConsentSource: dto.ConsentSource,
             TermsAccepted: dto.TermsAccepted,
-            TermsVersion: dto.TermsVersion), ct);
+            TermsVersion: dto.TermsVersion,
+            Language: dto.Language), ct);
 
         if (result.Conflict)
-            return Conflict(new { message = result.Message });
+            return Conflict(new { message = result.Message, code = RegisterResult.EmailConflictCode });
 
         if (!result.Success)
             return BadRequest(new { errors = result.Errors });
@@ -431,7 +432,10 @@ public sealed record RegisterRequest(
     string? PrivacyPolicyVersion = null,
     string? ConsentSource = null,
     bool TermsAccepted = false,
-    string? TermsVersion = null);
+    string? TermsVersion = null,
+    // Site language the client is showing ("ar", "en", "de"); picks the language of the
+    // confirmation mail. Optional: an older client omits it and gets the bilingual message.
+    string? Language = null);
 
 public sealed record LoginRequest(
     string Email,

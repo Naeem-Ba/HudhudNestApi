@@ -103,10 +103,10 @@ RegisterCommandHandler
   └─ CommitTransactionAsync                  ← the account exists first, always
      └─ SendConfirmationEmailAsync           ← try/catch, never rethrows
         ├─ GenerateEmailConfirmationTokenAsync(identityId, CancellationToken.None)
-        └─ IEmailVerificationService.SendVerificationLinkAsync(email, token)
+        └─ IEmailVerificationService.SendVerificationLinkAsync(email, token, language)
            ├─ UserManager.FindByEmailAsync   ← resolves the identity id for the link
            ├─ IEmailConfirmationUrlBuilder.Build(identityId, token)
-           ├─ EmailConfirmationTemplate.BuildHtml / BuildText
+           ├─ EmailConfirmationTemplate.SubjectFor / BuildHtml / BuildText (language)
            └─ IApplicationEmailSender.SendEmailAsync
 ```
 
@@ -122,6 +122,28 @@ The send never fails the request, but the client is told the truth about it:
 - `POST /api/auth/email/add` answers `{ message, verificationSent: false }` in the same case.
 - The resend endpoint still answers identically in every case (below); it is the one place the
   flag must not appear.
+
+### The language of the message
+
+The app sends the site language it is showing (`language`: `ar`, `en` or `de`) with the
+register, add-email and resend requests, and the message is written in it: subject, brand
+header, greeting, button, link fallback, safety line and footer, with the right `lang` and
+`dir`. Every language names the platform (هدهد نيست / HudhudNest) in the subject and body.
+
+- `EmailConfirmationTemplate.NormalizeLanguage` is case-insensitive and drops a regional
+  suffix (`ar-SA` and `en_US` read as `ar` and `en`).
+- A language we do not ship (`fr`) or none at all (an app build that predates the field) gets
+  the original Arabic-and-English message. That is the honest answer to "we do not know what
+  this reader speaks", and it keeps older clients exactly as they were.
+- The language is **not** stored. `UserAccount.PreferredLanguage` exists but is not set at
+  registration, so a resend uses the language the client sends at that moment. Persisting it
+  at registration would let a later system-initiated mail follow the user's choice; it is a
+  deliberate follow-up, not part of this change.
+- The copy makes no promise it cannot keep: no expiry time, no support address.
+
+The `409` answer to a registration for a taken address carries `code: "EMAIL_ALREADY_REGISTERED"`
+next to the English `message`. Clients translate on the code (the convention in
+`docs/password-policy.md`); the message stays for older builds.
 
 ### Why the send is after the commit, and swallows everything
 

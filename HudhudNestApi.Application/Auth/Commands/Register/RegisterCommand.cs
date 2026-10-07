@@ -32,7 +32,10 @@ public sealed record RegisterCommand(
     // Terms of Service acceptance, recorded next to the privacy consent so each document is
     // provable on its own. Optional/additive like the privacy fields: older clients omit them.
     bool TermsAccepted = false,
-    string? TermsVersion = null)
+    string? TermsVersion = null,
+    // The site language the client was showing ("ar", "en", "de"). Only picks the language
+    // of the confirmation mail; an older client omits it and gets the bilingual message.
+    string? Language = null)
     : IRequest<RegisterResult>;
 
 public sealed record RegisterResult
@@ -74,6 +77,12 @@ public sealed record RegisterResult
             Conflict = true,
             Message = "Email already registered."
         };
+
+    /// <summary>
+    /// Stable code for the conflict above. The message is English prose a localised client
+    /// cannot translate; the code is the contract (docs/password-policy.md).
+    /// </summary>
+    public const string EmailConflictCode = "EMAIL_ALREADY_REGISTERED";
 
     public static RegisterResult Fail(
         IEnumerable<string> errors)
@@ -303,7 +312,8 @@ public sealed class RegisterCommandHandler
             var confirmationEmailSent =
                 await SendConfirmationEmailAsync(
                     userId,
-                    email);
+                    email,
+                    request.Language);
 
             return RegisterResult.Ok(
                 userId,
@@ -340,7 +350,8 @@ public sealed class RegisterCommandHandler
     /// </summary>
     private async Task<bool> SendConfirmationEmailAsync(
         Guid identityId,
-        string email)
+        string email,
+        string? language)
     {
         try
         {
@@ -354,6 +365,7 @@ public sealed class RegisterCommandHandler
                 .SendVerificationLinkAsync(
                     email,
                     token,
+                    language,
                     CancellationToken.None);
 
             _logger.LogInformation(

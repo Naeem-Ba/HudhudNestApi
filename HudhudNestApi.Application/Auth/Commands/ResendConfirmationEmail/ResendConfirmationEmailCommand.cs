@@ -12,7 +12,8 @@ namespace HudhudNestApi.Application.Auth.Commands.ResendConfirmationEmail;
 /// this, an unconfirmed account whose email went missing had no way forward.
 /// </summary>
 public sealed record ResendConfirmationEmailCommand(
-    string Email)
+    string Email,
+    string? Language = null)
     : IRequest<ResendConfirmationEmailResult>;
 
 public sealed record ResendConfirmationEmailResult
@@ -89,6 +90,7 @@ public sealed class ResendConfirmationEmailCommandHandler
                 .SendVerificationLinkAsync(
                     identity.Email,
                     token,
+                    request.Language,
                     ct);
 
             _logger.LogInformation(

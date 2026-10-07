@@ -26,8 +26,13 @@ public interface ISmsService
 
 public interface IEmailVerificationService
 {
+    /// <summary>
+    /// <paramref name="language"/> is the site language the client was showing ("ar", "en"
+    /// or "de", regional forms accepted). Null or unsupported keeps the bilingual message.
+    /// </summary>
     Task SendVerificationLinkAsync(
         string email,
         string verificationToken,
+        string? language,
         CancellationToken ct = default);
 }

@@ -15,7 +15,8 @@ namespace HudhudNestApi.Application.Auth.Commands.AddEmail;
 /// </summary>
 public sealed record AddEmailCommand(
     Guid UserId,
-    string Email)
+    string Email,
+    string? Language = null)
     : IRequest<AddEmailResult>;
 
 public sealed class AddEmailCommandHandler
@@ -140,6 +141,7 @@ public sealed class AddEmailCommandHandler
                 .SendVerificationLinkAsync(
                     email,
                     token,
+                    request.Language,
                     ct);
 
             verificationSent = true;
