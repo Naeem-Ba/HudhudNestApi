@@ -46,15 +46,24 @@ public sealed record RegisterResult
 
     public Guid? UserId { get; init; }
 
+    /// <summary>
+    /// False when the account was created but the confirmation mail could not be sent.
+    /// Registration still succeeds -- login does not wait on confirmation -- so this is how
+    /// the client learns that "we sent you a link" would be untrue and offers a resend.
+    /// </summary>
+    public bool ConfirmationEmailSent { get; init; }
+
     public IReadOnlyList<string> Errors { get; init; }
         = Array.Empty<string>();
 
     public static RegisterResult Ok(
-        Guid userId)
+        Guid userId,
+        bool confirmationEmailSent)
         => new()
         {
             Success = true,
             UserId = userId,
+            ConfirmationEmailSent = confirmationEmailSent,
             Message = "Registration successful."
         };
 
@@ -291,12 +300,14 @@ public sealed class RegisterCommandHandler
              * refers to, and a mail server is not something to hold a database
              * transaction open across.
              */
-            await SendConfirmationEmailAsync(
-                userId,
-                email);
+            var confirmationEmailSent =
+                await SendConfirmationEmailAsync(
+                    userId,
+                    email);
 
             return RegisterResult.Ok(
-                userId);
+                userId,
+                confirmationEmailSent);
         }
         catch (Exception ex)
         {
@@ -313,7 +324,8 @@ public sealed class RegisterCommandHandler
     }
 
     /// <summary>
-    /// Mints a confirmation token and mails the link, and lets no failure out.
+    /// Mints a confirmation token and mails the link, and lets no failure out. Returns
+    /// whether the provider accepted the message, so the caller can say so truthfully.
     ///
     /// By the time this runs the registration is committed: the account exists, the
     /// user can sign in, and an unconfirmed address is simply unconfirmed -- login
@@ -326,7 +338,7 @@ public sealed class RegisterCommandHandler
     /// after submitting has still registered and still needs the link. The same
     /// reasoning already governs the rollback path above.
     /// </summary>
-    private async Task SendConfirmationEmailAsync(
+    private async Task<bool> SendConfirmationEmailAsync(
         Guid identityId,
         string email)
     {
@@ -347,6 +359,8 @@ public sealed class RegisterCommandHandler
             _logger.LogInformation(
                 "Confirmation link sent for identity {IdentityId}.",
                 identityId);
+
+            return true;
         }
         catch (Exception ex)
         {
@@ -355,6 +369,8 @@ public sealed class RegisterCommandHandler
                 "Identity {IdentityId} registered, but the confirmation email could "
                 + "not be sent. The account stays unconfirmed until it is resent.",
                 identityId);
+
+            return false;
         }
     }
 

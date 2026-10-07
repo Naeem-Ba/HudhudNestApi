@@ -102,6 +102,17 @@ public sealed class PhoneAuthController : ControllerBase
                 result.ErrorCode ?? "ERROR",
                 result.ErrorMessage ?? "تعذّر إضافة البريد."));
 
+        if (!result.VerificationSent)
+        {
+            // The address is saved, only the mail failed; saying "sent" would be untrue.
+            return Ok(new
+            {
+                message = "تم حفظ البريد الإلكتروني، لكن تعذّر إرسال رابط التأكيد الآن. " +
+                          "اطلب إعادة الإرسال بعد قليل.",
+                verificationSent = false
+            });
+        }
+
         return Ok(new MessageResponse(
             "تم إرسال رابط تأكيد البريد الإلكتروني. تفقّد صندوق الوارد."));
     }
@@ -121,7 +132,7 @@ public sealed class PhoneAuthController : ControllerBase
     /// </remarks>
     [HttpPost("email/verify")]
     [AllowAnonymous]
-    [EnableRateLimiting("auth-password-reset")]
+    [EnableRateLimiting("email-verify")]
     [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> VerifyEmail(
@@ -156,7 +167,7 @@ public sealed class PhoneAuthController : ControllerBase
     /// </remarks>
     [HttpPost("email/resend-confirmation")]
     [AllowAnonymous]
-    [EnableRateLimiting("auth-password-reset")]
+    [EnableRateLimiting("email-confirmation-resend")]
     [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> ResendConfirmation(

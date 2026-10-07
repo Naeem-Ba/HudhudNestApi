@@ -102,6 +102,8 @@ public sealed class StartupIntegrationTests : IAsyncLifetime
         Assert.Contains("send-otp", policyNames);
         Assert.Contains("verify-otp", policyNames);
         Assert.Contains("auth-password-reset", policyNames);
+        Assert.Contains("email-verify", policyNames);
+        Assert.Contains("email-confirmation-resend", policyNames);
         Assert.Contains("contact", policyNames);
         Assert.Contains("auth-login", policyNames);
         Assert.Contains("auth-register", policyNames);

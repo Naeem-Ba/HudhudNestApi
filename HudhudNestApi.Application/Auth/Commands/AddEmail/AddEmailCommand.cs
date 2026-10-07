@@ -126,6 +126,8 @@ public sealed class AddEmailCommandHandler
          * which mirrors the same swallow-and-log policy RegisterCommandHandler and
          * ResendConfirmationEmailCommandHandler already use for this exact tradeoff.
          */
+        var verificationSent = false;
+
         try
         {
             var token =
@@ -139,6 +141,8 @@ public sealed class AddEmailCommandHandler
                     email,
                     token,
                     ct);
+
+            verificationSent = true;
 
             _logger.LogInformation(
                 "Email verification sent to {Email} for identity {IdentityId}.",
@@ -155,7 +159,7 @@ public sealed class AddEmailCommandHandler
                 identity.IdentityId);
         }
 
-        return AddEmailResult.Ok();
+        return AddEmailResult.Ok(verificationSent);
     }
 
     private static string NormalizeEmail(

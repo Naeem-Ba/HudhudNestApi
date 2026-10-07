@@ -74,7 +74,10 @@ public sealed class AuthController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, new
         {
             message = result.Message,
-            userId = result.UserId
+            userId = result.UserId,
+            // False when the account exists but the provider did not accept the
+            // confirmation mail; the client must not tell the user a link was sent.
+            confirmationEmailSent = result.ConfirmationEmailSent
         });
     }
 

@@ -239,6 +239,7 @@ public sealed class AddEmailCommandHandlerTests
 
         // Assert
         Assert.True(result.Success);
+        Assert.True(result.VerificationSent);
 
         identity.Verify(
             x => x.FindByEmailAsync(
@@ -349,6 +350,9 @@ public sealed class AddEmailCommandHandlerTests
         // failure must not be reported back as a failed request -- it stays
         // unconfirmed until resent, mirroring RegisterCommandHandler's policy.
         Assert.True(result.Success);
+
+        // ...but it must not claim that a link went out when none did.
+        Assert.False(result.VerificationSent);
 
         identity.Verify(
             x => x.SetEmailAsync(

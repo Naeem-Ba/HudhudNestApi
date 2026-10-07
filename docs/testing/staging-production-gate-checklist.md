@@ -69,7 +69,8 @@ mitigation, not equivalent to real required-reviewer protection: anyone with pus
 
 ## Email configuration
 
-- [ ] `Email:Provider` is `Resend`.
+- [ ] `Email:Provider` is `Resend` (a blank value means SMTP in Production, which now refuses to
+      start without `Email:SmtpHost`).
 - [ ] `Email:From` is an address on a domain verified in the Resend dashboard.
 - [ ] `Email__Resend__ApiKey` is a real key from an environment variable, not a file.
 - [ ] `Frontend:BaseUrl` is the deployed frontend origin, HTTPS.

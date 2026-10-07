@@ -28,14 +28,19 @@ and `Microsoft.AspNetCore.Identity.UI.Services.IEmailSender` (Identity's).
 | `Console` | `ConsoleEmailSender` | Writes to the log. **Refused in Production** |
 | *(blank)* | — | Falls back to the old rule: SMTP in Production, console elsewhere |
 
-Two rules are enforced at **startup**, which is the only place they can still stop a
+Three rules are enforced at **startup**, which is the only place they can still stop a
 deployment:
 
 1. **`Console` in Production throws.** It only logs. Reaching Production with it selected
    would mean nobody ever receives a link, and nothing would say so until someone
    complained.
 2. **A blank `Email:Provider` preserves prior behaviour**, so an environment provisioned
-   before this setting existed keeps working exactly as it did.
+   before this setting existed keeps working exactly as it did: SMTP in Production.
+3. **SMTP in Production needs `Email:SmtpHost`** (`EmailOptions.ValidateForEnvironment`).
+   Production ran for days with the provider unset and no host: every registration returned
+   201, the send failed with `SMTP host is not configured`, the failure was swallowed (see
+   below), and nobody got a link. Rule 2 plus the old absence of this check is how that
+   happened. Set `Email:Provider=Resend` (recommended) or configure the host.
 
 The aliases are registered `Scoped` even when the sender behind them is not: `AddHttpClient`
 registers its typed client `Transient`, and `CompositionRegistrationTests` pins
@@ -105,6 +110,19 @@ RegisterCommandHandler
            └─ IApplicationEmailSender.SendEmailAsync
 ```
 
+### Telling the client what happened
+
+The send never fails the request, but the client is told the truth about it:
+
+- `POST /api/auth/register` answers `201 { message, userId, confirmationEmailSent }`.
+  `confirmationEmailSent` is `false` when the provider did not accept the message; the app then
+  says "your account was created but the mail could not be sent" and leaves the resend button
+  in place instead of announcing a link that does not exist. A client that predates the field
+  reads its absence as "sent".
+- `POST /api/auth/email/add` answers `{ message, verificationSent: false }` in the same case.
+- The resend endpoint still answers identically in every case (below); it is the one place the
+  flag must not appear.
+
 ### Why the send is after the commit, and swallows everything
 
 By the time it runs, the registration is committed: the account exists and the user can sign
@@ -125,15 +143,20 @@ the rollback path in the same handler.
 - **Anonymous by necessity.** The caller is someone who cannot finish signing up because the
   first link never arrived; gating this on a token would exclude exactly the accounts that
   need it.
-- **Rate-limited** under the `auth-password-reset` policy.
+- **Rate-limited** under its own `email-confirmation-resend` policy (5 per hour per client).
+  It used to share `auth-password-reset` (3 per hour) with forgot/reset password and with the
+  verify endpoint, so one click, one retry and one resend locked a person out of their own
+  confirmation, and the page then reported the link as invalid.
+- **Confirming** (`POST /api/auth/email/verify`) has its own `email-verify` policy (20 per hour
+  per client): it needs a valid, unguessable token, so a looser limit costs nothing.
 - **Identical response** whether the address is unknown, already confirmed, or was just sent
   to — otherwise the endpoint enumerates accounts.
 - **The send failure is swallowed for that same reason:** letting a provider outage become a
   500 would make the status code answer "does this account exist?", which is the one question
   the identical responses exist to refuse.
 
-⚠️ **Nothing in the Angular app calls this endpoint yet.** See `B-15` in the frontend
-repository's `docs/BACKEND-ISSUES.md`.
+The Angular app calls it from the registration success screen and from the verify page
+(`AUTH.RESEND_CONFIRMATION`), with a 60-second cooldown and a specific text for a 429.
 
 ## The confirmation URL
 

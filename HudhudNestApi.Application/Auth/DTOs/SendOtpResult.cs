@@ -107,11 +107,14 @@ public sealed record AddEmailResult
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
 
-    /// <summary>هل تم إرسال رسالة تحقق؟</summary>
+    /// <summary>
+    /// هل قبل مزوّد البريد رسالة التحقق؟ يبقى الحفظ ناجحاً إن فشل الإرسال (البريد محفوظ
+    /// وغير مؤكَّد)، لكن لا يجوز أن يُقال للمستخدم إن الرابط أُرسل.
+    /// </summary>
     public bool VerificationSent { get; init; }
 
-    public static AddEmailResult Ok() =>
-        new() { Success = true, VerificationSent = true };
+    public static AddEmailResult Ok(bool verificationSent) =>
+        new() { Success = true, VerificationSent = verificationSent };
 
     public static AddEmailResult Fail(string code, string message) =>
         new() { Success = false, ErrorCode = code, ErrorMessage = message };
