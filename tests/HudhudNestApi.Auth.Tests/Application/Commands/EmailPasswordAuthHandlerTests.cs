@@ -614,6 +614,7 @@ public sealed class RegisterCommandHandlerTests
         Assert.True(result.Success);
         Assert.False(result.Conflict);
         Assert.NotNull(result.UserId);
+        Assert.True(result.ConfirmationEmailSent);
 
         var createdUserId =
             result.UserId!.Value;
@@ -749,6 +750,10 @@ public sealed class RegisterCommandHandlerTests
         // Assert
         Assert.True(result.Success);
         Assert.NotNull(result.UserId);
+
+        // The account exists, but the client must be told no link went out: the app used to
+        // announce "we sent a confirmation link" on every 201, true or not.
+        Assert.False(result.ConfirmationEmailSent);
 
         emailVerification.Verify(
             x => x.SendVerificationLinkAsync(

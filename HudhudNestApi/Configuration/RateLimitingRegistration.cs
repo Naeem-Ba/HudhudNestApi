@@ -40,6 +40,34 @@ public static class RateLimitingRegistration
                         QueueLimit = 0
                     }));
 
+            // Confirming an address and asking for a new confirmation link used to share
+            // "auth-password-reset" (3 per hour per client address) with forgot/reset password:
+            // one click on a confirmation link, a retry and a resend exhausted it, and the page
+            // then reported an invalid link. They get their own buckets. Confirming needs a
+            // valid, unguessable token, so a looser limit costs nothing; resending stays tight
+            // because it sends mail to an address the caller names.
+            options.AddPolicy("email-verify", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 20,
+                        Window = TimeSpan.FromHours(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
+            options.AddPolicy("email-confirmation-resend", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 5,
+                        Window = TimeSpan.FromHours(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
             options.AddPolicy("contact", httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
                     partitionKey: GetClientRateLimitPartitionKey(httpContext),

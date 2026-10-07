@@ -41,8 +41,8 @@ public sealed class PublicEndpointPolicyTests
 
             // Resending a confirmation link: the caller is stuck precisely because they
             // cannot confirm, so they hold no token. The response is identical for known
-            // and unknown addresses, and the "auth-password-reset" rate-limit policy
-            // bounds abuse.
+            // and unknown addresses, and the "email-confirmation-resend" rate-limit
+            // policy bounds abuse.
             "PhoneAuthController.ResendConfirmation",
 
             // Public, read-only, rate-limited ("public-read"): which OTP delivery channels the picker offers for a calling

@@ -65,5 +65,22 @@ public sealed class EmailOptions
                 "Production. Set it to an address on a domain verified with the email " +
                 "provider (e.g. Resend), or every send will be rejected with a silent 403.");
         }
+
+        // A blank Provider means SMTP in Production (see ResolveEmailProvider), and the SMTP
+        // sender only discovers a missing host when it tries to send -- an error the callers
+        // swallow. Production ran like that: every registration succeeded, the confirmation
+        // mail failed with "SMTP host is not configured", and nothing stopped the deployment.
+        var resolvesToSmtp =
+            string.IsNullOrWhiteSpace(Provider) ||
+            string.Equals(Provider.Trim(), "Smtp", StringComparison.OrdinalIgnoreCase);
+
+        if (resolvesToSmtp && string.IsNullOrWhiteSpace(SmtpHost))
+        {
+            throw new InvalidOperationException(
+                "Email:Provider resolves to Smtp in Production but Email:SmtpHost is empty, so " +
+                "no confirmation or password-reset mail could ever be sent. Set " +
+                "Email:Provider=Resend with Email:Resend:ApiKey and Email:From, or configure " +
+                "Email:SmtpHost.");
+        }
     }
 }

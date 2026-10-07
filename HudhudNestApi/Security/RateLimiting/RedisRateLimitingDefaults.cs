@@ -8,6 +8,10 @@ internal static class RedisRateLimitingDefaults
             ["send-otp"] = Policy(3, TimeSpan.FromMinutes(15)),
             ["verify-otp"] = Policy(5, TimeSpan.FromMinutes(15)),
             ["auth-password-reset"] = Policy(3, TimeSpan.FromHours(1)),
+            // Own buckets so confirming/resending a confirmation link no longer drains the
+            // forgot-password budget (see RateLimitingRegistration.cs).
+            ["email-verify"] = Policy(20, TimeSpan.FromHours(1)),
+            ["email-confirmation-resend"] = Policy(5, TimeSpan.FromHours(1)),
             ["contact"] = Policy(5, TimeSpan.FromHours(1)),
             // Landing-page waitlist / lead capture — same cadence as "contact".
             ["leads-submit"] = Policy(5, TimeSpan.FromHours(1)),
