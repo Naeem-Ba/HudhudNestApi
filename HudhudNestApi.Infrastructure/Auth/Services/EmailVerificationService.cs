@@ -31,6 +31,7 @@ public sealed class EmailVerificationService : IEmailVerificationService
     public async Task SendVerificationLinkAsync(
         string email,
         string verificationToken,
+        string? language,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(email))
@@ -56,9 +57,9 @@ public sealed class EmailVerificationService : IEmailVerificationService
         await _emailSender.SendEmailAsync(
             new EmailMessage(
                 email,
-                EmailConfirmationTemplate.Subject,
-                EmailConfirmationTemplate.BuildHtml(verificationUrl),
-                EmailConfirmationTemplate.BuildText(verificationUrl)),
+                EmailConfirmationTemplate.SubjectFor(language),
+                EmailConfirmationTemplate.BuildHtml(verificationUrl, language),
+                EmailConfirmationTemplate.BuildText(verificationUrl, language)),
             ct);
     }
 }

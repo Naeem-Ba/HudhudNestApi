@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Common.Models;
+using HudhudNestApi.Infrastructure.Email.Templates;
 using Xunit;
 using IdentityEmailSender = Microsoft.AspNetCore.Identity.UI.Services.IEmailSender;
 
@@ -77,7 +78,7 @@ public sealed class EmailConfirmationFlowTests
         return (factory, factory.CreateClient(), mail);
     }
 
-    private static object RegisterBody(string email) => new
+    private static object RegisterBody(string email, string? language = null) => new
     {
         firstName = "Naeem",
         lastName = "Test",
@@ -87,7 +88,8 @@ public sealed class EmailConfirmationFlowTests
         privacyPolicyVersion = "2026-10-01",
         termsAccepted = true,
         termsVersion = "2026-10-01",
-        consentSource = "Web"
+        consentSource = "Web",
+        language
     };
 
     private static string UniqueEmail() => $"confirm-flow-{Guid.NewGuid():N}@example.com";
@@ -269,5 +271,98 @@ public sealed class EmailConfirmationFlowTests
 
         var refused = await client.PostAsJsonAsync("/api/auth/email/resend-confirmation", someone);
         Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("ar", "هدهد نيست", "<html lang=\"ar\" dir=\"rtl\">", "Confirm your email address")]
+    [InlineData("en", "HudhudNest", "<html lang=\"en\" dir=\"ltr\">", "أكِّد بريدك الإلكتروني")]
+    [InlineData("de", "HudhudNest", "<html lang=\"de\" dir=\"ltr\">", "Confirm your email address")]
+    public async Task Register_MailsInTheLanguageTheClientWasShowing(
+        string language,
+        string brand,
+        string htmlTag,
+        string otherLanguageHeading)
+    {
+        await using var database = new PostgresAuthTestFactory();
+        await database.PrepareDatabaseAsync();
+        var (factory, client, mail) = Start(database);
+        await using var host = factory;
+
+        var response = await client.PostAsJsonAsync(
+            "/api/auth/register",
+            RegisterBody(UniqueEmail(), language));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var message = Assert.Single(mail.Sent);
+        Assert.Contains(brand, message.Subject, StringComparison.Ordinal);
+        Assert.Contains(htmlTag, message.Html, StringComparison.Ordinal);
+        Assert.Contains(brand, message.Html, StringComparison.Ordinal);
+        Assert.DoesNotContain(otherLanguageHeading, message.Html, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("fr")]
+    [InlineData("")]
+    public async Task Register_WithoutAShippedLanguage_MailsTheBilingualMessage(string? language)
+    {
+        await using var database = new PostgresAuthTestFactory();
+        await database.PrepareDatabaseAsync();
+        var (factory, client, mail) = Start(database);
+        await using var host = factory;
+
+        var response = await client.PostAsJsonAsync(
+            "/api/auth/register",
+            RegisterBody(UniqueEmail(), language));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var message = Assert.Single(mail.Sent);
+        Assert.Equal(EmailConfirmationTemplate.Subject, message.Subject);
+        Assert.Contains("أكِّد بريدك الإلكتروني", message.Html, StringComparison.Ordinal);
+        Assert.Contains("Confirm your email address", message.Html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Resend_MailsInTheLanguageTheClientWasShowing()
+    {
+        await using var database = new PostgresAuthTestFactory();
+        await database.PrepareDatabaseAsync();
+        var (factory, client, mail) = Start(database);
+        await using var host = factory;
+        var email = UniqueEmail();
+
+        await client.PostAsJsonAsync("/api/auth/register", RegisterBody(email, "ar"));
+        Assert.True(mail.Sent.TryDequeue(out _));
+
+        var resend = await client.PostAsJsonAsync(
+            "/api/auth/email/resend-confirmation",
+            new { email, language = "de" });
+
+        Assert.Equal(HttpStatusCode.OK, resend.StatusCode);
+        var message = Assert.Single(mail.Sent);
+        Assert.Contains("<html lang=\"de\" dir=\"ltr\">", message.Html, StringComparison.Ordinal);
+        Assert.Contains("E-Mail-Adresse bestätigen", message.Html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Register_WithATakenEmail_AnswersConflict_WithAStableCode()
+    {
+        await using var database = new PostgresAuthTestFactory();
+        await database.PrepareDatabaseAsync();
+        var (factory, client, _) = Start(database);
+        await using var host = factory;
+        var email = UniqueEmail();
+
+        var first = await client.PostAsJsonAsync("/api/auth/register", RegisterBody(email, "ar"));
+        var second = await client.PostAsJsonAsync("/api/auth/register", RegisterBody(email, "ar"));
+
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+
+        // The message stays (older app builds print it); the code is what a translated client
+        // keys on, because the message is English and the page may not be.
+        var body = await second.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("EMAIL_ALREADY_REGISTERED", body.GetProperty("code").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("message").GetString()));
     }
 }

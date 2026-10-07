@@ -67,6 +67,7 @@ public sealed class AddEmailCommandHandlerTests
             x => x.SendVerificationLinkAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
     }
@@ -157,6 +158,7 @@ public sealed class AddEmailCommandHandlerTests
             x => x.SendVerificationLinkAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
     }
@@ -220,6 +222,7 @@ public sealed class AddEmailCommandHandlerTests
                 x => x.SendVerificationLinkAsync(
                     "user@example.com",
                     "confirmation-token",
+                    It.IsAny<string?>(),
                     It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
@@ -234,7 +237,8 @@ public sealed class AddEmailCommandHandlerTests
             await handler.Handle(
                 new AddEmailCommand(
                     userId,
-                    " User@Example.com "),
+                    " User@Example.com ",
+                    "ar"),
                 CancellationToken.None);
 
         // Assert
@@ -264,6 +268,7 @@ public sealed class AddEmailCommandHandlerTests
             x => x.SendVerificationLinkAsync(
                 "user@example.com",
                 "confirmation-token",
+                "ar",
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -327,6 +332,7 @@ public sealed class AddEmailCommandHandlerTests
                 x => x.SendVerificationLinkAsync(
                     "user@example.com",
                     "confirmation-token",
+                    It.IsAny<string?>(),
                     It.IsAny<CancellationToken>()))
             .ThrowsAsync(
                 new InvalidOperationException(

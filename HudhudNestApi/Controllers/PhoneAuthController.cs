@@ -94,7 +94,7 @@ public sealed class PhoneAuthController : ControllerBase
         if (userId is null)
             return Unauthorized(new ErrorResponse("UNAUTHORIZED", "غير مصرّح."));
 
-        var command = new AddEmailCommand(userId.Value, request.Email);
+        var command = new AddEmailCommand(userId.Value, request.Email, request.Language);
         var result = await _mediator.Send(command, ct);
 
         if (!result.Success)
@@ -175,7 +175,7 @@ public sealed class PhoneAuthController : ControllerBase
         CancellationToken ct)
     {
         var result = await _mediator.Send(
-            new ResendConfirmationEmailCommand(request.Email),
+            new ResendConfirmationEmailCommand(request.Email, request.Language),
             ct);
 
         return Ok(new MessageResponse(result.Message));
@@ -214,11 +214,11 @@ public sealed record VerifyOtpRequest(
     string? FirstName = null,
     string? LastName = null);
 
-public sealed record AddEmailRequest(string Email);
+public sealed record AddEmailRequest(string Email, string? Language = null);
 
 public sealed record VerifyEmailRequest(Guid UserId, string Token);
 
-public sealed record ResendConfirmationRequest(string Email);
+public sealed record ResendConfirmationRequest(string Email, string? Language = null);
 
 // -- Responses -------------------------------------------------
 public sealed record SendOtpResponse(string Message, int ExpiresInSeconds);

@@ -90,6 +90,43 @@ public sealed class ResendConfirmationEmailCommandHandlerTests
             x => x.SendVerificationLinkAsync(
                 Email,
                 "fresh-token",
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Theory(DisplayName = "The link is mailed in the language the client asked for")]
+    [InlineData("ar")]
+    [InlineData("en")]
+    [InlineData("de")]
+    [InlineData(null)]
+    public async Task Language_IsPassedThroughToTheMail(string? language)
+    {
+        var snapshot = Snapshot(emailConfirmed: false);
+        var identity = new Mock<IResendConfirmationIdentityService>();
+
+        identity
+            .Setup(x => x.FindByEmailAsync(Email, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(snapshot);
+
+        identity
+            .Setup(x => x.GenerateEmailConfirmationTokenAsync(
+                snapshot.IdentityId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync("fresh-token");
+
+        var verification = new Mock<IEmailVerificationService>();
+
+        await CreateHandler(identity, verification)
+            .Handle(
+                new ResendConfirmationEmailCommand(Email, language),
+                CancellationToken.None);
+
+        verification.Verify(
+            x => x.SendVerificationLinkAsync(
+                Email,
+                "fresh-token",
+                language,
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -138,6 +175,7 @@ public sealed class ResendConfirmationEmailCommandHandlerTests
             .Setup(x => x.SendVerificationLinkAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("Resend returned 422"));
 
@@ -191,6 +229,7 @@ public sealed class ResendConfirmationEmailCommandHandlerTests
             x => x.SendVerificationLinkAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
 
