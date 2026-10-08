@@ -1,0 +1,1397 @@
+{
+ "environment": "staging",
+ "batchId": "HUDHUDNEST-STAGING-QA-2026-10",
+ "commitSha": "ec17ea9df1844af92c7bc5989992695d5f52df58",
+ "testedAt": "2026-10-08T09:51:22.344Z",
+ "accountsCreated": 103,
+ "listingsCreated": 100,
+ "imagesUploaded": 411,
+ "testsExecuted": 175,
+ "passed": 166,
+ "failed": 6,
+ "blocked": 3,
+ "verdict": "FAIL",
+ "issues": [
+  {
+   "id": "STG-001",
+   "severity": "P1",
+   "area": "Listing images",
+   "title": "Deleting the main image while other images exist returns HTTP 500"
+  },
+  {
+   "id": "STG-002",
+   "severity": "P1",
+   "area": "Listing images",
+   "title": "After deleting the only/main image, every later upload to that listing fails with HTTP 500 (listing is stuck without photos)"
+  },
+  {
+   "id": "STG-003",
+   "severity": "P2",
+   "area": "Search / Filters",
+   "title": "Listings of type ForRentAndSale are excluded when filtering by either \"For rent\" or \"For sale\"; the UI has no combined option"
+  },
+  {
+   "id": "STG-004",
+   "severity": "P3",
+   "area": "Security / Exposure",
+   "title": "Swagger JSON is publicly readable on Staging (/swagger/v1/swagger.json -> 200)"
+  },
+  {
+   "id": "STG-005",
+   "severity": "P3",
+   "area": "Images / Edge",
+   "title": "A 21 MB image upload returns HTTP 502 instead of 413/400"
+  },
+  {
+   "id": "STG-006",
+   "severity": "P3",
+   "area": "UI / i18n",
+   "title": "No-image placeholder text \"No image\" is not localized (shown in English in the German UI)"
+  },
+  {
+   "id": "STG-007",
+   "severity": "P3",
+   "area": "UI / i18n",
+   "title": "Province, district and property-type labels are English in the German UI"
+  }
+ ],
+ "results": [
+  {
+   "area": "Search",
+   "id": "S1",
+   "name": "all 100 created listings visible in public list",
+   "status": "pass",
+   "detail": "found 100/100; list total=105 totalCount=105"
+  },
+  {
+   "area": "Search",
+   "id": "S2",
+   "name": "unique ids across pageSize=100 pages, count == totalCount",
+   "status": "pass",
+   "detail": "105 vs 105"
+  },
+  {
+   "area": "Listings",
+   "id": "L1",
+   "name": "GET detail of all listings returns 200",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Listings",
+   "id": "L2",
+   "name": "persisted fields match what was sent (title/type/price/loc)",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Listings",
+   "id": "L3",
+   "name": "currency persisted",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Images",
+   "id": "I1",
+   "name": "detail imageUrls count == uploaded count",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Images",
+   "id": "I2",
+   "name": "listings without image are readable (3 created without images by design)",
+   "status": "pass",
+   "detail": "noImage=3"
+  },
+  {
+   "area": "Images",
+   "id": "I3",
+   "name": "all 411 image URLs return 200 image/*",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Images",
+   "id": "I4",
+   "name": "every image stored under staging/ folder (storage isolation)",
+   "status": "pass",
+   "detail": "non-staging=0"
+  },
+  {
+   "area": "Performance",
+   "id": "P-IMG",
+   "name": "image CDN HEAD latency",
+   "status": "pass",
+   "detail": "n=411 avg=119ms p95=141ms"
+  },
+  {
+   "area": "Filters",
+   "id": "F-gov1",
+   "name": "GovernorateId=1 (expected 10)",
+   "status": "pass",
+   "detail": "got=10 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-gov3",
+   "name": "GovernorateId=3 (expected 9)",
+   "status": "pass",
+   "detail": "got=9 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-gov6",
+   "name": "GovernorateId=6 (expected 8)",
+   "status": "pass",
+   "detail": "got=8 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-gov11",
+   "name": "GovernorateId=11 (expected 8)",
+   "status": "pass",
+   "detail": "got=8 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-gov14",
+   "name": "GovernorateId=14 (expected 9)",
+   "status": "pass",
+   "detail": "got=9 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-type1",
+   "name": "PropertyTypeId=1 (expected 32)",
+   "status": "pass",
+   "detail": "got=32 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-type3",
+   "name": "PropertyTypeId=3 (expected 10)",
+   "status": "pass",
+   "detail": "got=10 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-type6",
+   "name": "PropertyTypeId=6 (expected 6)",
+   "status": "pass",
+   "detail": "got=6 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-type10",
+   "name": "PropertyTypeId=10 (expected 10)",
+   "status": "pass",
+   "detail": "got=10 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-type13",
+   "name": "PropertyTypeId=13 (expected 5)",
+   "status": "pass",
+   "detail": "got=5 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-lt-ForRent",
+   "name": "ListingType=ForRent (expected 31)",
+   "status": "pass",
+   "detail": "got=31 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-lt-ForSale",
+   "name": "ListingType=ForSale (expected 59)",
+   "status": "pass",
+   "detail": "got=59 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-lt-ForRentAndSale",
+   "name": "ListingType=ForRentAndSale (expected 15)",
+   "status": "pass",
+   "detail": "got=15 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-combo1",
+   "name": "Damascus+Apartment+ForSale (expected 0)",
+   "status": "pass",
+   "detail": "got=0 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-combo2",
+   "name": "Aleppo+ForRent+MinRooms=2&MaxRooms=3 (expected 0)",
+   "status": "pass",
+   "detail": "got=0 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-combo3",
+   "name": "Latakia+ForRent+USD (expected 2)",
+   "status": "pass",
+   "detail": "got=2 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-area",
+   "name": "MinArea=100&MaxArea=200 (expected 29)",
+   "status": "pass",
+   "detail": "got=29 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-rooms",
+   "name": "MinRooms=4 (expected 36)",
+   "status": "pass",
+   "detail": "got=36 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-price-rent",
+   "name": "ForRent USD price 100..400 (expected 10)",
+   "status": "pass",
+   "detail": "got=10 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-price-sale",
+   "name": "ForSale USD price 50000..150000 (expected 18)",
+   "status": "pass",
+   "detail": "got=18 extra=0 missing=0"
+  },
+  {
+   "area": "Filters",
+   "id": "F-balcony",
+   "name": "HasBalcony=true (expected 34)",
+   "status": "pass",
+   "detail": "got=34 extra=0 missing=0"
+  },
+  {
+   "area": "Search",
+   "id": "S3",
+   "name": "SearchTerm=batch tag finds all synthetic listings",
+   "status": "pass",
+   "detail": "got 103"
+  },
+  {
+   "area": "Search",
+   "id": "S4",
+   "name": "Arabic SearchTerm \"فيلا\" returns only matching",
+   "status": "pass",
+   "detail": "got 10"
+  },
+  {
+   "area": "Search",
+   "id": "S5",
+   "name": "German SearchTerm \"Wohnung\" returns only matching",
+   "status": "pass",
+   "detail": "got 5"
+  },
+  {
+   "area": "Search",
+   "id": "S6",
+   "name": "no-match search returns empty list (empty state)",
+   "status": "pass",
+   "detail": "got 0"
+  },
+  {
+   "area": "Security",
+   "id": "SEC-SQLI",
+   "name": "SQL-injection-like search term is harmless (200) or blocked by edge/WAF (403), no leak",
+   "status": "pass",
+   "detail": "HTTP 403 (403 = blocked by security control)"
+  },
+  {
+   "area": "Pagination",
+   "id": "PG1",
+   "name": "pageSize=10 walks all pages, no duplicates, none missing",
+   "status": "pass",
+   "detail": "seen=105 unique=105 total=105"
+  },
+  {
+   "area": "Pagination",
+   "id": "PG2",
+   "name": "totalPages == ceil(total/10) and last page partial",
+   "status": "pass",
+   "detail": "pages=11 last=5"
+  },
+  {
+   "area": "Pagination",
+   "id": "PG3",
+   "name": "page beyond last returns 200 with empty items",
+   "status": "pass",
+   "detail": "HTTP 200 items=0"
+  },
+  {
+   "area": "Pagination",
+   "id": "PG4",
+   "name": "invalid paging page=0&pageSize=10 -> 400 (no 500)",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"Filter.Page\":[\"'Page' must be greater than or eq"
+  },
+  {
+   "area": "Pagination",
+   "id": "PG5",
+   "name": "invalid paging page=1&pageSize=0 -> 400 (no 500)",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"Filter.PageSize\":[\"'Page Size' must be between 1"
+  },
+  {
+   "area": "Pagination",
+   "id": "PG6",
+   "name": "invalid paging page=1&pageSize=101 -> 400 (no 500)",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"Filter.PageSize\":[\"'Page Size' must be between 1"
+  },
+  {
+   "area": "Pagination",
+   "id": "PG7",
+   "name": "invalid paging page=-1&pageSize=10 -> 400 (no 500)",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"Filter.Page\":[\"'Page' must be greater than or eq"
+  },
+  {
+   "area": "Pagination",
+   "id": "PG8",
+   "name": "invalid paging page=abc -> 400 (no 500)",
+   "status": "pass",
+   "detail": "HTTP 400 {\"type\":\"https://tools.ietf.org/html/rfc9110#section-15.5.1\",\"title\":\"One or more validation errors "
+  },
+  {
+   "area": "Sorting",
+   "id": "SO1",
+   "name": "Area desc ordering correct",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Sorting",
+   "id": "SO2",
+   "name": "Area asc ordering correct",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Sorting",
+   "id": "SO3",
+   "name": "ColdRent asc ordering correct",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Sorting",
+   "id": "SO4",
+   "name": "PurchasePrice desc ordering correct",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Sorting",
+   "id": "SO5",
+   "name": "CreatedAt desc (newest first, featured pinned on top by design)",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Sorting",
+   "id": "SO6",
+   "name": "unsupported SortBy rejected 400/422",
+   "status": "pass",
+   "detail": "HTTP 422"
+  },
+  {
+   "area": "Login",
+   "id": "AU1",
+   "name": "login with correct password -> 200 + access token",
+   "status": "pass",
+   "detail": "HTTP 200"
+  },
+  {
+   "area": "Login",
+   "id": "AU2",
+   "name": "login response has no password/hash fields",
+   "status": "pass",
+   "detail": "succeeded,errorCode,message,challengeId,accessToken,refreshToken,accessTokenExpiresAtUtc,confirmationToken,verificationState,dueAtUtc,graceEndsAtUtc,channel"
+  },
+  {
+   "area": "Login",
+   "id": "AU3",
+   "name": "refresh cookie issued HttpOnly+Secure",
+   "status": "pass",
+   "detail": "checked via jar: .AspNetCore.Antiforgery.4fOiBzLy3VE,XSRF-TOKEN,refresh_token"
+  },
+  {
+   "area": "Login",
+   "id": "AU4",
+   "name": "wrong password -> 401/400 safe message",
+   "status": "pass",
+   "detail": "HTTP 400 {\"code\":\"PHONE_AUTH_FAILED\",\"message\":\"The request could not be completed.\"}"
+  },
+  {
+   "area": "Login",
+   "id": "AU5",
+   "name": "unknown phone gives same status as wrong password (no enumeration)",
+   "status": "pass",
+   "detail": "unknown=400 wrong=400"
+  },
+  {
+   "area": "Login",
+   "id": "AU6",
+   "name": "anonymous /users/me -> 401",
+   "status": "pass",
+   "detail": "HTTP 401"
+  },
+  {
+   "area": "Login",
+   "id": "AU7",
+   "name": "invalid bearer -> 401",
+   "status": "pass",
+   "detail": "HTTP 401"
+  },
+  {
+   "area": "Login",
+   "id": "AU8",
+   "name": "forged/expired JWT -> 401",
+   "status": "pass",
+   "detail": "HTTP 401"
+  },
+  {
+   "area": "Login",
+   "id": "AU9",
+   "name": "alg=none JWT rejected",
+   "status": "pass",
+   "detail": "HTTP 401"
+  },
+  {
+   "area": "Login",
+   "id": "AU10",
+   "name": "refresh via cookie rotates tokens (200)",
+   "status": "pass",
+   "detail": "HTTP 200"
+  },
+  {
+   "area": "Login",
+   "id": "AU11",
+   "name": "logout -> 204/200",
+   "status": "pass",
+   "detail": "HTTP 204"
+  },
+  {
+   "area": "Login",
+   "id": "AU12",
+   "name": "refresh with pre-logout cookie is rejected (revoked)",
+   "status": "pass",
+   "detail": "HTTP 401"
+  },
+  {
+   "area": "Login",
+   "id": "AU13",
+   "name": "login again after logout works",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Registration",
+   "id": "R1",
+   "name": "already-registered phone: generic anti-enumeration response (no takeover)",
+   "status": "pass",
+   "detail": "HTTP 200 {\"succeeded\":true,\"errorCode\":null,\"message\":\"If the phone number is eligible, a verification code w"
+  },
+  {
+   "area": "Registration",
+   "id": "R2",
+   "name": "malformed phone -> 400",
+   "status": "pass",
+   "detail": "HTTP 400"
+  },
+  {
+   "area": "Registration",
+   "id": "R3",
+   "name": "wrong OTP -> 400",
+   "status": "pass",
+   "detail": "HTTP 400"
+  },
+  {
+   "area": "Registration",
+   "id": "R4",
+   "name": "weak password rejected -> 400 (no account created)",
+   "status": "pass",
+   "detail": "HTTP 400 {\"code\":\"OTP_EXPIRED\",\"message\":\"The request could not be completed.\"}"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z1",
+   "name": "A cannot PUT B's listing (403/404)",
+   "status": "pass",
+   "detail": "HTTP 403"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z2",
+   "name": "A cannot DELETE B's listing",
+   "status": "pass",
+   "detail": "HTTP 403"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z3",
+   "name": "A cannot publish/unpublish B's listing",
+   "status": "pass",
+   "detail": "HTTP 403"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z4",
+   "name": "A cannot read B's /manage view",
+   "status": "pass",
+   "detail": "HTTP 403"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z5",
+   "name": "A cannot upload images to B's listing",
+   "status": "pass",
+   "detail": "HTTP 403"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z6",
+   "name": "A cannot delete B's image",
+   "status": "pass",
+   "detail": "HTTP 403"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z7",
+   "name": "A cannot set B's main image",
+   "status": "pass",
+   "detail": "HTTP 403"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z8",
+   "name": "anonymous PUT -> 401",
+   "status": "pass",
+   "detail": "HTTP 401"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z9",
+   "name": "anonymous create -> 401",
+   "status": "pass",
+   "detail": "HTTP 401"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z10",
+   "name": "B's listing unchanged after attacks",
+   "status": "pass",
+   "detail": "شقة سكنية حديثة التشطيب للبيع في الزبدان"
+  },
+  {
+   "area": "Dashboard",
+   "id": "D1",
+   "name": "B /properties/mine lists exactly own listing",
+   "status": "pass",
+   "detail": "HTTP 200 n=1"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z11",
+   "name": "mass-assignment: OwnerId in PUT body does not transfer ownership",
+   "status": "pass",
+   "detail": "PUT HTTP 204; owner now unchanged"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z12",
+   "name": "anonymous /users/{id} does not expose phone/email",
+   "status": "pass",
+   "detail": "HTTP 401 \"\""
+  },
+  {
+   "area": "Authorization",
+   "id": "Z13",
+   "name": "public listing exposes no owner phone/email",
+   "status": "pass",
+   "detail": "checked public detail JSON"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z14",
+   "name": "normal user cannot call admin users endpoint",
+   "status": "pass",
+   "detail": "HTTP 403"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z15",
+   "name": "normal user cannot read /operational/version",
+   "status": "pass",
+   "detail": "HTTP 403"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z16",
+   "name": "build-info without secret -> 404",
+   "status": "pass",
+   "detail": "HTTP 404"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z17",
+   "name": "cleanup endpoint without secret -> 404",
+   "status": "pass",
+   "detail": "HTTP 404"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z18",
+   "name": "cookie-authenticated refresh without CSRF token rejected (403)",
+   "status": "pass",
+   "detail": "HTTP 403"
+  },
+  {
+   "area": "Authorization",
+   "id": "Z19",
+   "name": "mass-assignment: OwnerId in POST body ignored (owner = caller)",
+   "status": "pass",
+   "detail": "owner=caller"
+  },
+  {
+   "area": "Listings",
+   "id": "L4",
+   "name": "free-plan quota (1 active) enforced -> 409",
+   "status": "pass",
+   "detail": "HTTP 409"
+  },
+  {
+   "area": "API",
+   "id": "E1",
+   "name": "empty title -> 400/422 validation (not 409/500), safe body",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"Title\":[\"'Title' must not be empty.\"]},\"errorCodes\":{\"Title\":[\"NotEm"
+  },
+  {
+   "area": "API",
+   "id": "E2",
+   "name": "empty description -> 400/422 validation (not 409/500), safe body",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"Description\":[\"'Description' must not be empty.\"]},\"errorCodes\":{\"De"
+  },
+  {
+   "area": "API",
+   "id": "E3",
+   "name": "negative rent -> 400/422 validation (not 409/500), safe body",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"ColdRent\":[\"Cold rent must be greater than zero.\"],\"RentalStartDate\""
+  },
+  {
+   "area": "API",
+   "id": "E4",
+   "name": "zero sale price -> 400/422 validation (not 409/500), safe body",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"PurchasePrice\":[\"Purchase price must be greater than zero.\"]},\"error"
+  },
+  {
+   "area": "API",
+   "id": "E5",
+   "name": "huge price 1e30 -> 400/422 validation (not 409/500), safe body",
+   "status": "pass",
+   "detail": "HTTP 400 {\"type\":\"https://tools.ietf.org/html/rfc9110#section-15.5.1\",\"title\":\"One or more validation errors occurred.\",\"status\":"
+  },
+  {
+   "area": "API",
+   "id": "E6",
+   "name": "invalid currency -> 400/422 validation (not 409/500), safe body",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"CurrencyCode\":[\"Invalid ISO 4217 currency code.\"]},\"errorCodes\":{\"Cu"
+  },
+  {
+   "area": "API",
+   "id": "E7",
+   "name": "bad governorate id -> 400/422 validation (not 409/500), safe body",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"Location\":[\"The district must belong to the governorate and the neig"
+  },
+  {
+   "area": "API",
+   "id": "E8",
+   "name": "district/governorate mismatch -> 400/422 validation (not 409/500), safe body",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"Location\":[\"The district must belong to the governorate and the neig"
+  },
+  {
+   "area": "API",
+   "id": "E9",
+   "name": "lat without lon -> 400/422 validation (not 409/500), safe body",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"\":[\"Both Latitude and Longitude must be provided together, or neithe"
+  },
+  {
+   "area": "API",
+   "id": "E10",
+   "name": "rooms 999 -> 400/422 validation (not 409/500), safe body",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"Rooms\":[\"'Rooms' must be between 1 and 50. You entered 999.\"]},\"erro"
+  },
+  {
+   "area": "API",
+   "id": "E11",
+   "name": "area 1 m2 -> 400/422 validation (not 409/500), safe body",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"Area\":[\"Area must be greater than 10 m².\"]},\"errorCodes\":{\"Area\":[\"G"
+  },
+  {
+   "area": "API",
+   "id": "E12",
+   "name": "title 5000 chars -> 400/422 validation (not 409/500), safe body",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"Title\":[\"The length of 'Title' must be 200 characters or fewer. You "
+  },
+  {
+   "area": "API",
+   "id": "E13",
+   "name": "invalid listing type -> 400/422 validation (not 409/500), safe body",
+   "status": "pass",
+   "detail": "HTTP 400 {\"type\":\"https://tools.ietf.org/html/rfc9110#section-15.5.1\",\"title\":\"One or more validation errors occurred.\",\"status\":"
+  },
+  {
+   "area": "API",
+   "id": "E14",
+   "name": "sale without legal status -> 400/422 validation (not 409/500), safe body",
+   "status": "pass",
+   "detail": "HTTP 422 {\"title\":\"Validation Error\",\"status\":422,\"errors\":{\"LegalStatus\":[\"Ownership type is required for sale listings.\"]},\"err"
+  },
+  {
+   "area": "Security",
+   "id": "SEC-XSS",
+   "name": "HTML in title: stored verbatim as JSON text (frontend must escape) or sanitized",
+   "status": "pass",
+   "detail": "stored=\"<script>alert(1)</script> QA <img src=x onerror=al\""
+  },
+  {
+   "area": "API",
+   "id": "E16",
+   "name": "non-guid id -> 4xx (404/400) not 500",
+   "status": "pass",
+   "detail": "HTTP 401"
+  },
+  {
+   "area": "API",
+   "id": "E17",
+   "name": "unknown guid -> 404",
+   "status": "pass",
+   "detail": "HTTP 404"
+  },
+  {
+   "area": "API",
+   "id": "E18",
+   "name": "malformed JSON -> 400",
+   "status": "pass",
+   "detail": "HTTP 400"
+  },
+  {
+   "area": "Images",
+   "id": "I5",
+   "name": "non-image bytes labelled image/png rejected",
+   "status": "pass",
+   "detail": "HTTP 400 {\"message\":\"File 'fake.png' is not a valid image file.\"}"
+  },
+  {
+   "area": "Images",
+   "id": "I6",
+   "name": "SVG/script upload rejected (unsupported type)",
+   "status": "pass",
+   "detail": "HTTP 400"
+  },
+  {
+   "area": "Images",
+   "id": "I7",
+   "name": "executable upload rejected",
+   "status": "pass",
+   "detail": "HTTP 400"
+  },
+  {
+   "area": "Images",
+   "id": "I8",
+   "name": "upload with no files -> 400",
+   "status": "pass",
+   "detail": "HTTP 400"
+  },
+  {
+   "area": "Images",
+   "id": "I9",
+   "name": "11 files in one request rejected (limit 10)",
+   "status": "pass",
+   "detail": "HTTP 400"
+  },
+  {
+   "area": "Images",
+   "id": "I10",
+   "name": "valid upload to own listing -> 200",
+   "status": "pass",
+   "detail": "HTTP 200"
+  },
+  {
+   "area": "Images",
+   "id": "I11",
+   "name": "listing images list ordered, exactly one main",
+   "status": "pass",
+   "detail": "[[0,true],[1,false]]"
+  },
+  {
+   "area": "Images",
+   "id": "I12",
+   "name": "set a non-main image as main (clean listing)",
+   "status": "pass",
+   "detail": "HTTP 204"
+  },
+  {
+   "area": "Images",
+   "id": "I13b",
+   "name": "delete MAIN image while others exist",
+   "status": "fail",
+   "detail": "HTTP 500 corr a51da140e62e6e5bc0dc071030417ae5"
+  },
+  {
+   "area": "Images",
+   "id": "I13c",
+   "name": "delete the only image, then upload a new one",
+   "status": "fail",
+   "detail": "HTTP 500 (and again 500)"
+  },
+  {
+   "area": "Images",
+   "id": "I13a",
+   "name": "delete NON-main image succeeds",
+   "status": "pass",
+   "detail": "HTTP 204"
+  },
+  {
+   "area": "Images",
+   "id": "I14",
+   "name": "deleted image URL no longer served by storage (after 4s)",
+   "status": "pass",
+   "detail": "HTTP 404"
+  },
+  {
+   "area": "Images",
+   "id": "I15",
+   "name": "21 MB upload rejected (413/400)",
+   "status": "fail",
+   "detail": "HTTP 502"
+  },
+  {
+   "area": "Favorites",
+   "id": "FV1",
+   "name": "anonymous favorites list -> 401",
+   "status": "pass",
+   "detail": "HTTP 401"
+  },
+  {
+   "area": "Favorites",
+   "id": "FV2",
+   "name": "A favorites B's listing",
+   "status": "pass",
+   "detail": "HTTP 201"
+  },
+  {
+   "area": "Favorites",
+   "id": "FV3",
+   "name": "duplicate favorite is idempotent/409, not 500",
+   "status": "pass",
+   "detail": "HTTP 409"
+  },
+  {
+   "area": "Favorites",
+   "id": "FV4",
+   "name": "favorite listed exactly once",
+   "status": "pass",
+   "detail": "n=1"
+  },
+  {
+   "area": "Favorites",
+   "id": "FV5",
+   "name": "B does not see A's favorites",
+   "status": "pass",
+   "detail": "n=0"
+  },
+  {
+   "area": "Favorites",
+   "id": "FV6",
+   "name": "remove favorite",
+   "status": "pass",
+   "detail": "HTTP 204"
+  },
+  {
+   "area": "Favorites",
+   "id": "FV7",
+   "name": "remove again does not 500",
+   "status": "pass",
+   "detail": "HTTP 404"
+  },
+  {
+   "area": "Favorites",
+   "id": "FV8",
+   "name": "favorite again after remove",
+   "status": "pass",
+   "detail": "HTTP 201"
+  },
+  {
+   "area": "Favorites",
+   "id": "FV9",
+   "name": "favorite persists after re-login",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Favorites",
+   "id": "FV10",
+   "name": "favorite of nonexistent listing -> 404/400",
+   "status": "pass",
+   "detail": "HTTP 404"
+  },
+  {
+   "area": "Contact",
+   "id": "M1",
+   "name": "A sends inquiry on B's listing -> 201",
+   "status": "pass",
+   "detail": "HTTP 201 {\"id\":\"2826c0bc-b6d6-4cc4-b836-beb4d5ce85e9\",\"propertyId\":\"4ea45a9e-7c67-4f16-8089-8aaf19cfc1c0\",\"se"
+  },
+  {
+   "area": "Contact",
+   "id": "M2",
+   "name": "B (owner) receives the inquiry exactly once",
+   "status": "pass",
+   "detail": "HTTP 200 occurrences=1"
+  },
+  {
+   "area": "Contact",
+   "id": "M3",
+   "name": "third user C cannot read A<->B thread",
+   "status": "pass",
+   "detail": "HTTP 403"
+  },
+  {
+   "area": "Contact",
+   "id": "M4",
+   "name": "empty message -> 400/422",
+   "status": "pass",
+   "detail": "HTTP 422"
+  },
+  {
+   "area": "Contact",
+   "id": "M5",
+   "name": "message to nonexistent listing -> 404/400",
+   "status": "pass",
+   "detail": "HTTP 404"
+  },
+  {
+   "area": "Contact",
+   "id": "M6",
+   "name": "anonymous message -> 401",
+   "status": "pass",
+   "detail": "HTTP 401"
+  },
+  {
+   "area": "Contact",
+   "id": "M7",
+   "name": "oversized message rejected (4xx)",
+   "status": "pass",
+   "detail": "HTTP 422"
+  },
+  {
+   "area": "Contact",
+   "id": "M8",
+   "name": "owner conversations list loads",
+   "status": "pass",
+   "detail": "HTTP 200"
+  },
+  {
+   "area": "Security",
+   "id": "CORS1",
+   "name": "staging web origin allowed",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Security",
+   "id": "CORS2",
+   "name": "production web origin NOT allowed by staging API",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Security",
+   "id": "CORS3",
+   "name": "arbitrary origin not reflected",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Security",
+   "id": "HDR1",
+   "name": "security headers present (HSTS, nosniff, XFO, CSP)",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Security",
+   "id": "EXP-/swagger",
+   "name": "/swagger not publicly exposed",
+   "status": "pass",
+   "detail": "HTTP 301"
+  },
+  {
+   "area": "Security",
+   "id": "EXP-/swagger/v1/swagger.json",
+   "name": "/swagger/v1/swagger.json not publicly exposed",
+   "status": "fail",
+   "detail": "HTTP 200"
+  },
+  {
+   "area": "Security",
+   "id": "EXP-/.env",
+   "name": "/.env not publicly exposed",
+   "status": "pass",
+   "detail": "HTTP 401"
+  },
+  {
+   "area": "Security",
+   "id": "EXP-/appsettings.json",
+   "name": "/appsettings.json not publicly exposed",
+   "status": "pass",
+   "detail": "HTTP 401"
+  },
+  {
+   "area": "Security",
+   "id": "EXP-/api/operational/version",
+   "name": "/api/operational/version not publicly exposed",
+   "status": "pass",
+   "detail": "HTTP 401"
+  },
+  {
+   "area": "Security",
+   "id": "EXP-/metrics",
+   "name": "/metrics not publicly exposed",
+   "status": "pass",
+   "detail": "HTTP 401"
+  },
+  {
+   "area": "API",
+   "id": "E19",
+   "name": "very long path -> 4xx without leak",
+   "status": "pass",
+   "detail": "HTTP 401"
+  },
+  {
+   "area": "Listings",
+   "id": "SS1",
+   "name": "short-stay public list reachable",
+   "status": "pass",
+   "detail": "HTTP 200 total=0"
+  },
+  {
+   "area": "Listings",
+   "id": "IN1",
+   "name": "investment projects public list reachable",
+   "status": "pass",
+   "detail": "HTTP 200 total=0"
+  },
+  {
+   "area": "Listings",
+   "id": "SS2",
+   "name": "short-stay & investment creation by synthetic users",
+   "status": "blocked",
+   "detail": "Short stay needs separate flows/owner roles; investment projects are admin-managed. Not created (no admin credentials, scope)."
+  },
+  {
+   "area": "Randomized",
+   "id": "RND1",
+   "name": "40 deterministic mixed operations (seed 424242) with zero 5xx",
+   "status": "pass",
+   "detail": "5xx=0"
+  },
+  {
+   "area": "Performance",
+   "id": "PERF-GET /api/properties?pageSize=20",
+   "name": "GET /api/properties?pageSize=20: avg 188ms p95 417ms p99 425ms {\"200\":30}",
+   "status": "pass",
+   "detail": "p95 budget 1500ms; errors=0"
+  },
+  {
+   "area": "Performance",
+   "id": "PERF-GET /api/properties (filters combo)",
+   "name": "GET /api/properties (filters combo): avg 199ms p95 481ms p99 495ms {\"200\":30}",
+   "status": "pass",
+   "detail": "p95 budget 1500ms; errors=0"
+  },
+  {
+   "area": "Performance",
+   "id": "PERF-GET /api/properties/{id}",
+   "name": "GET /api/properties/{id}: avg 351ms p95 360ms p99 438ms {\"200\":40}",
+   "status": "pass",
+   "detail": "p95 budget 1500ms; errors=0"
+  },
+  {
+   "area": "Performance",
+   "id": "PERF-GET /api/properties/{id} (conc 5)",
+   "name": "GET /api/properties/{id} (conc 5): avg 267ms p95 408ms p99 775ms {\"200\":50}",
+   "status": "pass",
+   "detail": "p95 budget 1500ms; errors=0"
+  },
+  {
+   "area": "Performance",
+   "id": "PERF-GET /api/properties?SearchTerm",
+   "name": "GET /api/properties?SearchTerm: avg 181ms p95 413ms p99 422ms {\"200\":20}",
+   "status": "pass",
+   "detail": "p95 budget 1500ms; errors=0"
+  },
+  {
+   "area": "Performance",
+   "id": "PERF-GET /api/lookups/governorates",
+   "name": "GET /api/lookups/governorates: avg 134ms p95 141ms p99 213ms {\"200\":20}",
+   "status": "pass",
+   "detail": "p95 budget 1500ms; errors=0"
+  },
+  {
+   "area": "Performance",
+   "id": "PERF-GET /api/properties/{id}/images",
+   "name": "GET /api/properties/{id}/images: avg 206ms p95 275ms p99 284ms {\"200\":10,\"429\":10}",
+   "status": "pass",
+   "detail": "p95 budget 1500ms; errors=0"
+  },
+  {
+   "area": "Performance",
+   "id": "PERF-GET /api/properties/mine (auth)",
+   "name": "GET /api/properties/mine (auth): avg 235ms p95 254ms p99 254ms {\"200\":15}",
+   "status": "pass",
+   "detail": "p95 budget 1500ms; errors=0"
+  },
+  {
+   "area": "Performance",
+   "id": "PERF-GET /api/users/me (auth)",
+   "name": "GET /api/users/me (auth): avg 494ms p95 507ms p99 507ms {\"200\":15}",
+   "status": "pass",
+   "detail": "p95 budget 1500ms; errors=0"
+  },
+  {
+   "area": "Performance",
+   "id": "PERF-RL",
+   "name": "per-IP rate limit (120 req/min, shared Staging bucket) enforced with 429 under burst (informational)",
+   "status": "pass",
+   "detail": "GET /api/properties/{id}/images: 10x429"
+  },
+  {
+   "area": "Mobile",
+   "id": "UI1",
+   "name": "Listings page 375px (AR and DE): no horizontal overflow, 20 cards, no broken images",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Mobile",
+   "id": "UI2",
+   "name": "Listing detail 375px (no-image listing, SYP listing, 3-image gallery): no overflow, price/area/rooms render",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Mobile",
+   "id": "UI3",
+   "name": "Listing detail 768px tablet with 10-image gallery (1/10 counter, thumbnails)",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "RTL",
+   "id": "UI4",
+   "name": "Arabic: dir=rtl, nav/filter/cards mirrored, no overflow (desktop 1280 and mobile 375)",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "RTL",
+   "id": "UI5",
+   "name": "English and German: dir=ltr, nav and filters translated, no raw translation keys / undefined / null / NaN",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Search",
+   "id": "UI6",
+   "name": "UI filter Damascus + Apartment + For sale shows empty state; API agrees (0)",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Search",
+   "id": "UI7",
+   "name": "Filter state lives in URL; list -> detail -> browser Back preserves filter and result count (2 = API 2)",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Pagination",
+   "id": "UI8",
+   "name": "UI pagination: 6 pages, 20/20/20/20/20/5, 105 unique cards, Next disabled on last page",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Listings",
+   "id": "UI9",
+   "name": "Result counter (105) equals API totalCount (100 batch + 2 existing + 1 probe + 2 repro)",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "area": "Images",
+   "id": "UI10",
+   "name": "No-image placeholder is localized",
+   "status": "fail",
+   "detail": ""
+  },
+  {
+   "area": "Filters",
+   "id": "UI11",
+   "name": "Province/district/property-type labels translated in the German UI",
+   "status": "fail",
+   "detail": ""
+  },
+  {
+   "area": "Registration",
+   "id": "UI12",
+   "name": "UI registration/login via the browser form",
+   "status": "blocked",
+   "detail": "BLOCKED BY POLICY: no credential entry on a non-local host; API-level auth/favorites covered instead"
+  },
+  {
+   "area": "Favorites",
+   "id": "UI13",
+   "name": "Favorites through the UI (needs an authenticated browser session)",
+   "status": "blocked",
+   "detail": "BLOCKED BY POLICY: no credential entry on a non-local host; API-level auth/favorites covered instead"
+  }
+ ],
+ "performance": [
+  {
+   "endpoint": "GET /api/properties?pageSize=20",
+   "requests": 30,
+   "concurrency": 1,
+   "avgMs": 188,
+   "p95Ms": 417,
+   "p99Ms": 425,
+   "status": {
+    "200": 30
+   },
+   "errors5xx": 0
+  },
+  {
+   "endpoint": "GET /api/properties (filters combo)",
+   "requests": 30,
+   "concurrency": 1,
+   "avgMs": 199,
+   "p95Ms": 481,
+   "p99Ms": 495,
+   "status": {
+    "200": 30
+   },
+   "errors5xx": 0
+  },
+  {
+   "endpoint": "GET /api/properties/{id}",
+   "requests": 40,
+   "concurrency": 1,
+   "avgMs": 351,
+   "p95Ms": 360,
+   "p99Ms": 438,
+   "status": {
+    "200": 40
+   },
+   "errors5xx": 0
+  },
+  {
+   "endpoint": "GET /api/properties/{id} (conc 5)",
+   "requests": 50,
+   "concurrency": 5,
+   "avgMs": 267,
+   "p95Ms": 408,
+   "p99Ms": 775,
+   "status": {
+    "200": 50
+   },
+   "errors5xx": 0
+  },
+  {
+   "endpoint": "GET /api/properties?SearchTerm",
+   "requests": 20,
+   "concurrency": 1,
+   "avgMs": 181,
+   "p95Ms": 413,
+   "p99Ms": 422,
+   "status": {
+    "200": 20
+   },
+   "errors5xx": 0
+  },
+  {
+   "endpoint": "GET /api/lookups/governorates",
+   "requests": 20,
+   "concurrency": 1,
+   "avgMs": 134,
+   "p95Ms": 141,
+   "p99Ms": 213,
+   "status": {
+    "200": 20
+   },
+   "errors5xx": 0
+  },
+  {
+   "endpoint": "GET /api/properties/{id}/images",
+   "requests": 20,
+   "concurrency": 1,
+   "avgMs": 206,
+   "p95Ms": 275,
+   "p99Ms": 284,
+   "status": {
+    "200": 10,
+    "429": 10
+   },
+   "errors5xx": 0
+  },
+  {
+   "endpoint": "GET /api/properties/mine (auth)",
+   "requests": 15,
+   "concurrency": 1,
+   "avgMs": 235,
+   "p95Ms": 254,
+   "p99Ms": 254,
+   "status": {
+    "200": 15
+   },
+   "errors5xx": 0
+  },
+  {
+   "endpoint": "GET /api/users/me (auth)",
+   "requests": 15,
+   "concurrency": 1,
+   "avgMs": 494,
+   "p95Ms": 507,
+   "p99Ms": 507,
+   "status": {
+    "200": 15
+   },
+   "errors5xx": 0
+  }
+ ],
+ "cleanup": "not performed"
+}

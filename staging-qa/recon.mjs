@@ -1,0 +1,10 @@
+import { loadEnv, safetyGate, Client } from './lib.mjs';
+const env = loadEnv();
+console.log(JSON.stringify(await safetyGate(env)));
+const c = new Client('r', env);
+const show = async (label, path, n = 1500) => { const r = await c.req('GET', path); console.log(label, r.status, JSON.stringify(r.data).slice(0, n)); };
+await show('gov', '/api/lookups/governorates?countryCode=SY');
+await show('types', '/api/lookups/property-type-catalog', 2200);
+await show('amen', '/api/lookups/amenities', 500);
+await show('plans', '/api/plans', 1500);
+await show('enum', '/api/enums/PropertyStatus', 400);
