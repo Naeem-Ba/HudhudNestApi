@@ -238,7 +238,7 @@ public sealed class CreateBookingCommandHandlerTests
         public Task NotifyValuationOfficeInvitationExpiredAsync(Guid recipientId, Guid invitationId, Guid inquiryId, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifyValuationResultReadyAsync(Guid recipientId, Guid inquiryId, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifyValuationInquiryReminderSoonAsync(Guid recipientId, Guid inquiryId, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(Guid userId, int page, int pageSize, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(Guid userId, int page, int pageSize, string? language = null, CancellationToken ct = default) => throw new NotImplementedException();
         public Task MarkAsReadAsync(Guid notificationId, Guid userId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task MarkAllAsReadAsync(Guid userId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<int> GetUnreadCountAsync(Guid userId, CancellationToken ct = default) => throw new NotImplementedException();

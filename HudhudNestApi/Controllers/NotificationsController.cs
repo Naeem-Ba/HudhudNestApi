@@ -28,6 +28,7 @@ public sealed class NotificationsController : ControllerBase
     public async Task<IActionResult> GetMyNotifications(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
+        [FromQuery] string? language = null,
         CancellationToken ct = default)
     {
         var userId = _currentUser.UserId;
@@ -39,10 +40,16 @@ public sealed class NotificationsController : ControllerBase
             userId.Value,
             page,
             pageSize,
+            language ?? FirstAcceptLanguage(),
             ct);
 
         return Ok(result);
     }
+
+    // The site language arrives as ?language=ar|en|de (same contract as the confirmation mail);
+    // the Accept-Language header is the fallback for clients that do not send it.
+    private string? FirstAcceptLanguage()
+        => Request.Headers.AcceptLanguage.ToString().Split(',')[0].Split(';')[0].Trim() is { Length: > 0 } tag ? tag : null;
 
     [HttpGet("unread-count")]
     [ProducesResponseType(StatusCodes.Status200OK)]

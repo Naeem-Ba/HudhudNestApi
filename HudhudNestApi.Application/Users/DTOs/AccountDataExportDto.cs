@@ -27,6 +27,8 @@ public sealed class AccountDataExportDto
     public IReadOnlyList<AccountDataExportUserRating> RatingsGiven { get; init; } = Array.Empty<AccountDataExportUserRating>();
 
     public IReadOnlyList<AccountDataExportUserRating> RatingsReceived { get; init; } = Array.Empty<AccountDataExportUserRating>();
+
+    public IReadOnlyList<AccountDataExportAgencyRating> AgencyRatingsGiven { get; init; } = Array.Empty<AccountDataExportAgencyRating>();
 }
 
 public sealed class AccountDataExportProfile
@@ -89,6 +91,18 @@ public sealed class AccountDataExportConsent
     public string Source { get; init; } = string.Empty;
     public DateTime ConsentedAtUtc { get; init; }
     public DateTime? WithdrawnAtUtc { get; init; }
+}
+
+public sealed class AccountDataExportAgencyRating
+{
+    public Guid AgencyId { get; init; }
+    public int Service { get; init; }
+    public int Professionalism { get; init; }
+    public int Reliability { get; init; }
+    public int OverallExperience { get; init; }
+    public double OverallScore { get; init; }
+    public string? Comment { get; init; }
+    public DateTime CreatedAt { get; init; }
 }
 
 public sealed class AccountDataExportUserRating

@@ -64,6 +64,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IVisitRepository, VisitRepository>();
         services.AddScoped<IPropertyReviewRepository, PropertyReviewRepository>();
         services.AddScoped<IUserRatingRepository, UserRatingRepository>();
+        services.AddScoped<IAgencyRatingRepository, AgencyRatingRepository>();
         services.AddScoped<IPropertyRepository, PropertyRepository>();
         services.AddScoped<IPropertyPriceHistoryRepository, PropertyPriceHistoryRepository>();
         services.AddScoped<ISavedSearchRepository, SavedSearchRepository>();

@@ -20,6 +20,10 @@ using HudhudNestApi.Application.Agencies.Queries.GetAgencyBySlug;
 using HudhudNestApi.Application.Agencies.Queries.GetAgencySentInvitations;
 using HudhudNestApi.Application.Agencies.Queries.GetMyAgency;
 using HudhudNestApi.Application.Agencies.Queries.GetMyAgencyInvitations;
+using HudhudNestApi.Application.Reviews.Commands.RateAgency;
+using HudhudNestApi.Application.Reviews.DTOs;
+using HudhudNestApi.Application.Reviews.Queries.GetAgencyRatingEligibility;
+using HudhudNestApi.Application.Reviews.Queries.GetAgencyRatings;
 
 namespace HudhudNestApi.Controllers;
 
@@ -437,6 +441,70 @@ public sealed class AgenciesController : ControllerBase
         return NoContent();
     }
 
+    // ── GET /api/agencies/{agencyId}/ratings ─────────────────────
+    // Public: the agency's own rating (business rating), separate from any member's
+    // UserRating. An inactive/deleted agency is 404, like its public page.
+    [HttpGet("{agencyId:guid}/ratings")]
+    [AllowAnonymous]
+    [EnableRateLimiting("public-read")]
+    [ProducesResponseType(typeof(AgencyRatingSummaryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetRatings(
+        Guid agencyId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(new GetAgencyRatingsQuery(agencyId, page, pageSize), ct);
+        return Ok(result);
+    }
+
+    // ── GET /api/agencies/{agencyId}/ratings/eligibility ─────────
+    [HttpGet("{agencyId:guid}/ratings/eligibility")]
+    [Authorize]
+    [ProducesResponseType(typeof(AgencyRatingEligibilityDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetRatingEligibility(Guid agencyId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var result = await _mediator.Send(new GetAgencyRatingEligibilityQuery(agencyId, userId.Value), ct);
+        return Ok(result);
+    }
+
+    // ── POST /api/agencies/{agencyId}/ratings ────────────────────
+    // Create or edit the caller's rating of the agency. The rater comes from the token only.
+    [HttpPost("{agencyId:guid}/ratings")]
+    [Authorize]
+    [EnableRateLimiting("user-write")]
+    [ProducesResponseType(typeof(AgencyRatingDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RateAgency(
+        Guid agencyId,
+        [FromBody] RateAgencyRequest dto,
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var result = await _mediator.Send(
+            new RateAgencyCommand(
+                AgencyId: agencyId,
+                RaterId: userId.Value,
+                Service: dto.Service,
+                Professionalism: dto.Professionalism,
+                Reliability: dto.Reliability,
+                OverallExperience: dto.OverallExperience,
+                Comment: dto.Comment),
+            ct);
+
+        return StatusCode(StatusCodes.Status201Created, result);
+    }
+
     private Guid? GetCurrentUserId()
     {
         var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -446,6 +514,14 @@ public sealed class AgenciesController : ControllerBase
     private string? GetClientIp()
         => HttpContext.Connection.RemoteIpAddress?.ToString();
 }
+
+/// <summary>Request body for rating an agency; the rater is taken from the token.</summary>
+public sealed record RateAgencyRequest(
+    int Service,
+    int Professionalism,
+    int Reliability,
+    int OverallExperience,
+    string? Comment);
 
 /// <summary>
 /// Request body for agency registration. Separate from the command so the caller cannot

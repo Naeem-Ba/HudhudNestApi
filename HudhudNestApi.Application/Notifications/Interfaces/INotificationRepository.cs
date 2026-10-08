@@ -1,4 +1,5 @@
-﻿using HudhudNestApi.Domain.Notifications.Entities;
+﻿using HudhudNestApi.Application.Notifications.Models;
+using HudhudNestApi.Domain.Notifications.Entities;
 
 namespace HudhudNestApi.Application.Notifications.Interfaces;
 
@@ -10,6 +11,14 @@ public interface INotificationRepository
         Guid userId,
         int page,
         int pageSize,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Names and titles behind message-based notifications, for rendering their text in the
+    /// reader's language. Keyed by message id; a message that no longer resolves is absent.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, NotificationMessageContext>> GetMessageContextsAsync(
+        IReadOnlyCollection<Guid> messageIds,
         CancellationToken ct = default);
 
     Task<int> GetUnreadCountAsync(Guid userId, CancellationToken ct = default);
