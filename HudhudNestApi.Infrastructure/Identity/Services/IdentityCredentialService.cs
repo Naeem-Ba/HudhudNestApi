@@ -118,7 +118,20 @@ public sealed class IdentityCredentialService
         Guid id, string email, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(email);
-        return Result(await _users.SetEmailAsync(await Load(id, ct), email));
+        var result = Result(await _users.SetEmailAsync(await Load(id, ct), email));
+
+        // UserManager.SetEmailAsync rotates the security stamp (a new address is a new identity claim)
+        // but knows nothing about CachedSecurityStampValidator's 5-minute snapshot. Left in place, the
+        // snapshot still holds the OLD stamp, so every token issued afterwards -- a fresh login, a
+        // refresh -- carries the new stamp and is rejected as invalid_token until the entry expires:
+        // "Add / resend email" from account settings locked the owner out of /users/me for minutes,
+        // re-login included. Same rule as UpdateSecurityStampAsync above.
+        if (result.Succeeded)
+        {
+            await _stampCache.InvalidateAsync(id, ct);
+        }
+
+        return result;
     }
 
     public async Task<string> GenerateEmailConfirmationTokenAsync(Guid id, CancellationToken ct) =>
