@@ -87,6 +87,7 @@ public sealed class AppDbContext
     public DbSet<VisitRequest> VisitRequests => Set<VisitRequest>();
     public DbSet<PropertyReview> PropertyReviews => Set<PropertyReview>();
     public DbSet<UserRating> UserRatings => Set<UserRating>();
+    public DbSet<AgencyRating> AgencyRatings => Set<AgencyRating>();
     public DbSet<Currency> Currencies => Set<Currency>();
     public DbSet<Governorate> Governorates => Set<Governorate>();
     public DbSet<District> Districts => Set<District>();

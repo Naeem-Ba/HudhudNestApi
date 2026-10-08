@@ -2488,6 +2488,58 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.ToTable("PlanRequests", (string)null);
                 });
 
+            modelBuilder.Entity("HudhudNestApi.Domain.Reviews.Entities.AgencyRating", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AgencyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("OverallExperience")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Professionalism")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RaterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Reliability")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Service")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgencyId");
+
+                    b.HasIndex("RaterId");
+
+                    b.HasIndex("AgencyId", "RaterId")
+                        .IsUnique();
+
+                    b.ToTable("AgencyRatings", (string)null);
+                });
+
             modelBuilder.Entity("HudhudNestApi.Domain.Reviews.Entities.PropertyReview", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5731,6 +5783,23 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Reviews.Entities.AgencyRating", b =>
+                {
+                    b.HasOne("HudhudNestApi.Domain.Agencies.Entities.Agency", null)
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", "Rater")
+                        .WithMany()
+                        .HasForeignKey("RaterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Rater");
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.Reviews.Entities.PropertyReview", b =>

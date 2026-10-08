@@ -4,6 +4,7 @@ using HudhudNestApi.Application.Notifications.DTOs;
 using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Domain.Notifications.Entities;
 using HudhudNestApi.Domain.Notifications.Enums;
+using HudhudNestApi.Infrastructure.Email.Templates;
 using HudhudNestApi.Infrastructure.Hubs;
 
 namespace HudhudNestApi.Infrastructure.Notifications;
@@ -547,6 +548,7 @@ public sealed class NotificationService : INotificationService
         Guid userId,
         int page,
         int pageSize,
+        string? language = null,
         CancellationToken ct = default)
     {
         if (userId == Guid.Empty)
@@ -563,7 +565,68 @@ public sealed class NotificationService : INotificationService
             pageSize,
             ct);
 
-        return notifications.Select(MapToDto).ToList();
+        var dtos = notifications.Select(MapToDto).ToList();
+        await LocalizeAsync(dtos, language, ct);
+        return dtos;
+    }
+
+    /// <summary>
+    /// Re-renders the text of message-based notifications in the language of the site the user is
+    /// reading them on. Types without a template, an unsupported language, or a message that no
+    /// longer resolves keep the stored text. Never throws: a failure here must not hide the list.
+    /// </summary>
+    private async Task LocalizeAsync(List<NotificationDto> dtos, string? language, CancellationToken ct)
+    {
+        if (EmailConfirmationTemplate.NormalizeLanguage(language) is null)
+        {
+            return;
+        }
+
+        var messageIds = dtos
+            .Where(d => d.Type is NotificationType.NewMessage or NotificationType.AgencyMemberInquiry
+                        && d.RelatedEntityId.HasValue)
+            .Select(d => d.RelatedEntityId!.Value)
+            .Distinct()
+            .ToList();
+
+        if (messageIds.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var contexts = await _notifications.GetMessageContextsAsync(messageIds, ct);
+
+            for (var i = 0; i < dtos.Count; i++)
+            {
+                var dto = dtos[i];
+                if (dto.RelatedEntityId is not { } id || !contexts.TryGetValue(id, out var context))
+                {
+                    continue;
+                }
+
+                var text = NotificationTexts.Render(dto.Type, language, context);
+                if (text is not null)
+                {
+                    dtos[i] = new NotificationDto
+                    {
+                        Id = dto.Id,
+                        Type = dto.Type,
+                        Message = text,
+                        PropertyId = dto.PropertyId,
+                        RelatedEntityId = dto.RelatedEntityId,
+                        IsRead = dto.IsRead,
+                        ReadAt = dto.ReadAt,
+                        CreatedAt = dto.CreatedAt
+                    };
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Notification localization failed; returning the stored texts.");
+        }
     }
 
     public async Task MarkAsReadAsync(

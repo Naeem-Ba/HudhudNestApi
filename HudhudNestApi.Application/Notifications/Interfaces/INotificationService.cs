@@ -124,10 +124,17 @@ public interface INotificationService
         string detail,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// The user's notifications, newest first. <paramref name="language"/> (ar | en | de, regional
+    /// forms accepted) is the language of the site the user is looking at: when given, the text of
+    /// message-based notifications is rendered in it; otherwise (or for an unsupported language)
+    /// the stored text is returned unchanged.
+    /// </summary>
     Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(
         Guid userId,
         int page,
         int pageSize,
+        string? language = null,
         CancellationToken ct = default);
 
     Task MarkAsReadAsync(

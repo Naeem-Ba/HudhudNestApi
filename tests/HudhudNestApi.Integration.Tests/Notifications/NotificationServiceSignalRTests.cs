@@ -148,6 +148,12 @@ public sealed class NotificationServiceSignalRTests
             return Task.FromResult<IReadOnlyList<Notification>>(result);
         }
 
+        public Task<IReadOnlyDictionary<Guid, HudhudNestApi.Application.Notifications.Models.NotificationMessageContext>> GetMessageContextsAsync(
+            IReadOnlyCollection<Guid> messageIds,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyDictionary<Guid, HudhudNestApi.Application.Notifications.Models.NotificationMessageContext>>(
+                new Dictionary<Guid, HudhudNestApi.Application.Notifications.Models.NotificationMessageContext>());
+
         public Task<int> GetUnreadCountAsync(
             Guid userId,
             CancellationToken ct = default)

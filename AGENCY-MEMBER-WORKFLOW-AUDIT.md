@@ -29,7 +29,7 @@ The core messaging path already works and is secure: the recipient is derived by
 | 3 | Individual vs agency listing | `AgencyId == null` for non-members; no agency artefacts are created | OK |
 | 4 | Agency A member cannot publish for Agency B | Agency comes only from the caller's own account | OK |
 | 5 | Membership/agency active check at publish | Was missing; now enforced on create and publish (rules 2-3) | OK (new) |
-| 6 | Agency + publisher shown on listing detail | `PropertyDto` exposes only `AgencyId` (and `OwnerName`); agency profile is public only **by slug** (`GET /api/agencies/{slug}`), so a client cannot resolve name/logo from the id. The frontend does not show an agency block on the detail page (only `agencies-api.service.ts` references agencyId) | **GAP** |
+| 6 | Agency + publisher shown on listing detail | Was: `PropertyDto` carried only `AgencyId`. Now the public list and detail add `AgencyName`, `AgencySlug`, `AgencyLogoUrl`, `AgencyRatingAverage`, `AgencyRatingCount` for an **active, non-deleted** agency (one batch lookup per page); null for individual listings and inactive agencies. The frontend block that shows it is not built | OK (API) |
 | 7 | Message recipient from backend | `SendMessageCommandHandler`: for a non-owner sender, `receiverId = property.OwnerId`; any `ReceiverId` in the request is ignored | OK |
 | 8 | Owner reply restricted | The owner must name a `ReceiverId`, and `ConversationExistsAsync(property, owner, receiver)` must be true, otherwise 403 | OK |
 | 9 | Agency owner in-app notification | **Absent** before this change (only the receiver was notified) | **GAP, fixed** |
@@ -38,7 +38,7 @@ The core messaging path already works and is secure: the recipient is derived by
 | 12 | Two-way conversation | Customer -> publisher, publisher -> customer, customer again, all in the same (property, pair) thread | OK (by code) |
 | 13 | Agency owner != publisher | Message goes to the publisher; the owner only gets the awareness notice (new) | OK |
 | 14 | Dual rating, member | `UserRating` on the member's user id: self-rating blocked, one rating per rater/rated (upsert, not unlimited), eligibility = completed visit **or** any message thread with that user | OK |
-| 15 | Dual rating, agency | **No agency rating exists** (no entity, endpoint, or UI). Rating the member does not touch any agency figure, so the two are independent, but the agency half is missing | **MISSING REQUIREMENT** |
+| 15 | Dual rating, agency | New `AgencyRating` aggregate (table `AgencyRatings`, criteria Service / Professionalism / Reliability / OverallExperience, 1..5, optional comment, unique per agency+rater) with its own endpoints; it never reads or writes `UserRating`. Rules: agency active; owner and members cannot rate; a completed visit or a message thread about a listing currently attributed to the agency is required; repeat call edits in place | OK (API) |
 | 16 | Agency manager | Decided: the manager is the owner; no new role (rule 6) | OK (decision) |
 | 17 | Member removal | Was: listings kept the agency attribution. Now: they become individual (rule 1) | OK (new) |
 | 18 | Member deactivation | Was: 404 to the customer. Now: routed to the agency owner while the agency is active (rule 4, interpretation) | OK (new) |
@@ -71,7 +71,7 @@ Member rating works (`POST /api/users/{id}/ratings`, eligibility endpoint). Agen
 - Database: no schema change was needed (`Notifications.Type` is an int enum; value 39 added). Row-level checks were NOT RUN.
 - API: unchanged contracts. `INotificationService` gained one method; `SendMessageCommandHandler` gained an `IAgencyRepository` dependency.
 - Frontend: read only; not changed. The `Notification` list shows the stored `Message` text, so the new notice renders without client change, but any client switch on `NotificationType` needs the new value 39 (not verified). Agency block on the listing detail and any agency-rating UI do not exist.
-- Localization: backend notification texts are stored as Arabic strings (existing convention for every notification type), so the new notice is Arabic only. EN/DE/RTL behaviour was not tested for this flow.
+- Localization: `NewMessage` and `AgencyMemberInquiry` are localized at read time (ar/en/de, unit-tested); every other notification type, the live push and API error messages remain Arabic. EN/DE/RTL rendering in the UI was not tested.
 
 ## Test Results
 
@@ -106,11 +106,17 @@ Member rating works (`POST /api/users/{id}/ratings`, eligibility endpoint). Agen
 
 Note: customers are not told that the agency owner can read the thread; consider stating it in the privacy text.
 
+## Added after the decisions (2026-10-08, third change set)
+
+- **Agency rating:** `GET /api/agencies/{id}/ratings` (public, rate-limited `public-read`, 404 for an inactive agency), `GET /api/agencies/{id}/ratings/eligibility` and `POST /api/agencies/{id}/ratings` (authenticated; rater = token). Migration `AddAgencyRatings` (new table only). The account data export gained `AgencyRatingsGiven`.
+- **Agency card on the listing contract:** see row 6. Cached list/detail responses can show a rating up to the existing output-cache TTL (30 s) late.
+- **Notifications in the site language:** `GET /api/notifications` accepts `?language=ar|en|de` (regional forms accepted; `Accept-Language` is the fallback; same contract as the confirmation mail). The text of `NewMessage` and `AgencyMemberInquiry` is rendered in that language when the user reads their list, from the live names (customer, member, listing, agency) with localized fallbacks. Without a language, or with an unsupported one, the stored Arabic text is returned unchanged.
+
 ## Still open
 
-- Agency rating (entity, endpoint, UI) and agency info (name/logo/slug) on the listing contract were not part of the decisions and are **not** built.
+- **Other notification types stay Arabic-only** (visit, review, listing lifecycle, invitations, services, short stay, valuation, ...): only the two types of this workflow are localized. The real-time push (SignalR) carries the stored Arabic text because the recipient's site language is unknown when the event is raised; the list endpoint is localized. The frontend must send `language` (it does not store or send a preferred language today) and show the new agency fields / rating UI: **not built**.
 - The live end-to-end run on Staging and the DB-level checks remain NOT RUN.
-- The notification text and the 403 messages are Arabic only (existing convention).
+- Error messages (403/400) are still Arabic only.
 
 ## Recommended Fixes
 
@@ -122,7 +128,7 @@ Note: customers are not told that the agency owner can read the thread; consider
 ## Final Verdict
 
 ```text
-FAIL
+PASS WITH WARNINGS
 ```
 
-against the stated acceptance criteria: the message/notification/reply chain now works, but "agency appears on the listing" and "customer can rate the agency separately" are not met. After deploying this change, the verdict becomes PASS WITH WARNINGS only if the agency display and agency rating are delivered or explicitly de-scoped.
+Backend (API + domain + unit tests): every step of the acceptance chain is now implemented: member publishes, agency and publisher shown on the listing contract, message to the publisher, agency-owner notification in the reader's language, reply and continued thread, member rating and a separate agency rating. Warnings: the live Staging end-to-end run and DB-level checks were NOT RUN; the frontend does not yet send the site language, show the agency card, or offer the agency rating; other notification types are still Arabic-only.

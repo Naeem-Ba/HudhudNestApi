@@ -1,8 +1,10 @@
 using MediatR;
+using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Listings.DTOs;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Listings.Mappers;
 using HudhudNestApi.Application.Properties.DTOs;
+using HudhudNestApi.Application.Reviews.Interfaces;
 
 namespace HudhudNestApi.Application.Listings.Queries.GetPropertiesList;
 
@@ -14,9 +16,18 @@ public sealed class GetPropertiesListQueryHandler
     : IRequestHandler<GetPropertiesListQuery, PagedResult<PropertyDto>>
 {
     private readonly IPropertyRepository _repo;
+    private readonly IAgencyRepository _agencies;
+    private readonly IAgencyRatingRepository _agencyRatings;
 
-    public GetPropertiesListQueryHandler(IPropertyRepository repo)
-        => _repo = repo;
+    public GetPropertiesListQueryHandler(
+        IPropertyRepository repo,
+        IAgencyRepository agencies,
+        IAgencyRatingRepository agencyRatings)
+    {
+        _repo = repo;
+        _agencies = agencies;
+        _agencyRatings = agencyRatings;
+    }
 
     public async Task<PagedResult<PropertyDto>> Handle(
         GetPropertiesListQuery request,
@@ -30,12 +41,15 @@ public sealed class GetPropertiesListQueryHandler
         // "now" must not be judged against two different instants within one response.
         var asOfUtc = DateTime.UtcNow;
 
+        var items = pagedProperties.Items
+            .Select(property => PropertyMapper.ToDto(property, asOfUtc))
+            .ToList();
+
+        await AgencyListingInfoEnricher.EnrichAsync(items, _agencies, _agencyRatings, cancellationToken);
+
         return new PagedResult<PropertyDto>
         {
-            Items = pagedProperties.Items
-                            .Select(property => PropertyMapper.ToDto(property, asOfUtc))
-                            .ToList()
-                            .AsReadOnly(),
+            Items = items.AsReadOnly(),
             TotalCount = pagedProperties.TotalCount,
             Page = pagedProperties.Page,
             PageSize = pagedProperties.PageSize

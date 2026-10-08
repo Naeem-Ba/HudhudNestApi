@@ -83,6 +83,19 @@ public sealed class PropertyDto
     // listings" — see PropertyFilterDto.AgencyId.
     public Guid? AgencyId { get; set; }
 
+    // Public agency card for the listing page, filled only by the public list/detail queries
+    // (see AgencyListingInfoEnricher) and only for an ACTIVE, non-deleted agency; null for an
+    // individual listing, an inactive agency, or any other endpoint that returns this DTO.
+    // Public data only: the same fields the public agency page shows, never a contact detail.
+    public string? AgencyName { get; set; }
+    public string? AgencySlug { get; set; }
+    public string? AgencyLogoUrl { get; set; }
+
+    // The agency's own rating (separate from the publisher's UserRating). Count is 0 and the
+    // average null while nobody has rated it.
+    public double? AgencyRatingAverage { get; set; }
+    public int AgencyRatingCount { get; set; }
+
     // Publishing
     public bool IsPublished { get; set; }
     public DateTime? PublishedAt { get; set; }

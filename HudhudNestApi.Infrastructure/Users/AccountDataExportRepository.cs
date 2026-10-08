@@ -160,6 +160,22 @@ public sealed class AccountDataExportRepository : IAccountDataExportRepository
             })
             .ToListAsync(ct);
 
+        var agencyRatingsGiven = await _db.AgencyRatings
+            .AsNoTracking()
+            .Where(r => r.RaterId == userId)
+            .Select(r => new AccountDataExportAgencyRating
+            {
+                AgencyId = r.AgencyId,
+                Service = r.Service,
+                Professionalism = r.Professionalism,
+                Reliability = r.Reliability,
+                OverallExperience = r.OverallExperience,
+                OverallScore = (r.Service + r.Professionalism + r.Reliability + r.OverallExperience) / 4.0,
+                Comment = r.Comment,
+                CreatedAt = r.CreatedAt
+            })
+            .ToListAsync(ct);
+
         return new AccountDataExportDto
         {
             ExportedAtUtc = DateTime.UtcNow,
@@ -170,7 +186,8 @@ public sealed class AccountDataExportRepository : IAccountDataExportRepository
             VisitRequestsMade = visits,
             Consents = consents,
             RatingsGiven = ratingsGiven,
-            RatingsReceived = ratingsReceived
+            RatingsReceived = ratingsReceived,
+            AgencyRatingsGiven = agencyRatingsGiven
         };
     }
 }
