@@ -104,6 +104,33 @@ public sealed class PropertyRepositoryGetPagedTests : IAsyncLifetime
             all.Items.Select(p => p.ColdRent).OrderBy(r => r));
     }
 
+    [Fact(DisplayName = "ListingType filter: For rent / For sale also return For-rent-and-sale ads; the combined filter stays exact")]
+    public async Task ListingTypeFilter_CombinedAdsMatchBothRentAndSale()
+    {
+        var owner = await _factory.SeedUserAsync($"{_marker}@test.local");
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            foreach (var (suffix, type) in new[]
+                     {
+                         ("rent", ListingType.ForRent),
+                         ("sale", ListingType.ForSale),
+                         ("both", ListingType.ForRentAndSale)
+                     })
+                db.Properties.Add(Property.Create(
+                    $"{_marker} {suffix}", "وصف كافٍ للإعلان", owner.UserAccountId, type));
+            await db.SaveChangesAsync();
+        }
+
+        PropertyFilterDto Filter(ListingType? type) =>
+            new() { Page = 1, PageSize = 10, SearchTerm = _marker, ListingType = type };
+
+        Assert.Equal(["both", "rent"], Titles(await GetAsync(Filter(ListingType.ForRent))).Order().ToArray());
+        Assert.Equal(["both", "sale"], Titles(await GetAsync(Filter(ListingType.ForSale))).Order().ToArray());
+        Assert.Equal(["both"], Titles(await GetAsync(Filter(ListingType.ForRentAndSale))));
+        Assert.Equal(3, (await GetAsync(Filter(null))).TotalCount);
+    }
+
     private async Task SeedAsync()
     {
         var owner = await _factory.SeedUserAsync($"{_marker}@test.local");

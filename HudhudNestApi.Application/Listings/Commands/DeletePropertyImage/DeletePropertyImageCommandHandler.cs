@@ -58,7 +58,13 @@ public sealed class DeletePropertyImageCommandHandler
         var wasMain = image.IsMain;
         var publicId = image.PublicId;
 
+        // PropertyImage is soft-deleted, and IX_PropertyImages_OneMainPerProperty (unique on
+        // PropertyId WHERE IsMain) does not look at IsDeleted. The removed row must therefore give
+        // up IsMain first, and it must be saved BEFORE the replacement is promoted: both writes in
+        // one SaveChanges are not ordered, and the index is checked per statement.
+        image.IsMain = false;
         _images.Remove(image);
+        await _uow.SaveChangesAsync(cancellationToken);
 
         if (wasMain)
         {
@@ -68,10 +74,11 @@ public sealed class DeletePropertyImageCommandHandler
                 .FirstOrDefault();
 
             if (replacement is not null)
+            {
                 replacement.IsMain = true;
+                await _uow.SaveChangesAsync(cancellationToken);
+            }
         }
-
-        await _uow.SaveChangesAsync(cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(publicId))
             await _storage.DeleteImageAsync(publicId, cancellationToken);

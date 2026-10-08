@@ -475,8 +475,16 @@ public sealed class PropertyRepository : IPropertyRepository
         if (filter.PropertyTypeId.HasValue)
             query = query.Where(p => p.PropertyTypeId == filter.PropertyTypeId.Value);
 
+        // STG-003: a "for sale or rent" listing is both, so it must surface under either filter
+        // (the UI only offers For rent / For sale; combined ads were reachable under "All" only).
+        // Filtering by ForRentAndSale itself stays an exact match.
         if (filter.ListingType.HasValue)
-            query = query.Where(p => p.ListingType == filter.ListingType.Value);
+        {
+            var requested = filter.ListingType.Value;
+            query = requested == ListingType.ForRentAndSale
+                ? query.Where(p => p.ListingType == ListingType.ForRentAndSale)
+                : query.Where(p => p.ListingType == requested || p.ListingType == ListingType.ForRentAndSale);
+        }
 
         if (filter.Status.HasValue)
             query = query.Where(p => p.Status == filter.Status.Value);
