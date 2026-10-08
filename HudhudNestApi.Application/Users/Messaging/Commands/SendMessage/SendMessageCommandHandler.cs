@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Exceptions;
+using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Notifications.Interfaces;
@@ -20,6 +21,7 @@ public sealed class SendMessageCommandHandler
     private readonly IMessageRepository _messages;
     private readonly IUnitOfWork _uow;
     private readonly INotificationService _notifications;
+    private readonly IAgencyRepository _agencies;
     private readonly ILogger<SendMessageCommandHandler> _logger;
 
     public SendMessageCommandHandler(
@@ -29,6 +31,7 @@ public sealed class SendMessageCommandHandler
         IMessageRepository messages,
         IUnitOfWork uow,
         INotificationService notifications,
+        IAgencyRepository agencies,
         ILogger<SendMessageCommandHandler> logger)
     {
         _currentUser = currentUser;
@@ -37,6 +40,7 @@ public sealed class SendMessageCommandHandler
         _messages = messages;
         _uow = uow;
         _notifications = notifications;
+        _agencies = agencies;
         _logger = logger;
     }
 
@@ -211,6 +215,44 @@ public sealed class SendMessageCommandHandler
                 property.Id,
                 senderId,
                 receiverId);
+        }
+
+        /*
+         * Agency awareness: when a CUSTOMER writes about a listing published by an agency member,
+         * the agency owner is told that it happened. The message itself is not redirected (the
+         * publisher stays the receiver) and its content is not copied. Skipped when the owner
+         * already is the receiver (the owner published the listing). Also non-critical.
+         */
+        if (senderId != property.OwnerId && property.AgencyId is { } agencyId)
+        {
+            try
+            {
+                var agency = await _agencies.GetByIdAsync(agencyId, cancellationToken);
+                if (agency is { IsDeleted: false } &&
+                    agency.OwnerUserId != receiverId &&
+                    agency.OwnerUserId != senderId)
+                {
+                    await _notifications.NotifyAgencyMemberInquiryAsync(
+                        recipientId: agency.OwnerUserId,
+                        messageId: message.Id,
+                        propertyId: property.Id,
+                        propertyTitle: property.Title,
+                        agencyName: agency.Name,
+                        customerName: senderDisplayName,
+                        memberName: receiver.DisplayName,
+                        ct: cancellationToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to create agency inquiry notification. " +
+                    "MessageId={MessageId}, PropertyId={PropertyId}, AgencyId={AgencyId}",
+                    message.Id,
+                    property.Id,
+                    agencyId);
+            }
         }
 
         return new MessageDto

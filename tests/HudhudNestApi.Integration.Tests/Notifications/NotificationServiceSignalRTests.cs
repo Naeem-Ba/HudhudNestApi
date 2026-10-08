@@ -109,6 +109,101 @@ public sealed class NotificationServiceSignalRTests
         Assert.Equal(visitId, dto.RelatedEntityId);
     }
 
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Feature", "Notifications")]
+    public async Task NotifyAgencyMemberInquiryAsync_PersistsAwarenessNotice_ForAgencyOwner_AndPushesIt()
+    {
+        var ownerId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var propertyId = Guid.NewGuid();
+
+        var repository = new CapturingNotificationRepository();
+        var hubContext = new CapturingNotificationHubContext();
+        var service = new NotificationService(repository, hubContext, NullLogger<NotificationService>.Instance);
+
+        await service.NotifyAgencyMemberInquiryAsync(
+            ownerId,
+            messageId,
+            propertyId,
+            " شقة في المزة ",
+            " مكتب الهدهد ",
+            " أحمد ",
+            " سامر ",
+            CancellationToken.None);
+
+        var stored = Assert.Single(repository.Notifications);
+        Assert.Equal(ownerId, stored.RecipientId);
+        Assert.Equal(NotificationType.AgencyMemberInquiry, stored.Type);
+        Assert.Equal(propertyId, stored.PropertyId);
+        Assert.Equal(messageId, stored.RelatedEntityId);
+        Assert.Equal(
+            "استفسار جديد: أرسل أحمد رسالة إلى سامر بخصوص 'شقة في المزة' (مكتب 'مكتب الهدهد').",
+            stored.Message);
+
+        Assert.Equal(NotificationHub.GetGroupName(ownerId), hubContext.Clients.LastGroupName);
+        Assert.Equal(NotificationHub.ReceiveNotificationEvent, hubContext.Clients.LastMethodName);
+        var dto = Assert.IsType<NotificationDto>(Assert.Single(hubContext.Clients.LastArguments));
+        Assert.Equal(NotificationType.AgencyMemberInquiry, dto.Type);
+        Assert.Equal(messageId, dto.RelatedEntityId);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Feature", "Notifications")]
+    public async Task NotifyAgencyMemberInquiryAsync_BlankNames_FallBackToArabicPlaceholders()
+    {
+        var repository = new CapturingNotificationRepository();
+        var service = new NotificationService(
+            repository,
+            new CapturingNotificationHubContext(),
+            NullLogger<NotificationService>.Instance);
+
+        await service.NotifyAgencyMemberInquiryAsync(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            " ",
+            "",
+            "  ",
+            "",
+            CancellationToken.None);
+
+        var stored = Assert.Single(repository.Notifications);
+        Assert.Equal(
+            "استفسار جديد: أرسل مستخدم رسالة إلى عضو المكتب بخصوص 'عقار' (مكتب 'مكتب عقاري').",
+            stored.Message);
+    }
+
+    [Theory]
+    [Trait("Category", "Integration")]
+    [Trait("Feature", "Notifications")]
+    [InlineData(true, false, false, "recipientId")]
+    [InlineData(false, true, false, "messageId")]
+    [InlineData(false, false, true, "propertyId")]
+    public async Task NotifyAgencyMemberInquiryAsync_EmptyId_ThrowsAndStoresNothing(
+        bool emptyRecipient, bool emptyMessage, bool emptyProperty, string expectedParameter)
+    {
+        var repository = new CapturingNotificationRepository();
+        var service = new NotificationService(
+            repository,
+            new CapturingNotificationHubContext(),
+            NullLogger<NotificationService>.Instance);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.NotifyAgencyMemberInquiryAsync(
+            emptyRecipient ? Guid.Empty : Guid.NewGuid(),
+            emptyMessage ? Guid.Empty : Guid.NewGuid(),
+            emptyProperty ? Guid.Empty : Guid.NewGuid(),
+            "title",
+            "agency",
+            "customer",
+            "member",
+            CancellationToken.None));
+
+        Assert.Equal(expectedParameter, exception.ParamName);
+        Assert.Empty(repository.Notifications);
+    }
+
     private sealed class CapturingNotificationRepository : INotificationRepository
     {
         public List<Notification> Notifications { get; } = new();
