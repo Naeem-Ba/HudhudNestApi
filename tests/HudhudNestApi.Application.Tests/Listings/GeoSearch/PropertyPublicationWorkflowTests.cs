@@ -92,7 +92,7 @@ public sealed class PropertyPublicationWorkflowTests
             .Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
         var publisher = new Mock<IPublisher>();
-        var handler = new PublishPropertyCommandHandler(repository.Object, unitOfWork.Object, publisher.Object);
+        var handler = new PublishPropertyCommandHandler(repository.Object, unitOfWork.Object, publisher.Object, Mock.Of<HudhudNestApi.Application.Agencies.Interfaces.IAgencyRepository>());
 
         await handler.Handle(
             new PublishPropertyCommand(property.Id, property.OwnerId, IsAdmin: false),
@@ -119,7 +119,7 @@ public sealed class PropertyPublicationWorkflowTests
         var repository = RepositoryReturning(property);
         var unitOfWork = new Mock<IUnitOfWork>();
         var publisher = new Mock<IPublisher>();
-        var handler = new PublishPropertyCommandHandler(repository.Object, unitOfWork.Object, publisher.Object);
+        var handler = new PublishPropertyCommandHandler(repository.Object, unitOfWork.Object, publisher.Object, Mock.Of<HudhudNestApi.Application.Agencies.Interfaces.IAgencyRepository>());
 
         await handler.Handle(
             new PublishPropertyCommand(property.Id, property.OwnerId, IsAdmin: false),
@@ -140,7 +140,8 @@ public sealed class PropertyPublicationWorkflowTests
         var handler = new PublishPropertyCommandHandler(
             repository.Object,
             Mock.Of<IUnitOfWork>(),
-            Mock.Of<IPublisher>());
+            Mock.Of<IPublisher>(),
+            Mock.Of<HudhudNestApi.Application.Agencies.Interfaces.IAgencyRepository>());
 
         var exception = await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(
             new PublishPropertyCommand(property.Id, property.OwnerId, IsAdmin: false),
@@ -164,7 +165,8 @@ public sealed class PropertyPublicationWorkflowTests
         var handler = new PublishPropertyCommandHandler(
             repository.Object,
             Mock.Of<IUnitOfWork>(),
-            Mock.Of<IPublisher>());
+            Mock.Of<IPublisher>(),
+            Mock.Of<HudhudNestApi.Application.Agencies.Interfaces.IAgencyRepository>());
 
         await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(
             new PublishPropertyCommand(property.Id, Guid.NewGuid(), IsAdmin: false),

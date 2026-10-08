@@ -28,7 +28,7 @@ The core messaging path already works and is secure: the recipient is derived by
 | 2 | Agency attribution derived server-side | `property.SetAgency(ownerAccount.AgencyId)` at creation; `CreatePropertyCommand` carries no AgencyId, so a client cannot attribute a listing to another agency | OK |
 | 3 | Individual vs agency listing | `AgencyId == null` for non-members; no agency artefacts are created | OK |
 | 4 | Agency A member cannot publish for Agency B | Agency comes only from the caller's own account | OK |
-| 5 | Membership/agency active check at publish | Not checked: a member of a **deactivated** agency can still publish (`Agency.IsActive` is not read in `CreatePropertyCommandHandler`) | GAP (rule decision) |
+| 5 | Membership/agency active check at publish | Was missing; now enforced on create and publish (rules 2-3) | OK (new) |
 | 6 | Agency + publisher shown on listing detail | `PropertyDto` exposes only `AgencyId` (and `OwnerName`); agency profile is public only **by slug** (`GET /api/agencies/{slug}`), so a client cannot resolve name/logo from the id. The frontend does not show an agency block on the detail page (only `agencies-api.service.ts` references agencyId) | **GAP** |
 | 7 | Message recipient from backend | `SendMessageCommandHandler`: for a non-owner sender, `receiverId = property.OwnerId`; any `ReceiverId` in the request is ignored | OK |
 | 8 | Owner reply restricted | The owner must name a `ReceiverId`, and `ConversationExistsAsync(property, owner, receiver)` must be true, otherwise 403 | OK |
@@ -39,11 +39,11 @@ The core messaging path already works and is secure: the recipient is derived by
 | 13 | Agency owner != publisher | Message goes to the publisher; the owner only gets the awareness notice (new) | OK |
 | 14 | Dual rating, member | `UserRating` on the member's user id: self-rating blocked, one rating per rater/rated (upsert, not unlimited), eligibility = completed visit **or** any message thread with that user | OK |
 | 15 | Dual rating, agency | **No agency rating exists** (no entity, endpoint, or UI). Rating the member does not touch any agency figure, so the two are independent, but the agency half is missing | **MISSING REQUIREMENT** |
-| 16 | Agency manager | Role does not exist | Business Rule Gap |
-| 17 | Member removal | `RemoveAgencyMember` clears `AgencyId`/role on the user. Existing listings **keep** `Property.AgencyId` (documented in code as intentional "badge of the agency it was published under") | Business Rule Gap (decide) |
-| 18 | Member deactivation | Messages to an inactive user fail with 404 "Receiver was not found" (`GetActiveByIdAsync`); nothing re-routes to the agency | Business Rule Gap |
-| 19 | Agency deactivation | Only flips `IsActive`: profile 404s by slug; listings, new listings and messages are untouched | Business Rule Gap |
-| 20 | Owner sees member conversations | No such capability. Message queries are limited to sender/receiver, so privacy holds by default | Policy decision |
+| 16 | Agency manager | Decided: the manager is the owner; no new role (rule 6) | OK (decision) |
+| 17 | Member removal | Was: listings kept the agency attribution. Now: they become individual (rule 1) | OK (new) |
+| 18 | Member deactivation | Was: 404 to the customer. Now: routed to the agency owner while the agency is active (rule 4, interpretation) | OK (new) |
+| 19 | Agency deactivation | Now blocks new listings and publishing (rules 2-3); existing listings and the public profile behaviour are unchanged | OK (new) |
+| 20 | Owner sees member conversations | Implemented read-only (rule 5) | OK (new) |
 
 ## Agency Ownership / Listing Publisher / Display Flow
 
@@ -93,18 +93,28 @@ Member rating works (`POST /api/users/{id}/ratings`, eligibility endpoint). Agen
 - No exploitable authorization defect found in the messaging path.
 - STG-class defects from the previous QA run are tracked separately (PR #297).
 
-## Business Rule Gaps (decisions needed)
+## Business Rules (decided by the product owner, 2026-10-08, and implemented)
 
-1. Listings after a member leaves the agency: keep the agency badge (current) or become individual?
-2. Deactivated agency: should its listings be hidden, new listings blocked, messages blocked?
-3. Deactivated/removed member: re-route inquiries to the agency owner?
-4. May the agency owner read members' conversations (today: no)?
-5. Is an agency manager role wanted (today: none)?
-6. Should publishing require an active agency?
+| # | Rule | Implementation |
+|---|---|---|
+| 1 | When a member leaves, their current listings become individual | `RemoveAgencyMemberCommandHandler` calls the new `IAgencyRepository.ClearMemberAttributionAsync` (sets `Property.AgencyId = null` for that member's listings of that agency; they stay published and owned by the user) in the same save as the membership removal |
+| 2 | A deactivated agency blocks new listings | `CreatePropertyCommandHandler`: a member of a deactivated/deleted agency gets 403 `AGENCY_INACTIVE`; existing listings are untouched |
+| 3 | Publishing requires an active agency | `PublishPropertyCommandHandler`: publishing an agency listing as non-admin requires an active agency (403 `AGENCY_INACTIVE`); administrators are exempt. Creating a listing already publishes it, so rule 2 covers creation |
+| 4 | Disabled member: inquiries go to the agency owner | **Interpretation:** the answer was phrased as a question; it was implemented as "yes" and is isolated in `SendMessageCommandHandler` (revert = remove the `representativeId` block). If the publisher is not an active account and the listing's agency is active, the customer's message goes to the agency owner, who can reply in the same thread. No routing if the agency is inactive (the existing 404 applies) |
+| 5 | The agency owner may read members' conversations | Read-only. `GetMessagesQueryHandler`: for a listing of their agency the owner can list all messages and read the publisher<->customer thread (`OtherUserId` = customer). `GetConversationsQueryHandler`: with `propertyId` of an agency listing the owner sees the publisher's conversations for it (unread counts are the publisher's). Marking as read and sending stay participant-only |
+| 6 | Agency manager = agency owner | No new role. The owner is the manager everywhere (notifications, oversight, member removal) |
+
+Note: customers are not told that the agency owner can read the thread; consider stating it in the privacy text.
+
+## Still open
+
+- Agency rating (entity, endpoint, UI) and agency info (name/logo/slug) on the listing contract were not part of the decisions and are **not** built.
+- The live end-to-end run on Staging and the DB-level checks remain NOT RUN.
+- The notification text and the 403 messages are Arabic only (existing convention).
 
 ## Recommended Fixes
 
-1. Deploy this change and run the live E2E (needs the Staging secrets again).
+1. Deploy these changes and run the live E2E (needs the Staging secrets again).
 2. Add `AgencyName`, `AgencyLogoUrl`, `AgencySlug` to the listing detail contract (or a public agency-by-id endpoint) and an agency block in the frontend.
 3. Decide and build the agency rating (section Dual Rating Flow).
 4. Resolve the business rules above.

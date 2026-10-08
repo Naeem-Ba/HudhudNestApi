@@ -58,6 +58,15 @@ public interface IAgencyRepository
     Task<int> ClearAgencyAttributionAsync(Guid agencyId, CancellationToken ct = default);
 
     /// <summary>
+    /// A member left (or was removed from) the agency: the listings they published under it
+    /// stop carrying the agency attribution and become individual listings of that user. Same
+    /// contract as <see cref="ClearAgencyAttributionAsync"/> but limited to one publisher; the
+    /// listings stay published and owned by the user. Mutates tracked entities; the caller
+    /// saves.
+    /// </summary>
+    Task<int> ClearMemberAttributionAsync(Guid agencyId, Guid memberUserId, CancellationToken ct = default);
+
+    /// <summary>
     /// Active agencies matching exactly ONE location scope, excluding ids already selected.
     ///
     /// Added for Valuation Stage 4 (Office Matching)'s progressive geographic expansion:

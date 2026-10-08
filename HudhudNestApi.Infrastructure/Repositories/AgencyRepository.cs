@@ -97,6 +97,25 @@ public sealed class AgencyRepository : IAgencyRepository
         return listings.Count;
     }
 
+    public async Task<int> ClearMemberAttributionAsync(
+        Guid agencyId,
+        Guid memberUserId,
+        CancellationToken ct = default)
+    {
+        // Same reasoning as ClearAgencyAttributionAsync: go through the domain method so
+        // UpdatedAt is stamped and the change tracker sees it.
+        var listings = await _db.Properties
+            .Where(p => p.AgencyId == agencyId && p.OwnerId == memberUserId)
+            .ToListAsync(ct);
+
+        foreach (var listing in listings)
+        {
+            listing.SetAgency(null);
+        }
+
+        return listings.Count;
+    }
+
     public async Task<IReadOnlyList<Agency>> FindActiveByLocationAsync(
         int? neighborhoodId,
         int? districtId,

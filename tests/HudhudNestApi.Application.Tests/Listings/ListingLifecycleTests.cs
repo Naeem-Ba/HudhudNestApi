@@ -335,6 +335,7 @@ public sealed class ListingLifecycleTests
         var agencyId = Guid.NewGuid();
 
         var agencies = new Mock<IAgencyRepository>();
+        AgencyIsActive(agencies, agencyId);
         agencies
             .Setup(x => x.GetUserAccountAsync(ownerId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(BuildAccountInAgency(ownerId, agencyId));
@@ -367,6 +368,7 @@ public sealed class ListingLifecycleTests
         var agencyId = Guid.NewGuid();
 
         var agencies = new Mock<IAgencyRepository>();
+        AgencyIsActive(agencies, agencyId);
         agencies
             .Setup(x => x.GetUserAccountAsync(ownerId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(BuildAccountInAgency(ownerId, agencyId));
@@ -406,6 +408,7 @@ public sealed class ListingLifecycleTests
         var agencyId = Guid.NewGuid();
 
         var agencies = new Mock<IAgencyRepository>();
+        AgencyIsActive(agencies, agencyId);
         var member = BuildAccountInAgency(ownerId, agencyId);
         agencies
             .Setup(x => x.GetUserAccountAsync(ownerId, It.IsAny<CancellationToken>()))
@@ -459,6 +462,7 @@ public sealed class ListingLifecycleTests
         var agencyId = Guid.NewGuid();
 
         var agencies = new Mock<IAgencyRepository>();
+        AgencyIsActive(agencies, agencyId);
         agencies
             .Setup(x => x.GetUserAccountAsync(ownerId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(BuildAccountInAgency(ownerId, agencyId));
@@ -877,6 +881,12 @@ public sealed class ListingLifecycleTests
     /// either gate, and having every test wire up confirmation + a plan by hand would bury
     /// what each test is actually about.
     /// </summary>
+    // Business rule: members can publish only for an active agency, so these tests must provide one.
+    private static void AgencyIsActive(Mock<IAgencyRepository> agencies, Guid agencyId) =>
+        agencies
+            .Setup(x => x.GetByIdAsync(agencyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(HudhudNestApi.Domain.Agencies.Entities.Agency.Create("Test agency", "test", Guid.NewGuid(), "SY", DateTime.UtcNow));
+
     private static Mock<IAgencyRepository> DefaultAgencies()
     {
         var agencies = new Mock<IAgencyRepository>();

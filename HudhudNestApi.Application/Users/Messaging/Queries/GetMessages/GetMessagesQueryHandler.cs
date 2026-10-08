@@ -1,4 +1,5 @@
 ﻿using MediatR;
+using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Interfaces;
@@ -15,15 +16,18 @@ public sealed class GetMessagesQueryHandler
     private readonly ICurrentUserService _currentUser;
     private readonly IPropertyRepository _properties;
     private readonly IMessageRepository _messages;
+    private readonly IAgencyRepository _agencies;
 
     public GetMessagesQueryHandler(
         ICurrentUserService currentUser,
         IPropertyRepository properties,
-        IMessageRepository messages)
+        IMessageRepository messages,
+        IAgencyRepository agencies)
     {
         _currentUser = currentUser;
         _properties = properties;
         _messages = messages;
+        _agencies = agencies;
     }
 
     public async Task<PagedResult<MessageDto>> Handle(
@@ -41,11 +45,15 @@ public sealed class GetMessagesQueryHandler
         if (property is null)
             throw new NotFoundException("Property was not found.");
 
+        // Read-only oversight: the agency owner reads the publisher's side of a thread.
+        var isAgencyOwnerOversight = property.OwnerId != currentUserId &&
+            await AgencyOwnerAccess.IsOwnerOfListingAgencyAsync(_agencies, property, currentUserId, cancellationToken);
+
         if (request.OtherUserId.HasValue)
         {
             var pagedConversation = await _messages.GetConversationAsync(
                 request.PropertyId,
-                currentUserId,
+                isAgencyOwnerOversight ? property.OwnerId : currentUserId,
                 request.OtherUserId.Value,
                 request.Page,
                 request.PageSize,
@@ -63,7 +71,7 @@ public sealed class GetMessagesQueryHandler
             };
         }
 
-        if (property.OwnerId != currentUserId)
+        if (property.OwnerId != currentUserId && !isAgencyOwnerOversight)
         {
             throw new UnauthorizedAccessException(
                 "Only the property owner can list all property messages. Provide OtherUserId to read a conversation.");
