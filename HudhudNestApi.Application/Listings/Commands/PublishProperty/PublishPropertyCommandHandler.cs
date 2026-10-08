@@ -1,5 +1,6 @@
 using MediatR;
 using FluentValidation.Results;
+using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Events;
@@ -14,15 +15,18 @@ public sealed class PublishPropertyCommandHandler
     private readonly IPropertyRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPublisher _publisher;
+    private readonly IAgencyRepository _agencies;
 
     public PublishPropertyCommandHandler(
         IPropertyRepository repository,
         IUnitOfWork unitOfWork,
-        IPublisher publisher)
+        IPublisher publisher,
+        IAgencyRepository agencies)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
         _publisher = publisher;
+        _agencies = agencies;
     }
 
     public async Task Handle(
@@ -41,6 +45,17 @@ public sealed class PublishPropertyCommandHandler
 
         if (property.IsPublished)
             return;
+
+        // Business rule: publishing a listing attributed to an agency requires that agency to
+        // be active. Administrators are exempt (moderation).
+        if (!request.IsAdmin && property.AgencyId is { } agencyId)
+        {
+            var agency = await _agencies.GetByIdAsync(agencyId, cancellationToken);
+            if (agency is not { IsDeleted: false, IsActive: true })
+                throw new ForbiddenException(
+                    "مكتبكم العقاري غير مفعّل حالياً، لذلك لا يمكن نشر الإعلان.",
+                    "AGENCY_INACTIVE");
+        }
 
         if (property.Images.All(image => image.IsDeleted))
             throw new ValidationException(

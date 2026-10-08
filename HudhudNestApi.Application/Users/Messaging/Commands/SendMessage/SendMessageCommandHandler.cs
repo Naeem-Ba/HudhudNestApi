@@ -64,15 +64,33 @@ public sealed class SendMessageCommandHandler
                 "Property was not found.");
         }
 
+        /*
+         * Who answers for this listing. Normally its publisher. Business rule: when the
+         * publisher is no longer an active account (disabled) and the listing belongs to an
+         * active agency, the agency owner answers instead, so the inquiry is not lost.
+         */
+        var representativeId = property.OwnerId;
+        if (property.AgencyId is { } routingAgencyId &&
+            await _userDirectory.GetActiveByIdAsync(property.OwnerId, cancellationToken) is null)
+        {
+            var routingAgency = await _agencies.GetByIdAsync(routingAgencyId, cancellationToken);
+            if (routingAgency is { IsDeleted: false, IsActive: true } &&
+                await _userDirectory.GetActiveByIdAsync(routingAgency.OwnerUserId, cancellationToken) is not null)
+            {
+                representativeId = routingAgency.OwnerUserId;
+            }
+        }
+
         Guid receiverId;
 
-        if (senderId != property.OwnerId)
+        if (senderId != representativeId)
         {
             /*
-             * A visitor can only contact the property owner.
+             * A visitor can only contact the listing's representative (its publisher, or the
+             * agency owner while the publisher is disabled).
              */
             receiverId =
-                property.OwnerId;
+                representativeId;
         }
         else
         {
@@ -223,7 +241,7 @@ public sealed class SendMessageCommandHandler
          * publisher stays the receiver) and its content is not copied. Skipped when the owner
          * already is the receiver (the owner published the listing). Also non-critical.
          */
-        if (senderId != property.OwnerId && property.AgencyId is { } agencyId)
+        if (senderId != representativeId && property.AgencyId is { } agencyId)
         {
             try
             {

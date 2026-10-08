@@ -69,6 +69,7 @@ public sealed class CreatePropertyCommandHandler
         // that's going to be rejected anyway.
         await EnsureContactConfirmedAsync(request.OwnerId, cancellationToken);
         var verifiedAccount = EnsurePlanSelected(ownerAccount);
+        await EnsureAgencyActiveAsync(verifiedAccount, cancellationToken);
 
         var property = await CreateWithQuotaEnforcedAsync(request, verifiedAccount, cancellationToken);
 
@@ -82,6 +83,30 @@ public sealed class CreatePropertyCommandHandler
         await TryPublishPropertyPublishedEventAsync(property, cancellationToken);
 
         return property.Id;
+    }
+
+    /// <summary>
+    /// Business rule: a member of an agency can publish only while that agency is active.
+    /// A deactivated or deleted agency blocks new listings from its members; their existing
+    /// listings are untouched. Individual users (no agency) are not affected.
+    /// </summary>
+    private async Task EnsureAgencyActiveAsync(UserAccount ownerAccount, CancellationToken ct)
+    {
+        if (ownerAccount.AgencyId is not { } agencyId)
+            return;
+
+        var agency = await _agencies.GetByIdAsync(agencyId, ct);
+        if (agency is { IsDeleted: false, IsActive: true })
+            return;
+
+        _logger.LogInformation(
+            "Listing creation blocked: agency not active. OwnerId={OwnerId}, AgencyId={AgencyId}",
+            ownerAccount.Id,
+            agencyId);
+
+        throw new ForbiddenException(
+            "مكتبكم العقاري غير مفعّل حالياً، لذلك لا يمكن نشر إعلانات جديدة.",
+            "AGENCY_INACTIVE");
     }
 
     /// <summary>

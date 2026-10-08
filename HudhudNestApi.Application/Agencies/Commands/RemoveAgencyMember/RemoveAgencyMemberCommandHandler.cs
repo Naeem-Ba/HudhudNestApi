@@ -75,6 +75,10 @@ public sealed class RemoveAgencyMemberCommandHandler
         }
 
         member.LeaveAgency(DateTime.UtcNow);
+
+        // Business rule: when a member leaves, the listings they published under the agency
+        // become individual listings (they stay published and owned by the same user).
+        await _agencies.ClearMemberAttributionAsync(agency.Id, member.Id, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         var roleResult = await _identity.RemoveRoleAsync(
