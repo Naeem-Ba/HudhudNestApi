@@ -1,0 +1,44 @@
+[
+ {
+  "step": "S1 upload 3 images",
+  "status": 200,
+  "corr": "04e20707635fe575e1afbd229c7026a4",
+  "body": "[{\"id\":\"46facf99-baeb-40a2-97f1-0aea98b4f066\",\"url\":\"https://res.cloudinary.com/dfjng4hhu/image/upload/v1791451812/stagi"
+ },
+ {
+  "step": "S1 PATCH setmain on non-main (expect 200/204)",
+  "status": 204,
+  "corr": "45093f80c71c7ee02209ce1c9dc74162",
+  "body": "\"\""
+ },
+ {
+  "step": "S1 DELETE main while others exist (expect 204)",
+  "status": 500,
+  "corr": "a51da140e62e6e5bc0dc071030417ae5",
+  "body": "{\"title\":\"Internal Server Error\",\"status\":500,\"message\":\"An unexpected error occurred. Please try again later.\"}"
+ },
+ {
+  "step": "S2 upload 1 image",
+  "status": 200,
+  "corr": "285ec3ca10e5488dabe6c68c51deb5f8",
+  "body": "[{\"id\":\"83ae5f0f-6d9c-4e8a-ab39-54b176bcb497\",\"url\":\"https://res.cloudinary.com/dfjng4hhu/image/upload/v1791451821/stagi"
+ },
+ {
+  "step": "S2 DELETE the only (main) image (expect 204)",
+  "status": 204,
+  "corr": "672574f4d91169895c2433506e147b2a",
+  "body": "\"\""
+ },
+ {
+  "step": "S2 upload a new image afterwards (expect 200)",
+  "status": 500,
+  "corr": "d85337dbdef21a57914f45365135ed20",
+  "body": "{\"title\":\"Internal Server Error\",\"status\":500,\"message\":\"An unexpected error occurred. Please try again later.\"}"
+ },
+ {
+  "step": "S2 upload again (expect 200)",
+  "status": 500,
+  "corr": "35485ea957b955d86d08b193aa1ea2c5",
+  "body": "{\"title\":\"Internal Server Error\",\"status\":500,\"message\":\"An unexpected error occurred. Please try again later.\"}"
+ }
+]
