@@ -337,6 +337,12 @@ public sealed class AppDbContext
                     entry.State = EntityState.Modified;
                     isDeleted.CurrentValue = true;
 
+                    // A soft-deleted image must not keep occupying the "one main image per
+                    // property" unique index (it ignores IsDeleted); otherwise the next upload or
+                    // promotion on that listing fails with a 500.
+                    if (entry.Entity is PropertyImage deletedImage)
+                        deletedImage.IsMain = false;
+
                     var deletedAt = entry.Properties
                         .FirstOrDefault(p => p.Metadata.Name == "DeletedAt");
                     if (deletedAt is not null)

@@ -104,4 +104,70 @@ public sealed class PropertyImagesHandlerTests
         repository.Verify(x => x.Remove(It.IsAny<PropertyImage>()), Times.Never);
         storage.Verify(x => x.DeleteImageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    // STG-001: the removed main image kept IsMain=true (soft delete) while the replacement was
+    // promoted in the same SaveChanges, so the one-main-per-property unique index rejected it (HTTP 500).
+    [Fact(DisplayName = "Delete main image clears its IsMain, saves, then promotes the next image")]
+    public async Task Delete_MainImage_ClearsFlagBeforePromotingReplacement()
+    {
+        var ownerId = Guid.NewGuid();
+        var property = Property.Create("Title", "Description", ownerId, ListingType.ForRent);
+        var main = new PropertyImage { PropertyId = property.Id, Url = "u1", PublicId = "p1", IsMain = true, SortOrder = 0 };
+        var next = new PropertyImage { PropertyId = property.Id, Url = "u2", PublicId = "p2", IsMain = false, SortOrder = 1 };
+        property.Images.Add(main);
+        property.Images.Add(next);
+
+        var repository = new Mock<IPropertyImageRepository>();
+        repository.Setup(x => x.GetPropertyWithImagesAsync(property.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(property);
+        var ownership = new Mock<IPropertyOwnershipService>();
+        var storage = new Mock<IMediaStorageService>();
+
+        var saveSnapshots = new List<(bool MainFlag, bool NextFlag)>();
+        var uow = new Mock<IUnitOfWork>();
+        uow.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .Callback(() => saveSnapshots.Add((main.IsMain, next.IsMain)))
+            .ReturnsAsync(1);
+
+        var handler = new DeletePropertyImageCommandHandler(
+            repository.Object, ownership.Object, storage.Object, uow.Object);
+
+        var result = await handler.Handle(
+            new DeletePropertyImageCommand(property.Id, main.Id, ownerId),
+            CancellationToken.None);
+
+        Assert.Equal(PropertyImageMutationStatus.Success, result.Status);
+        Assert.Equal(2, saveSnapshots.Count);
+        Assert.Equal((false, false), saveSnapshots[0]); // first save: nobody is main yet
+        Assert.Equal((false, true), saveSnapshots[1]);  // second save: replacement promoted
+        repository.Verify(x => x.Remove(main), Times.Once);
+        storage.Verify(x => x.DeleteImageAsync("p1", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // STG-002: deleting the only image must leave no soft-deleted row holding IsMain.
+    [Fact(DisplayName = "Delete the only image clears its IsMain so the next upload can become main")]
+    public async Task Delete_OnlyImage_ClearsMainFlag()
+    {
+        var ownerId = Guid.NewGuid();
+        var property = Property.Create("Title", "Description", ownerId, ListingType.ForRent);
+        var only = new PropertyImage { PropertyId = property.Id, Url = "u1", PublicId = "p1", IsMain = true };
+        property.Images.Add(only);
+
+        var repository = new Mock<IPropertyImageRepository>();
+        repository.Setup(x => x.GetPropertyWithImagesAsync(property.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(property);
+        var uow = new Mock<IUnitOfWork>();
+        uow.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var handler = new DeletePropertyImageCommandHandler(
+            repository.Object, new Mock<IPropertyOwnershipService>().Object,
+            new Mock<IMediaStorageService>().Object, uow.Object);
+
+        var result = await handler.Handle(
+            new DeletePropertyImageCommand(property.Id, only.Id, ownerId), CancellationToken.None);
+
+        Assert.Equal(PropertyImageMutationStatus.Success, result.Status);
+        Assert.False(only.IsMain);
+        uow.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

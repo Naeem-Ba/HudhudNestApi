@@ -66,7 +66,12 @@ Staging__TestSupport__FixedOtp=<secret>
 Staging__TestSupport__PhonePrefix=<reserved prefix>
 Staging__TestSupport__CleanupSecret=<strong secret>
 Staging__TestSupport__UseInMemoryMedia=false
+Swagger__Enabled=false
 ```
+
+`Swagger__Enabled` must be `false` (or unset) on Staging: with `true` the OpenAPI document is served
+anonymously at `/swagger/v1/swagger.json` (QA finding STG-004, 2026-10-08). Production never serves
+Swagger regardless of this setting (`Program.cs`: `!IsProduction() && Swagger:Enabled`).
 
 The database name must contain the configured marker. Redis and storage must be separate resources or
 explicitly isolated namespaces. Staging must not contain Production SMS, email, webhook, database,
