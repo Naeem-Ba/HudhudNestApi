@@ -1,0 +1,18 @@
+# Gitleaks configuration. Extends the default ruleset; the allowlist below matches two exact
+# non-secret values only (anchored), so every other finding still fails the Secret Scan.
+# Note: gitleaks 8.24.3 only honours the legacy [allowlist] table when extending the default config.
+title = "HudhudNestApi gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known non-secret values flagged by generic-api-key (Staging QA batch)"
+regexes = [
+  # Report prose 'No direct database access: FK/orphan/duplicate checks ...' in STAGING-TEST-REPORT.md
+  # and staging-qa/build-report.mjs.
+  '''^FK/orphan/duplicate$''',
+  # Deliberately forged alg=none JWT (header {alg:none}, payload {sub:1}, no signature) used as a
+  # negative auth test in staging-qa/tests.mjs.
+  '''^eyJhbGciOiJub25lIn0\.eyJzdWIiOiIxIn0\.$''',
+]
