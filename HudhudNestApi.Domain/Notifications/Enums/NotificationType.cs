@@ -138,4 +138,12 @@ public enum NotificationType
     /// ValuationSlaEnforcementService.
     /// </summary>
     ValuationInquiryReminderSoon = 38,
+
+    /// <summary>
+    /// A customer messaged an agency member about one of the agency's listings. Sent to the
+    /// agency owner as an awareness notice only: the message itself still goes to the listing
+    /// publisher, and its content is not copied here. RelatedEntityId is the message id.
+    /// Raised by SendMessageCommandHandler.
+    /// </summary>
+    AgencyMemberInquiry = 39,
 }

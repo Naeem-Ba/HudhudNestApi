@@ -83,6 +83,23 @@ public interface INotificationService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Tells an agency owner that a customer messaged one of the agency's members about one of
+    /// its listings. RecipientId is the agency's OwnerUserId (this codebase notifies an agency
+    /// through its owner). Awareness only: the message goes to the publisher, and its content is
+    /// deliberately not part of this notification. RelatedEntityId is the message id. Called by
+    /// SendMessageCommandHandler.
+    /// </summary>
+    Task NotifyAgencyMemberInquiryAsync(
+        Guid recipientId,
+        Guid messageId,
+        Guid propertyId,
+        string propertyTitle,
+        string agencyName,
+        string customerName,
+        string memberName,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Tells the agency owner their invitation was accepted or declined. Called by
     /// AcceptAgencyInvitationCommandHandler / DeclineAgencyInvitationCommandHandler.
     /// </summary>

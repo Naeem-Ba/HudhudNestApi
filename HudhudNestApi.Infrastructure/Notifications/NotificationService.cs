@@ -234,6 +234,58 @@ public sealed class NotificationService : INotificationService
             raterId);
     }
 
+    public async Task NotifyAgencyMemberInquiryAsync(
+        Guid recipientId,
+        Guid messageId,
+        Guid propertyId,
+        string propertyTitle,
+        string agencyName,
+        string customerName,
+        string memberName,
+        CancellationToken ct = default)
+    {
+        if (recipientId == Guid.Empty)
+        {
+            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
+        }
+
+        if (messageId == Guid.Empty)
+        {
+            throw new ArgumentException("Message id is required.", nameof(messageId));
+        }
+
+        if (propertyId == Guid.Empty)
+        {
+            throw new ArgumentException("Property id is required.", nameof(propertyId));
+        }
+
+        var customer = string.IsNullOrWhiteSpace(customerName) ? "مستخدم" : customerName.Trim();
+        var member = string.IsNullOrWhiteSpace(memberName) ? "عضو المكتب" : memberName.Trim();
+        var agency = string.IsNullOrWhiteSpace(agencyName) ? "مكتب عقاري" : agencyName.Trim();
+        var title = string.IsNullOrWhiteSpace(propertyTitle) ? "عقار" : propertyTitle.Trim();
+
+        // Awareness only: names the people, the listing and the agency, never the message text.
+        var notification = new Notification
+        {
+            RecipientId = recipientId,
+            Type = NotificationType.AgencyMemberInquiry,
+            Message = $"استفسار جديد: أرسل {customer} رسالة إلى {member} بخصوص '{title}' (مكتب '{agency}').",
+            PropertyId = propertyId,
+            RelatedEntityId = messageId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await PersistAndPushAsync(notification, ct);
+
+        _logger.LogInformation(
+            "Agency member inquiry notification created. NotificationId={NotificationId}, RecipientId={RecipientId}, PropertyId={PropertyId}, MessageId={MessageId}",
+            notification.Id,
+            recipientId,
+            propertyId,
+            messageId);
+    }
+
     public async Task NotifyAgencyInvitationReceivedAsync(
         Guid recipientId,
         Guid invitationId,
