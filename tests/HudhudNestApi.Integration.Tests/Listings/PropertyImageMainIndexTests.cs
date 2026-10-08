@@ -64,7 +64,11 @@ public sealed class PropertyImageMainIndexTests : IAsyncLifetime
             // The upload handler assigns IsMain=true when no live image exists; this used to violate the index.
             db.PropertyImages.Add(new PropertyImage
             {
-                PropertyId = propertyId, Url = "u2", PublicId = "p2", IsMain = true, SortOrder = 0
+                PropertyId = propertyId,
+                Url = "u2",
+                PublicId = "p2",
+                IsMain = true,
+                SortOrder = 0
             });
             await db.SaveChangesAsync();
         }
