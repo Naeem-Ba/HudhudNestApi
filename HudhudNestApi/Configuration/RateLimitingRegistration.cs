@@ -347,14 +347,15 @@ public static class RateLimitingRegistration
 
             // Finding F7 (docs/ACCOUNT-DELETION-PRODUCTION-READINESS.md): self-service data
             // export. A heavier read than most /me endpoints (assembles the account's full
-            // owned-data graph), so capped lower than an ordinary authenticated GET but not as
-            // tightly as account-delete -- there is no irreversible action here to brute-force.
+            // owned-data graph), so one download per 24 hours (owner decision 2026-10-09; it was
+            // 5). The request is counted when it arrives, so a download that fails on the client
+            // still uses the day's slot.
             options.AddPolicy("data-export", httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
                     partitionKey: GetClientRateLimitPartitionKey(httpContext),
                     factory: _ => new FixedWindowRateLimiterOptions
                     {
-                        PermitLimit = 5,
+                        PermitLimit = 1,
                         Window = TimeSpan.FromHours(24),
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                         QueueLimit = 0

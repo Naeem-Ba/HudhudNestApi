@@ -14,17 +14,20 @@ public sealed class EmailVerificationService : IEmailVerificationService
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IApplicationEmailSender _emailSender;
     private readonly IEmailConfirmationUrlBuilder _urlBuilder;
+    private readonly IEmailConfirmationSendLimiter _sendLimiter;
     private readonly ILogger<EmailVerificationService> _logger;
 
     public EmailVerificationService(
         UserManager<ApplicationUser> userManager,
         IApplicationEmailSender emailSender,
         IEmailConfirmationUrlBuilder urlBuilder,
+        IEmailConfirmationSendLimiter sendLimiter,
         ILogger<EmailVerificationService> logger)
     {
         _userManager = userManager;
         _emailSender = emailSender;
         _urlBuilder = urlBuilder;
+        _sendLimiter = sendLimiter;
         _logger = logger;
     }
 
@@ -49,6 +52,21 @@ public sealed class EmailVerificationService : IEmailVerificationService
                 PiiMasking.MaskEmail(email));
 
             return;
+        }
+
+        // Every confirmation mail passes through here -- registration, add / resend from account
+        // settings, the anonymous resend page -- so this is the one place a per-account cap cannot
+        // be bypassed by picking a different door. Callers that must not reveal anything swallow the
+        // exception; add-email reports it (see AddEmailCommandHandler).
+        var retryAfter = await _sendLimiter.TryAcquireAsync(user.Id, ct);
+        if (retryAfter is not null)
+        {
+            _logger.LogWarning(
+                "Confirmation e-mail to {Email} not sent: identity {IdentityId} reached its limit.",
+                PiiMasking.MaskEmail(email),
+                user.Id);
+
+            throw new EmailConfirmationLimitExceededException(retryAfter.Value);
         }
 
         var verificationUrl =

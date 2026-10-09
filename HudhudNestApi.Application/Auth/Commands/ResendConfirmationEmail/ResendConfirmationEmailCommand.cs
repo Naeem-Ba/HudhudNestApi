@@ -97,6 +97,11 @@ public sealed class ResendConfirmationEmailCommandHandler
                 "Confirmation link resent for identity {IdentityId}.",
                 identity.IdentityId);
         }
+        catch (EmailConfirmationLimitExceededException)
+        {
+            // The account has used its confirmation mails for now. Same response as every other
+            // outcome (the sender already logged it), or the status would reveal the account.
+        }
         catch (Exception ex)
         {
             // Swallowed for the same reason RegisterCommandHandler swallows it: letting a

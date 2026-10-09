@@ -7,6 +7,7 @@ using HudhudNestApi.Application.Auth.Commands.AddEmail;
 using HudhudNestApi.Application.Auth.Commands.ResendConfirmationEmail;
 using HudhudNestApi.Application.Auth.Commands.VerifyEmail;
 using HudhudNestApi.Application.Auth.DTOs;
+using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Domain.Enums;
 
 namespace HudhudNestApi.Controllers;
@@ -85,6 +86,7 @@ public sealed class PhoneAuthController : ControllerBase
     [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> AddEmail(
         [FromBody] AddEmailRequest request,
         CancellationToken ct)
@@ -96,6 +98,20 @@ public sealed class PhoneAuthController : ControllerBase
 
         var command = new AddEmailCommand(userId.Value, request.Email, request.Language);
         var result = await _mediator.Send(command, ct);
+
+        if (result.ErrorCode == AddEmailErrorCodes.LimitReached)
+        {
+            // Not covered by the HTTP rate limiter on purpose: this is a per-account quota of
+            // confirmation mails actually sent (3 per rolling 24 hours, see
+            // EmailConfirmationSendPolicy), not a per-caller request rate.
+            var retryAfterSeconds = (int)Math.Ceiling(
+                (result.RetryAfter ?? EmailConfirmationSendPolicy.Window).TotalSeconds);
+            Response.Headers.RetryAfter = retryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            return StatusCode(
+                StatusCodes.Status429TooManyRequests,
+                new ErrorResponse(result.ErrorCode, result.ErrorMessage!));
+        }
 
         if (!result.Success)
             return BadRequest(new ErrorResponse(

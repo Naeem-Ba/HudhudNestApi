@@ -154,7 +154,7 @@
 | /F-USR-05/ | اختيار خطة الاشتراك | م | `POST /api/Users/me/plan` | M | ✅ | |
 | /F-USR-06/ | طلب حذف الحساب بنافذة تأجيل **30 يومًا** وإعادة مصادقة | م | `DELETE /api/Users/me` | M | ✅ | `RequestDeleteUserCommandHandler`؛ الواجهة تعرض تاريخ التنفيذ ويبقى المستخدم مسجّلًا (HudhudNest#125) |
 | /F-USR-07/ | إلغاء طلب الحذف خلال النافذة | م | `POST /api/Users/me/deletion/cancel` | M | ✅ | زر إلغاء في «منطقة الخطر» وشريط تنبيه على كل الصفحات (HudhudNest#125) |
-| /F-USR-08/ | تصدير بيانات المستخدم | م | `GET /api/Users/me/export` (5/24h) | M | ✅ | قسم «بياناتك»: تنزيل JSON في الويب، ونافذة مشاركة النظام في أندرويد/iOS عبر `@capacitor/filesystem` و`share` (HudhudNest#125)؛ لم يُختبر بعد على جهاز حقيقي |
+| /F-USR-08/ | تصدير بيانات المستخدم | م | `GET /api/Users/me/export` (1/24h) | M | ✅ | قسم «بياناتك»: تنزيل JSON في الويب، ونافذة مشاركة النظام في أندرويد/iOS عبر `@capacitor/filesystem` و`share` (HudhudNest#125)؛ لم يُختبر بعد على جهاز حقيقي |
 | /F-USR-09/ | تنفيذ الحذف النهائي بمهمة خلفية ساعية | نظام | `AccountDeletionSweepHostedService` | M | ✅ | |
 | /F-USR-10/ | سياسة بقاء إعلانات المحذوف (إخفاء الاسم فقط) | نظام | — | M | 🟡 | قرار أعمال مفتوح: لا إلغاء نشر تلقائي (`ACCOUNT-DELETION-PRODUCTION-READINESS.md`) |
 
@@ -373,7 +373,7 @@
 | `shortstay-booking`، `service-requests`، `valuation-inquiries` | 10 / 60 د |
 | `service-request-documents` | 20 / 60 د |
 | `account-delete` | 3 / 60 د |
-| `data-export` | 5 / 24 س |
+| `data-export` | 1 / 24 س |
 
 يعمل المحدِّد على Redis في Production (يفشل **مغلقًا** بـ 503 إن غاب)، وفي الذاكرة خلاف ذلك.
 

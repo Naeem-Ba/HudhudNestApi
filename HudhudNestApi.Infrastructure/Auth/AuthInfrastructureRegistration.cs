@@ -473,6 +473,7 @@ internal static class AuthInfrastructureRegistration
             services.AddScoped<IOtpService, OtpService>();
 
         services.AddScoped<IEmailVerificationService, EmailVerificationService>();
+        services.AddScoped<IEmailConfirmationSendLimiter, DistributedEmailConfirmationSendLimiter>();
 
         if (stagingTestSupportEnabled)
         {

@@ -76,6 +76,17 @@ public sealed class AccountDataExportTests : IAsyncLifetime
         Assert.DoesNotContain(export.Properties, p => p.Id == otherPropertyId);
     }
 
+    [Fact(DisplayName = "GET /api/Users/me/export allows one download per 24 hours: the second is rate limited")]
+    public async Task Export_SecondDownloadWithinADay_IsRateLimited()
+    {
+        var owner = await _factory.SeedUserAsync("export-once");
+
+        using var client = _factory.AuthedClient(owner.AccessToken);
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/Users/me/export")).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await client.GetAsync("/api/Users/me/export")).StatusCode);
+    }
+
     [Fact(DisplayName = "GET /api/Users/me/export requires authentication")]
     public async Task Export_WithoutToken_ReturnsUnauthorized()
     {

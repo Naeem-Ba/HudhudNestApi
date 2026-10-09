@@ -473,7 +473,7 @@ HudhudNestApi.Infrastructure ──implements──▶ Application ; ──▶ D
 | `shortstay-booking` | 10 | 60 د | حجز إقامة |
 | `service-requests` / `service-request-documents` | 10 / 20 | 60 د | طلبات/مستندات خدمة |
 | `account-delete` | 3 | 60 د | طلب حذف الحساب |
-| `data-export` | 5 | 24 س | تصدير البيانات |
+| `data-export` | 1 | 24 س | تصدير البيانات |
 | `valuation-inquiries` | 10 | 60 د | طلبات التقييم |
 
 ### 6.4 قابلية الصيانة

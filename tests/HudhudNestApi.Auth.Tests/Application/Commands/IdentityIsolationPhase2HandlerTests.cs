@@ -37,6 +37,7 @@ public sealed class AddEmailCommandHandlerTests
             new AddEmailCommandHandler(
                 identity.Object,
                 emailService.Object,
+                Mock.Of<IEmailConfirmationSendLimiter>(),
                 NullLogger<AddEmailCommandHandler>.Instance);
 
         // Act
@@ -122,6 +123,7 @@ public sealed class AddEmailCommandHandlerTests
             new AddEmailCommandHandler(
                 identity.Object,
                 emailService.Object,
+                Mock.Of<IEmailConfirmationSendLimiter>(),
                 NullLogger<AddEmailCommandHandler>.Instance);
 
         // Act
@@ -230,6 +232,7 @@ public sealed class AddEmailCommandHandlerTests
             new AddEmailCommandHandler(
                 identity.Object,
                 emailService.Object,
+                Mock.Of<IEmailConfirmationSendLimiter>(),
                 NullLogger<AddEmailCommandHandler>.Instance);
 
         // Act
@@ -342,6 +345,7 @@ public sealed class AddEmailCommandHandlerTests
             new AddEmailCommandHandler(
                 identity.Object,
                 emailService.Object,
+                Mock.Of<IEmailConfirmationSendLimiter>(),
                 NullLogger<AddEmailCommandHandler>.Instance);
 
         // Act
@@ -366,6 +370,170 @@ public sealed class AddEmailCommandHandlerTests
                 "user@example.com",
                 It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Fact(
+        DisplayName =
+            "AddEmail refuses with the limit result, before saving anything, once the account has used its confirmation mails")]
+    public async Task LimitReached_RefusesBeforeSavingAnything()
+    {
+        // Arrange
+        var userId =
+            Guid.NewGuid();
+
+        var identity =
+            new Mock<IAddEmailIdentityService>();
+
+        identity
+            .Setup(
+                x => x.FindByIdAsync(
+                    userId,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                CreateIdentitySnapshot(
+                    identityId: userId,
+                    email: "user@example.com",
+                    emailConfirmed: false));
+
+        var limiter =
+            new Mock<IEmailConfirmationSendLimiter>();
+
+        limiter
+            .Setup(
+                x => x.PeekAsync(
+                    userId,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                TimeSpan.FromHours(5));
+
+        var emailService =
+            new Mock<IEmailVerificationService>();
+
+        var handler =
+            new AddEmailCommandHandler(
+                identity.Object,
+                emailService.Object,
+                limiter.Object,
+                NullLogger<AddEmailCommandHandler>.Instance);
+
+        // Act
+        var result =
+            await handler.Handle(
+                new AddEmailCommand(
+                    userId,
+                    "user@example.com"),
+                CancellationToken.None);
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal(AddEmailErrorCodes.LimitReached, result.ErrorCode);
+        Assert.Equal(TimeSpan.FromHours(5), result.RetryAfter);
+
+        // SetEmailAsync rotates the security stamp: a refused request must not do that, and must
+        // not look up whether another account owns the address either.
+        identity.Verify(
+            x => x.SetEmailAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        identity.Verify(
+            x => x.FindByEmailAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        emailService.Verify(
+            x => x.SendVerificationLinkAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact(
+        DisplayName =
+            "AddEmail reports the limit, not a mail failure, when the sender refuses at the last moment")]
+    public async Task SenderHitsTheLimitRace_ReturnsTheLimitResult()
+    {
+        // Arrange
+        var userId =
+            Guid.NewGuid();
+
+        var identity =
+            new Mock<IAddEmailIdentityService>();
+
+        identity
+            .Setup(
+                x => x.FindByIdAsync(
+                    userId,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                CreateIdentitySnapshot(
+                    identityId: userId,
+                    email: null,
+                    emailConfirmed: false));
+
+        identity
+            .Setup(
+                x => x.FindByEmailAsync(
+                    "user@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                (IdentityAccountSnapshot?)null);
+
+        identity
+            .Setup(
+                x => x.SetEmailAsync(
+                    userId,
+                    "user@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                IdentityOperationResult.Success());
+
+        identity
+            .Setup(
+                x => x.GenerateEmailConfirmationTokenAsync(
+                    userId,
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+                "confirmation-token");
+
+        var emailService =
+            new Mock<IEmailVerificationService>();
+
+        emailService
+            .Setup(
+                x => x.SendVerificationLinkAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string?>(),
+                    It.IsAny<CancellationToken>()))
+            .ThrowsAsync(
+                new EmailConfirmationLimitExceededException(
+                    TimeSpan.FromMinutes(90)));
+
+        var handler =
+            new AddEmailCommandHandler(
+                identity.Object,
+                emailService.Object,
+                Mock.Of<IEmailConfirmationSendLimiter>(),
+                NullLogger<AddEmailCommandHandler>.Instance);
+
+        // Act
+        var result =
+            await handler.Handle(
+                new AddEmailCommand(
+                    userId,
+                    "user@example.com"),
+                CancellationToken.None);
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal(AddEmailErrorCodes.LimitReached, result.ErrorCode);
+        Assert.Equal(TimeSpan.FromMinutes(90), result.RetryAfter);
     }
 
     private static IdentityAccountSnapshot
