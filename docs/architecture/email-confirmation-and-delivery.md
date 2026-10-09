@@ -158,6 +158,25 @@ It is cancelled when the client goes away. A user who closes the tab the instant
 submitting has still registered and still needs the link. The same reasoning already governs
 the rollback path in the same handler.
 
+## Per-account send limit
+
+At most **3 confirmation mails per account per rolling 24 hours** (`EmailConfirmationSendPolicy`),
+whichever door asked for them: registration, `POST /api/auth/email/add` (the "send activation
+link" button in account settings) or `POST /api/auth/email/resend-confirmation`.
+
+- **Where it is enforced:** `EmailVerificationService.SendVerificationLinkAsync`, the one place every
+  confirmation mail passes through, via `IEmailConfirmationSendLimiter` (Redis through
+  `IDistributedCache` in Production). It counts mails actually handed to the sender, not requests.
+- **Why not the HTTP rate limiter:** that one keys on the caller's address (plus the user id in Redis
+  mode), uses clock-aligned windows, counts requests that send nothing, and `email/add` had no
+  policy at all, so the button could be pressed without limit.
+- **What the caller sees:** `email/add` answers `429` with `code: EMAIL_CONFIRMATION_LIMIT_REACHED`
+  and a `Retry-After` header, before saving anything (saving rotates the security stamp). The
+  anonymous resend keeps its identical response and simply sends nothing.
+- **Limits of the design:** the cache has no atomic increment, so two simultaneous requests can let a
+  fourth mail through; and if the cache is unreachable the mail is sent (fail-open) and a warning is
+  logged. The count lives only in the cache: losing it (Redis flush) resets everyone's quota.
+
 ## Resending
 
 `POST /api/auth/email/resend-confirmation` covers the lost-mail case.

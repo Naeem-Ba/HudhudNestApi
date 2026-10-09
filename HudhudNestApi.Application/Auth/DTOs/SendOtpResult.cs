@@ -113,9 +113,27 @@ public sealed record AddEmailResult
     /// </summary>
     public bool VerificationSent { get; init; }
 
+    /// <summary>When the account may be sent another confirmation mail; set with <see cref="AddEmailErrorCodes.LimitReached"/>.</summary>
+    public TimeSpan? RetryAfter { get; init; }
+
     public static AddEmailResult Ok(bool verificationSent) =>
         new() { Success = true, VerificationSent = verificationSent };
 
     public static AddEmailResult Fail(string code, string message) =>
         new() { Success = false, ErrorCode = code, ErrorMessage = message };
+
+    public static AddEmailResult LimitReached(TimeSpan retryAfter) =>
+        new()
+        {
+            Success = false,
+            ErrorCode = AddEmailErrorCodes.LimitReached,
+            ErrorMessage = "تم بلوغ الحد الأقصى لرسائل التأكيد لهذا الحساب. حاول لاحقاً.",
+            RetryAfter = retryAfter
+        };
+}
+
+public static class AddEmailErrorCodes
+{
+    /// <summary>The account has already been sent its quota of confirmation mails (HTTP 429).</summary>
+    public const string LimitReached = "EMAIL_CONFIRMATION_LIMIT_REACHED";
 }

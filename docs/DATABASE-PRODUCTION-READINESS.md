@@ -705,7 +705,7 @@ work, without modifying its anonymization logic:
   visit requests made, consent records, plan tier, ratings given/received. Explicitly excludes
   (by construction, not by generic-serializer omission): `PasswordHash`, `SecurityStamp`,
   `RefreshTokens`, `PhoneNumberLookupHash`, `DataProtectionKeys`, any other user's data.
-  Rate-limited (`data-export`, 5/24h, registered in both the in-memory and Redis-backed
+  Rate-limited (`data-export`, 1/24h since 2026-10-09 — it was 5, registered in both the in-memory and Redis-backed
   limiters). Audit-logged (`AuditActions.DataExportRequested` — who/when, not the payload
   content, matching this codebase's existing PII-logging discipline).
 

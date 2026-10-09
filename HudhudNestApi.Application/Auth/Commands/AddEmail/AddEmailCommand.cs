@@ -28,16 +28,20 @@ public sealed class AddEmailCommandHandler
 
     private readonly IEmailVerificationService _emailService;
 
+    private readonly IEmailConfirmationSendLimiter _sendLimiter;
+
     private readonly ILogger<AddEmailCommandHandler>
         _logger;
 
     public AddEmailCommandHandler(
         IAddEmailIdentityService identity,
         IEmailVerificationService emailService,
+        IEmailConfirmationSendLimiter sendLimiter,
         ILogger<AddEmailCommandHandler> logger)
     {
         _identity = identity;
         _emailService = emailService;
+        _sendLimiter = sendLimiter;
         _logger = logger;
     }
 
@@ -78,7 +82,27 @@ public sealed class AddEmailCommandHandler
         }
 
         /*
-         * 3. Check whether another identity already owns the email.
+         * 3. Refuse before touching the account once its confirmation mails are used up.
+         *
+         * Checked ahead of the uniqueness lookup below so a caller who is over the limit learns
+         * nothing more about other accounts, and ahead of SetEmailAsync because that rotates the
+         * security stamp (signing the account's other sessions out and voiding the link in the
+         * mail already sent) -- a request that cannot send must not do that. The send itself
+         * counts the attempt (EmailVerificationService).
+         */
+        var retryAfter =
+            await _sendLimiter.PeekAsync(
+                identity.IdentityId,
+                ct);
+
+        if (retryAfter is not null)
+        {
+            return AddEmailResult.LimitReached(
+                retryAfter.Value);
+        }
+
+        /*
+         * 3b. Check whether another identity already owns the email.
          */
         var existingWithEmail =
             await _identity.FindByEmailAsync(
@@ -150,6 +174,13 @@ public sealed class AddEmailCommandHandler
                 "Email verification sent to {Email} for identity {IdentityId}.",
                 PiiMasking.MaskEmail(email),
                 identity.IdentityId);
+        }
+        catch (EmailConfirmationLimitExceededException limit)
+        {
+            // Only reachable when another request used the last slot between the check above and
+            // this send. The address was just saved; report the limit instead of a silent failure.
+            return AddEmailResult.LimitReached(
+                limit.RetryAfter);
         }
         catch (Exception ex)
         {

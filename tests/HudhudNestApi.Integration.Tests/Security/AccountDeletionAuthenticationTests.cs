@@ -83,7 +83,10 @@ public sealed class AccountDeletionAuthenticationTests : IClassFixture<TestAppli
     [Fact(DisplayName = "GET /api/Users/me/export with no Authorization header is rejected with 401")]
     public async Task Export_MissingToken_Returns401()
     {
-        using var client = _factory.CreateClient();
+        // "data-export" allows one request per 24 hours per caller and every anonymous caller shares
+        // one bucket, so each anonymous export test gets a host of its own instead of the shared one.
+        using var factory = new TestApplication();
+        using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/Users/me/export");
 
@@ -93,7 +96,8 @@ public sealed class AccountDeletionAuthenticationTests : IClassFixture<TestAppli
     [Fact(DisplayName = "GET /api/Users/me/export with a malformed bearer token is rejected with 401")]
     public async Task Export_MalformedToken_Returns401()
     {
-        using var client = _factory.CreateClient();
+        using var factory = new TestApplication();
+        using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", "this-is-not-a-jwt");
 
