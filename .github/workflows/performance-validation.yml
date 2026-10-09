@@ -1,10 +1,10 @@
 name: Concurrent Performance Validation
 
 on:
-  pull_request:
-    branches: [main, master, develop]
-  push:
-    branches: [main, master]
+  # No `pull_request` / `push` trigger of its own: .github/workflows/production-gate.yml calls this workflow
+  # on every pull request (profile `pr`) and every push (profile `release`) as the "Mandatory Concurrent
+  # Performance Gate". Listing the same events here ran the identical job a second time per event.
+  # What remains: the weekly run, a manual run, and the call from the gate.
   schedule:
     - cron: '17 2 * * 1'
   workflow_dispatch:

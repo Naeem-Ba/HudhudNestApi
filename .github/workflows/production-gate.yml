@@ -23,9 +23,11 @@ env:
   COMPOSE_FILE: ci/docker-compose.production-gate.yml
   HUDHUDNEST_IMAGE_TAG: production-gate
 
+# A newer push to the same pull request cancels the older, now pointless run. Pushes to master/main/develop and
+# manual runs are never cancelled: they migrate and deploy Staging and are the only path to Production.
 concurrency:
   group: production-gate-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   performance-validation:
