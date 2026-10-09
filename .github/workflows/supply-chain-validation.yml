@@ -2,13 +2,13 @@ name: Supply Chain Validation
 
 on:
   push:
+    # Only the integration branches. `codex/**`, `feature/**` and `fix/**` used to be listed here too, which
+    # made every push to such a branch with an open pull request run twice (once as `push`, once as
+    # `pull_request`). The pull_request run tests the merge result and is the one that counts.
     branches:
       - main
       - master
       - develop
-      - 'codex/**'
-      - 'feature/**'
-      - 'fix/**'
 
   pull_request:
     branches:

@@ -42,9 +42,10 @@ bash scripts/run-performance-tests.sh
 
 ## CI and scheduled execution
 
-`.github/workflows/performance-validation.yml` runs the PR, release, and scheduled profiles. The production workflow
-calls it as a mandatory reusable release job. No mandatory step uses `continue-on-error`; missing evidence causes
-artifact upload or the aggregator to fail.
+`.github/workflows/performance-validation.yml` holds the PR, release, and scheduled profiles. It has no pull request or
+push trigger of its own: the production workflow calls it as a mandatory reusable job on every pull request (`pr`
+profile) and push (`release` profile), and it also runs weekly (`staging` profile) and on manual dispatch. No
+mandatory step uses `continue-on-error`; missing evidence causes artifact upload or the aggregator to fail.
 
 ## Test phases
 
