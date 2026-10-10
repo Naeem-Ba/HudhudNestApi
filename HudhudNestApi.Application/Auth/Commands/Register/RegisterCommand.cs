@@ -173,6 +173,10 @@ public sealed class RegisterCommandHandler
                 request.LastName,
                 now);
 
+        account.ChooseInitialLanguage(
+            request.Language,
+            now);
+
         /*
          * Framework-neutral identity creation request.
          *

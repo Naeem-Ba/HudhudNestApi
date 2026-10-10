@@ -17,6 +17,15 @@ public sealed class UserDto
 
     public string PreferredLanguage { get; set; } = "en";
     public string PreferredCurrency { get; set; } = "EUR";
+
+    /// <summary>
+    /// False for an account that never chose a language: <see cref="PreferredLanguage"/> is then
+    /// only the stored default, and a client should upload its own choice instead of adopting it.
+    /// </summary>
+    public bool HasChosenLanguage { get; set; }
+
+    /// <summary>Same as <see cref="HasChosenLanguage"/>, for <see cref="PreferredCurrency"/>.</summary>
+    public bool HasChosenCurrency { get; set; }
     public string? CountryCode { get; set; }
 
     public string? Bio { get; set; }

@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Notifications.Localization;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Exceptions;
@@ -77,7 +78,7 @@ public sealed class AcceptServiceRequestCommandHandler
                 propertyId: serviceRequest.PropertyId,
                 propertyTitle: serviceRequest.Property?.Title ?? "-",
                 type: NotificationType.ServiceRequestAccepted,
-                detail: $"تم قبول طلبك ({serviceRequest.RequestNumber}) من قِبل {provider.DisplayName}.",
+                detail: NotificationText.Of(NotificationKeys.ServiceAcceptedDetail, ("number", serviceRequest.RequestNumber), ("provider", provider.DisplayName)),
                 ct: ct);
         }
         catch (Exception ex)

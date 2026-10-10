@@ -1,4 +1,5 @@
-﻿using HudhudNestApi.Domain.Users.Enums;
+﻿using HudhudNestApi.Domain.Users.Constants;
+using HudhudNestApi.Domain.Users.Enums;
 
 namespace HudhudNestApi.Domain.Users.Entities;
 
@@ -43,6 +44,16 @@ public sealed class UserAccount
 
     public string PreferredCurrency { get; private set; } =
         "EUR";
+
+    /// <summary>
+    /// When the user (or the client on their behalf) explicitly chose the interface language.
+    /// Null for every account that predates synced preferences: their <see cref="PreferredLanguage"/>
+    /// is just the column default, not a choice, and must not drive notification language.
+    /// </summary>
+    public DateTime? PreferredLanguageSetAt { get; private set; }
+
+    /// <summary>Same as <see cref="PreferredLanguageSetAt"/>, for the display currency.</summary>
+    public DateTime? PreferredCurrencySetAt { get; private set; }
 
     public string? CountryCode { get; private set; }
 
@@ -324,11 +335,32 @@ public sealed class UserAccount
             utcNow;
     }
 
+    /// <summary>
+    /// Records the language the user registered in. Anything the product does not translate
+    /// is ignored rather than rejected: sign-up must not fail over a language hint.
+    /// </summary>
+    public void ChooseInitialLanguage(string? languageTag, DateTime utcNow)
+    {
+        var language = SupportedPreferences.NormalizeLanguage(languageTag);
+        if (language is null)
+        {
+            return;
+        }
+
+        PreferredLanguage = language;
+        PreferredLanguageSetAt = utcNow;
+        UpdatedAt = utcNow;
+    }
+
+    /// <param name="languageChosen">The caller supplied the language (as opposed to echoing the stored one).</param>
+    /// <param name="currencyChosen">The caller supplied the currency (as opposed to echoing the stored one).</param>
     public void UpdatePreferences(
         string preferredLanguage,
         string preferredCurrency,
         string? countryCode,
-        DateTime utcNow)
+        DateTime utcNow,
+        bool languageChosen = false,
+        bool currencyChosen = false)
     {
         if (string.IsNullOrWhiteSpace(
                 preferredLanguage))
@@ -346,6 +378,22 @@ public sealed class UserAccount
                 nameof(preferredCurrency));
         }
 
+        if (languageChosen
+            && !SupportedPreferences.IsSupportedLanguage(preferredLanguage))
+        {
+            throw new ArgumentException(
+                "Preferred language is not supported.",
+                nameof(preferredLanguage));
+        }
+
+        if (currencyChosen
+            && !SupportedPreferences.IsSupportedCurrency(preferredCurrency))
+        {
+            throw new ArgumentException(
+                "Preferred currency is not supported.",
+                nameof(preferredCurrency));
+        }
+
         PreferredLanguage =
             preferredLanguage
                 .Trim()
@@ -355,6 +403,16 @@ public sealed class UserAccount
             preferredCurrency
                 .Trim()
                 .ToUpperInvariant();
+
+        if (languageChosen)
+        {
+            PreferredLanguageSetAt = utcNow;
+        }
+
+        if (currencyChosen)
+        {
+            PreferredCurrencySetAt = utcNow;
+        }
 
         CountryCode =
             string.IsNullOrWhiteSpace(countryCode)

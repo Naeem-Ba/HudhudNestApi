@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using HudhudNestApi.Domain.Users.Constants;
 
 namespace HudhudNestApi.Application.Users.Commands.UpdateUser;
 
@@ -31,12 +32,16 @@ public sealed class UpdateUserCommandValidator : AbstractValidator<UpdateUserCom
             .MaximumLength(2048)
             .When(x => x.ProfileImageUrl is not null);
 
+        // Only codes the product actually translates / prices: anything else would be stored,
+        // echoed back, and then fail (or silently fall back) in the notification localizer.
         RuleFor(x => x.PreferredLanguage)
-            .MaximumLength(10)
+            .Must(SupportedPreferences.IsSupportedLanguage)
+            .WithMessage("Preferred language must be one of: " + string.Join(", ", SupportedPreferences.Languages) + ".")
             .When(x => x.PreferredLanguage is not null);
 
         RuleFor(x => x.PreferredCurrency)
-            .Length(3)
+            .Must(SupportedPreferences.IsSupportedCurrency)
+            .WithMessage("Preferred currency must be one of: " + string.Join(", ", SupportedPreferences.Currencies) + ".")
             .When(x => x.PreferredCurrency is not null);
 
         RuleFor(x => x.CountryCode)

@@ -1,4 +1,5 @@
-﻿using MediatR;
+using HudhudNestApi.Application.Notifications.Localization;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Bookings.DTOs;
 using HudhudNestApi.Application.Bookings.Interfaces;
@@ -87,15 +88,15 @@ public sealed class RequestVisitCommandHandler : IRequestHandler<RequestVisitCom
             // ومُرِّر relatedEntityId ليتمكن المعلن من التصرف (تأكيد/رفض/موعد
             // بديل) مباشرة من بطاقة الإشعار دون البحث عن الزيارة يدويًا.
             var noteSuffix = string.IsNullOrWhiteSpace(request.VisitorNote)
-                ? string.Empty
-                : $" — ملاحظة الزائر: {request.VisitorNote.Trim()}";
+                ? NotificationText.Empty
+                : NotificationText.Of(NotificationKeys.NoteFromVisitor, ("note", request.VisitorNote.Trim()));
 
             await _notifications.NotifyPropertyUpdateAsync(
                 recipientId: property.OwnerId,
                 propertyId: property.Id,
                 propertyTitle: property.Title,
                 type: NotificationType.VisitRequested,
-                detail: $"{request.VisitorName} بتاريخ {request.ProposedAt:dd/MM/yyyy HH:mm}.{noteSuffix}",
+                detail: NotificationText.Of(NotificationKeys.VisitRequestedDetail, ("name", request.VisitorName), ("at", request.ProposedAt), ("note", noteSuffix)),
                 relatedEntityId: visit.Id,
                 ct: ct);
         }

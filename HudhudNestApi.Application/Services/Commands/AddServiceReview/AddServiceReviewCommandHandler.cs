@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Notifications.Localization;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Exceptions;
@@ -84,7 +85,7 @@ public sealed class AddServiceReviewCommandHandler
                 propertyId: serviceRequest.PropertyId,
                 propertyTitle: serviceRequest.Property?.Title ?? "-",
                 type: NotificationType.ServiceReviewAdded,
-                detail: $"تم إضافة تقييم جديد ({request.Rating}/5) لطلب الخدمة ({serviceRequest.RequestNumber}).",
+                detail: NotificationText.Of(NotificationKeys.ServiceReviewAddedDetail, ("rating", request.Rating), ("number", serviceRequest.RequestNumber)),
                 ct: ct);
         }
         catch (Exception ex)

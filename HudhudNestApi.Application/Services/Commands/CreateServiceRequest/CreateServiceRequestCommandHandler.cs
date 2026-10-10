@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Notifications.Localization;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Exceptions;
@@ -112,7 +113,7 @@ public sealed class CreateServiceRequestCommandHandler
                 propertyId: property.Id,
                 propertyTitle: property.Title,
                 type: NotificationType.ServiceRequestSubmitted,
-                detail: $"طلب خدمة جديد ({requestNumber}) على عقار '{property.Title}'.",
+                detail: NotificationText.Of(NotificationKeys.ServiceSubmittedDetail, ("number", requestNumber), ("title", property.Title)),
                 ct: ct);
         }
         catch (Exception ex)

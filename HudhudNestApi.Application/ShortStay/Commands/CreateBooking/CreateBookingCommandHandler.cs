@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Notifications.Localization;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Exceptions;
@@ -149,7 +150,7 @@ public sealed class CreateBookingCommandHandler : IRequestHandler<CreateBookingC
                     bookingId: booking.Id,
                     listingTitle: listing.Title,
                     type: NotificationType.ShortStayBookingRequested,
-                    detail: $"طلب حجز جديد لـ '{listing.Title}' من {request.CheckIn:dd/MM/yyyy} إلى {request.CheckOut:dd/MM/yyyy}.",
+                detail: NotificationText.Of(NotificationKeys.ShortStayRequestedDetail, ("title", listing.Title), ("from", request.CheckIn), ("to", request.CheckOut)),
                     ct: ct);
             }
             catch (Exception ex)

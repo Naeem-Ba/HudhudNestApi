@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Notifications.Localization;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Exceptions;
@@ -78,14 +79,14 @@ public sealed class ApproveBookingCommandHandler : IRequestHandler<ApproveBookin
                 await _notifications.NotifyShortStayBookingUpdateAsync(
                     booking.GuestId, booking.Id, listing.Title,
                     NotificationType.ShortStayBookingApproved,
-                    $"تمت الموافقة على حجزك لـ '{listing.Title}'.", ct);
+                    NotificationText.Of(NotificationKeys.ShortStayApprovedDetail, ("title", listing.Title)), ct);
 
                 foreach (var other in others)
                 {
                     await _notifications.NotifyShortStayBookingUpdateAsync(
                         other.GuestId, other.Id, listing.Title,
                         NotificationType.ShortStayBookingRejected,
-                        $"للأسف تم قبول حجز آخر لنفس التواريخ في '{listing.Title}'.", ct);
+                        NotificationText.Of(NotificationKeys.ShortStayOtherBookingTakenDetail, ("title", listing.Title)), ct);
                 }
             }
             catch (Exception ex)

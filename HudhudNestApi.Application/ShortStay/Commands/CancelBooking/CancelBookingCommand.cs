@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Notifications.Localization;
 using MediatR;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
@@ -39,7 +40,7 @@ public sealed class CancelBookingCommandHandler : IRequestHandler<CancelBookingC
         await _notifications.NotifyShortStayBookingUpdateAsync(
             listing.OwnerId, booking.Id, listing.Title,
             NotificationType.ShortStayBookingCancelled,
-            $"ألغى الضيف حجزه لـ '{listing.Title}'.", ct);
+            NotificationText.Of(NotificationKeys.ShortStayCancelledByGuestDetail, ("title", listing.Title)), ct);
 
         return booking.ToDto(listing.Id, listing.Title, listing.CurrencyCode);
     }

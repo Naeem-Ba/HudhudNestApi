@@ -1,4 +1,5 @@
-﻿using MediatR;
+using HudhudNestApi.Application.Notifications.Localization;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using FluentValidation.Results;
 using HudhudNestApi.Application.Common.Exceptions;
@@ -268,7 +269,7 @@ public sealed class UpdatePropertyCommandHandler
         var ownerId = property.OwnerId;
         var propertyId = property.Id;
         var title = string.IsNullOrWhiteSpace(property.Title)
-            ? "العقار"
+            ? string.Empty
             : property.Title;
 
         var currencyCode = string.IsNullOrWhiteSpace(property.CurrencyCode)
@@ -282,7 +283,7 @@ public sealed class UpdatePropertyCommandHandler
                 propertyId: propertyId,
                 propertyTitle: title,
                 type: NotificationType.PropertyStatusChanged,
-                detail: $"{oldStatus} → {property.Status}",
+                detail: NotificationText.Of(NotificationKeys.StatusChangedDetail, ("from", oldStatus), ("to", property.Status)),
                 ct: cancellationToken);
         }
 
@@ -293,7 +294,7 @@ public sealed class UpdatePropertyCommandHandler
                 propertyId: propertyId,
                 propertyTitle: title,
                 type: NotificationType.PropertyPriceChanged,
-                detail: $"Cold rent: {FormatMoney(oldColdRent, currencyCode)} → {FormatMoney(property.ColdRent, currencyCode)}",
+                detail: NotificationText.Of(NotificationKeys.ColdRentChangedDetail, ("from", FormatMoney(oldColdRent, currencyCode)), ("to", FormatMoney(property.ColdRent, currencyCode))),
                 ct: cancellationToken);
         }
 
@@ -304,7 +305,7 @@ public sealed class UpdatePropertyCommandHandler
                 propertyId: propertyId,
                 propertyTitle: title,
                 type: NotificationType.PropertyPriceChanged,
-                detail: $"Warm rent: {FormatMoney(oldWarmRent, currencyCode)} → {FormatMoney(property.WarmRent, currencyCode)}",
+                detail: NotificationText.Of(NotificationKeys.WarmRentChangedDetail, ("from", FormatMoney(oldWarmRent, currencyCode)), ("to", FormatMoney(property.WarmRent, currencyCode))),
                 ct: cancellationToken);
         }
 
@@ -315,7 +316,7 @@ public sealed class UpdatePropertyCommandHandler
                 propertyId: propertyId,
                 propertyTitle: title,
                 type: NotificationType.PropertyPriceChanged,
-                detail: $"Purchase price: {FormatMoney(oldPurchasePrice, currencyCode)} → {FormatMoney(property.PurchasePrice, currencyCode)}",
+                detail: NotificationText.Of(NotificationKeys.PurchasePriceChangedDetail, ("from", FormatMoney(oldPurchasePrice, currencyCode)), ("to", FormatMoney(property.PurchasePrice, currencyCode))),
                 ct: cancellationToken);
         }
 

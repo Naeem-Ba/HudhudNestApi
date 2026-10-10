@@ -1,4 +1,5 @@
 ﻿using HudhudNestApi.Application.Notifications.DTOs;
+using HudhudNestApi.Application.Notifications.Localization;
 using HudhudNestApi.Domain.Notifications.Enums;
 
 namespace HudhudNestApi.Application.Notifications.Interfaces;
@@ -18,7 +19,7 @@ public interface INotificationService
         Guid propertyId,
         string propertyTitle,
         NotificationType type,
-        string detail,
+        NotificationText detail,
         Guid? relatedEntityId = null,
         CancellationToken ct = default);
 
@@ -121,7 +122,7 @@ public interface INotificationService
         Guid bookingId,
         string listingTitle,
         NotificationType type,
-        string detail,
+        NotificationText detail,
         CancellationToken ct = default);
 
     Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(

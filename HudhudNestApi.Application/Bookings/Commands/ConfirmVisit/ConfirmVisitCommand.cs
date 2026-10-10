@@ -1,4 +1,5 @@
-﻿using MediatR;
+using HudhudNestApi.Application.Notifications.Localization;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Bookings.Interfaces;
 using HudhudNestApi.Application.Common.Exceptions;
@@ -57,15 +58,15 @@ public sealed class ConfirmVisitCommandHandler : IRequestHandler<ConfirmVisitCom
         try
         {
             var noteSuffix = string.IsNullOrWhiteSpace(visit.OwnerNote)
-                ? string.Empty
-                : $" — ملاحظة المالك: {visit.OwnerNote}";
+                ? NotificationText.Empty
+                : NotificationText.Of(NotificationKeys.NoteFromOwner, ("note", visit.OwnerNote));
 
             await _notifications.NotifyPropertyUpdateAsync(
                 recipientId: visit.RequesterId,
                 propertyId: property.Id,
                 propertyTitle: property.Title,
                 type: NotificationType.VisitConfirmed,
-                detail: $"موعد الزيارة بتاريخ {visit.ProposedAt:dd/MM/yyyy HH:mm}.{noteSuffix}",
+                detail: NotificationText.Of(NotificationKeys.VisitConfirmedDetail, ("at", visit.ProposedAt), ("note", noteSuffix)),
                 relatedEntityId: visit.Id,
                 ct: ct);
         }
