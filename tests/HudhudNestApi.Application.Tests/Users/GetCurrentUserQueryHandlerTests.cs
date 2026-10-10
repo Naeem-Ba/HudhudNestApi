@@ -83,6 +83,59 @@ public sealed class GetCurrentUserQueryHandlerTests
     }
 
     [Fact]
+    public async Task Handle_ReturnsTheSavedBioAndContactInfo()
+    {
+        // The profile form is filled from this response and saves everything it shows, so a
+        // missing bio or contact line was shown empty and then cleared by the next save.
+        var id =
+            Guid.NewGuid();
+
+        var account =
+            CreateUserAccount(id);
+
+        account.UpdateAboutInfo(
+            "Letting flats in Damascus since 2019.",
+            "WhatsApp +963911234567",
+            DateTime.UtcNow);
+
+        var identity =
+            new IdentityAccountSnapshot(
+                IdentityId: id,
+                UserAccountId: id,
+                Email: "user@example.com",
+                PhoneNumber: null,
+                EmailConfirmed: true,
+                PhoneConfirmed: false,
+                HasPassword: true,
+                IsDeleted: false);
+
+        var sut =
+            new GetCurrentUserQueryHandler(
+                new StubIdentityService(
+                    identity,
+                    ["User"]),
+                new StubUserAccountRepository(
+                    account),
+                new StubPlanRepository(),
+                new Moq.Mock<HudhudNestApi.Application.Plans.Interfaces.IPlanRequestRepository>().Object);
+
+        var result =
+            await sut.Handle(
+                new GetCurrentUserQuery(id),
+                CancellationToken.None);
+
+        Assert.NotNull(result);
+
+        Assert.Equal(
+            "Letting flats in Damascus since 2019.",
+            result!.Bio);
+
+        Assert.Equal(
+            "WhatsApp +963911234567",
+            result.ContactInfo);
+    }
+
+    [Fact]
     public async Task Handle_ReturnsNull_WhenIdentityAccountIsDeleted()
     {
         // Arrange

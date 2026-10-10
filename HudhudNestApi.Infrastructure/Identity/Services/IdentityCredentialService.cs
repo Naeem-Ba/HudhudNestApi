@@ -204,10 +204,16 @@ public sealed class IdentityCredentialService
 
             // Explicit pre-check so a collision is a 409 with a stable code rather than
             // a unique-index violation escaping as a 500. The index still backs this up
-            // against the race between check and save.
+            // against the race between check and save. It matches the normalized number as
+            // well as the lookup hash: the hash is filled in by an optional backfill (and
+            // phone registration did not write it before the proof-beats-claim change), so an
+            // account without one is invisible to a hash-only check, while the unique index
+            // on NormalizedPhoneNumber still rejects the save.
             var alreadyTaken = await _users.Users
                 .AnyAsync(
-                    other => other.PhoneNumberLookupHash == lookupHash && other.Id != user.Id,
+                    other => other.Id != user.Id
+                        && (other.PhoneNumberLookupHash == lookupHash
+                            || other.NormalizedPhoneNumber == normalized),
                     ct);
 
             if (alreadyTaken)
