@@ -9,6 +9,13 @@ public interface ICommonLookupService
     Task<IReadOnlyList<LookupItemDto>> GetPropertyTypesAsync(CancellationToken ct = default);
     Task<IReadOnlyList<LookupItemDto>> GetCitiesAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// The cities of one governorate: the governorate's own Arabic and English names (a listing's
+    /// City is filled from the governorate name when it is published) plus every other City value
+    /// found on that governorate's listings.
+    /// </summary>
+    Task<IReadOnlyList<LookupItemDto>> GetCitiesByGovernorateAsync(int governorateId, CancellationToken ct = default);
+
     // Phase-0, Task 0 follow-up: the real, DB-backed structured-location catalog
     // (Governorate/District/Neighborhood/PropertyType) — previously had entities,
     // tables and seed data but no read endpoint at all. See StructuredLocationLookupDto

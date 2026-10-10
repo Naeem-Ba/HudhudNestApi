@@ -38,12 +38,15 @@ public sealed class LookupsController : ControllerBase
     public async Task<IActionResult> GetPropertyTypes(CancellationToken ct)
         => Ok(await _lookups.GetPropertyTypesAsync(ct));
 
+    /// <summary>All cities of existing listings, or with <c>governorateId</c> only that governorate's.</summary>
     [HttpGet("cities")]
     [AllowAnonymous] // Public reference data.
     [EnableRateLimiting("public-read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetCities(CancellationToken ct)
-        => Ok(await _lookups.GetCitiesAsync(ct));
+    public async Task<IActionResult> GetCities([FromQuery] int? governorateId, CancellationToken ct)
+        => Ok(governorateId is > 0
+            ? await _lookups.GetCitiesByGovernorateAsync(governorateId.Value, ct)
+            : await _lookups.GetCitiesAsync(ct));
 
     // Phase-0, Task 0 follow-up: real, DB-backed structured-location catalog.
     // Governorate/District/Neighborhood/PropertyType entities and seed data
