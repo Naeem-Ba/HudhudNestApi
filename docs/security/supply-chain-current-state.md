@@ -41,7 +41,7 @@ This assessment covers the HudhudNestApi solution projects, package references, 
 
 ## NuGet Inventory Summary
 
-The direct package set is centrally declared in `Directory.Packages.props`. Security-pinned direct references include `MessagePack 2.5.302`, `Microsoft.Bcl.Memory 9.0.18`, and `System.Security.Cryptography.Xml 8.0.4`.
+The direct package set is centrally declared in `Directory.Packages.props`. Security-pinned direct references include `MessagePack 2.5.307` and `Microsoft.Bcl.Memory 10.0.12`. (`System.Security.Cryptography.Xml` was pinned to 8.0.4 on .NET 8; the .NET 10 shared framework already includes it, so the pin was removed — NU1510.)
 
 The current `dotnet list package --vulnerable --include-transitive` result reported no vulnerable packages from the configured sources during local inspection.
 

@@ -80,6 +80,63 @@ public sealed class MigrationCompletenessTests
     }
 
     /// <summary>
+    /// EF Core 9+ compares the model with the snapshot before it migrates and refuses with
+    /// PendingModelChangesWarning when they differ. The snapshot was generated with
+    /// Npgsql.EnableLegacyTimestampBehavior on, so every process that calls MigrateAsync has to set
+    /// the same switch first. The Migrator tool did not; on EF Core 10 it failed against a fresh
+    /// database even though no model change was missing. Tools get it either directly or through
+    /// AddInfrastructure, whose persistence registration sets it.
+    /// </summary>
+    [Fact(DisplayName = "Every tool that runs migrations gets the legacy timestamp switch before it migrates")]
+    public void MigratingTools_Should_SetTheLegacyTimestampSwitch()
+    {
+        const string Switch = "Npgsql.EnableLegacyTimestampBehavior";
+        var repositoryRoot = FindRepositoryRoot();
+
+        var registration = File.ReadAllText(Path.Combine(
+            repositoryRoot,
+            "HudhudNestApi.Infrastructure",
+            "Persistence",
+            "PersistenceInfrastructureRegistration.cs"));
+        Assert.Contains(Switch, registration, StringComparison.Ordinal);
+
+        var toolsDirectory = Path.Combine(repositoryRoot, "tools");
+        var migrating = Directory.GetFiles(toolsDirectory, "Program.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Select(path => (Path: path, Source: File.ReadAllText(path)))
+            .Where(tool => tool.Source.Contains("MigrateAsync(", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.NotEmpty(migrating);
+
+        var missing = migrating
+            .Where(tool => !tool.Source.Contains(Switch, StringComparison.Ordinal) &&
+                           !tool.Source.Contains("AddInfrastructure(", StringComparison.Ordinal))
+            .Select(tool => Path.GetRelativePath(toolsDirectory, tool.Path))
+            .ToArray();
+
+        Assert.True(
+            missing.Length == 0,
+            "These tools run MigrateAsync without setting Npgsql.EnableLegacyTimestampBehavior (directly or through " +
+            "AddInfrastructure), so EF Core refuses to migrate (PendingModelChangesWarning): " + string.Join(", ", missing));
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "HudhudNestApi.sln")))
+                return directory.FullName;
+
+            directory = directory.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate repository root containing HudhudNestApi.sln.");
+    }
+
+    /// <summary>
     /// Diffs the compiled model snapshot against the current model and returns the operations
     /// that would have to be applied. Empty means every model change is covered by a migration.
     /// </summary>

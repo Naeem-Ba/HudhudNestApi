@@ -6,8 +6,8 @@ Assessment date: 2026-07-28. Finding: M-10 (P0, production blocking).
 
 | Area | Confirmed repository state |
 |---|---|
-| Runtime | ASP.NET Core / .NET 8 |
-| ORM and provider | EF Core 8.0.11 with Npgsql.EntityFrameworkCore.PostgreSQL 8.0.11 |
+| Runtime | ASP.NET Core / .NET 10 (LTS) |
+| ORM and provider | EF Core 10.0.12 with Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 |
 | Database | PostgreSQL 16, pinned by `postgis/postgis:16-3.4` in the production gate |
 | Spatial extension | PostGIS 3.4 in the pinned database image; startup/readiness checks execute a PostGIS query |
 | Migrations | `HudhudNestApi.Infrastructure/Migrations`; history table is the EF default `__EFMigrationsHistory` |

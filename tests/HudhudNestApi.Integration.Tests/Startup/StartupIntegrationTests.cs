@@ -335,14 +335,8 @@ public sealed class StartupIntegrationTests : IAsyncLifetime
 
             builder.ConfigureTestServices(services =>
             {
-                services.RemoveAll<DbContextOptions<AppDbContext>>();
                 services.UseEphemeralDataProtection();
-
-                services.AddDbContext<AppDbContext>(options =>
-                    options
-                        .UseInMemoryDatabase(_databaseName)
-                        .ConfigureWarnings(warnings =>
-                            warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
+                services.UseInMemoryAppDbContext(_databaseName);
             });
         }
     }

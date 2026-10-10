@@ -2,7 +2,7 @@
 
 ## Scope
 
-Backend only, .NET 8 Clean Architecture, PostgreSQL. This phase gives the backend a way to
+Backend only, .NET 10 Clean Architecture, PostgreSQL. This phase gives the backend a way to
 answer, for a given platform and client app version, whether an update exists and whether it is
 mandatory, plus admin CRUD to manage that data.
 

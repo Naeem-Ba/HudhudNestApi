@@ -72,12 +72,7 @@ public sealed class PhoneAuthWebApplicationFactory
             services.RemoveAll<IHostedService>();
             services.UseEphemeralDataProtection();
 
-            services.RemoveAll<DbContextOptions<AppDbContext>>();
-            services.AddDbContext<AppDbContext>(options =>
-                options
-                    .UseInMemoryDatabase(_databaseName)
-                    .ConfigureWarnings(warnings =>
-                        warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
+            services.UseInMemoryAppDbContext(_databaseName);
 
             services.RemoveAll<IOtpService>();
             services.AddSingleton<IOtpService, DeterministicOtpService>();

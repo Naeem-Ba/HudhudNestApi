@@ -20,7 +20,7 @@ HudhudNestApi uses NuGet Central Package Management through `Directory.Packages.
 | `xunit.runner.visualstudio` | `4.0.0` |
 | `coverlet.collector` | `10.0.1` |
 
-These versions were selected because they are already compatible with the repository's .NET 8 test execution path and existing xUnit tests. Versions are kept current with `Directory.Packages.props` as the single source of truth (last verified 2026-09-18 during a `docs/audit/` review).
+These versions were selected because they are already compatible with the repository's .NET 10 test execution path and existing xUnit tests. Versions are kept current with `Directory.Packages.props` as the single source of truth (last verified 2026-09-18 during a `docs/audit/` review).
 
 ## Restore Reproducibility
 

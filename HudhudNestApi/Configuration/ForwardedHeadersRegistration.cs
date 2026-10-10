@@ -1,6 +1,7 @@
 using System.Net;
+using System.Net.Sockets;
 using Microsoft.AspNetCore.HttpOverrides;
-using AspNetCoreIPNetwork = Microsoft.AspNetCore.HttpOverrides.IPNetwork;
+using IPNetwork = System.Net.IPNetwork;
 
 namespace HudhudNestApi.Configuration;
 
@@ -79,7 +80,7 @@ public static class ForwardedHeadersRegistration
             options.RequireHeaderSymmetry = false;
 
             options.KnownProxies.Clear();
-            options.KnownNetworks.Clear();
+            options.KnownIPNetworks.Clear();
 
             foreach (var proxy in knownProxies)
             {
@@ -93,7 +94,7 @@ public static class ForwardedHeadersRegistration
 
             foreach (var cidr in knownNetworks)
             {
-                options.KnownNetworks.Add(ParseNetwork(cidr));
+                options.KnownIPNetworks.Add(ParseNetwork(cidr));
             }
 
             foreach (var host in allowedHosts.Where(value => !string.IsNullOrWhiteSpace(value)))
@@ -105,17 +106,35 @@ public static class ForwardedHeadersRegistration
         return services;
     }
 
-    private static AspNetCoreIPNetwork ParseNetwork(string cidr)
+    private static IPNetwork ParseNetwork(string cidr)
     {
         var parts = cidr.Split('/', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 2 ||
             !IPAddress.TryParse(parts[0], out var prefix) ||
-            !int.TryParse(parts[1], out var prefixLength))
+            !int.TryParse(parts[1], out var prefixLength) ||
+            prefixLength < 0 ||
+            prefixLength > (prefix.AddressFamily == AddressFamily.InterNetwork ? 32 : 128))
         {
             throw new InvalidOperationException(
                 $"Invalid ForwardedHeaders:KnownNetworks CIDR value '{cidr}'. Expected format: 10.0.0.0/8.");
         }
 
-        return new AspNetCoreIPNetwork(prefix, prefixLength);
+        // System.Net.IPNetwork (which replaced the obsolete Microsoft.AspNetCore.HttpOverrides.IPNetwork
+        // in .NET 10) throws when the address has bits set beyond the prefix, e.g. 10.1.2.3/8, where the
+        // old type accepted it and matched the whole 10.0.0.0/8 range. A value that has been working
+        // in the Production environment variables must not start failing the boot, so the host bits are
+        // cleared here and the same range is trusted as before.
+        return new IPNetwork(ClearHostBits(prefix, prefixLength), prefixLength);
+    }
+
+    private static IPAddress ClearHostBits(IPAddress address, int prefixLength)
+    {
+        var bytes = address.GetAddressBytes();
+        for (var bit = prefixLength; bit < bytes.Length * 8; bit++)
+        {
+            bytes[bit / 8] &= (byte)~(0x80 >> (bit % 8));
+        }
+
+        return new IPAddress(bytes);
     }
 }

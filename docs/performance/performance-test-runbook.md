@@ -9,7 +9,7 @@ Production users, databases, Redis, storage, or provider credentials.
 ## Prerequisites
 
 - Docker with Compose and a running daemon.
-- .NET 8 SDK.
+- .NET 10 SDK.
 - PostgreSQL client (`psql`), `curl`, `jq`, Python 3, OpenSSL, and Bash.
 - Ports 58080, 55432, and 56379 available.
 

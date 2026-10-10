@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 env:
-  DOTNET_VERSION: 8.0.x
+  DOTNET_VERSION: 10.0.x
   COMPOSE_FILE: ci/docker-compose.production-gate.yml
   HUDHUDNEST_IMAGE_TAG: production-gate
 
@@ -546,7 +546,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # The runtime image (mcr.microsoft.com/dotnet/aspnet:8.0-jammy-chiseled-extra)
+          # The runtime image (mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra)
           # is a distroless-style image: it has no shell and no coreutils, so
           # `docker compose exec api id -u` fails with "executable file not
           # found in $PATH" (exit 127). Instead, read the effective user Docker

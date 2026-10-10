@@ -199,7 +199,7 @@ public sealed class CICDPipelineTests
         Assert.Contains("NuGet.config", apiDockerfile);
         Assert.Contains("--locked-mode", apiDockerfile);
         Assert.Contains(
-            "mcr.microsoft.com/dotnet/aspnet:8.0-jammy-chiseled-extra AS runtime",
+            "mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra AS runtime",
             apiDockerfile);
         Assert.Contains("USER $APP_UID", apiDockerfile);
         Assert.Contains("--locked-mode", migratorDockerfile);

@@ -11,7 +11,7 @@
 ## المنهجية وحدود المسؤولية
 
 هذا الجرد نتج عن فحص فعلي للكود المصدري في مستودعين:
-- **Backend**: `HudhudNestApi` (.NET 8 / ASP.NET Core)، بما فيه EF Core migrations، model snapshot، الإعدادات (`appsettings*.json`)، وواجهات الخدمات الخارجية.
+- **Backend**: `HudhudNestApi` (.NET 10 / ASP.NET Core)، بما فيه EF Core migrations، model snapshot، الإعدادات (`appsettings*.json`)، وواجهات الخدمات الخارجية.
 - **Frontend/Mobile**: `HudhudNest` (Angular + Capacitor)، بما فيه مكونات الواجهة، `capacitor.config.ts`، `AndroidManifest.xml`، `Info.plist`.
 
 **لا يمثل هذا الملف رأياً قانونياً.** كل صف في الجدول أدناه مصنّف بحسب مستوى التحقق:

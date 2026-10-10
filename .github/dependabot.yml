@@ -24,12 +24,13 @@ updates:
     # which is where security fixes for this stack land -- and every bar below
     # names the condition that lifts it.
     ignore:
-      # Directory.Build.props targets net8.0 for all 15 projects. These packages
-      # are versioned in lockstep with the framework, so a major bump is a
-      # framework migration wearing a dependency bump's clothes. #60 proposed
-      # exactly that: EF Core 9.0.19 next to EF Core Tools 10.0.11 -- internally
-      # inconsistent before it is even incompatible, and EF Core 10 requires
-      # net10.0. Lift all four when the TargetFramework moves.
+      # Directory.Build.props targets net10.0 (LTS, supported until November
+      # 2028) for all 15 projects. These packages are versioned in lockstep with
+      # the framework, so a major bump is a framework migration wearing a
+      # dependency bump's clothes. #60 proposed exactly that: EF Core 9.0.19 next
+      # to EF Core Tools 10.0.11 -- internally inconsistent before it is even
+      # compatible. The next major (11.x) belongs to .NET 11, a short-support
+      # release; lift all four when the TargetFramework moves to the next LTS.
       - dependency-name: "Microsoft.AspNetCore.*"
         update-types: ["version-update:semver-major"]
       - dependency-name: "Microsoft.EntityFrameworkCore*"
@@ -43,7 +44,7 @@ updates:
       # 12.5.0 is Apache-2.0, 14.2.0 ships a file licence with
       # requireLicenseAcceptance. It also demands
       # Microsoft.Extensions.{DependencyInjection,Logging}.Abstractions 10.0.0
-      # even in its own net8.0 dependency group, against the 8.0.x pinned here.
+      # even in its own net8.0 dependency group, against the Abstractions pinned here.
       # Merged in #48, reverted in #54, proposed again in #62. 74 files use
       # IRequestHandler. Lift only on a deliberate licensing decision.
       - dependency-name: "MediatR"
@@ -51,8 +52,9 @@ updates:
 
       # HudhudNestApi never calls MessagePack. It is a direct, security-pinned
       # reference (2.5.302 carries the hash-collision DoS fix) only because
-      # Microsoft.AspNetCore.SignalR.StackExchangeRedis 8.0.x, the SignalR Redis
-      # backplane, is compiled against MessagePack 2.5 for its wire protocol.
+      # Microsoft.AspNetCore.SignalR.StackExchangeRedis (10.0.x still depends on
+      # MessagePack 2.5.302), the SignalR Redis backplane, is compiled against
+      # MessagePack 2.5 for its wire protocol.
       # 3.1.9 (#185) resolves and round-trips a backplane message in isolation,
       # but that path cannot be exercised end to end without two nodes sharing a
       # real Redis, and 3.x brings nothing this project uses. Lift when the
@@ -96,10 +98,10 @@ updates:
           - "postgis/postgis"
           - "redis"
     ignore:
-      # The .NET base images track Directory.Build.props (net8.0). 8.0 -> 10.0
-      # (#195-#197) is the same framework migration barred for the NuGet
-      # packages above, and the runtime image is a pinned chiseled 8.0 variant.
-      # Lift together with the TargetFramework.
+      # The .NET base images track Directory.Build.props (net10.0) and the
+      # runtime image is a pinned chiseled 10.0 variant (10.0-noble-chiseled-extra).
+      # A major bump is the same framework migration barred for the NuGet
+      # packages above. Lift together with the TargetFramework.
       - dependency-name: "dotnet/*"
         update-types: ["version-update:semver-major"]
       - dependency-name: "mcr.microsoft.com/dotnet/*"

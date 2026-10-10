@@ -28,7 +28,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DOTNET_VERSION: '8.0.x'
+  DOTNET_VERSION: '10.0.x'
   SOLUTION_PATH: 'HudhudNestApi.sln'
   COVERAGE_BASELINE_PATH: 'ci/coverage-baseline.json'
   VULNERABILITY_BASELINE_PATH: 'ci/vulnerability-baseline.json'

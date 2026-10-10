@@ -85,7 +85,7 @@ override that; see §13.
 ## 2. Current Database Architecture
 
 - **Engine**: PostgreSQL, PostGIS extension. Provider: `Npgsql.EntityFrameworkCore.PostgreSQL`
-  8.0.11 on EF Core 8 / .NET 8 (`Directory.Packages.props`, `HudhudNestApi.Infrastructure.csproj`).
+  10.0.3 on EF Core 10 / .NET 10 (`Directory.Packages.props`, `HudhudNestApi.Infrastructure.csproj`).
 - **Context**: one primary `AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>`
   ([AppDbContext.cs](../HudhudNestApi.Infrastructure/Persistence/AppDbContext.cs)) plus a second,
   separate `DataProtectionKeyDbContext` for ASP.NET Data Protection keys.

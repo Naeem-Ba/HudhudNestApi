@@ -3,7 +3,7 @@
 
 | | |
 |---|---|
-| **اسم النظام** | HudhudNestApi (.NET 8 Web API) — الواجهة الخلفية لمنصّة «هدهد نيست» |
+| **اسم النظام** | HudhudNestApi (.NET 10 Web API) — الواجهة الخلفية لمنصّة «هدهد نيست» |
 | **إصدار الوثيقة** | **2.0** |
 | **تاريخ الإصدار** | 2026-10-02 |
 | **الحالة** | معتمدة — مطابقة للكود على `master` عند commit `d153318` (PR #264) |
@@ -137,7 +137,7 @@ HudhudNestApi هي الواجهة الخلفية الوحيدة لمنصّة ع�
 
 | القيد | الأثر المعماري |
 |---|---|
-| **.NET 8 / Clean Architecture من 4 مشاريع** | اتجاه الاعتماد مفروض آليًا؛ ترقية إلى .NET 10 مخطَّطة (`docs/operations/net10-migration-plan.md`) وصور Docker الأساسية محجوبة عن قفزات الإصدار الرئيسي (#200) |
+| **.NET 10 (LTS) / Clean Architecture من 4 مشاريع** | اتجاه الاعتماد مفروض آليًا؛ تمت الترقية من .NET 8 إلى .NET 10 (`docs/operations/net10-migration-plan.md`) وصور Docker الأساسية محجوبة عن قفزات الإصدار الرئيسي (#200) |
 | **PostgreSQL + PostGIS وحيدة** | البحث الجغرافي عبر PostGIS؛ فهارس trigram للبحث النصي (#212)؛ **Render Postgres المجاني ينتهي** → خطة الانتقال إلى Supabase (`database-host-migration-runbook.md`) — لم تُنفَّذ بعد |
 | **Cloudinary بخطة مجانية (بيئة واحدة)** | العزل بين البيئتين **بمجلد جذر**: `staging/` تلقائيًا في Staging و`hudhudnest/` في Production (#244)، لا عزل تخزين فعلي؛ تخطيط مجلدات مركزي لكل كيان (`IMediaFolderBuilder`) |
 | **مستودعان منفصلان** | أي تغيير في عقد HTTP يتطلب تنسيقًا يدويًا؛ سُمّي عطل CSRF التاريخي مثالًا |
@@ -152,7 +152,7 @@ HudhudNestApi هي الواجهة الخلفية الوحيدة لمنصّة ع�
 
 ### 3.1 وصف النظام
 
-**HudhudNestApi** واجهة REST بـ **.NET 8** تخدم منصّة عقارية متعددة الأدوار: باحثون (إيجار/شراء/إقامة قصيرة)، ملّاك ووسطاء، مكاتب عقارية، مزوّدو خدمات، مستثمرون، مسؤولو نظام. المعمارية **Clean Architecture** بأربع طبقات فيزيائية مع **CQRS** عبر **MediatR**، وPostgreSQL/PostGIS للبيانات.
+**HudhudNestApi** واجهة REST بـ **.NET 10** تخدم منصّة عقارية متعددة الأدوار: باحثون (إيجار/شراء/إقامة قصيرة)، ملّاك ووسطاء، مكاتب عقارية، مزوّدو خدمات، مستثمرون، مسؤولو نظام. المعمارية **Clean Architecture** بأربع طبقات فيزيائية مع **CQRS** عبر **MediatR**، وPostgreSQL/PostGIS للبيانات.
 
 النظام بلا حالة على مستوى العملية: أي حالة تنجو بين الطلبات تُحفَظ في PostgreSQL أو Redis. العوامل الخلفية الثمانية (القسم 4.3) تتشارك العمل عبر أقفال `BackgroundJobLock` فلا تتكرر عند تعدد النسخ.
 
@@ -348,7 +348,7 @@ HudhudNestApi.Infrastructure ──implements──▶ Application ; ──▶ D
 
 | التقنية | الدور | التبرير |
 |---|---|---|
-| .NET 8 / ASP.NET Core | المنصّة | LTS، أداء، Middleware ناضج |
+| .NET 10 / ASP.NET Core | المنصّة | LTS، أداء، Middleware ناضج |
 | PostgreSQL + PostGIS + EF Core/Npgsql | القاعدة | استعلامات جغرافية + ACID؛ `xmin` للتزامن |
 | MediatR + FluentValidation | CQRS | نقطة تمديد موحّدة |
 | Redis (StackExchange) | تحديد معدل، كاش مخرجات، Security Stamp، SignalR | حالة مشتركة |
