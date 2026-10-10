@@ -17,6 +17,13 @@ internal static class PersistenceInfrastructureRegistration
         IConfiguration configuration,
         IHostEnvironment environment)
     {
+        // The migrations and the model snapshot were generated with Npgsql's legacy timestamp
+        // behaviour, and Program.cs sets the same switch for the API. A host that only calls
+        // AddInfrastructure -- the Migrator tool -- never runs Program.cs, and EF Core 9+ refuses to
+        // migrate when the model it builds differs from the snapshot (PendingModelChangesWarning).
+        // Idempotent, and it has to happen before the first DbContext is created.
+        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
         var exposeDatabaseDiagnostics =
             PerformanceDatabaseDiagnosticsPolicy.IsEnabled(environment, configuration);
         if (exposeDatabaseDiagnostics)
