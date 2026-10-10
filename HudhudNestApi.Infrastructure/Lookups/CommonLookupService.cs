@@ -139,6 +139,40 @@ public sealed class CommonLookupService : ICommonLookupService
         return result ?? Array.Empty<LookupItemDto>();
     }
 
+    public async Task<IReadOnlyList<LookupItemDto>> GetCitiesByGovernorateAsync(
+        int governorateId,
+        CancellationToken ct = default)
+    {
+        // Parent-scoped, so not cached for the same reason as GetDistrictsAsync.
+        var governorate = await _db.Governorates
+            .AsNoTracking()
+            .Where(g => g.Id == governorateId && g.IsActive)
+            .Select(g => new { g.NameAr, g.NameEn })
+            .FirstOrDefaultAsync(ct);
+
+        if (governorate is null)
+            return Array.Empty<LookupItemDto>();
+
+        var stored = await _db.Properties
+            .AsNoTracking()
+            .Where(p => p.GovernorateId == governorateId && p.City != "")
+            .Select(p => p.City)
+            .Distinct()
+            .ToListAsync(ct);
+
+        // Case-insensitive de-duplication: the same city typed "Damascus" and "damascus" is one suggestion.
+        return stored
+            .Append(governorate.NameAr)
+            .Append(governorate.NameEn)
+            .Where(city => !string.IsNullOrWhiteSpace(city))
+            .Select(city => city.Trim())
+            .GroupBy(city => city, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(city => city, StringComparer.CurrentCulture)
+            .Select(city => new LookupItemDto(city, city))
+            .ToList();
+    }
+
     public async Task<IReadOnlyList<StructuredLocationLookupDto>> GetGovernoratesAsync(
         string countryCode = "SY",
         CancellationToken ct = default)
