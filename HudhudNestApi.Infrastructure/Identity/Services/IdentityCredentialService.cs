@@ -165,6 +165,13 @@ public sealed class IdentityCredentialService
     /// like, and both failure modes are returned as stable error codes the API layer
     /// can translate. PhoneNumberConfirmed is still reset, so a number set here is
     /// unverified until it passes the OTP flow.
+    ///
+    /// SECURITY (phone confirmation audit, 2026-10-10): a CONFIRMED phone is the account's
+    /// recovery and login credential, and this method is reachable with a bare access token
+    /// (PUT /api/users/me). It therefore refuses to replace or clear a confirmed number
+    /// (PHONE_NUMBER_CHANGE_REQUIRES_VERIFICATION); that takes the password + OTP flow under
+    /// /api/auth/phone/change. Re-sending the same number stays a no-op, and an unconfirmed
+    /// number (never proven, grants nothing) can still be corrected or set for the first time.
     /// </summary>
     public async Task<IdentityOperationResult> SetPhoneNumberAsync(
         Guid id, string? phone, DateTime changedAtUtc, CancellationToken ct)
@@ -186,6 +193,9 @@ public sealed class IdentityCredentialService
 
         if (string.Equals(user.NormalizedPhoneNumber, normalized, StringComparison.Ordinal))
             return IdentityOperationResult.Success();
+
+        if (user.PhoneNumberConfirmed && !string.IsNullOrEmpty(user.NormalizedPhoneNumber))
+            return IdentityOperationResult.Failed("PHONE_NUMBER_CHANGE_REQUIRES_VERIFICATION");
 
         string? lookupHash = null;
         if (normalized is not null)

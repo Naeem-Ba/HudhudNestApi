@@ -136,7 +136,9 @@ public sealed class UpdateUserCommandHandler
                             nameof(UpdateUserCommand.PhoneNumber),
                             phoneResult.Errors.Contains("PHONE_NUMBER_INVALID")
                                 ? "Phone number must be in international E.164 format, for example +963911234567."
-                                : string.Join(" | ", phoneResult.Errors));
+                                : phoneResult.Errors.Contains("PHONE_NUMBER_CHANGE_REQUIRES_VERIFICATION")
+                                    ? "A verified phone number cannot be changed or removed from the profile. Change it with a verification code instead."
+                                    : string.Join(" | ", phoneResult.Errors));
                 }
             }
 

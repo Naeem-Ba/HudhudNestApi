@@ -77,7 +77,10 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         var eligible = purpose switch
         {
             OtpPurpose.PhoneRegistration => user is null,
-            OtpPurpose.PhonePasswordReset => user is not null,
+            // Only a number the owner proved control of may reset a password. An unconfirmed number is a
+            // claim anyone with an access token could type into the profile, so it must not be a recovery
+            // channel (phone confirmation audit, 2026-10-10). It is answered with the same decoy as an unknown number.
+            OtpPurpose.PhonePasswordReset => user is { PhoneNumberConfirmed: true },
             OtpPurpose.PhoneReverification => user is not null && user.Id == userId,
             OtpPurpose.PhoneNumberChange => user is null && userId.HasValue,
             _ => false
@@ -269,7 +272,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhonePasswordReset, null, channel, ct);
         if (outcome.Challenge is not { } challenge) return Fail(PasswordResetErrorCode(outcome.FailureReason));
         var user = await _users.Users.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber, ct);
-        if (user is null) return Fail("PASSWORD_RESET_INVALID");
+        if (user is not { PhoneNumberConfirmed: true }) return Fail("PASSWORD_RESET_INVALID");
         await ConsumeAsync(challenge.Id, ct);
         return new(true, ConfirmationToken: await _users.GeneratePasswordResetTokenAsync(user));
     }
@@ -280,7 +283,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         var normalized = _normalizer.Normalize(phoneNumber);
         if (!normalized.Succeeded) return Fail("PASSWORD_RESET_INVALID");
         var user = await _users.Users.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == normalized.Value, ct);
-        if (user is null) return Fail("PASSWORD_RESET_INVALID");
+        if (user is not { PhoneNumberConfirmed: true }) return Fail("PASSWORD_RESET_INVALID");
         var reset = await _users.ResetPasswordAsync(user, confirmationToken, newPassword);
         if (!reset.Succeeded) return IdentityFail(reset, "PASSWORD_RESET_INVALID");
         // Proving control of the number by OTP is stronger than the failed guesses that locked the

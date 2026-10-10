@@ -52,6 +52,13 @@ When `PhoneVerification:EnforcementEnabled` is true, restricted users may read d
 
 Password reset and phone change update the Identity security stamp and revoke active refresh tokens. Existing refresh-token rotation, reuse detection, and JWT security-stamp validation remain authoritative. Unknown-phone login executes an Identity password-hasher dummy path and returns the same `PHONE_AUTH_FAILED` contract as a wrong password. Anonymous OTP send responses are generic.
 
+A phone number is a recovery credential only once its owner has proven control of it (`PhoneNumberConfirmed`). Two rules enforce that:
+
+- `POST password-reset/send-otp`, `verify` and `confirm` accept only a number whose account has `PhoneNumberConfirmed = true`. Any other number, confirmed or not, gets the same decoy challenge as an unknown number, so the response still reveals nothing about accounts.
+- `PUT /api/users/me` can no longer replace or clear a confirmed login phone: the request is refused with 422 (internal result code `PHONE_NUMBER_CHANGE_REQUIRES_VERIFICATION`) and nothing else in that request is saved. Re-sending the stored number is a no-op, an account with no phone may add one (stored unconfirmed), and a number that was never confirmed may still be corrected. A confirmed number changes only through `POST change/send-otp` + `POST change/verify` (password and OTP).
+
+Before this (phone confirmation audit, 2026-10-10) an access token alone could swap the login phone through the profile endpoint and then reset the account's password by OTP on the new number.
+
 Audit entries contain user ID when known, event name, outcome, IP through the existing audit redaction conventions, and no OTP, password, token, or raw phone.
 
 ## Migration and rollout
@@ -66,7 +73,7 @@ Existing users with no trustworthy phone-confirmation timestamp remain `NotConfi
 
 ## Error codes
 
-`PHONE_ALREADY_REGISTERED`, `PHONE_AUTH_FAILED`, `PHONE_NUMBER_INVALID`, `PHONE_COUNTRY_NOT_SUPPORTED`, `PHONE_NUMBER_ALREADY_IN_USE`, `OTP_INVALID`, `PASSWORD_POLICY_FAILED`, `USER_CREATE_FAILED`, `ROLE_ASSIGNMENT_FAILED`, `PHONE_REVERIFICATION_REQUIRED`, `PHONE_REVERIFICATION_NOT_CONFIGURED`, `RECENT_AUTHENTICATION_REQUIRED`, `PASSWORD_RESET_INVALID`, and, for channels, `OTP_CHANNEL_UNAVAILABLE` and `OTP_PROVIDER_UNAVAILABLE` (`SMS_FAILED` stays the SMS-specific spelling of the latter).
+`PHONE_ALREADY_REGISTERED`, `PHONE_AUTH_FAILED`, `PHONE_NUMBER_INVALID`, `PHONE_COUNTRY_NOT_SUPPORTED`, `PHONE_NUMBER_ALREADY_IN_USE`, `PHONE_NUMBER_CHANGE_REQUIRES_VERIFICATION`, `OTP_INVALID`, `PASSWORD_POLICY_FAILED`, `USER_CREATE_FAILED`, `ROLE_ASSIGNMENT_FAILED`, `PHONE_REVERIFICATION_REQUIRED`, `PHONE_REVERIFICATION_NOT_CONFIGURED`, `RECENT_AUTHENTICATION_REQUIRED`, `PASSWORD_RESET_INVALID`, and, for channels, `OTP_CHANNEL_UNAVAILABLE` and `OTP_PROVIDER_UNAVAILABLE` (`SMS_FAILED` stays the SMS-specific spelling of the latter).
 
 ## OTP channels
 
