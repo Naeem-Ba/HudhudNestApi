@@ -820,7 +820,7 @@ jobs:
       # green PR, branch or master runs.
       - name: Upload production gate results
         if: ${{ failure() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: production-gate-results-${{ github.sha }}-${{ github.run_id }}
           if-no-files-found: warn
@@ -885,7 +885,7 @@ jobs:
         run: bash scripts/verify-observability.sh
       - name: Upload observability evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: observability-evidence-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: error
@@ -944,7 +944,7 @@ jobs:
 
       - name: Upload Redis HA validation artifacts
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: redis-ha-validation
           if-no-files-found: warn
@@ -998,7 +998,7 @@ jobs:
 
       - name: Upload Redis Sentinel HA drill artifacts
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: redis-sentinel-ha-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
@@ -1329,7 +1329,7 @@ jobs:
 
       - name: Upload sanitized staging evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: staging-smoke-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: error
@@ -1406,7 +1406,7 @@ jobs:
 
       - name: Upload Redis failover artifacts
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: redis-staging-failover
           if-no-files-found: error
@@ -1664,7 +1664,7 @@ jobs:
             '{commitSha:$commitSha,backupId:$backupId,efCoreMigration:$efCoreMigration,previousKnownGoodDeployId:$previousKnownGoodDeployId,gateCompletedAtUtc:$gateCompletedAtUtc,recoveryGate:"PASS",eligibleForRenderDeploy:true}' \
             > artifacts/production-release/predeployment-recovery-metadata.json
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: production-release-recovery-metadata-${{ github.run_id }}
           retention-days: 90
