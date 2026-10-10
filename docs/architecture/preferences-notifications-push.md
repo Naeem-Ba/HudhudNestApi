@@ -58,8 +58,7 @@ entity and the notification renderer all read it. The web app mirrors it in
   key. Tests assert all three languages are filled in and use identical placeholders.
 * Already stored notifications are never rewritten, so a language change affects only later ones. The
   `?language=` query the web app still sends to `GET /notifications` is ignored by the server.
-* Not yet localized: **security-alert emails** (`SecurityAlertEmailService`, English only, addressed by
-  email rather than account id, with placeholder links) -- see "Remaining work".
+* **Security-alert emails** (failed login, lockout, password-change request, password changed) are also in the account holder's language (`SecurityAlertTemplates`, ar/en/de). The account is found from the address the alert goes to (`ISecurityAlertLanguageResolver`), never from the request that caused it. An account that never chose a language, an unknown address or a failed lookup keeps the original English. The `[..._LINK]` placeholder lines in those emails predate this work and are unchanged in all languages.
 
 ## Push
 
@@ -123,7 +122,6 @@ The web repo uses `@capacitor-firebase/messaging` (returns an **FCM** token on b
 
 ## Remaining work
 
-* Security-alert emails are English-only; localizing them needs the account looked up by email in the
-  background worker and four translated templates.
+* The security emails still contain unreplaced `[CHANGE_PASSWORD_LINK]`-style placeholders (pre-existing); they need real frontend URLs.
 * No exchange-rate source (by decision); display currency has no visible effect yet beyond being stored.
 * Real-device push (Android/iOS) and DB-backed integration tests were not run in this environment.
