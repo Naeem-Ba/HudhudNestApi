@@ -183,6 +183,40 @@ public sealed class UsersController : ControllerBase
         return result is null ? NotFound() : NoContent();
     }
 
+    /// <summary>
+    /// PUT /api/Users/me/preferences -- the caller's interface language and display currency.
+    /// Only these two fields are read from the body (null = leave unchanged), so this endpoint can
+    /// never touch a profile, contact or security field; the user id comes from the token, never
+    /// the body. Unsupported codes are a 400 from UpdateUserCommandValidator.
+    /// </summary>
+    [HttpPut("me/preferences")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [EnableRateLimiting("user-write")]
+    public async Task<IActionResult> UpdatePreferences(
+        [FromBody] UpdatePreferencesRequest dto,
+        CancellationToken ct)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var result = await _sender.Send(new UpdateUserCommand(
+            UserId: userId,
+            FirstName: null,
+            LastName: null,
+            DisplayName: null,
+            PhoneNumber: null,
+            ProfileImageUrl: null,
+            PreferredLanguage: dto.PreferredLanguage,
+            PreferredCurrency: dto.PreferredCurrency,
+            CountryCode: null
+        ), ct);
+
+        return result is null ? NotFound() : NoContent();
+    }
+
     // POST /api/Users/me/avatar — رفع/استبدال الصورة الشخصية (multipart/form-data).
     // نفس منهجية POST /api/properties/{id}/images (PropertyImagesController):
     // IFormFile → DTO لا يعرف ASP.NET → Command → Handler يتحقق ويرفع عبر
@@ -452,6 +486,11 @@ public sealed record UpdateProfileRequest(
     string? PhoneNumber,
     string? Bio = null,
     string? ContactInfo = null);
+
+/// <summary>Null leaves the stored value unchanged.</summary>
+public sealed record UpdatePreferencesRequest(
+    string? PreferredLanguage,
+    string? PreferredCurrency);
 
 public sealed record ChangePasswordRequest(
     string CurrentPassword,
