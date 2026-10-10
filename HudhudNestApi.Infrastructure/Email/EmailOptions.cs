@@ -66,6 +66,15 @@ public sealed class EmailOptions
                 "provider (e.g. Resend), or every send will be rejected with a silent 403.");
         }
 
+        if (TryGetReservedSenderDomain(From, out var reservedDomain))
+        {
+            throw new InvalidOperationException(
+                $"Email:From uses the reserved or test domain '{reservedDomain}' in Production. " +
+                "Set it to an address on a domain verified with the email provider (e.g. Resend); " +
+                "reserved domains (.test, .invalid, .example, .local, localhost, example.com/net/org) " +
+                "can never be verified, so every send would be rejected.");
+        }
+
         // A blank Provider means SMTP in Production (see ResolveEmailProvider), and the SMTP
         // sender only discovers a missing host when it tries to send -- an error the callers
         // swallow. Production ran like that: every registration succeeded, the confirmation
@@ -82,5 +91,47 @@ public sealed class EmailOptions
                 "Email:Provider=Resend with Email:Resend:ApiKey and Email:From, or configure " +
                 "Email:SmtpHost.");
         }
+    }
+
+    private static readonly string[] ReservedDomainSuffixes =
+    [
+        ".test",
+        ".invalid",
+        ".example",
+        ".local",
+        ".localhost"
+    ];
+
+    private static readonly string[] ReservedExampleDomains =
+    [
+        "example.com",
+        "example.net",
+        "example.org"
+    ];
+
+    /// <summary>
+    /// RFC 2606 / RFC 6761 names (and "localhost") can never be verified with a mail provider, so a
+    /// sender on one of them is a left-over test value rather than a real Production sender.
+    /// </summary>
+    private static bool TryGetReservedSenderDomain(string from, out string domain)
+    {
+        domain = string.Empty;
+
+        var at = from.LastIndexOf('@');
+        if (at < 0 || at == from.Length - 1)
+            return false;
+
+        var host = from[(at + 1)..].Trim().Trim('>').TrimEnd('.').ToLowerInvariant();
+
+        var reserved =
+            host == "localhost" ||
+            ReservedDomainSuffixes.Any(suffix => host.EndsWith(suffix, StringComparison.Ordinal)) ||
+            ReservedExampleDomains.Any(example =>
+                host == example || host.EndsWith("." + example, StringComparison.Ordinal));
+
+        if (reserved)
+            domain = host;
+
+        return reserved;
     }
 }

@@ -135,8 +135,13 @@ Verified in code (not assumed from file existence):
   `ASPNETCORE_ENVIRONMENT`/`DOTNET_ENVIRONMENT`, not a config flag that could be forgotten.
 - `ProductionStartupValidator` is a real `IHostedService` — it runs at process start and **throws**
   (crashing the process, not logging-and-continuing) if: the Production DB connection is missing,
-  `Trust Server Certificate=true` is present in the Production connection string, SMS/Email settings
-  fail their Production-only validation, or PostGIS is not actually reachable and healthy.
+  `Trust Server Certificate=true` is present in the Production connection string, one of the three
+  secrets (`Jwt:Key`, `OtpSettings:SecretKey`, `Security:PhoneLookupHmacKey`) is missing, too short, a
+  placeholder or the public CI test value, or two of them are equal (`ProductionSecretsPolicy`; the
+  OTP and phone-lookup keys used to be read only on the first phone request, so a service without
+  them started, reported ready and then returned 500 for every phone registration and login),
+  SMS/Email settings fail their Production-only validation, or PostGIS is not actually reachable and
+  healthy.
 - `Email:Provider` is validated to reject `Console` in Production (`AuthInfrastructureRegistration.cs:249`)
   and to reject the shipped placeholder `@hudhudnest.local` `From` address (`EmailOptions.ValidateForEnvironment`).
 - `Jwt:Key` is validated to be ≥32 characters via `IOptions<JwtOptions>.ValidateOnStart()`
