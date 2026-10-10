@@ -36,6 +36,7 @@ public sealed class ProductionStartupValidator : IHostedService
         }
 
         ValidateProductionDatabaseConnection();
+        ValidateSecrets();
         ValidateSmsSettings();
         ValidateEmailSettings();
         await ValidatePostGisAsync(cancellationToken);
@@ -64,6 +65,11 @@ public sealed class ProductionStartupValidator : IHostedService
                 "Production database connection must not use Trust Server Certificate=true. Use a trusted CA certificate with SSL Mode=Require or VerifyFull.");
         }
     }
+
+    // OtpService and HmacPhoneNumberLookupHasher read their keys in their constructors, i.e. on the
+    // first request that needs them, so without this check a service missing either key started,
+    // reported ready and then answered 500 to every phone registration and login.
+    private void ValidateSecrets() => ProductionSecretsPolicy.EnsureValid(_configuration);
 
     private void ValidateSmsSettings()
     {

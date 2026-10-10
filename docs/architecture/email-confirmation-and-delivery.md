@@ -72,7 +72,9 @@ When the provider is `Resend`, all of these are `ValidateOnStart`:
 
 Regardless of provider, `ProductionStartupValidator` additionally runs
 `EmailOptions.ValidateForEnvironment` in Production: `Email:From` must not still be the
-shipped placeholder domain (see below).
+shipped placeholder domain (see below) nor any other reserved or test domain that can never be
+verified with a provider (`.test`, `.invalid`, `.example`, `.local`, `localhost`, `example.com`,
+`example.net`, `example.org`).
 
 A misconfigured deployment therefore fails at boot rather than at the first registration.
 
