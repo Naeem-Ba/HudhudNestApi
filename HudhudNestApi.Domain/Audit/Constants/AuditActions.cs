@@ -22,6 +22,7 @@ public static class AuditActions
     public const string PhoneVerificationRestricted = "PhoneVerificationRestricted";
     public const string PhoneNumberChangeRequested = "PhoneNumberChangeRequested";
     public const string PhoneNumberChanged = "PhoneNumberChanged";
+    public const string PhoneUnconfirmedClaimReleased = "PhoneUnconfirmedClaimReleased";
     public const string AccountDeletionCompleted = "AccountDeletionCompleted";
     public const string AccountDeletionRequested = "AccountDeletionRequested";
     public const string AccountDeletionCancelled = "AccountDeletionCancelled";
