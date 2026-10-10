@@ -2,29 +2,27 @@ using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using HudhudNestApi.Application.Common.DTOs;
 using HudhudNestApi.Application.Common.Interfaces;
-using HudhudNestApi.Application.Properties.DTOs;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings.Entities;
 using HudhudNestApi.Domain.Lookups.Entities;
 using HudhudNestApi.Infrastructure.Persistence;
-using HudhudNestApi.Infrastructure.Repositories;
 using HudhudNestApi.Integration.Tests.Auth;
 using Xunit;
 
 namespace HudhudNestApi.Integration.Tests.Listings;
 
 /// <summary>
-/// The City filter and the city suggestions, on a real server.
+/// The city suggestions behind the filter's City box, on a real server.
 ///
 /// A listing's City is filled from its governorate's name in whatever language the publisher used,
-/// so the same governorate is stored as "دمشق" by one listing and "Damascus" by another. A plain
-/// substring match on City made "دمشق" return "ريف دمشق" (Rural Damascus) listings and miss every
-/// listing stored in English.
+/// so the same governorate is stored as "دمشق" by one listing and "Damascus" by another. Suggestions
+/// for a chosen governorate therefore list that governorate's own names plus the cities found on its
+/// listings, de-duplicated, and never another governorate's.
 /// </summary>
 [Collection("AuthPostgres")]
 [Trait("Category", "Integration")]
 [Trait("Feature", "Listings")]
-public sealed class PropertyCityFilterTests : IAsyncLifetime
+public sealed class CitySuggestionsTests : IAsyncLifetime
 {
     private readonly PostgresAuthTestFactory _factory = new();
     private readonly string _marker = $"city-{Guid.NewGuid():N}"[..13];
@@ -38,43 +36,6 @@ public sealed class PropertyCityFilterTests : IAsyncLifetime
     {
         _factory.Dispose();
         return Task.CompletedTask;
-    }
-
-    [Fact(DisplayName = "City equal to a governorate's name matches that governorate in either language, never its look-alike")]
-    public async Task City_NamingAGovernorate_MatchesTheGovernorateInBothLanguages()
-    {
-        await SeedAsync();
-        var expected = new[] { "ar", "en", "legacy" };
-
-        // Arabic name: the Arabic listing, the English-stored one, and the legacy row without a governorate id —
-        // but not the Rural Damascus listing whose name merely contains it.
-        Assert.Equal(expected, await TitlesAsync(new PropertyFilterDto { City = _damascus.NameAr }));
-        // English name, any casing, gives the same set.
-        Assert.Equal(expected, await TitlesAsync(new PropertyFilterDto { City = _damascus.NameEn.ToUpperInvariant() }));
-        // The look-alike governorate is matched by its own name only.
-        Assert.Equal(new[] { "rural" }, await TitlesAsync(new PropertyFilterDto { City = _ruralDamascus.NameAr }));
-    }
-
-    [Fact(DisplayName = "City that is not a governorate's name stays a substring match")]
-    public async Task City_NotAGovernorateName_IsSubstringMatch()
-    {
-        await SeedAsync();
-
-        // Every seeded City carries the unique suffix; none of them equals a governorate name.
-        var suffix = _damascus.NameEn[(_damascus.NameEn.IndexOf('-') + 1)..];
-        Assert.Equal(new[] { "ar", "en", "legacy", "rural" }, await TitlesAsync(new PropertyFilterDto { City = $"-{suffix}" }));
-    }
-
-    [Fact(DisplayName = "Governorate filter together with a city of the same governorate keeps the listings stored in the other language")]
-    public async Task GovernorateAndCity_Together_StillMatchBothLanguages()
-    {
-        await SeedAsync();
-
-        var together = await TitlesAsync(new PropertyFilterDto { GovernorateId = _damascus.Id, City = _damascus.NameAr });
-        Assert.Equal(new[] { "ar", "en", "legacy" }, together);
-
-        // A city of another governorate contradicts the chosen governorate: nothing matches.
-        Assert.Empty(await TitlesAsync(new PropertyFilterDto { GovernorateId = _ruralDamascus.Id, City = _damascus.NameAr }));
     }
 
     [Fact(DisplayName = "City suggestions scoped to a governorate list its own names and its listings' cities, de-duplicated, and nothing of other governorates")]
@@ -144,27 +105,7 @@ public sealed class PropertyCityFilterTests : IAsyncLifetime
         Add("ar", _damascus.NameAr, _damascus.Id);
         Add("en", _damascus.NameEn, _damascus.Id);
         Add("rural", _ruralDamascus.NameAr, _ruralDamascus.Id);
-        // Published before listings carried a governorate id: only the free-text city says where it is.
-        Add("legacy", _damascus.NameEn.ToLowerInvariant(), null);
         Add("jaramana", $"Jaramana-{_marker}", _damascus.Id);
         await db.SaveChangesAsync();
-    }
-
-    private async Task<string[]> TitlesAsync(PropertyFilterDto filter)
-    {
-        filter.Page = 1;
-        filter.PageSize = 50;
-        filter.SearchTerm = _marker;
-
-        await using var scope = _factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var page = await new PropertyRepository(db).GetPagedAsync(filter, CancellationToken.None);
-
-        // "jaramana" belongs to the suggestions test only; the filter tests compare the other four.
-        return page.Items
-            .Select(p => p.Title[(p.Title.LastIndexOf(' ') + 1)..])
-            .Where(t => t != "jaramana")
-            .Order()
-            .ToArray();
     }
 }

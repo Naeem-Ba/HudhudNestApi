@@ -367,42 +367,23 @@ public sealed class PropertyRepository : IPropertyRepository
         _db.Properties.Remove(property);
     }
 
-    /// <summary>A governorate that the free-text City filter named exactly (in Arabic or English).</summary>
-    public sealed record CityGovernorate(int Id, string NameAr, string NameEn);
-
-    /// <summary>
-    /// Names of the selected governorate/district, used to match legacy free-text locations, and the
-    /// governorate the City filter spelled out, if any.
-    /// </summary>
+    /// <summary>Names of the selected governorate/district, used to match legacy free-text locations.</summary>
     public sealed record LocationTextFallback(
         string? GovernorateNameAr, string? GovernorateNameEn,
-        string? DistrictNameAr, string? DistrictNameEn,
-        CityGovernorate? CityAsGovernorate = null);
+        string? DistrictNameAr, string? DistrictNameEn);
 
     /// <summary>
     /// Looks up the selected governorate/district names so <see cref="ApplyFilter"/> can also match
-    /// legacy listings that have no structured location ids, and the governorate the City filter
-    /// named when it is exactly a governorate's name. Returns null when none of those filters is
-    /// set (no extra query).
+    /// legacy listings that have no structured location ids. Returns null when no structured
+    /// location filter is set (no extra query).
     /// </summary>
     public static async Task<LocationTextFallback?> ResolveLocationFallbackAsync(
         AppDbContext db, PropertyFilterDto filter, CancellationToken ct = default)
     {
-        var city = filter.City?.Trim();
-        if (!filter.GovernorateId.HasValue && !filter.DistrictId.HasValue && string.IsNullOrEmpty(city))
+        if (!filter.GovernorateId.HasValue && !filter.DistrictId.HasValue)
             return null;
 
         string? gAr = null, gEn = null, dAr = null, dEn = null;
-        CityGovernorate? cityAsGovernorate = null;
-
-        if (!string.IsNullOrEmpty(city))
-        {
-            var lowered = city.ToLowerInvariant();
-            cityAsGovernorate = await db.Governorates.AsNoTracking()
-                .Where(x => x.NameAr == city || x.NameEn.ToLower() == lowered)
-                .Select(x => new CityGovernorate(x.Id, x.NameAr, x.NameEn))
-                .FirstOrDefaultAsync(ct);
-        }
 
         if (filter.GovernorateId is { } gid)
         {
@@ -420,7 +401,7 @@ public sealed class PropertyRepository : IPropertyRepository
             dAr = d?.NameAr; dEn = d?.NameEn;
         }
 
-        return new LocationTextFallback(gAr, gEn, dAr, dEn, cityAsGovernorate);
+        return new LocationTextFallback(gAr, gEn, dAr, dEn);
     }
 
     /// <summary>
@@ -446,27 +427,8 @@ public sealed class PropertyRepository : IPropertyRepository
         if (!string.IsNullOrWhiteSpace(filter.CountryCode))
             query = query.Where(p => p.CountryCode == filter.CountryCode.ToUpperInvariant());
 
-        // City is free text, and a listing's City is filled from the governorate's name in whatever
-        // language its publisher used. So when the filter is exactly a governorate's name, match the
-        // governorate itself (by id, or by name for legacy rows without one): a plain substring match
-        // would return "Rural Damascus" listings for "Damascus" and miss the ones stored in the other
-        // language. Any other text stays a substring match.
         if (!string.IsNullOrWhiteSpace(filter.City))
-        {
-            if (locationFallback?.CityAsGovernorate is { } cityGovernorate)
-            {
-                var cityGovernorateId = cityGovernorate.Id;
-                var cityGovernorateNameAr = cityGovernorate.NameAr;
-                var cityGovernorateNameEn = cityGovernorate.NameEn;
-                query = query.Where(p => p.GovernorateId == cityGovernorateId ||
-                    (p.GovernorateId == null &&
-                     (EF.Functions.ILike(p.City, cityGovernorateNameAr) || EF.Functions.ILike(p.City, cityGovernorateNameEn))));
-            }
-            else
-            {
-                query = query.Where(p => EF.Functions.ILike(p.City, $"%{filter.City.Trim()}%"));
-            }
-        }
+            query = query.Where(p => EF.Functions.ILike(p.City, $"%{filter.City.Trim()}%"));
 
         if (!string.IsNullOrWhiteSpace(filter.Region))
             query = query.Where(p => EF.Functions.ILike(p.Region!, $"%{filter.Region.Trim()}%"));
