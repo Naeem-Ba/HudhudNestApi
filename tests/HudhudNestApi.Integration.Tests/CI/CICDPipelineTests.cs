@@ -75,10 +75,17 @@ public sealed class CICDPipelineTests
         var ciYaml = File.ReadAllText(Path.Combine(repoRoot, ".github", "workflows", "ci.yml"));
         var productionYaml = File.ReadAllText(Path.Combine(repoRoot, ".github", "workflows", "production-gate.yml"));
 
-        Assert.Contains("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0", ciYaml);
-        Assert.Contains("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1", ciYaml);
-        Assert.Contains("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0", productionYaml);
-        Assert.Contains("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1", productionYaml);
+        // The two release workflows must use these actions, pinned to a SHA with a version comment. The
+        // SHA itself is not pinned here: Dependabot moves it every time the action ships a patch, and a
+        // test that names one SHA fails every such update even though the pin is just as immutable.
+        foreach (var action in new[] { "actions/setup-dotnet", "actions/upload-artifact" })
+        {
+            var usesPinned = new System.Text.RegularExpressions.Regex(
+                $@"uses:\s+{System.Text.RegularExpressions.Regex.Escape(action)}@[0-9a-f]{{40}}\s+#\s+v\d+\.\d+\.\d+");
+
+            Assert.Matches(usesPinned, ciYaml);
+            Assert.Matches(usesPinned, productionYaml);
+        }
     }
 
     [Fact(DisplayName = "CI quality gate scripts and baseline must be present")]
