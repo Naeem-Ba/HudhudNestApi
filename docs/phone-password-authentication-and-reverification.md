@@ -57,6 +57,13 @@ A phone number is a recovery credential only once its owner has proven control o
 - `POST password-reset/send-otp`, `verify` and `confirm` accept only a number whose account has `PhoneNumberConfirmed = true`. Any other number, confirmed or not, gets the same decoy challenge as an unknown number, so the response still reveals nothing about accounts.
 - `PUT /api/users/me` can no longer replace or clear a confirmed login phone: the request is refused with 422 (internal result code `PHONE_NUMBER_CHANGE_REQUIRES_VERIFICATION`) and nothing else in that request is saved. Re-sending the stored number is a no-op, an account with no phone may add one (stored unconfirmed), and a number that was never confirmed may still be corrected. A confirmed number changes only through `POST change/send-otp` + `POST change/verify` (password and OTP).
 
+A one-time code proves control of a number; a number typed into a profile proves nothing. So the code wins over an unconfirmed claim (phase 2 of the same audit):
+
+- Registration (`registration/send-otp` + `verify`) and the phone change (`change/send-otp` + `verify`) accept a number that is held only by an unconfirmed account. When the code is verified, that account's phone fields are cleared (audit event `PhoneUnconfirmedClaimReleased`) and the number moves to the verified holder. Before this, a typed number locked its real owner out of registering.
+- The change flow also confirms the number the calling account already holds unconfirmed: it is the way to confirm a number typed into the profile.
+- A number held by a CONFIRMED account still blocks both flows, and the answer to the caller stays the same decoy, so nothing new is revealed about accounts.
+- `change/verify` still needs the current password. Accounts without a password (Google, Apple) therefore cannot confirm a phone yet; that policy is undecided.
+
 Before this (phone confirmation audit, 2026-10-10) an access token alone could swap the login phone through the profile endpoint and then reset the account's password by OTP on the new number.
 
 Audit entries contain user ID when known, event name, outcome, IP through the existing audit redaction conventions, and no OTP, password, token, or raw phone.

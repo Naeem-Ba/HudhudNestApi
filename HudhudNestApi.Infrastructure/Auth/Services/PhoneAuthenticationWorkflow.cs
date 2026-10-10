@@ -38,14 +38,17 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     private readonly string[] _allowedCountryCodes;
     private readonly IUserSecurityStampCacheInvalidator _stampCache;
     private readonly SystemRoleGuarantee _roles;
+    private readonly IPhoneNumberLookupHasher _lookupHasher;
 
     public PhoneAuthenticationWorkflow(AppDbContext db, UserManager<ApplicationUser> users,
         SignInManager<ApplicationUser> signIn, IPhoneNumberNormalizer normalizer, IOtpService otp,
         IOtpChannelService channels, ITokenService tokens, IRefreshTokenRepository refreshTokens,
         IPhoneVerificationPolicy policy, TimeProvider clock, IAuditLogService audit,
         IOptions<SmsProviderOptions> smsOptions, ILogger<PhoneAuthenticationWorkflow> logger,
-        IUserSecurityStampCacheInvalidator stampCache, SystemRoleGuarantee roles)
+        IUserSecurityStampCacheInvalidator stampCache, SystemRoleGuarantee roles,
+        IPhoneNumberLookupHasher lookupHasher)
     {
+        _lookupHasher = lookupHasher;
         _stampCache = stampCache;
         _roles = roles;
         _allowedCountryCodes = smsOptions.Value.AllowedCountryCodes
@@ -76,13 +79,19 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         var user = await _users.Users.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == phone, ct);
         var eligible = purpose switch
         {
-            OtpPurpose.PhoneRegistration => user is null,
+            // Proof beats a claim: a number held only by an unconfirmed account (typed into a profile, never
+            // proven) must not lock out the person who really controls it. The OTP below is what proves it, and
+            // the claim is released when the code is verified. A confirmed holder still blocks, answered with
+            // the same decoy as before, so nothing new is revealed.
+            OtpPurpose.PhoneRegistration => user is null || !user.PhoneNumberConfirmed,
             // Only a number the owner proved control of may reset a password. An unconfirmed number is a
             // claim anyone with an access token could type into the profile, so it must not be a recovery
             // channel (phone confirmation audit, 2026-10-10). It is answered with the same decoy as an unknown number.
             OtpPurpose.PhonePasswordReset => user is { PhoneNumberConfirmed: true },
             OtpPurpose.PhoneReverification => user is not null && user.Id == userId,
-            OtpPurpose.PhoneNumberChange => user is null && userId.HasValue,
+            // Also the way to confirm the number an account already holds unconfirmed (its own, or someone
+            // else's claim to release).
+            OtpPurpose.PhoneNumberChange => userId.HasValue && (user is null || !user.PhoneNumberConfirmed),
             _ => false
         };
 
@@ -174,13 +183,16 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         await using var transaction = await _db.Database.BeginTransactionAsync(ct);
         try
         {
-            if (await _users.Users.AnyAsync(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber, ct))
+            var now = _clock.GetUtcNow();
+            var holders = await _users.Users.Where(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber).ToListAsync(ct);
+            if (holders.Any(x => x.PhoneNumberConfirmed))
             {
                 await transaction.RollbackAsync(ct);
                 await ReleaseAsync(challenge.Id, ct);
                 return Fail("PHONE_ALREADY_REGISTERED");
             }
-            var now = _clock.GetUtcNow();
+            // The code just proved control of the number, which an unconfirmed claim never did.
+            foreach (var claimant in holders) await ReleaseUnconfirmedClaimAsync(claimant, now, ipAddress, ct);
             var id = Guid.NewGuid();
             var user = NewVerifiedUser(id, challenge.NormalizedPhoneNumber, now);
             var created = await _users.CreateAsync(user, password);
@@ -336,16 +348,25 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             return Fail("RECENT_AUTHENTICATION_REQUIRED");
         var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneNumberChange, userId, channel, ct);
         if (outcome.Challenge is not { } challenge) return Fail(OtpErrorCode(outcome.FailureReason, "OTP_INVALID"));
-        if (await _users.Users.AnyAsync(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber, ct))
+        // A confirmed holder keeps the number, even this account: confirming it a second time changes nothing.
+        // An unconfirmed holder is only a claim; the code just proved control, so the claim is released below
+        // (when the claimant is this very account, confirming its own number is exactly what is asked for).
+        var claimants = await _users.Users
+            .Where(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber && x.Id != user.Id).ToListAsync(ct);
+        if (claimants.Any(x => x.PhoneNumberConfirmed) ||
+            (user.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber && user.PhoneNumberConfirmed))
             return Fail("PHONE_NUMBER_ALREADY_IN_USE");
-        // The AnyAsync above is only a friendly early answer: another request can take the number between it
+        // The check above is only a friendly early answer: another request can take the number between it
         // and the write, and the unique index is what actually decides. Registration handles that with a
         // transaction; so does this, otherwise the loser got a 500 and a burnt code.
         await using var transaction = await _db.Database.BeginTransactionAsync(ct);
         try
         {
+            var now = _clock.GetUtcNow();
+            foreach (var claimant in claimants) await ReleaseUnconfirmedClaimAsync(claimant, now, ipAddress, ct);
             user.PhoneNumber = challenge.NormalizedPhoneNumber;
             user.NormalizedPhoneNumber = challenge.NormalizedPhoneNumber;
+            user.PhoneNumberLookupHash = _lookupHasher.Compute(challenge.NormalizedPhoneNumber);
             user.PhoneNumberConfirmed = true;
             SetVerified(user, _clock.GetUtcNow());
             await ConsumeAsync(challenge.Id, ct);
@@ -364,6 +385,25 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         await _audit.LogAsync(user.Id, AuditActions.PhoneNumberChanged, ipAddress,
             newValue: "{\"outcome\":\"succeeded\"}", ct: ct);
         return new(true, Message: "Phone number changed.");
+    }
+
+    /// <summary>
+    /// Takes an unproven number away from the account that merely typed it. Saved on its own, before the new
+    /// holder is written, so the unique indexes on the number never see two rows holding it.
+    /// </summary>
+    private async Task ReleaseUnconfirmedClaimAsync(ApplicationUser claimant, DateTimeOffset now,
+        string? ipAddress, CancellationToken ct)
+    {
+        claimant.PhoneNumber = null;
+        claimant.NormalizedPhoneNumber = null;
+        claimant.PhoneNumberLookupHash = null;
+        claimant.PhoneNumberConfirmed = false;
+        claimant.UpdatedAt = now.UtcDateTime;
+        var updated = await _users.UpdateAsync(claimant);
+        if (!updated.Succeeded)
+            throw new InvalidOperationException("The unconfirmed phone claim could not be released.");
+        await _audit.LogAsync(claimant.Id, AuditActions.PhoneUnconfirmedClaimReleased, ipAddress,
+            newValue: "{\"outcome\":\"released\"}", ct: ct);
     }
 
     private async Task<OtpValidationOutcome> ValidateAndReserveAsync(Guid id, string code,
@@ -487,6 +527,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             UserName = phone,
             PhoneNumber = phone,
             NormalizedPhoneNumber = phone,
+            PhoneNumberLookupHash = _lookupHasher.Compute(phone),
             PhoneNumberConfirmed = true,
             CreatedAt = now.UtcDateTime,
             UpdatedAt = now.UtcDateTime
