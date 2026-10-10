@@ -1,7 +1,7 @@
 # Account Deletion — Production Readiness (Phase 5)
 
 **Date:** 2026-09-05
-**Scope:** Server-side account deletion for HudhudNestApi (.NET 8) + the HudhudNest Angular/Capacitor client, per the Phase 5 spec (Google Play + Apple App Store account-deletion compliance).
+**Scope:** Server-side account deletion for HudhudNestApi (.NET 10) + the HudhudNest Angular/Capacitor client, per the Phase 5 spec (Google Play + Apple App Store account-deletion compliance).
 **Status of this document:** Technical readiness assessment based on actual code inspection and test runs performed in this session. It is **not** a legal opinion — see §18 for what still needs a legal/business decision.
 
 > **Note on concurrent work:** this repository had several other Claude Code sessions active on the same working tree while this phase was executed (visible via `git status` picking up unrelated in-flight changes — a new Consent-tracking feature, PII log-masking, audit-log retention, Cloudinary cleanup for expired listings). Those are **out of scope** for this document and were not modified by this phase; they are called out only where they touch a fact this report depends on (e.g. `docs/privacy/data-inventory.md`).

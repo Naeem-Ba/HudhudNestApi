@@ -3,6 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using HudhudNestApi.Infrastructure.Persistence;
 
+// Same process-wide Npgsql setting as the API (Program.cs). This tool runs MigrateAsync, and EF Core 9+
+// refuses to migrate (PendingModelChangesWarning) when the model built here differs from the snapshot.
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var rawConnection = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
     ?? Environment.GetEnvironmentVariable("RESTORE_TARGET_DATABASE_URL");
 if (string.IsNullOrWhiteSpace(rawConnection))

@@ -452,7 +452,7 @@
 
 | الطبقة | التقنية |
 |---|---|
-| الخلفية | .NET 8 / ASP.NET Core، MediatR، FluentValidation، EF Core + Npgsql + NetTopologySuite، Identity |
+| الخلفية | .NET 10 / ASP.NET Core، MediatR، FluentValidation، EF Core + Npgsql + NetTopologySuite، Identity |
 | قاعدة البيانات | PostgreSQL + PostGIS (Render؛ خطة الانتقال إلى Supabase) |
 | ذاكرة مؤقتة | Redis (Upstash في Production، Valkey على Render في Staging) |
 | الوسائط | Cloudinary (جذر `staging/` أو `hudhudnest/` بحسب البيئة) |

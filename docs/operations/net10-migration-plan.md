@@ -1,9 +1,9 @@
 # .NET 10 migration plan
 
-**Status:** planned, not started
+**Status:** code migrated on 2026-10-10 (this PR); not yet deployed — see "What the migration found" and "Rollout" below
 **Deadline:** 2026-11-10 — the day .NET 8 leaves support
 **Written:** 2026-08-21
-**Owner:** _unassigned — assign before the first work item starts_
+**Owner:** Naeem-Ba
 
 ---
 
@@ -23,7 +23,7 @@ time to discover a provider-level breaking change.
 10.0.x — that was verified against nuget.org on 2026-08-21, with `Microsoft.EntityFrameworkCore`
 at 10.0.11.
 
-## Where the solution stands
+## Where the solution stood before this migration
 
 Phase 03 of the security remediation raised the whole 8.0.x stack from **8.0.11
 (November 2024)** to **8.0.30**, and every other dependency to its newest in-band
@@ -40,6 +40,56 @@ worth exactly as much as 8.0.x still being supported.
 | Package management | Central, with lock files and `--locked-mode` in CI |
 | Runtime dependencies | PostgreSQL + PostGIS, Redis, Cloudinary, Twilio, SMTP |
 | Container base images | `mcr.microsoft.com/dotnet/{sdk,aspnet}:8.0` |
+
+## What the migration found (2026-10-10)
+
+The version bump itself was mechanical. These are the places where .NET 10 / EF Core 10 /
+Npgsql 10 behaved differently from .NET 8 and what was done about each. All of them are
+covered by a test or by a CI step so they cannot regress silently.
+
+| # | Change in the new stack | Effect here | Fix |
+|---|---|---|---|
+| 1 | EF Core 9+ compares the model with the migration snapshot before `MigrateAsync` and throws `PendingModelChangesWarning` when they differ. | The Migrator tool (and the recovery verifier's rehearsal) do not set `Npgsql.EnableLegacyTimestampBehavior`, so they built a `timestamptz` model against a `timestamp` snapshot and refused to migrate a fresh database. EF Core 8 never looked, so this had been invisible. | The switch is set at the top of both tools, like `Program.cs` does. Guarded by an Architecture test (every tool that calls `MigrateAsync` must set it) and by CI's "Apply EF Core migrations" step. |
+| 2 | `ForwardedHeadersOptions.KnownNetworks` and `Microsoft.AspNetCore.HttpOverrides.IPNetwork` are obsolete; the replacements are `KnownIPNetworks` and `System.Net.IPNetwork`, and the new type **throws** when host bits are set (for example `10.1.2.3/8`). | The Production allowlist comes from an environment variable, so a value that booted on .NET 8 could have failed the whole service on .NET 10. | `ForwardedHeadersRegistration` masks the host bits before building the network, so every value that worked still works. The configuration key (`ForwardedHeaders:KnownNetworks`) is unchanged. Covered by new tests for host-bits values and malformed CIDRs. |
+| 3 | `AddDbContext` also registers an `IDbContextOptionsConfiguration<TContext>`. | The integration test factories replaced only `DbContextOptions<AppDbContext>` with InMemory, so Npgsql stayed registered next to it and EF refused to build the context. Test-only. | One shared helper (`UseInMemoryAppDbContext`) removes both registrations. |
+| 4 | NuGet audit (NU1510): `System.Security.Cryptography.Xml` is part of the shared framework. | The direct 8.0.4 security pin is now redundant. | Pin removed. |
+| 5 | Container base images: the Ubuntu base of the `10.0` images is 24.04 (noble); there is no jammy tag to stay on. | The runtime image changes from jammy to `noble-chiseled-extra`. | Dockerfiles updated; the image tag was verified on MCR. |
+
+Checked on the new stack rather than assumed:
+
+- **Tests:** Application, Auth, Architecture, Infrastructure and Observability suites, and the
+  whole Integration suite (613 tests), pass on `net10.0`.
+- **Schema:** a fresh PostGIS database migrated by the .NET 8 Migrator and one migrated by the
+  .NET 10 Migrator produce identical `pg_dump --schema-only` output (68 migrations). Seed data is
+  identical apart from generated ids and timestamps, the EF product version in the history table,
+  and `Roles.ConcurrencyStamp`, which Identity 10 now fills in on create (it was `NULL`).
+- **Data Protection:** a payload protected on .NET 8 is unprotected on .NET 10 and the other way
+  round, and a key ring created by either version is read by the other (throwaway console
+  experiment with the default algorithms). Keys stored in the database by the running service
+  stay readable after the upgrade.
+- **Passwords:** Identity's default hasher still uses 100,000 iterations, and hashes verify in
+  both directions, so existing accounts keep logging in and the dummy-hash timing fix keeps its cost.
+- **Startup:** the Release build as Production behaves like the .NET 8 build on every refusal
+  probe, boots with the well-formed baseline, answers `/health/ready` 200, and accepts a
+  host-bits CIDR while refusing a malformed one.
+- **Packages:** `dotnet list package --vulnerable --include-transitive` reports nothing for all
+  16 projects.
+
+Not covered by the above, and left to the gates: building the container image and its Trivy
+scan (there is no Docker daemon in the development sandbox), the performance baselines, and the
+restore drill. `Microsoft.IdentityModel` moved from 7.7.3 to 8.19.2 with the JWT bearer package;
+the JWT, refresh-token and security-stamp tests pass, but no token minted by a .NET 8 build was
+replayed against a .NET 10 build, so a user holding an access token across the deploy may be
+asked to sign in again.
+
+## Rollout
+
+1. Merge this PR into `master` only after the Production secrets guard PR is deployed, so
+   the two behaviour changes never reach Production in the same release.
+2. The Production Gate runs on the merge commit; the manual deploy to Render rebuilds the
+   image from `HudhudNestApi/Dockerfile` (new SDK and runtime base images).
+3. Rollback is a redeploy of the previous Render deploy; no migration is part of this change,
+   so the database needs no rollback.
 
 ## Known work items
 
@@ -67,7 +117,7 @@ results, because the codebase leans on provider specifics:
 
 ### 2. Framework and package bump
 
-- `Directory.Build.props`: `net8.0` → `net10.0`.
+- `Directory.Build.props`: `net8.0` → `net10.0`. _(done)_
 - All `Microsoft.*`, `Microsoft.AspNetCore.*`, `Microsoft.EntityFrameworkCore.*` and
   `Microsoft.Extensions.*` entries in `Directory.Packages.props` → 10.0.x.
 - Regenerate every `packages.lock.json` (`dotnet restore --force-evaluate`). CI restores

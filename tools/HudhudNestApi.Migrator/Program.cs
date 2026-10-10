@@ -10,6 +10,12 @@ using HudhudNestApi.Infrastructure.Persistence;
 using HudhudNestApi.Infrastructure.Persistence.Backfills;
 using HudhudNestApi.Infrastructure.Persistence.Seeds;
 
+// Same process-wide Npgsql setting as the API (Program.cs) and design time (AppDbContextFactory).
+// It decides whether DateTime maps to "timestamp" or "timestamptz", so without it this process
+// builds a different model than the one the migrations were generated from. EF Core 9+ compares
+// the two before migrating and refuses with PendingModelChangesWarning; EF Core 8 never looked.
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder =
     Host.CreateApplicationBuilder(args);
 

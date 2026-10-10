@@ -44,6 +44,69 @@ public sealed class ForwardedHeadersTests
         Assert.False(options.RequireHeaderSymmetry);
     }
 
+    // .NET 10 replaced Microsoft.AspNetCore.HttpOverrides.IPNetwork with System.Net.IPNetwork, which throws
+    // when the address has bits set beyond the prefix. The old type accepted such a value (10.1.2.3/8 trusted
+    // all of 10.0.0.0/8), so a value already living in the Production environment variables must keep booting.
+    [Theory(DisplayName = "KnownNetworks keeps accepting CIDR values with host bits set and trusts the whole range")]
+    [InlineData("10.1.2.3/8", "10.200.1.1", "11.0.0.1")]
+    [InlineData("10.0.0.0/8", "10.200.1.1", "11.0.0.1")]
+    [InlineData("203.0.113.77/32", "203.0.113.77", "203.0.113.78")]
+    [InlineData("2001:db8:1:2::9/32", "2001:db8:ffff::1", "2001:db9::1")]
+    public void AddTrustedForwardedHeaders_ShouldTrustTheWholeNetwork_EvenWhenHostBitsAreSet(
+        string cidr, string insideAddress, string outsideAddress)
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = "Production"
+        });
+
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ForwardedHeaders:KnownNetworks:0"] = cidr,
+            ["ForwardedHeaders:ForwardLimit"] = "1"
+        });
+
+        builder.Services.AddTrustedForwardedHeaders(builder.Configuration, builder.Environment);
+
+        using var app = builder.Build();
+
+        var options = app.Services
+            .GetRequiredService<IOptions<ForwardedHeadersOptions>>()
+            .Value;
+
+        var network = Assert.Single(options.KnownIPNetworks);
+        Assert.True(network.Contains(IPAddress.Parse(insideAddress)));
+        Assert.False(network.Contains(IPAddress.Parse(outsideAddress)));
+    }
+
+    [Theory(DisplayName = "KnownNetworks rejects malformed CIDR values with a clear message")]
+    [InlineData("10.0.0.0")]
+    [InlineData("10.0.0.0/33")]
+    [InlineData("10.0.0.0/-1")]
+    [InlineData("not-an-ip/8")]
+    [InlineData("2001:db8::/129")]
+    public void AddTrustedForwardedHeaders_ShouldRejectMalformedNetworks(string cidr)
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = "Production"
+        });
+
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ForwardedHeaders:KnownNetworks:0"] = cidr,
+            ["ForwardedHeaders:ForwardLimit"] = "1"
+        });
+
+        builder.Services.AddTrustedForwardedHeaders(builder.Configuration, builder.Environment);
+
+        using var app = builder.Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => app.Services.GetRequiredService<IOptions<ForwardedHeadersOptions>>().Value);
+        Assert.Contains("ForwardedHeaders:KnownNetworks", exception.Message, StringComparison.Ordinal);
+    }
+
     [Fact(DisplayName = "Production ForwardedHeaders should use bounded trusted proxy settings")]
     public void ForwardedHeaders_ShouldUse_BoundedTrustedProxySettings()
     {
