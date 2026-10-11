@@ -54,11 +54,11 @@ public static class SecurityAlertTemplates
 مرحبًا {userName}،
 
 {failedAttemptCount switch
-{
-    3 => "⚠️ تحذير: رُصدت ثلاث محاولات دخول فاشلة\nإن لم تكن أنت، فحسابك ما زال متاحًا. يُرجى تغيير كلمة المرور فورًا.",
-    4 => "🔴 هام: رُصدت أربع محاولات دخول فاشلة\nسيُقفل حسابك بعد محاولة فاشلة واحدة أخرى!\nإن لم تكن أنت، غيّر كلمة المرور الآن لحماية حسابك.",
-    _ => "ℹ️ لم تنجح هذه المحاولة.\nإن لم تكن أنت، فكّر في تغيير كلمة المرور.",
-}}
+                {
+                    3 => "⚠️ تحذير: رُصدت ثلاث محاولات دخول فاشلة\nإن لم تكن أنت، فحسابك ما زال متاحًا. يُرجى تغيير كلمة المرور فورًا.",
+                    4 => "🔴 هام: رُصدت أربع محاولات دخول فاشلة\nسيُقفل حسابك بعد محاولة فاشلة واحدة أخرى!\nإن لم تكن أنت، غيّر كلمة المرور الآن لحماية حسابك.",
+                    _ => "ℹ️ لم تنجح هذه المحاولة.\nإن لم تكن أنت، فكّر في تغيير كلمة المرور.",
+                }}
 
 تفاصيل محاولة الدخول الفاشلة:
 {ShortRule}
@@ -94,11 +94,11 @@ public static class SecurityAlertTemplates
 Hallo {userName},
 
 {failedAttemptCount switch
-{
-    3 => "⚠️ WARNUNG: Drei fehlgeschlagene Versuche erkannt\nWenn Sie das nicht waren, ist Ihr Konto weiterhin zugänglich. Bitte ändern Sie sofort Ihr Passwort.",
-    4 => "🔴 WICHTIG: Vier fehlgeschlagene Versuche erkannt\nIhr Konto wird nach einem weiteren fehlgeschlagenen Versuch gesperrt!\nWenn Sie das nicht waren, ändern Sie JETZT Ihr Passwort, um Ihr Konto zu schützen.",
-    _ => "ℹ️ Dieser Versuch war nicht erfolgreich.\nWenn Sie das nicht waren, sollten Sie Ihr Passwort ändern.",
-}}
+                {
+                    3 => "⚠️ WARNUNG: Drei fehlgeschlagene Versuche erkannt\nWenn Sie das nicht waren, ist Ihr Konto weiterhin zugänglich. Bitte ändern Sie sofort Ihr Passwort.",
+                    4 => "🔴 WICHTIG: Vier fehlgeschlagene Versuche erkannt\nIhr Konto wird nach einem weiteren fehlgeschlagenen Versuch gesperrt!\nWenn Sie das nicht waren, ändern Sie JETZT Ihr Passwort, um Ihr Konto zu schützen.",
+                    _ => "ℹ️ Dieser Versuch war nicht erfolgreich.\nWenn Sie das nicht waren, sollten Sie Ihr Passwort ändern.",
+                }}
 
 Details zum fehlgeschlagenen Anmeldeversuch:
 {ShortRule}
@@ -134,11 +134,11 @@ Dies ist eine automatische Sicherheitsmeldung - bitte nicht antworten.
 Hello {userName},
 
 {failedAttemptCount switch
-{
-    3 => "\n⚠️ WARNING: Three failed attempts detected\nIf this wasn't you, your account is still accessible. Please change your password immediately.\n",
-    4 => "\n🔴 CRITICAL: Four failed attempts detected\nYour account will be locked after one more failed attempt!\nIf this wasn't you, change your password RIGHT NOW to secure your account.\n",
-    _ => "\nℹ️ This attempt was unsuccessful.\nIf this wasn't you, consider changing your password.\n",
-}}
+                {
+                    3 => "\n⚠️ WARNING: Three failed attempts detected\nIf this wasn't you, your account is still accessible. Please change your password immediately.\n",
+                    4 => "\n🔴 CRITICAL: Four failed attempts detected\nYour account will be locked after one more failed attempt!\nIf this wasn't you, change your password RIGHT NOW to secure your account.\n",
+                    _ => "\nℹ️ This attempt was unsuccessful.\nIf this wasn't you, consider changing your password.\n",
+                }}
 
 Failed Login Attempt Details:
 {ShortRule}
