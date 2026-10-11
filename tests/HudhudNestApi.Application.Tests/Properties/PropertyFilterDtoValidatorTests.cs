@@ -78,7 +78,7 @@ public sealed class PropertyFilterDtoValidatorTests
 
         var result = _validator.TestValidate(filter);
 
-        result.ShouldHaveAnyValidationError();
+        result.ShouldHaveValidationErrors();
     }
 
     [Theory]

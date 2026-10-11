@@ -632,7 +632,7 @@ public sealed class CreatePropertyCommandValidatorTests
 
         // يجب أن يفشل لأن PurchasePrice مطلوب
         var result = await _validator.TestValidateAsync(cmd);
-        result.ShouldHaveAnyValidationError();
+        result.ShouldHaveValidationErrors();
     }
 
     [Fact]
@@ -647,7 +647,7 @@ public sealed class CreatePropertyCommandValidatorTests
         };
 
         var result = await _validator.TestValidateAsync(cmd);
-        result.ShouldHaveAnyValidationError();
+        result.ShouldHaveValidationErrors();
     }
 
     [Fact]
@@ -662,7 +662,7 @@ public sealed class CreatePropertyCommandValidatorTests
         };
 
         var result = await _validator.TestValidateAsync(cmd);
-        result.ShouldHaveAnyValidationError();
+        result.ShouldHaveValidationErrors();
     }
 
     #endregion
@@ -726,7 +726,7 @@ public sealed class CreatePropertyCommandValidatorTests
         };
 
         (await _validator.TestValidateAsync(cmd))
-                  .ShouldHaveAnyValidationError();
+                  .ShouldHaveValidationErrors();
     }
 
     [Fact]
@@ -740,7 +740,7 @@ public sealed class CreatePropertyCommandValidatorTests
         };
 
         (await _validator.TestValidateAsync(cmd))
-                  .ShouldHaveAnyValidationError();
+                  .ShouldHaveValidationErrors();
     }
 
     [Theory]
@@ -1008,7 +1008,7 @@ public sealed class CreatePropertyCommandValidatorTests
         var cmd = ValidCommand() with { RentalStartDate = start, RentalEndDate = start };
 
         (await _validator.TestValidateAsync(cmd))
-                  .ShouldHaveAnyValidationError()
+                  .ShouldHaveValidationErrors()
                   .WithErrorMessage("Rental end date must be after the start date.");
     }
 
@@ -1020,7 +1020,7 @@ public sealed class CreatePropertyCommandValidatorTests
         var cmd = ValidCommand() with { RentalStartDate = start, RentalEndDate = start.AddDays(-1) };
 
         (await _validator.TestValidateAsync(cmd))
-                  .ShouldHaveAnyValidationError()
+                  .ShouldHaveValidationErrors()
                   .WithErrorMessage("Rental end date must be after the start date.");
     }
 
