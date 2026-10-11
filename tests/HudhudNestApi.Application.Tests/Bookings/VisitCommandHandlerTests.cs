@@ -11,6 +11,7 @@ using HudhudNestApi.Application.Bookings.Interfaces;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Notifications.Interfaces;
+using HudhudNestApi.Application.Notifications.Localization;
 using HudhudNestApi.Domain.Bookings.Entities;
 using HudhudNestApi.Domain.Bookings.Enums;
 using HudhudNestApi.Domain.Notifications.Enums;
@@ -87,7 +88,7 @@ public sealed class VisitCommandHandlerTests
         notifications.Verify(
             x => x.NotifyPropertyUpdateAsync(
                 requesterId, propertyId, property.Title,
-                NotificationType.VisitRescheduleProposed, It.IsAny<string>(),
+                NotificationType.VisitRescheduleProposed, It.IsAny<NotificationText>(),
                 visit.Id, It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -140,7 +141,7 @@ public sealed class VisitCommandHandlerTests
         notifications
             .Setup(x => x.NotifyPropertyUpdateAsync(
                 It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<NotificationType>(),
-                It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<NotificationText>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("simulated notification failure"));
 
         var handler = new ProposeAlternateVisitCommandHandler(
@@ -182,7 +183,7 @@ public sealed class VisitCommandHandlerTests
         notifications.Verify(
             x => x.NotifyPropertyUpdateAsync(
                 ownerId, propertyId, property.Title, NotificationType.VisitRescheduleAccepted,
-                It.IsAny<string>(), visit.Id, It.IsAny<CancellationToken>()),
+                It.IsAny<NotificationText>(), visit.Id, It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -234,7 +235,7 @@ public sealed class VisitCommandHandlerTests
         notifications
             .Setup(x => x.NotifyPropertyUpdateAsync(
                 It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<NotificationType>(),
-                It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<NotificationText>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("simulated notification failure"));
 
         var handler = new AcceptRescheduledVisitCommandHandler(
@@ -274,7 +275,7 @@ public sealed class VisitCommandHandlerTests
         notifications.Verify(
             x => x.NotifyPropertyUpdateAsync(
                 ownerId, propertyId, property.Title, NotificationType.VisitRescheduleDeclined,
-                It.IsAny<string>(), visit.Id, It.IsAny<CancellationToken>()),
+                It.IsAny<NotificationText>(), visit.Id, It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -305,7 +306,7 @@ public sealed class VisitCommandHandlerTests
         notifications
             .Setup(x => x.NotifyPropertyUpdateAsync(
                 It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<NotificationType>(),
-                It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<NotificationText>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("simulated notification failure"));
 
         var handler = new DeclineRescheduledVisitCommandHandler(
@@ -349,7 +350,7 @@ public sealed class VisitCommandHandlerTests
         notifications.Verify(
             x => x.NotifyPropertyUpdateAsync(
                 requesterId, propertyId, property.Title, NotificationType.VisitConfirmed,
-                It.IsAny<string>(), visit.Id, It.IsAny<CancellationToken>()),
+                It.IsAny<NotificationText>(), visit.Id, It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -377,7 +378,7 @@ public sealed class VisitCommandHandlerTests
         notifications.Verify(
             x => x.NotifyPropertyUpdateAsync(
                 requesterId, propertyId, property.Title, NotificationType.VisitDeclined,
-                It.IsAny<string>(), visit.Id, It.IsAny<CancellationToken>()),
+                It.IsAny<NotificationText>(), visit.Id, It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -405,7 +406,7 @@ public sealed class VisitCommandHandlerTests
         notifications.Verify(
             x => x.NotifyPropertyUpdateAsync(
                 ownerId, propertyId, property.Title, NotificationType.VisitCancelled,
-                It.IsAny<string>(), visit.Id, It.IsAny<CancellationToken>()),
+                It.IsAny<NotificationText>(), visit.Id, It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -428,7 +429,7 @@ public sealed class VisitCommandHandlerTests
         notifications
             .Setup(x => x.NotifyPropertyUpdateAsync(
                 It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<NotificationType>(),
-                It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<NotificationText>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("simulated notification failure"));
 
         var uow = new Mock<IUnitOfWork>();
@@ -455,7 +456,7 @@ public sealed class VisitCommandHandlerTests
         notifications
             .Setup(x => x.NotifyPropertyUpdateAsync(
                 It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<NotificationType>(),
-                It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<NotificationText>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("simulated notification failure"));
 
         var handler = new DeclineVisitCommandHandler(
@@ -480,7 +481,7 @@ public sealed class VisitCommandHandlerTests
         notifications
             .Setup(x => x.NotifyPropertyUpdateAsync(
                 It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<NotificationType>(),
-                It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<NotificationText>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("simulated notification failure"));
 
         var handler = new CancelVisitCommandHandler(
@@ -508,14 +509,14 @@ public sealed class VisitCommandHandlerTests
         visits.Setup(x => x.HasPendingVisitAsync(propertyId, requesterId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
-        string? capturedDetail = null;
+        NotificationText? capturedDetail = null;
         Guid? capturedRelatedEntityId = null;
         var notifications = new Mock<INotificationService>();
         notifications
             .Setup(x => x.NotifyPropertyUpdateAsync(
                 ownerId, propertyId, property.Title, NotificationType.VisitRequested,
-                It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
-            .Callback<Guid, Guid, string, NotificationType, string, Guid?, CancellationToken>(
+                It.IsAny<NotificationText>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, Guid, string, NotificationType, NotificationText, Guid?, CancellationToken>(
                 (_, _, _, _, detail, relatedEntityId, _) =>
                 {
                     capturedDetail = detail;
@@ -533,7 +534,9 @@ public sealed class VisitCommandHandlerTests
                 "الرجاء الاتصال قبل الوصول"),
             CancellationToken.None);
 
-        Assert.Contains("الرجاء الاتصال قبل الوصول", capturedDetail);
+        var note = Assert.IsType<NotificationText>(capturedDetail!.Args["note"]);
+        Assert.Equal(NotificationKeys.NoteFromVisitor, note.Key);
+        Assert.Equal("الرجاء الاتصال قبل الوصول", note.Args["note"]);
         Assert.Equal(result.Id, capturedRelatedEntityId);
     }
 

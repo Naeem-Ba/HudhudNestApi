@@ -84,6 +84,7 @@ public sealed class AppDbContext
     public DbSet<PropertyAttributionEvent> PropertyAttributionEvents => Set<PropertyAttributionEvent>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
     public DbSet<VisitRequest> VisitRequests => Set<VisitRequest>();
     public DbSet<PropertyReview> PropertyReviews => Set<PropertyReview>();
     public DbSet<UserRating> UserRatings => Set<UserRating>();

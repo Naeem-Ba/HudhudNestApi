@@ -84,6 +84,8 @@ public sealed class GetCurrentUserQueryHandler
             ProfileImageUrl = account.ProfileImageUrl,
             PreferredLanguage = account.PreferredLanguage,
             PreferredCurrency = account.PreferredCurrency,
+            HasChosenLanguage = account.PreferredLanguageSetAt is not null,
+            HasChosenCurrency = account.PreferredCurrencySetAt is not null,
             CountryCode = account.CountryCode,
             // The profile form is filled from this response and saves everything it shows. Leaving
             // these out showed an empty bio and contact line and made the next save clear both

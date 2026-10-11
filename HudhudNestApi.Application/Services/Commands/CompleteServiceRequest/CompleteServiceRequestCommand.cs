@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Notifications.Localization;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -89,7 +90,7 @@ public sealed class CompleteServiceRequestCommandHandler
                 propertyId: serviceRequest.PropertyId,
                 propertyTitle: serviceRequest.Property?.Title ?? "-",
                 type: NotificationType.ServiceRequestCompleted,
-                detail: $"تم إتمام طلبك ({serviceRequest.RequestNumber}). يمكنك الآن تقييم الخدمة.",
+                detail: NotificationText.Of(NotificationKeys.ServiceCompletedDetail, ("number", serviceRequest.RequestNumber)),
                 ct: ct);
         }
         catch (Exception ex)

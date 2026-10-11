@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Notifications.Localization;
 using MediatR;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
@@ -39,7 +40,7 @@ public sealed class ConfirmBookingCommandHandler : IRequestHandler<ConfirmBookin
         await _notifications.NotifyShortStayBookingUpdateAsync(
             booking.GuestId, booking.Id, listing.Title,
             NotificationType.ShortStayBookingConfirmed,
-            $"تم تأكيد حجزك لـ '{listing.Title}'.", ct);
+            NotificationText.Of(NotificationKeys.ShortStayConfirmedDetail, ("title", listing.Title)), ct);
 
         return booking.ToDto(listing.Id, listing.Title, listing.CurrencyCode);
     }

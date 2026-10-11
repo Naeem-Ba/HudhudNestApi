@@ -73,6 +73,11 @@ public sealed class UserAccountConfiguration
             .IsFixedLength()
             .IsRequired();
 
+        // Null = never chosen (every pre-existing account): see UserAccount.PreferredLanguageSetAt.
+        builder.Property(x => x.PreferredLanguageSetAt);
+
+        builder.Property(x => x.PreferredCurrencySetAt);
+
         builder.Property(x => x.CountryCode)
             .HasMaxLength(2)
             .IsFixedLength();

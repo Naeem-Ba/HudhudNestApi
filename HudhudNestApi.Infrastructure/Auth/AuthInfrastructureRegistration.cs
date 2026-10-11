@@ -108,6 +108,7 @@ internal static class AuthInfrastructureRegistration
         services.AddScoped<IdentityAccessService>();
         services.AddScoped<IdentityCredentialService>();
 
+        services.AddScoped<ISecurityAlertLanguageResolver, SecurityAlertLanguageResolver>();
         services.AddScoped<SecurityAlertEmailService>();
         services.AddScoped<ISecurityAlertService>(
             sp => sp.GetRequiredService<SecurityAlertEmailService>());

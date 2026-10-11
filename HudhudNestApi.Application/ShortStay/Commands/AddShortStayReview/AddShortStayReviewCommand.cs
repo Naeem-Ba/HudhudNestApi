@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Notifications.Localization;
 using MediatR;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
@@ -67,7 +68,7 @@ public sealed class AddShortStayReviewCommandHandler : IRequestHandler<AddShortS
             await _notifications.NotifyShortStayBookingUpdateAsync(
                 listing.OwnerId, booking.Id, listing.Title,
                 NotificationType.ShortStayReviewAdded,
-                $"حصل إعلانك '{listing.Title}' على تقييم جديد.", ct);
+                NotificationText.Of(NotificationKeys.ShortStayReviewAddedDetail, ("title", listing.Title)), ct);
         }
         catch
         {

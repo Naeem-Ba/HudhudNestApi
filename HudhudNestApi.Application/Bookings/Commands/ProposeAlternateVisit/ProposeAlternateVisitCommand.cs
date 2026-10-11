@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Notifications.Localization;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Bookings.Interfaces;
@@ -60,15 +61,15 @@ public sealed class ProposeAlternateVisitCommandHandler
         try
         {
             var noteSuffix = string.IsNullOrWhiteSpace(visit.OwnerNote)
-                ? string.Empty
-                : $" — ملاحظة المالك: {visit.OwnerNote}";
+                ? NotificationText.Empty
+                : NotificationText.Of(NotificationKeys.NoteFromOwner, ("note", visit.OwnerNote));
 
             await _notifications.NotifyPropertyUpdateAsync(
                 recipientId: visit.RequesterId,
                 propertyId: property.Id,
                 propertyTitle: property.Title,
                 type: NotificationType.VisitRescheduleProposed,
-                detail: $"الموعد الجديد المقترح: {visit.ProposedAt:dd/MM/yyyy HH:mm}.{noteSuffix}",
+                detail: NotificationText.Of(NotificationKeys.VisitProposedDetail, ("at", visit.ProposedAt), ("note", noteSuffix)),
                 relatedEntityId: visit.Id,
                 ct: ct);
         }

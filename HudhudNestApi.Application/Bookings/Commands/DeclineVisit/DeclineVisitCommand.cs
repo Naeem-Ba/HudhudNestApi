@@ -1,4 +1,5 @@
-﻿using MediatR;
+using HudhudNestApi.Application.Notifications.Localization;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Bookings.Interfaces;
 using HudhudNestApi.Application.Common.Exceptions;
@@ -57,15 +58,15 @@ public sealed class DeclineVisitCommandHandler : IRequestHandler<DeclineVisitCom
         try
         {
             var noteSuffix = string.IsNullOrWhiteSpace(visit.OwnerNote)
-                ? string.Empty
-                : $" — سبب الرفض: {visit.OwnerNote}";
+                ? NotificationText.Empty
+                : NotificationText.Of(NotificationKeys.NoteDeclineReason, ("note", visit.OwnerNote));
 
             await _notifications.NotifyPropertyUpdateAsync(
                 recipientId: visit.RequesterId,
                 propertyId: property.Id,
                 propertyTitle: property.Title,
                 type: NotificationType.VisitDeclined,
-                detail: $"طلب الزيارة بتاريخ {visit.ProposedAt:dd/MM/yyyy HH:mm}.{noteSuffix}",
+                detail: NotificationText.Of(NotificationKeys.VisitDeclinedDetail, ("at", visit.ProposedAt), ("note", noteSuffix)),
                 relatedEntityId: visit.Id,
                 ct: ct);
         }

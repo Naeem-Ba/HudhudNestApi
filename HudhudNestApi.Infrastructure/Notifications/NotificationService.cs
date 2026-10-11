@@ -2,28 +2,46 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Notifications.DTOs;
 using HudhudNestApi.Application.Notifications.Interfaces;
+using HudhudNestApi.Application.Notifications.Localization;
+using HudhudNestApi.Application.Notifications.Push;
 using HudhudNestApi.Domain.Notifications.Entities;
 using HudhudNestApi.Domain.Notifications.Enums;
+using HudhudNestApi.Domain.Users.Constants;
 using HudhudNestApi.Infrastructure.Hubs;
+using HudhudNestApi.Infrastructure.Notifications.Localization;
 
 namespace HudhudNestApi.Infrastructure.Notifications;
 
+/// <summary>
+/// Creates, stores and delivers notifications. Every sentence is rendered here, in the language
+/// of the RECIPIENT (see <see cref="IRecipientLanguageResolver"/>), from the central
+/// <see cref="NotificationCatalog"/> -- callers describe what happened, never how it is worded.
+/// Notifications already stored are never re-rendered.
+/// </summary>
 public sealed class NotificationService : INotificationService
 {
     private const int MaxPageSize = 50;
+    private const string PushTitle = "HudhudNest";
+    private static readonly TimeSpan PushBudget = TimeSpan.FromSeconds(5);
 
     private readonly INotificationRepository _notifications;
     private readonly IHubContext<NotificationHub> _hub;
     private readonly ILogger<NotificationService> _logger;
+    private readonly IRecipientLanguageResolver? _languages;
+    private readonly IPushNotificationDispatcher? _push;
 
     public NotificationService(
         INotificationRepository notifications,
         IHubContext<NotificationHub> hub,
-        ILogger<NotificationService> logger)
+        ILogger<NotificationService> logger,
+        IRecipientLanguageResolver? languages = null,
+        IPushNotificationDispatcher? push = null)
     {
         _notifications = notifications;
         _hub = hub;
         _logger = logger;
+        _languages = languages;
+        _push = push;
     }
 
     public async Task NotifyNewMessageAsync(
@@ -34,37 +52,17 @@ public sealed class NotificationService : INotificationService
         Guid propertyId,
         CancellationToken ct = default)
     {
-        if (recipientId == Guid.Empty)
-        {
-            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
-        }
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(messageId, "Message id is required.", nameof(messageId));
+        RequireId(propertyId, "Property id is required.", nameof(propertyId));
 
-        if (messageId == Guid.Empty)
-        {
-            throw new ArgumentException("Message id is required.", nameof(messageId));
-        }
+        var lang = await LanguageOfAsync(recipientId, ct);
 
-        if (propertyId == Guid.Empty)
-        {
-            throw new ArgumentException("Property id is required.", nameof(propertyId));
-        }
-
-        var safeSenderName = string.IsNullOrWhiteSpace(senderName)
-            ? "مستخدم"
-            : senderName.Trim();
-
-        var notification = new Notification
-        {
-            RecipientId = recipientId,
-            Type = NotificationType.NewMessage,
-            Message = $"أرسل لك {safeSenderName} رسالة جديدة.",
-            PropertyId = propertyId,
-            RelatedEntityId = messageId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        await PersistAndPushAsync(notification, ct);
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.NewMessage,
+                Say(lang, "msg.new_message", ("sender", NameOr(senderName, "generic.user"))),
+                propertyId: propertyId, relatedEntityId: messageId),
+            ct);
 
         _logger.LogInformation(
             "New message notification created. RecipientId={RecipientId}, SenderId={SenderId}, MessageId={MessageId}, PropertyId={PropertyId}",
@@ -79,76 +77,40 @@ public sealed class NotificationService : INotificationService
         Guid propertyId,
         string propertyTitle,
         NotificationType type,
-        string detail,
+        NotificationText detail,
         Guid? relatedEntityId = null,
         CancellationToken ct = default)
     {
-        if (recipientId == Guid.Empty)
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(propertyId, "Property id is required.", nameof(propertyId));
+
+        var lang = await LanguageOfAsync(recipientId, ct);
+
+        var key = type switch
         {
-            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
-        }
-
-        if (propertyId == Guid.Empty)
-        {
-            throw new ArgumentException("Property id is required.", nameof(propertyId));
-        }
-
-        var title = string.IsNullOrWhiteSpace(propertyTitle)
-            ? "العقار"
-            : propertyTitle.Trim();
-
-        var message = type switch
-        {
-            NotificationType.PropertyStatusChanged =>
-                $"تغيّرت حالة عقارك '{title}': {detail}",
-
-            NotificationType.PropertyPriceChanged =>
-                $"تغيّر سعر عقارك '{title}': {detail}",
-
-            NotificationType.PropertyPublished =>
-                $"تم نشر العقار '{title}' بنجاح.",
-
-            NotificationType.PropertyUnpublished =>
-                $"تم إلغاء نشر العقار '{title}'.",
-
-            // ✅ إصلاح: كانت هذه الأنواع تسقط في حالة الـ default الإنكليزية
-            // أدناه، ما ينتج نصاً عربياً/إنكليزياً مختلطاً وغير واضح للمعلن/الزائر.
-            NotificationType.VisitRequested =>
-                $"طلب زيارة جديد لعقارك '{title}': {detail}",
-
-            NotificationType.VisitConfirmed =>
-                $"تم تأكيد موعد زيارتك لعقار '{title}': {detail}",
-
-            NotificationType.VisitDeclined =>
-                $"تم رفض طلب زيارتك لعقار '{title}': {detail}",
-
-            NotificationType.VisitCancelled =>
-                $"ألغى الزائر طلب الزيارة لعقارك '{title}': {detail}",
-
-            NotificationType.VisitRescheduleProposed =>
-                $"اقترح مالك العقار '{title}' موعداً بديلاً لزيارتك: {detail}",
-
-            NotificationType.VisitRescheduleAccepted =>
-                $"وافق الزائر على الموعد البديل لزيارة عقارك '{title}': {detail}",
-
-            NotificationType.VisitRescheduleDeclined =>
-                $"رفض الزائر الموعد البديل لزيارة عقارك '{title}': {detail}",
-
-            _ => $"تحديث على العقار '{title}': {detail}"
+            NotificationType.PropertyStatusChanged => "msg.property_status_changed",
+            NotificationType.PropertyPriceChanged => "msg.property_price_changed",
+            NotificationType.PropertyPublished => "msg.property_published",
+            NotificationType.PropertyUnpublished => "msg.property_unpublished",
+            NotificationType.VisitRequested => "msg.visit_requested",
+            NotificationType.VisitConfirmed => "msg.visit_confirmed",
+            NotificationType.VisitDeclined => "msg.visit_declined",
+            NotificationType.VisitCancelled => "msg.visit_cancelled",
+            NotificationType.VisitRescheduleProposed => "msg.visit_reschedule_proposed",
+            NotificationType.VisitRescheduleAccepted => "msg.visit_reschedule_accepted",
+            NotificationType.VisitRescheduleDeclined => "msg.visit_reschedule_declined",
+            _ => "msg.property_update_default",
         };
 
-        var notification = new Notification
-        {
-            RecipientId = recipientId,
-            Type = type,
-            Message = message,
-            PropertyId = propertyId,
-            RelatedEntityId = relatedEntityId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
+        var message = Say(
+            lang,
+            key,
+            ("title", NameOr(propertyTitle, "generic.property")),
+            ("detail", detail ?? NotificationText.Empty));
 
-        await PersistAndPushAsync(notification, ct);
+        await PersistAndPushAsync(
+            New(recipientId, type, message, propertyId: propertyId, relatedEntityId: relatedEntityId),
+            ct);
 
         _logger.LogInformation(
             "Property notification created. RecipientId={RecipientId}, PropertyId={PropertyId}, Type={Type}",
@@ -164,35 +126,18 @@ public sealed class NotificationService : INotificationService
         string savedSearchName,
         CancellationToken ct = default)
     {
-        if (recipientId == Guid.Empty)
-        {
-            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
-        }
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(propertyId, "Property id is required.", nameof(propertyId));
 
-        if (propertyId == Guid.Empty)
-        {
-            throw new ArgumentException("Property id is required.", nameof(propertyId));
-        }
+        var lang = await LanguageOfAsync(recipientId, ct);
 
-        var title = string.IsNullOrWhiteSpace(propertyTitle)
-            ? "العقار"
-            : propertyTitle.Trim();
-
-        var searchName = string.IsNullOrWhiteSpace(savedSearchName)
-            ? "بحثك المحفوظ"
-            : savedSearchName.Trim();
-
-        var notification = new Notification
-        {
-            RecipientId = recipientId,
-            Type = NotificationType.SavedSearchMatch,
-            Message = $"عقار جديد '{title}' يطابق '{searchName}'.",
-            PropertyId = propertyId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        await PersistAndPushAsync(notification, ct);
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.SavedSearchMatch,
+                Say(lang, "msg.saved_search_match",
+                    ("title", NameOr(propertyTitle, "generic.property")),
+                    ("search", NameOr(savedSearchName, "generic.saved_search"))),
+                propertyId: propertyId),
+            ct);
 
         _logger.LogInformation(
             "Saved search match notification created. RecipientId={RecipientId}, PropertyId={PropertyId}",
@@ -207,26 +152,17 @@ public sealed class NotificationService : INotificationService
         double overallScore,
         CancellationToken ct = default)
     {
-        if (recipientId == Guid.Empty)
-        {
-            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
-        }
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
 
-        var safeRaterName = string.IsNullOrWhiteSpace(raterName)
-            ? "مستخدم"
-            : raterName.Trim();
+        var lang = await LanguageOfAsync(recipientId, ct);
 
-        var notification = new Notification
-        {
-            RecipientId = recipientId,
-            Type = NotificationType.UserRated,
-            Message = $"قيّمك {safeRaterName} بمتوسط {overallScore:0.0}/5 على صفحتك الشخصية.",
-            RelatedEntityId = raterId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        await PersistAndPushAsync(notification, ct);
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.UserRated,
+                Say(lang, "msg.user_rated",
+                    ("rater", NameOr(raterName, "generic.user")),
+                    ("score", overallScore)),
+                relatedEntityId: raterId),
+            ct);
 
         _logger.LogInformation(
             "User-rated notification created. RecipientId={RecipientId}, RaterId={RaterId}",
@@ -244,37 +180,23 @@ public sealed class NotificationService : INotificationService
         string memberName,
         CancellationToken ct = default)
     {
-        if (recipientId == Guid.Empty)
-        {
-            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
-        }
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(messageId, "Message id is required.", nameof(messageId));
+        RequireId(propertyId, "Property id is required.", nameof(propertyId));
 
-        if (messageId == Guid.Empty)
-        {
-            throw new ArgumentException("Message id is required.", nameof(messageId));
-        }
-
-        if (propertyId == Guid.Empty)
-        {
-            throw new ArgumentException("Property id is required.", nameof(propertyId));
-        }
-
-        var customer = string.IsNullOrWhiteSpace(customerName) ? "مستخدم" : customerName.Trim();
-        var member = string.IsNullOrWhiteSpace(memberName) ? "عضو المكتب" : memberName.Trim();
-        var agency = string.IsNullOrWhiteSpace(agencyName) ? "مكتب عقاري" : agencyName.Trim();
-        var title = string.IsNullOrWhiteSpace(propertyTitle) ? "عقار" : propertyTitle.Trim();
+        var lang = await LanguageOfAsync(recipientId, ct);
 
         // Awareness only: names the people, the listing and the agency, never the message text.
-        var notification = new Notification
-        {
-            RecipientId = recipientId,
-            Type = NotificationType.AgencyMemberInquiry,
-            Message = $"استفسار جديد: أرسل {customer} رسالة إلى {member} بخصوص '{title}' (مكتب '{agency}').",
-            PropertyId = propertyId,
-            RelatedEntityId = messageId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
+        var notification = New(
+            recipientId,
+            NotificationType.AgencyMemberInquiry,
+            Say(lang, "msg.agency_member_inquiry",
+                ("customer", NameOr(customerName, "generic.user")),
+                ("member", NameOr(memberName, "generic.agency_member")),
+                ("title", NameOr(propertyTitle, "generic.property_noun")),
+                ("agency", NameOr(agencyName, "generic.agency"))),
+            propertyId: propertyId,
+            relatedEntityId: messageId);
 
         await PersistAndPushAsync(notification, ct);
 
@@ -293,30 +215,18 @@ public sealed class NotificationService : INotificationService
         string inviterName,
         CancellationToken ct = default)
     {
-        if (recipientId == Guid.Empty)
-        {
-            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
-        }
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(invitationId, "Invitation id is required.", nameof(invitationId));
 
-        if (invitationId == Guid.Empty)
-        {
-            throw new ArgumentException("Invitation id is required.", nameof(invitationId));
-        }
+        var lang = await LanguageOfAsync(recipientId, ct);
 
-        var agency = string.IsNullOrWhiteSpace(agencyName) ? "مكتب عقاري" : agencyName.Trim();
-        var inviter = string.IsNullOrWhiteSpace(inviterName) ? "مستخدم" : inviterName.Trim();
-
-        var notification = new Notification
-        {
-            RecipientId = recipientId,
-            Type = NotificationType.AgencyInvitationReceived,
-            Message = $"دعاك {inviter} للانضمام إلى مكتب '{agency}'. راجع دعواتك لقبولها أو رفضها.",
-            RelatedEntityId = invitationId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        await PersistAndPushAsync(notification, ct);
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.AgencyInvitationReceived,
+                Say(lang, "msg.agency_invitation_received",
+                    ("inviter", NameOr(inviterName, "generic.user")),
+                    ("agency", NameOr(agencyName, "generic.agency"))),
+                relatedEntityId: invitationId),
+            ct);
 
         _logger.LogInformation(
             "Agency invitation notification created. RecipientId={RecipientId}, InvitationId={InvitationId}",
@@ -331,33 +241,21 @@ public sealed class NotificationService : INotificationService
         bool accepted,
         CancellationToken ct = default)
     {
-        if (recipientId == Guid.Empty)
-        {
-            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
-        }
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(invitationId, "Invitation id is required.", nameof(invitationId));
 
-        if (invitationId == Guid.Empty)
-        {
-            throw new ArgumentException("Invitation id is required.", nameof(invitationId));
-        }
+        var lang = await LanguageOfAsync(recipientId, ct);
 
-        var name = string.IsNullOrWhiteSpace(targetUserName) ? "المستخدم" : targetUserName.Trim();
-
-        var notification = new Notification
-        {
-            RecipientId = recipientId,
-            Type = accepted
-                ? NotificationType.AgencyInvitationAccepted
-                : NotificationType.AgencyInvitationDeclined,
-            Message = accepted
-                ? $"قبل {name} دعوة الانضمام إلى مكتبك."
-                : $"رفض {name} دعوة الانضمام إلى مكتبك.",
-            RelatedEntityId = invitationId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        await PersistAndPushAsync(notification, ct);
+        await PersistAndPushAsync(
+            New(recipientId,
+                accepted
+                    ? NotificationType.AgencyInvitationAccepted
+                    : NotificationType.AgencyInvitationDeclined,
+                Say(lang,
+                    accepted ? "msg.agency_invitation_accepted" : "msg.agency_invitation_declined",
+                    ("name", NameOr(targetUserName, "generic.the_user"))),
+                relatedEntityId: invitationId),
+            ct);
 
         _logger.LogInformation(
             "Agency invitation response notification created. RecipientId={RecipientId}, InvitationId={InvitationId}, Accepted={Accepted}",
@@ -372,29 +270,18 @@ public sealed class NotificationService : INotificationService
         bool hadPreliminaryEstimate,
         CancellationToken ct = default)
     {
-        if (recipientId == Guid.Empty)
-        {
-            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
-        }
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(inquiryId, "Inquiry id is required.", nameof(inquiryId));
 
-        if (inquiryId == Guid.Empty)
-        {
-            throw new ArgumentException("Inquiry id is required.", nameof(inquiryId));
-        }
+        var lang = await LanguageOfAsync(recipientId, ct);
 
-        var notification = new Notification
-        {
-            RecipientId = recipientId,
-            Type = NotificationType.ValuationInquiryExpired,
-            Message = hadPreliminaryEstimate
-                ? "انتهت مهلة 24 ساعة لطلب التقييم الخاص بك. كان لديك تقدير مبدئي مبني على إعلانات مشابهة، لكن لم يكتمل التقييم النهائي ضمن المهلة المحددة."
-                : "انتهت مهلة 24 ساعة لطلب التقييم الخاص بك دون التوصل إلى تقدير. يمكنك تقديم طلب تقييم جديد.",
-            RelatedEntityId = inquiryId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        await PersistAndPushAsync(notification, ct);
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.ValuationInquiryExpired,
+                Say(lang, hadPreliminaryEstimate
+                    ? "msg.valuation_expired_with_estimate"
+                    : "msg.valuation_expired_no_estimate"),
+                relatedEntityId: inquiryId),
+            ct);
 
         _logger.LogInformation(
             "Valuation inquiry expiry notification created. RecipientId={RecipientId}, InquiryId={InquiryId}, HadPreliminaryEstimate={HadPreliminaryEstimate}",
@@ -409,27 +296,16 @@ public sealed class NotificationService : INotificationService
         Guid inquiryId,
         CancellationToken ct = default)
     {
-        if (recipientId == Guid.Empty)
-        {
-            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
-        }
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(invitationId, "Invitation id is required.", nameof(invitationId));
 
-        if (invitationId == Guid.Empty)
-        {
-            throw new ArgumentException("Invitation id is required.", nameof(invitationId));
-        }
+        var lang = await LanguageOfAsync(recipientId, ct);
 
-        var notification = new Notification
-        {
-            RecipientId = recipientId,
-            Type = NotificationType.ValuationOfficeInvitationExpired,
-            Message = "انتهت صلاحية دعوة تقييم عقاري دون تقديم رد من مكتبك ضمن المهلة المحددة.",
-            RelatedEntityId = invitationId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        await PersistAndPushAsync(notification, ct);
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.ValuationOfficeInvitationExpired,
+                Say(lang, "msg.valuation_office_invitation_expired"),
+                relatedEntityId: invitationId),
+            ct);
 
         _logger.LogInformation(
             "Valuation office invitation expiry notification created. RecipientId={RecipientId}, InvitationId={InvitationId}, InquiryId={InquiryId}",
@@ -443,27 +319,16 @@ public sealed class NotificationService : INotificationService
         Guid inquiryId,
         CancellationToken ct = default)
     {
-        if (recipientId == Guid.Empty)
-        {
-            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
-        }
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(inquiryId, "Inquiry id is required.", nameof(inquiryId));
 
-        if (inquiryId == Guid.Empty)
-        {
-            throw new ArgumentException("Inquiry id is required.", nameof(inquiryId));
-        }
+        var lang = await LanguageOfAsync(recipientId, ct);
 
-        var notification = new Notification
-        {
-            RecipientId = recipientId,
-            Type = NotificationType.ValuationResultReady,
-            Message = "اكتمل تقييم عقارك: ردّت جميع المكاتب المدعوة على طلبك. يمكنك الاطلاع على النتيجة الآن.",
-            RelatedEntityId = inquiryId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        await PersistAndPushAsync(notification, ct);
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.ValuationResultReady,
+                Say(lang, "msg.valuation_result_ready"),
+                relatedEntityId: inquiryId),
+            ct);
 
         _logger.LogInformation(
             "Valuation result-ready notification created. RecipientId={RecipientId}, InquiryId={InquiryId}",
@@ -476,27 +341,16 @@ public sealed class NotificationService : INotificationService
         Guid inquiryId,
         CancellationToken ct = default)
     {
-        if (recipientId == Guid.Empty)
-        {
-            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
-        }
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(inquiryId, "Inquiry id is required.", nameof(inquiryId));
 
-        if (inquiryId == Guid.Empty)
-        {
-            throw new ArgumentException("Inquiry id is required.", nameof(inquiryId));
-        }
+        var lang = await LanguageOfAsync(recipientId, ct);
 
-        var notification = new Notification
-        {
-            RecipientId = recipientId,
-            Type = NotificationType.ValuationInquiryReminderSoon,
-            Message = "لم يكتمل تقييم عقارك بعد، وستنتهي المهلة المحددة (24 ساعة) خلال ساعات قليلة.",
-            RelatedEntityId = inquiryId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        await PersistAndPushAsync(notification, ct);
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.ValuationInquiryReminderSoon,
+                Say(lang, "msg.valuation_reminder_soon"),
+                relatedEntityId: inquiryId),
+            ct);
 
         _logger.LogInformation(
             "Valuation inquiry reminder-soon notification created. RecipientId={RecipientId}, InquiryId={InquiryId}",
@@ -509,32 +363,21 @@ public sealed class NotificationService : INotificationService
         Guid bookingId,
         string listingTitle,
         NotificationType type,
-        string detail,
+        NotificationText detail,
         CancellationToken ct = default)
     {
-        if (recipientId == Guid.Empty)
-        {
-            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
-        }
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(bookingId, "Booking id is required.", nameof(bookingId));
 
-        if (bookingId == Guid.Empty)
-        {
-            throw new ArgumentException("Booking id is required.", nameof(bookingId));
-        }
+        var lang = await LanguageOfAsync(recipientId, ct);
 
-        var notification = new Notification
-        {
-            RecipientId = recipientId,
-            Type = type,
-            Message = detail,
-            // Deliberately RelatedEntityId, not PropertyId — a ShortStayListing is its own
-            // aggregate and is not necessarily backed by a Property row.
-            RelatedEntityId = bookingId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        await PersistAndPushAsync(notification, ct);
+        // Deliberately RelatedEntityId, not PropertyId -- a ShortStayListing is its own
+        // aggregate and is not necessarily backed by a Property row.
+        await PersistAndPushAsync(
+            New(recipientId, type,
+                NotificationCatalog.Render(detail ?? NotificationText.Empty, lang),
+                relatedEntityId: bookingId),
+            ct);
 
         _logger.LogInformation(
             "Short-stay booking notification created. RecipientId={RecipientId}, BookingId={BookingId}, Type={Type}",
@@ -686,37 +529,23 @@ public sealed class NotificationService : INotificationService
         int daysRemaining,
         CancellationToken ct = default)
     {
-        if (recipientId == Guid.Empty)
-        {
-            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
-        }
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(propertyId, "Property id is required.", nameof(propertyId));
 
-        if (propertyId == Guid.Empty)
-        {
-            throw new ArgumentException("Property id is required.", nameof(propertyId));
-        }
-
-        var title = string.IsNullOrWhiteSpace(propertyTitle)
-            ? "العقار"
-            : propertyTitle.Trim();
+        var lang = await LanguageOfAsync(recipientId, ct);
 
         // Clamp rather than trust: a clock skew or a sweep that runs late must never
-        // produce "ينتهي خلال -2 يوم" in a message a customer reads.
+        // produce "expires in -2 days" in a message a customer reads.
         var days = Math.Max(daysRemaining, 0);
 
-        var notification = new Notification
-        {
-            RecipientId = recipientId,
-            Type = NotificationType.ListingExpiringSoon,
-            Message = days == 0
-                ? $"ينتهي نشر إعلانك '{title}' اليوم. مدِّده للإبقاء عليه ظاهراً."
-                : $"ينتهي نشر إعلانك '{title}' خلال {days} يوماً. مدِّده للإبقاء عليه ظاهراً.",
-            PropertyId = propertyId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
+        var title = NameOr(propertyTitle, "generic.property");
+        var message = days == 0
+            ? Say(lang, "msg.listing_expiring_today", ("title", title))
+            : Say(lang, "msg.listing_expiring_days", ("title", title), ("days", days));
 
-        await PersistAndPushAsync(notification, ct);
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.ListingExpiringSoon, message, propertyId: propertyId),
+            ct);
 
         _logger.LogInformation(
             "Listing expiring-soon notification created. RecipientId={RecipientId}, PropertyId={PropertyId}, DaysRemaining={Days}",
@@ -732,35 +561,19 @@ public sealed class NotificationService : INotificationService
         int graceDaysRemaining,
         CancellationToken ct = default)
     {
-        if (recipientId == Guid.Empty)
-        {
-            throw new ArgumentException("Recipient id is required.", nameof(recipientId));
-        }
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(propertyId, "Property id is required.", nameof(propertyId));
 
-        if (propertyId == Guid.Empty)
-        {
-            throw new ArgumentException("Property id is required.", nameof(propertyId));
-        }
-
-        var title = string.IsNullOrWhiteSpace(propertyTitle)
-            ? "العقار"
-            : propertyTitle.Trim();
-
+        var lang = await LanguageOfAsync(recipientId, ct);
         var graceDays = Math.Max(graceDaysRemaining, 0);
 
-        var notification = new Notification
-        {
-            RecipientId = recipientId,
-            Type = NotificationType.ListingExpired,
-            Message =
-                $"انتهت مدة نشر إعلانك '{title}' ولم يعد ظاهراً في نتائج البحث. " +
-                $"أمامك {graceDays} يوماً لتمديده قبل حذفه.",
-            PropertyId = propertyId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        await PersistAndPushAsync(notification, ct);
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.ListingExpired,
+                Say(lang, "msg.listing_expired",
+                    ("title", NameOr(propertyTitle, "generic.property")),
+                    ("days", graceDays)),
+                propertyId: propertyId),
+            ct);
 
         _logger.LogInformation(
             "Listing expired notification created. RecipientId={RecipientId}, PropertyId={PropertyId}, GraceDaysRemaining={GraceDays}",
@@ -768,6 +581,61 @@ public sealed class NotificationService : INotificationService
             propertyId,
             graceDays);
     }
+
+    // ------------------------------------------------------------------ helpers
+
+    private static void RequireId(Guid id, string message, string paramName)
+    {
+        if (id == Guid.Empty)
+        {
+            throw new ArgumentException(message, paramName);
+        }
+    }
+
+    private async Task<string> LanguageOfAsync(Guid recipientId, CancellationToken ct)
+    {
+        if (_languages is null)
+        {
+            return SupportedPreferences.FallbackLanguage;
+        }
+
+        try
+        {
+            return await _languages.GetLanguageAsync(recipientId, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A lookup failure must not lose the notification: fall back to the product language.
+            _logger.LogWarning(ex, "Recipient language lookup failed. RecipientId={RecipientId}", recipientId);
+            return SupportedPreferences.FallbackLanguage;
+        }
+    }
+
+    /// <summary>A user-supplied name is kept verbatim (never translated); a blank one becomes a translated placeholder.</summary>
+    private static NotificationText NameOr(string? value, string fallbackKey) =>
+        string.IsNullOrWhiteSpace(value)
+            ? NotificationText.Of(fallbackKey)
+            : NotificationText.FromLiteral(value.Trim());
+
+    private static string Say(string lang, string key, params (string Name, object? Value)[] args) =>
+        NotificationCatalog.Render(NotificationText.Of(key, args), lang);
+
+    private static Notification New(
+        Guid recipientId,
+        NotificationType type,
+        string message,
+        Guid? propertyId = null,
+        Guid? relatedEntityId = null) =>
+        new()
+        {
+            RecipientId = recipientId,
+            Type = type,
+            Message = message,
+            PropertyId = propertyId,
+            RelatedEntityId = relatedEntityId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+        };
 
     private async Task PersistAndPushAsync(
         Notification notification,
@@ -783,6 +651,45 @@ public sealed class NotificationService : INotificationService
             NotificationHub.ReceiveNotificationEvent,
             dto,
             ct);
+
+        await PushSafeAsync(notification, ct);
+    }
+
+    private async Task PushSafeAsync(Notification notification, CancellationToken ct)
+    {
+        if (_push is null)
+        {
+            return;
+        }
+
+        // The device push repeats the stored, already-localized text and nothing more.
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budget.CancelAfter(PushBudget);
+
+        try
+        {
+            await _push.DispatchAsync(
+                notification.RecipientId,
+                new PushPayload(
+                    PushTitle,
+                    notification.Message,
+                    notification.Type,
+                    notification.Id,
+                    notification.PropertyId,
+                    notification.RelatedEntityId),
+                budget.Token);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Push delivery failed. NotificationId={NotificationId}",
+                notification.Id);
+        }
     }
 
     private async Task SendSafeAsync(

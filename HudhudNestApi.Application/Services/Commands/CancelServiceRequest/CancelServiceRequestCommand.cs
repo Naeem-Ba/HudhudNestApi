@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Notifications.Localization;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -93,7 +94,7 @@ public sealed class CancelServiceRequestCommandHandler
                 propertyId: serviceRequest.PropertyId,
                 propertyTitle: serviceRequest.Property?.Title ?? "-",
                 type: NotificationType.ServiceRequestCancelled,
-                detail: $"تم إلغاء طلب الخدمة ({serviceRequest.RequestNumber}).",
+                detail: NotificationText.Of(NotificationKeys.ServiceCancelledDetail, ("number", serviceRequest.RequestNumber)),
                 ct: ct);
         }
         catch (Exception ex)

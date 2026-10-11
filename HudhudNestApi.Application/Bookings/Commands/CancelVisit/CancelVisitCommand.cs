@@ -1,4 +1,5 @@
-﻿using MediatR;
+using HudhudNestApi.Application.Notifications.Localization;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Bookings.Interfaces;
 using HudhudNestApi.Application.Common.Exceptions;
@@ -53,7 +54,7 @@ public sealed class CancelVisitCommandHandler : IRequestHandler<CancelVisitComma
                 propertyId: property.Id,
                 propertyTitle: property.Title,
                 type: NotificationType.VisitCancelled,
-                detail: $"{visit.VisitorName} — الموعد الملغى: {visit.ProposedAt:dd/MM/yyyy HH:mm}.",
+                detail: NotificationText.Of(NotificationKeys.VisitCancelledDetail, ("name", visit.VisitorName), ("at", visit.ProposedAt)),
                 relatedEntityId: visit.Id,
                 ct: ct);
         }

@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Notifications.Localization;
 using MediatR;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
@@ -40,7 +41,7 @@ public sealed class RejectBookingCommandHandler : IRequestHandler<RejectBookingC
         await _notifications.NotifyShortStayBookingUpdateAsync(
             booking.GuestId, booking.Id, listing.Title,
             NotificationType.ShortStayBookingRejected,
-            $"تم رفض حجزك لـ '{listing.Title}'.", ct);
+            NotificationText.Of(NotificationKeys.ShortStayRejectedDetail, ("title", listing.Title)), ct);
 
         return booking.ToDto(listing.Id, listing.Title, listing.CurrencyCode);
     }

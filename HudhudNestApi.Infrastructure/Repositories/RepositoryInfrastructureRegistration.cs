@@ -13,6 +13,8 @@ using HudhudNestApi.Application.Investments.Interfaces;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Marketing.Interfaces;
 using HudhudNestApi.Application.Notifications.Interfaces;
+using HudhudNestApi.Application.Notifications.Push;
+using HudhudNestApi.Infrastructure.Notifications.Push;
 using HudhudNestApi.Application.Plans.Interfaces;
 using HudhudNestApi.Application.Reviews.Interfaces;
 using HudhudNestApi.Application.Search.Interfaces;
@@ -55,6 +57,20 @@ internal static class RepositoryInfrastructureRegistration
 
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IRecipientLanguageResolver, RecipientLanguageResolver>();
+        services.AddScoped<IDeviceTokenService, DeviceTokenService>();
+        services.AddScoped<IPushNotificationDispatcher, PushNotificationDispatcher>();
+        services.Configure<PushOptions>(configuration.GetSection(PushOptions.SectionName));
+        services.AddHttpClient(FcmPushSender.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(4));
+        // Singleton: the sender caches its OAuth access token. Without FCM credentials the
+        // no-op sender is used and only the in-app (SignalR) notification is delivered.
+        services.AddSingleton<IPushSender>(sp =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PushOptions>>();
+            return options.Value.IsConfigured
+                ? ActivatorUtilities.CreateInstance<FcmPushSender>(sp)
+                : new NullPushSender();
+        });
         services.AddScoped<IAdminUserQueryRepository, AdminUserQueryRepository>();
         services.AddScoped<IAdminPaymentRequestQueryRepository, AdminPaymentRequestQueryRepository>();
         services.AddScoped<IAdminIdentityService, AdminIdentityService>();

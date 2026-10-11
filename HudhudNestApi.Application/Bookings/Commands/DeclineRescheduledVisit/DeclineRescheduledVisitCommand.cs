@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Notifications.Localization;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Bookings.Interfaces;
@@ -59,7 +60,7 @@ public sealed class DeclineRescheduledVisitCommandHandler
                 propertyId: property.Id,
                 propertyTitle: property.Title,
                 type: NotificationType.VisitRescheduleDeclined,
-                detail: $"{visit.VisitorName} — الموعد المرفوض: {visit.ProposedAt:dd/MM/yyyy HH:mm}.",
+                detail: NotificationText.Of(NotificationKeys.VisitRescheduleDeclinedDetail, ("name", visit.VisitorName), ("at", visit.ProposedAt)),
                 relatedEntityId: visit.Id,
                 ct: ct);
         }

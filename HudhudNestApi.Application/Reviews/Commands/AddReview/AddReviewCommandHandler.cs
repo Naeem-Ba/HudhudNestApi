@@ -14,6 +14,7 @@
 //   التحقق من الزيارة يأتي بعد التحقق من وجود العقار لأننا نحتاج
 //   الـ property object للتحقق من OwnerId أولاً.
 // ═══════════════════════════════════════════════════════════════
+using HudhudNestApi.Application.Notifications.Localization;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Interfaces;
@@ -110,7 +111,7 @@ public sealed class AddReviewCommandHandler
                 propertyId: property.Id,
                 propertyTitle: property.Title,
                 type: NotificationType.ReviewAdded,
-                detail: $"تم إضافة تقييم جديد ({request.Rating}/5) لعقارك.",
+                detail: NotificationText.Of(NotificationKeys.ReviewAddedDetail, ("rating", request.Rating)),
                 ct: ct);
         }
         catch (Exception ex)

@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Notifications.Localization;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -84,7 +85,7 @@ public sealed class ScheduleServiceRequestCommandHandler
                 propertyId: serviceRequest.PropertyId,
                 propertyTitle: serviceRequest.Property?.Title ?? "-",
                 type: NotificationType.ServiceRequestScheduled,
-                detail: $"تمت جدولة طلبك ({serviceRequest.RequestNumber}) بتاريخ {request.ScheduledAt:yyyy-MM-dd HH:mm}.",
+                detail: NotificationText.Of(NotificationKeys.ServiceScheduledDetail, ("number", serviceRequest.RequestNumber), ("at", request.ScheduledAt.ToString("yyyy-MM-dd HH:mm"))),
                 ct: ct);
         }
         catch (Exception ex)

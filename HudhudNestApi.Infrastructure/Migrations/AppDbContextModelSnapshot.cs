@@ -2316,6 +2316,41 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.ToTable("Messages", (string)null);
                 });
 
+            modelBuilder.Entity("HudhudNestApi.Domain.Notifications.Entities.DeviceToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("DeviceTokens", (string)null);
+                });
+
             modelBuilder.Entity("HudhudNestApi.Domain.Notifications.Entities.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4698,10 +4733,16 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasColumnType("character(3)")
                         .IsFixedLength();
 
+                    b.Property<DateTime?>("PreferredCurrencySetAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<string>("PreferredLanguage")
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
+
+                    b.Property<DateTime?>("PreferredLanguageSetAt")
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("ProfileImagePublicId")
                         .HasMaxLength(300)
@@ -5705,6 +5746,15 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Navigation("Property");
 
                     b.Navigation("Sender");
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Notifications.Entities.DeviceToken", b =>
+                {
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.Notifications.Entities.Notification", b =>

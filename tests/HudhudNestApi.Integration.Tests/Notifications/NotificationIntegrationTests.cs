@@ -18,6 +18,7 @@ using HudhudNestApi.Infrastructure.Identity.Entities;
 using HudhudNestApi.Infrastructure.Persistence;
 using HudhudNestApi.Integration.Tests.TestInfrastructure;
 using Property = HudhudNestApi.Domain.Listings.Entities.Property;
+using HudhudNestApi.Domain.Users.Constants;
 using HudhudNestApi.Domain.Users.Entities;
 
 namespace HudhudNestApi.Integration.Tests.Notifications;
@@ -392,7 +393,7 @@ public sealed class NotificationIntegrationTests
     public async Task UpdateProperty_ColdRentChange_CreatesPropertyPriceChangedNotification()
     {
         // Arrange
-        var owner = await CreateUserAsync("property-price-owner");
+        var owner = await CreateUserAsync("property-price-owner", SupportedPreferences.English);
         var property = await CreatePropertyForOwnerAsync(owner.Id);
         var ownerClient = await CreateAuthenticatedClientAsync(owner.Id);
         var newColdRent = property.ColdRent!.Value + 250;
@@ -635,7 +636,8 @@ public sealed class NotificationIntegrationTests
     }
 
     private async Task<ApplicationUser> CreateUserAsync(
-        string prefix)
+        string prefix,
+        string? preferredLanguage = null)
     {
         await using var scope =
             _factory.Services.CreateAsyncScope();
@@ -712,6 +714,9 @@ public sealed class NotificationIntegrationTests
             "Tester",
             $"{prefix} Tester",
             now);
+
+        // Without an explicit choice the recipient is addressed in the app's fallback language (Arabic).
+        account.ChooseInitialLanguage(preferredLanguage, now);
 
         db.UserAccounts.Add(
             account);

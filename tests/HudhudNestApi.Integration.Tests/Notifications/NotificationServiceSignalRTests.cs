@@ -9,7 +9,7 @@ using HudhudNestApi.Infrastructure.Notifications;
 
 namespace HudhudNestApi.Integration.Tests.Notifications;
 
-public sealed class NotificationServiceSignalRTests
+public sealed partial class NotificationServiceSignalRTests
 {
     [Fact]
     [Trait("Category", "Integration")]

@@ -212,7 +212,9 @@ public sealed class UpdateUserCommandHandler
                 effectiveLanguage,
                 effectiveCurrency,
                 effectiveCountryCode,
-                now);
+                now,
+                languageChosen: request.PreferredLanguage is not null,
+                currencyChosen: request.PreferredCurrency is not null);
 
             var effectiveBio =
                 request.Bio is null
@@ -294,6 +296,12 @@ public sealed class UpdateUserCommandHandler
 
             PreferredCurrency =
                 account.PreferredCurrency,
+
+            HasChosenLanguage =
+                account.PreferredLanguageSetAt is not null,
+
+            HasChosenCurrency =
+                account.PreferredCurrencySetAt is not null,
 
             CountryCode =
                 account.CountryCode,

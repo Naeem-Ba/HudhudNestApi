@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Notifications.Localization;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -84,7 +85,7 @@ public sealed class RejectServiceRequestCommandHandler
                 propertyId: serviceRequest.PropertyId,
                 propertyTitle: serviceRequest.Property?.Title ?? "-",
                 type: NotificationType.ServiceRequestRejected,
-                detail: $"تم رفض طلبك ({serviceRequest.RequestNumber}): {request.Reason}",
+                detail: NotificationText.Of(NotificationKeys.ServiceRejectedDetail, ("number", serviceRequest.RequestNumber), ("reason", request.Reason)),
                 ct: ct);
         }
         catch (Exception ex)
