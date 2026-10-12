@@ -591,6 +591,9 @@ public sealed class StagingSmokeJourneyTests
             session = session with { UserId = userId };
             if (!_userIds.Contains(userId)) _userIds.Add(userId);
 
+            // A gateway error (502/503/504) is the Render edge answering for a restarting instance, not
+            // the API's verdict on the replay, so only those are retried; a 2xx or any other status is
+            // judged on the first answer. Replaying a consumed challenge is safe to repeat.
             var reuse = await SendJsonAsync(HttpMethod.Post,
                 "/api/auth/phone/registration/verify",
                 new
@@ -602,9 +605,31 @@ public sealed class StagingSmokeJourneyTests
                     LastName = $"{_config.RunId}-{roleMarker}"
                 },
                 stagingSecret: _config.CleanupSecret);
+            for (var attempt = 1;
+                 attempt < _config.MaxRetries && IsGatewayError(reuse.StatusCode);
+                 attempt++)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(_config.RetryDelaySeconds));
+                reuse = await SendJsonAsync(HttpMethod.Post,
+                    "/api/auth/phone/registration/verify",
+                    new
+                    {
+                        ChallengeId = challengeId,
+                        Code = _config.FixedOtp,
+                        Password = _config.Password,
+                        FirstName = "E2E",
+                        LastName = $"{_config.RunId}-{roleMarker}"
+                    },
+                    stagingSecret: _config.CleanupSecret);
+            }
+
             Expect(reuse.StatusCode == HttpStatusCode.BadRequest, "Consumed OTP was reusable.");
             return session;
         }
+
+        private static bool IsGatewayError(HttpStatusCode status) =>
+            status is HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable
+                or HttpStatusCode.GatewayTimeout;
 
         private async Task<Session> LoginPhoneAsync(string phone)
         {
