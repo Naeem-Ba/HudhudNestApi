@@ -735,6 +735,35 @@ It.Is<string?>(
         alerts.Verify(x => x.Enqueue(It.IsAny<SecurityAlertRequest>()), Times.Never);
     }
 
+    [Theory]
+    [InlineData(null, "user")]
+    [InlineData("user@example.com", null)]
+    [InlineData(" ", "user")]
+    public async Task Handle_DoesNotQueueConfirmation_WhenAccountHasNoEmailOrUserName(
+        string? email, string? userName)
+    {
+        var userId = Guid.NewGuid();
+        var identity = CreateSuccessfulIdentityMock(userId);
+        identity
+            .Setup(x => x.FindByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateIdentitySnapshot(userId) with { Email = email, UserName = userName });
+        var alerts = new Mock<ISecurityAlertDispatcher>();
+
+        var sut = new ChangePasswordCommandHandler(
+            identity.Object,
+            CreateSuccessfulAuditMock().Object,
+            CreateRefreshTokenMock().Object,
+            alerts.Object,
+            new Mock<ILogger<ChangePasswordCommandHandler>>().Object);
+
+        var result = await sut.Handle(
+            new ChangePasswordCommand(userId, "CurrentPassword123", "NewPassword123", "127.0.0.1"),
+            CancellationToken.None);
+
+        Assert.True(result.Success);
+        alerts.Verify(x => x.Enqueue(It.IsAny<SecurityAlertRequest>()), Times.Never);
+    }
+
     private static Mock<IChangePasswordIdentityService>
         CreateSuccessfulIdentityMock(
             Guid userId)
