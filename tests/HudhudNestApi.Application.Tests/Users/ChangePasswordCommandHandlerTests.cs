@@ -44,6 +44,7 @@ public sealed class ChangePasswordCommandHandlerTests
                 identity.Object,
                 auditLogs.Object,
                 refreshTokens.Object,
+                new Mock<ISecurityAlertDispatcher>().Object,
                 logger.Object);
 
         var command =
@@ -134,6 +135,7 @@ public sealed class ChangePasswordCommandHandlerTests
                 identity.Object,
                 auditLogs.Object,
                 refreshTokens.Object,
+                new Mock<ISecurityAlertDispatcher>().Object,
                 logger.Object);
 
         var command =
@@ -239,6 +241,7 @@ public sealed class ChangePasswordCommandHandlerTests
                 identity.Object,
                 auditLogs.Object,
                 refreshTokens.Object,
+                new Mock<ISecurityAlertDispatcher>().Object,
                 logger.Object);
 
         var command =
@@ -325,6 +328,7 @@ public sealed class ChangePasswordCommandHandlerTests
                 identity.Object,
                 auditLogs.Object,
                 refreshTokens.Object,
+                new Mock<ISecurityAlertDispatcher>().Object,
                 logger.Object);
 
         var command =
@@ -451,6 +455,7 @@ public sealed class ChangePasswordCommandHandlerTests
                 identity.Object,
                 auditLogs.Object,
                 refreshTokens.Object,
+                new Mock<ISecurityAlertDispatcher>().Object,
                 logger.Object);
 
         var command =
@@ -568,6 +573,7 @@ public sealed class ChangePasswordCommandHandlerTests
                 identity.Object,
                 auditLogs.Object,
                 refreshTokens.Object,
+                new Mock<ISecurityAlertDispatcher>().Object,
                 logger.Object);
 
         var command =
@@ -633,6 +639,7 @@ It.Is<string?>(
                 identity.Object,
                 auditLogs.Object,
                 refreshTokens.Object,
+                new Mock<ISecurityAlertDispatcher>().Object,
                 logger.Object);
 
         var command =
@@ -670,6 +677,62 @@ It.Is<string?>(
             Times.Once);
 
         auditLogs.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Handle_QueuesPasswordChangedConfirmation_WhenPasswordChangeSucceeds()
+    {
+        var userId = Guid.NewGuid();
+        var identity = CreateSuccessfulIdentityMock(userId);
+        var alerts = new Mock<ISecurityAlertDispatcher>();
+
+        var sut = new ChangePasswordCommandHandler(
+            identity.Object,
+            CreateSuccessfulAuditMock().Object,
+            CreateRefreshTokenMock().Object,
+            alerts.Object,
+            new Mock<ILogger<ChangePasswordCommandHandler>>().Object);
+
+        var result = await sut.Handle(
+            new ChangePasswordCommand(userId, "CurrentPassword123", "NewPassword123", "127.0.0.1"),
+            CancellationToken.None);
+
+        Assert.True(result.Success);
+        alerts.Verify(
+            x => x.Enqueue(It.Is<SecurityAlertRequest>(a =>
+                a.Kind == SecurityAlertKind.PasswordChangedConfirmation &&
+                a.UserEmail == "user@example.com" &&
+                a.UserName == "user@example.com")),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_DoesNotQueueConfirmation_WhenChangePasswordFails()
+    {
+        var userId = Guid.NewGuid();
+        var identity = new Mock<IChangePasswordIdentityService>();
+        identity
+            .Setup(x => x.FindByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateIdentitySnapshot(userId));
+        identity
+            .Setup(x => x.ChangePasswordAsync(
+                userId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdentityOperationResult.Failed(new[] { "Incorrect password." }));
+        var alerts = new Mock<ISecurityAlertDispatcher>();
+
+        var sut = new ChangePasswordCommandHandler(
+            identity.Object,
+            CreateSuccessfulAuditMock().Object,
+            CreateRefreshTokenMock().Object,
+            alerts.Object,
+            new Mock<ILogger<ChangePasswordCommandHandler>>().Object);
+
+        var result = await sut.Handle(
+            new ChangePasswordCommand(userId, "wrong", "NewPassword123", "127.0.0.1"),
+            CancellationToken.None);
+
+        Assert.False(result.Success);
+        alerts.Verify(x => x.Enqueue(It.IsAny<SecurityAlertRequest>()), Times.Never);
     }
 
     private static Mock<IChangePasswordIdentityService>

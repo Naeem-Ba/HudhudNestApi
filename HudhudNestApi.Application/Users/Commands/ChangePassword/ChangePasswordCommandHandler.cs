@@ -2,6 +2,7 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Auth.Interfaces;
+using HudhudNestApi.Application.Auth.Models;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Domain.Audit.Constants;
 
@@ -18,6 +19,8 @@ public sealed class ChangePasswordCommandHandler
 
     private readonly IRefreshTokenRepository _refreshTokens;
 
+    private readonly ISecurityAlertDispatcher _securityAlerts;
+
     private readonly ILogger<ChangePasswordCommandHandler>
         _logger;
 
@@ -25,11 +28,13 @@ public sealed class ChangePasswordCommandHandler
         IChangePasswordIdentityService identity,
         IAuditLogService auditLogs,
         IRefreshTokenRepository refreshTokens,
+        ISecurityAlertDispatcher securityAlerts,
         ILogger<ChangePasswordCommandHandler> logger)
     {
         _identity = identity;
         _auditLogs = auditLogs;
         _refreshTokens = refreshTokens;
+        _securityAlerts = securityAlerts;
         _logger = logger;
     }
 
@@ -155,6 +160,26 @@ public sealed class ChangePasswordCommandHandler
             ct:
                 cancellationToken);
 
+        QueuePasswordChangedConfirmation(identity);
+
         return ChangePasswordResult.Ok();
+    }
+
+    /// <summary>
+    /// Tells the account owner the password was changed. The dispatcher picks the language from
+    /// the account's saved preference; phone-only accounts have no address, so nothing is queued.
+    /// </summary>
+    private void QueuePasswordChangedConfirmation(IdentityAccountSnapshot identity)
+    {
+        if (string.IsNullOrWhiteSpace(identity.Email) ||
+            string.IsNullOrWhiteSpace(identity.UserName))
+        {
+            return;
+        }
+
+        _securityAlerts.Enqueue(new SecurityAlertRequest(
+            SecurityAlertKind.PasswordChangedConfirmation,
+            UserEmail: identity.Email,
+            UserName: identity.UserName));
     }
 }
