@@ -8,7 +8,7 @@
 | العنصر | Staging | Production |
 |---|---|---|
 | مستودع الـ API | `Naeem-Ba/HudhudNestApi` — branch `master` | نفسه — branch `master` (الفصل بالـ pipeline لا بالـ branch) |
-| مستودع الواجهة | `Naeem-Ba/HudhudNest` — branch `staging` | نفسه — branch `main` |
+| مستودع الواجهة | `Naeem-Ba/HudhudNest` — branch `staging` (يتقدّم تلقائيًا إلى `main` عبر `sync-staging.yml`) | نفسه — Netlify يبني الإنتاج من branch `release` فقط (منذ 2026-10-10)، و`main` لا ينشر الإنتاج |
 | رابط الواجهة | `https://staging--hudhudnest.netlify.app` | `https://hudhudnest.com` |
 | رابط الـ API | `https://propertyapi-staging-api.onrender.com` | `https://wohnungen-api.onrender.com` |
 | خدمة Render | `propertyapi-staging-api` (`srv-dacpbgf40ujc73epheig`) | خدمة الإنتاج (المعرّف في سر `RENDER_SERVICE_ID`) |
@@ -55,12 +55,24 @@ gh pr create --base master
 - تابع: `gh run list --workflow "Production Gate" --branch master --limit 3` ثم `gh run watch`.
 - اكتمل Staging عندما ينجح `staging-smoke`. اختبر يدويًا على الواجهة `staging--hudhudnest.netlify.app`.
 
-**الواجهة**: افتح PR إلى `main` وجرّب معاينة الـ PR (Staging API). لاختبارها على موقع Staging نفسه:
+**الواجهة**: افتح PR إلى `main` وجرّب معاينة الـ PR (Staging API). بعد دمجه يقدّم `sync-staging.yml` فرع `staging` تلقائيًا (fast-forward فقط) عند نجاح Frontend CI. ولو أردت ذلك يدويًا:
 
 ```powershell
 git fetch origin
 git push origin origin/main:staging      # staging لا يحوي أي commit فريد، فهذا fast-forward
 ```
+
+## 3أ) Staging لا يراسل أشخاصًا حقيقيين
+
+`Staging:ExternalNotificationsDisabled=true` إلزامي في Staging (`StagingEnvironmentGuard`)، وهو الآن مفروض في السلوك لا في القيمة فقط:
+
+| القناة | سلوك Staging |
+|---|---|
+| البريد | أي مرسل مُعدّ (Resend/Smtp/Console) يُغلَّف بـ `StagingRecipientFilteringEmailSender`: يصل البريد فقط إلى `Staging:Email:AllowedRecipients` (عناوين كاملة أو `@domain` لنطاق كامل، بلا حساسية لحالة الأحرف). **القائمة الفارغة = لا يُرسَل شيء.** المحجوب يُسجَّل بموضوعه بلا عنوان ولا نص |
+| SMS | `Staging:TestSupport:Enabled=true` ← `StagingSmokeSmsSink` (يقبل بادئة الاختبار فقط). غير ذلك ← `StagingSuppressedSmsService` (لا يرسل ويعيد فشلًا) |
+| Telegram / WhatsApp | غير مسجَّلة في Staging إطلاقًا |
+
+لاستلام بريد حقيقي في Staging أثناء الاختبار اليدوي: في Render خدمة Staging اضبط `Staging__Email__AllowedRecipients__0=you@example.com` (و`__1` ... لمزيد). لا يلزم أي تغيير في الإنتاج.
 
 ## 4) نقل الإصدار إلى Production
 
@@ -69,7 +81,7 @@ git push origin origin/main:staging      # staging لا يحوي أي commit ف�
    (من أي branch آخر لن تعمل `deploy-production`.)
 3. `deploy-production` يتحقق أن `github.sha` ما زال رأس `master` (وإلا يفشل لأن الـ Hook ينشر رأس master الحالي لا الـ SHA)، ثم يستدعي `PRODUCTION_DEPLOY_HOOK_URL`.
 4. تحقق بعد النشر: Render → نشر ناجح؛ ثم `GET /api/operational/version` (أدمن) وقارن `commitSha` بالـ commit الذي اختبرته في Staging (`git rev-parse origin/master`).
-5. الواجهة: دمج PR إلى `main` ينشر Production تلقائيًا عبر Netlify (**لا يمر عبر Staging**) — لذلك جرّب معاينة الـ PR أولًا.
+5. الواجهة: دمج PR إلى `main` **لا** ينشر Production. الإنتاج يُبنى من فرع `release` فقط: يُقدَّم بـ PR `main` → `release` أو بـ workflow `promote-release.yml` (fast-forward إلى commit نجح فيه Frontend CI)، ثم تضغط **Publish deploy** يدويًا في Netlify (Auto Publishing مقفل عمدًا؛ كل بناء إنتاج يستهلك رصيد Netlify فتُجمَّع التغييرات). بعد النشر شغّل `npm run check:live`. الواجهة لا تمر عبر Staging؛ جرّب معاينة الـ PR أولًا.
 
 ## 5) Rollback
 
@@ -91,10 +103,10 @@ git push origin origin/main:staging      # staging لا يحوي أي commit ف�
 | 1 | حماية `master` غير مفعّلة وبيئات GitHub بلا Required reviewers. **تحقق حي 2026-10-03:** المستودع صار **عامًا** (`visibility: public`) فسبب «الخطة لا تدعم» لم يعد قائمًا؛ `GET /branches/master/protection` → 404، `rulesets` → `[]`، والبيئات `production`/`production-release`/`production-recovery`/`staging` بلا `protection_rules` وبلا `deployment_branch_policy`، والبيئة `production-rollback` **غير موجودة** (سيُنشئها GitHub بلا حماية عند أول تشغيل). أسرار الإنتاج الحرجة (`DATABASE_URL`, مفاتيح النسخ الاحتياطي) على مستوى المستودع فيقرؤها أي workflow على أي فرع | P1 | يتطلب قرار المالك — الأوامر في تقرير تدقيق CI/CD؛ التخفيف المؤقت: `workflow_dispatch` فقط + `master` فقط + فحص tip-of-master |
 | 2 | Render الإنتاج قد يكون بـ Auto-Deploy "بعد نجاح فحوص CI" على `master` (يذكره `application-rollback-runbook.md`) — عندها الدمج قد ينشر بلا أمر يدوي | P1 | **صار مفروضًا آليًا (2026-10-03):** `production-deployment-gate` يقرأ خدمة Render ويفشل إن لم يكن `autoDeployTrigger` ∈ {`off`,`checksPass`} أو كان الفرع المتتبَّع غير `master`. يبقى قرار المالك: `Off` (نشر يدوي فقط) أم `checksPass` (نشر تلقائي بعد نجاح الفحوص) |
 | 3 | خدمتا Render (Staging والإنتاج) تتبعان `master`؛ الفصل بالـ pipeline لا بالفرع | P2 | مقبول مع الحارس أعلاه |
-| 4 | نشر الواجهة للإنتاج (`main`) لا يمر بـ Staging | P2 | التخفيف: معاينة الـ PR على Staging API |
-| 5 | فرع الواجهة `staging` متأخر عن `main` بـ 148 commit → موقع Staging لا يعكس الكود الحالي | P2 | نفّذ أمر §3 |
+| 4 | نشر الواجهة للإنتاج (`release`) لا يمر بـ Staging | P2 | التخفيف: معاينة الـ PR على Staging API + نشر يدوي |
+| 5 | فرع الواجهة `staging` متأخر عن `main` | P2 | **أُغلقت (2026-10-12):** `sync-staging.yml` يقدّمه تلقائيًا؛ عند الفحص كان `staging` = `main` |
 | 6 | Cloudinary cloud مشترك؛ صور Staging القديمة (قبل هذا التعديل) قد تكون في مجلدات الإنتاج | P2 | جديد الرفع معزول؛ نظّف القديم يدويًا |
-| 7 | Resend: نطاق مُرسِل مشترك (مفتاح API منفصل) و`Staging:ExternalNotificationsDisabled` يُتحقَّق من قيمته فقط لا من سلوك المرسِل | P2 | **[غير مُتحقَّق]** أن Staging لا يرسل لعناوين حقيقية |
+| 7 | `Staging:ExternalNotificationsDisabled` كان يُتحقَّق من قيمته فقط ولا يؤثر في أي مرسل | P2 | **أُغلقت بالكود (QA المرحلة 3، P3-D01):** انظر §3أ. يبقى على المالك أن يضبط `Staging__Email__AllowedRecipients` إن أراد استلام بريد في Staging |
 | 8 | CORS الـ Staging مضبوط على `staging--hudhudnest.netlify.app` (تحقق حي ✔) لكن ملاحظات قديمة تذكر نطاقًا سابقًا | P3 | — |
 
 ## 8) نتائج الفحص الحي (2026-09-30)

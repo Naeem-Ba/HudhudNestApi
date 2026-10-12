@@ -282,9 +282,44 @@ internal static class AuthInfrastructureRegistration
                 break;
         }
 
+        if (environment.IsStaging())
+            AddStagingRecipientFilter(
+                services,
+                configuration);
+
         ValidateConfirmationLinkOrigin(
             configuration,
             environment);
+    }
+
+    /// <summary>
+    /// Staging must never mail a real person (StagingEnvironmentGuard already requires
+    /// Staging:ExternalNotificationsDisabled=true, but until now nothing acted on it). Wraps whichever
+    /// sender was selected above so only Staging:Email:AllowedRecipients can receive anything.
+    /// The registrations added here come last, so they win over the aliases of the real sender.
+    /// </summary>
+    private static void AddStagingRecipientFilter(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var innerRegistration = services.Last(
+            descriptor => descriptor.ServiceType == typeof(IApplicationEmailSender));
+        var innerFactory = innerRegistration.ImplementationFactory
+            ?? throw new InvalidOperationException(
+                "The email sender must be registered through a factory so Staging can wrap it.");
+
+        var allowed = configuration
+            .GetSection("Staging:Email:AllowedRecipients")
+            .Get<string[]>() ?? Array.Empty<string>();
+
+        services.AddScoped<IApplicationEmailSender>(sp =>
+            new StagingRecipientFilteringEmailSender(
+                (IApplicationEmailSender)innerFactory(sp),
+                allowed,
+                sp.GetRequiredService<ILogger<StagingRecipientFilteringEmailSender>>()));
+
+        services.AddScoped<IdentityEmailSender>(sp =>
+            (IdentityEmailSender)sp.GetRequiredService<IApplicationEmailSender>());
     }
 
     /// <summary>
@@ -486,6 +521,12 @@ internal static class AuthInfrastructureRegistration
         {
             services.AddScoped<ISmsService, ConsoleSmsService>();
         }
+        else if (environment.IsStaging())
+        {
+            // Staging without the smoke-test sink must still never text a real number
+            // (Staging:ExternalNotificationsDisabled is mandatory there).
+            services.AddScoped<ISmsService, StagingSuppressedSmsService>();
+        }
         else
         {
             var smsProvider =
@@ -533,7 +574,9 @@ internal static class AuthInfrastructureRegistration
         services.AddScoped<IOtpChannelService, OtpChannelService>();
 
         // The Staging smoke suite exercises the SMS path only; it must never reach a real Telegram/WhatsApp account.
-        if (stagingTestSupportEnabled)
+        // Staging without test support is no different: external delivery is disabled there, so neither
+        // gateway is registered.
+        if (stagingTestSupportEnabled || environment.IsStaging())
             return;
 
         var channels = configuration.GetSection(OtpChannelOptions.SectionName).Get<OtpChannelOptions>() ?? new OtpChannelOptions();

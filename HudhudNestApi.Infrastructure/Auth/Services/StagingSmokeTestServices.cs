@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Auth.Interfaces;
 
 namespace HudhudNestApi.Infrastructure.Auth.Services;
@@ -85,5 +86,33 @@ public sealed class StagingSmokeSmsSink : ISmsService
         // Deliberately do not log the phone number or OTP.
         return Task.FromResult(
             phoneNumber.StartsWith(_allowedPhonePrefix, StringComparison.Ordinal));
+    }
+}
+
+/// <summary>
+/// Used in Staging when the smoke-test sink is not enabled: nothing is sent and the caller is told the
+/// send failed, so no code path can text a real number from Staging.
+/// </summary>
+public sealed class StagingSuppressedSmsService : ISmsService
+{
+    private readonly ILogger<StagingSuppressedSmsService> _logger;
+
+    public StagingSuppressedSmsService(ILogger<StagingSuppressedSmsService> logger)
+    {
+        _logger = logger;
+    }
+
+    public Task<bool> SendOtpAsync(
+        string phoneNumber,
+        string otp,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        // Deliberately do not log the phone number or OTP.
+        _logger.LogInformation(
+            "Staging suppressed an outgoing SMS (external delivery is disabled in Staging).");
+
+        return Task.FromResult(false);
     }
 }

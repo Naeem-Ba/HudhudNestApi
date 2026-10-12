@@ -24,7 +24,7 @@ public static class CorsRegistration
             .GetSection("Cors:AllowedOriginPatterns")
             .Get<string[]>() ?? Array.Empty<string>();
         var compiledOriginPatterns = allowedOriginPatterns
-            .Select(pattern => new Regex(pattern, RegexOptions.Compiled | RegexOptions.CultureInvariant))
+            .Select(pattern => new Regex(AnchorPattern(pattern), RegexOptions.Compiled | RegexOptions.CultureInvariant))
             .ToArray();
 
         services.AddCors(options =>
@@ -73,4 +73,10 @@ public static class CorsRegistration
 
         return services;
     }
+
+    // The patterns live in the hosting dashboard, not in the repository, and Regex.IsMatch is a search:
+    // an entry written without ^ and $ would also accept "https://deploy-preview-1--hudhudnest.netlify.app.evil.example"
+    // on a credentialed policy. Anchoring here makes every pattern a whole-origin match whatever was typed;
+    // a pattern that already carries ^...$ is unaffected (\A(?:^x$)\z matches exactly what ^x$ did).
+    private static string AnchorPattern(string pattern) => $@"\A(?:{pattern})\z";
 }
