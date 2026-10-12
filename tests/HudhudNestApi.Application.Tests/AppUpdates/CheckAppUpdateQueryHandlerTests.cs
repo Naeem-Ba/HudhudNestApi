@@ -109,6 +109,19 @@ public sealed class CheckAppUpdateQueryHandlerTests
         Assert.Equal(expected, result.ReleaseNotes);
     }
 
+    [Theory]
+    [InlineData("ar")]
+    [InlineData("de")]
+    public async Task LanguageWithoutNotes_FallsBackToEnglish(string language)
+    {
+        var onlyEnglish = new EffectiveAppReleaseDto(
+            "1.1.0", "1.0.0", "https://play.google.com/store/apps/details?id=x", null, "notes-en", null, DateTime.UtcNow);
+        var handler = BuildHandler(onlyEnglish);
+        var result = await handler.Handle(new CheckAppUpdateQuery(AppPlatform.Android, "1.0.0", language), default);
+
+        Assert.Equal("notes-en", result.ReleaseNotes);
+    }
+
     [Fact]
     public async Task Mandatory_ImpliesUpdateAvailable()
     {

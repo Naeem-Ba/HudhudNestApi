@@ -2,6 +2,7 @@ using System.Text.Json;
 using MediatR;
 using HudhudNestApi.Application.AppUpdates.Commands.CreateAppRelease;
 using HudhudNestApi.Application.AppUpdates.Interfaces;
+using HudhudNestApi.Application.AppUpdates.Policies;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Domain.AppUpdates.ValueObjects;
@@ -29,6 +30,12 @@ public sealed class UpdateAppReleaseCommandHandler : IRequestHandler<UpdateAppRe
     {
         var release = await _releases.GetByIdAsync(request.Id, ct)
             ?? throw new NotFoundException($"App release {request.Id} was not found.");
+
+        // Platform is not part of the update request, so the store-link rules are checked here, where the
+        // stored release (and whether it is live) is known: an enabled release cannot lose its link.
+        var linkProblem = AppStoreLinkPolicy.Check(release.Platform, request.StoreUrl, release.IsEnabled);
+        if (linkProblem is not null)
+            throw new ValidationException(nameof(request.StoreUrl), linkProblem);
 
         var oldSnapshot = CreateAppReleaseCommandHandler.Snapshot(release);
 

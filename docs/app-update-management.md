@@ -106,10 +106,26 @@ All admin endpoints require `[Authorize(Roles = RoleNames.Admin)]`. Every mutati
 existing audit system.
 
 **Validation**: `Version`/`MinimumSupportedVersion` must parse as `major.minor.patch`;
-`MinimumSupportedVersion` cannot exceed `Version`; `StoreUrl`, if provided, must be an absolute
-`http`/`https` URL (it is optional — no real store URLs exist yet); creating/enabling a release
+`MinimumSupportedVersion` cannot exceed `Version`; `StoreUrl` follows the store link rules below
+(official store host, required while an Android/iOS release is enabled); creating/enabling a release
 that duplicates an already-enabled platform+version returns `409 Conflict` (backed by a database
 unique index, not just the application-level check).
+
+### Store link rules and release notes
+
+`StoreUrl` is shown to every installed client and opened by "Update now", so it is restricted
+(`HudhudNestApi.Application/AppUpdates/Policies/AppStoreLinkPolicy.cs`):
+
+- `https` only, no user info, default port. Android: `play.google.com`. iOS: `apps.apple.com` or
+  `itunes.apple.com`. Web has no store, any `https` link is accepted (the client never reads it).
+- An **enabled** Android or iOS release must have a link: creating it enabled, enabling it, or saving an
+  enabled release without one is refused with 422. Without a link "Update now" does nothing, and a raised
+  minimum version would lock users out of the app with no way to update.
+- A release saved disabled may still have no link yet (draft). The check runs again on enable.
+- The Angular client re-checks the same host list before opening the link.
+
+`ReleaseNotes` in the check response follow `lang`; when that language has no notes written, the English
+notes are returned, so the dialog is never empty.
 
 ## Caching
 

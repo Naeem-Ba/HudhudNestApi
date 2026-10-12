@@ -1,4 +1,5 @@
 using FluentValidation;
+using HudhudNestApi.Application.AppUpdates.Policies;
 using HudhudNestApi.Domain.AppUpdates.ValueObjects;
 
 namespace HudhudNestApi.Application.AppUpdates.Commands.CreateAppRelease;
@@ -26,8 +27,19 @@ public sealed class CreateAppReleaseCommandValidator : AbstractValidator<CreateA
 
         RuleFor(x => x.StoreUrl)
             .Must(BeAValidAbsoluteHttpUrl)
-            .WithMessage("رابط المتجر يجب أن يكون رابطًا صحيحًا من نوع http أو https.")
+            .WithMessage("رابط المتجر يجب أن يكون رابطًا صحيحًا من نوع https.")
             .When(x => !string.IsNullOrWhiteSpace(x.StoreUrl));
+
+        // Official store host for the platform, and a link for any release created enabled. See AppStoreLinkPolicy.
+        RuleFor(x => x.StoreUrl)
+            .Must((command, url) => AppStoreLinkPolicy.IsAcceptableLink(command.Platform, url))
+            .WithMessage(x => AppStoreLinkPolicy.InvalidLinkMessage(x.Platform))
+            .When(x => !string.IsNullOrWhiteSpace(x.StoreUrl) && BeAValidAbsoluteHttpUrl(x.StoreUrl));
+
+        RuleFor(x => x.StoreUrl)
+            .NotEmpty()
+            .WithMessage(AppStoreLinkPolicy.MissingLinkMessage)
+            .When(x => x.IsEnabled && AppStoreLinkPolicy.RequiresLink(x.Platform));
 
         RuleFor(x => x.ReleaseNotesAr).MaximumLength(4000);
         RuleFor(x => x.ReleaseNotesEn).MaximumLength(4000);
