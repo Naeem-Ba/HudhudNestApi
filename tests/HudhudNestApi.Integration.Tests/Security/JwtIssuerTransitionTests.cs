@@ -80,3 +80,21 @@ public sealed class JwtIssuerTransitionTests
     public void UnknownAudience_IsRejected() =>
         Assert.False(IsValid(BuildParameters(true), Token("HudhudNest", "Evil")));
 }
+
+/// <summary>
+/// The shipped appsettings.json must not re-open the rebrand window: with the legacy issuer/audience listed there,
+/// a token minted under the pre-rename values would stay valid forever in every environment.
+/// </summary>
+public sealed class ShippedJwtConfigurationTests
+{
+    [Fact]
+    public void AppSettings_ListNoLegacyIssuerOrAudience()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        Assert.True(File.Exists(path), $"appsettings.json was not copied next to the test assembly ({path})");
+        var jwt = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path)).RootElement.GetProperty("Jwt");
+
+        Assert.False(jwt.TryGetProperty("AdditionalValidIssuers", out var issuers) && issuers.GetArrayLength() > 0);
+        Assert.False(jwt.TryGetProperty("AdditionalValidAudiences", out var audiences) && audiences.GetArrayLength() > 0);
+    }
+}

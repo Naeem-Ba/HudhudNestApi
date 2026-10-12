@@ -987,14 +987,51 @@ public sealed class ResetPasswordCommandHandlerTests
 {
     [Fact(
         DisplayName =
-            "ResetPassword rejects same password")]
-    public async Task SamePassword_ReturnsConflict()
+            "ResetPassword answers an unknown address exactly like a rejected token")]
+    public async Task UnknownEmail_AnswersLikeARejectedToken()
+    {
+        var identityService =
+            new Mock<IResetPasswordIdentityService>();
+
+        identityService
+            .Setup(
+                x => x.FindByEmailAsync(
+                    "ghost@example.com",
+                    It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IdentityAccountSnapshot?)null);
+
+        var handler =
+            new ResetPasswordCommandHandler(
+                identityService.Object,
+                Mock.Of<IRefreshTokenRepository>(),
+                NullLogger<ResetPasswordCommandHandler>
+                    .Instance);
+
+        var result =
+            await handler.Handle(
+                new ResetPasswordCommand(
+                    "ghost@example.com",
+                    "token",
+                    "NewPassword123",
+                    "NewPassword123",
+                    "127.0.0.1"),
+                CancellationToken.None);
+
+        // Same shape as the answer for a known address with a bad token: no Conflict, an errors
+        // list, no free-text message. A different body would reveal which addresses exist.
+        Assert.False(result.Success);
+        Assert.False(result.Conflict);
+        Assert.Equal(new[] { "Invalid token." }, result.Errors);
+        Assert.Equal(string.Empty, result.Message);
+    }
+
+    [Fact(
+        DisplayName =
+            "ResetPassword never compares the new password with the current one before the token is checked")]
+    public async Task BadToken_NeverRevealsWhetherThePasswordMatchesTheCurrentOne()
     {
         var id =
             Guid.NewGuid();
-
-        var identity =
-            CreateIdentitySnapshot(id);
 
         var identityService =
             new Mock<IResetPasswordIdentityService>();
@@ -1004,15 +1041,17 @@ public sealed class ResetPasswordCommandHandlerTests
                 x => x.FindByEmailAsync(
                     "naeem@example.com",
                     It.IsAny<CancellationToken>()))
-            .ReturnsAsync(identity);
+            .ReturnsAsync(CreateIdentitySnapshot(id));
 
         identityService
             .Setup(
-                x => x.CheckPasswordAsync(
+                x => x.ResetPasswordAsync(
                     id,
+                    "bogus",
                     "Password123",
                     It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .ReturnsAsync(
+                IdentityOperationResult.Failed("Invalid token."));
 
         var handler =
             new ResetPasswordCommandHandler(
@@ -1025,26 +1064,18 @@ public sealed class ResetPasswordCommandHandlerTests
             await handler.Handle(
                 new ResetPasswordCommand(
                     "naeem@example.com",
-                    "token",
+                    "bogus",
                     "Password123",
                     "Password123",
                     "127.0.0.1"),
                 CancellationToken.None);
 
+        // Whatever the new password is, a bad token yields the same plain rejection: there is no
+        // 409 "must differ from the current password" any more, which let a caller who only knew
+        // the address test guesses of the current password without touching the lockout counter.
         Assert.False(result.Success);
-        Assert.True(result.Conflict);
-
-        Assert.Equal(
-            "New password must be different from the current password.",
-            result.Message);
-
-        identityService.Verify(
-            x => x.ResetPasswordAsync(
-                It.IsAny<Guid>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<CancellationToken>()),
-            Times.Never);
+        Assert.False(result.Conflict);
+        Assert.Equal(new[] { "Invalid token." }, result.Errors);
     }
 
     [Fact(
@@ -1068,14 +1099,6 @@ public sealed class ResetPasswordCommandHandlerTests
                     "naeem@example.com",
                     It.IsAny<CancellationToken>()))
             .ReturnsAsync(identity);
-
-        identityService
-            .Setup(
-                x => x.CheckPasswordAsync(
-                    id,
-                    "NewPassword123",
-                    It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
 
         identityService
             .Setup(

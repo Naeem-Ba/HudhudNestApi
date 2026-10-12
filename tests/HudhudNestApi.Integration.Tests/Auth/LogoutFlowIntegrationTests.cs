@@ -73,8 +73,9 @@ public sealed class LogoutFlowIntegrationTests : IClassFixture<PhoneAuthWebAppli
 /// Logout with CookieCsrf enforced, using the CSRF token fetched *before* sign-in -- exactly what the
 /// SPA and the Staging smoke do. Antiforgery request tokens are bound to the authenticated user, so
 /// this used to be rejected with 403 CSRF_VALIDATION_FAILED (the refresh token was never revoked).
-/// Logout requires a Bearer token, which a cross-site page cannot supply, so it is exempt; refresh
-/// (anonymous, cookie-driven) must stay protected.
+/// A Bearer-authenticated logout is exempt (a cross-site page cannot attach the header); a logout
+/// that carries only the ambient refresh cookie -- the access token expired -- must present the CSRF
+/// header exactly like refresh, and then still works instead of answering 401 and keeping the session.
 /// </summary>
 public sealed class LogoutWithCsrfIntegrationTests : IClassFixture<PhoneAuthWebApplicationFactory>
 {
@@ -82,9 +83,20 @@ public sealed class LogoutWithCsrfIntegrationTests : IClassFixture<PhoneAuthWebA
 
     public LogoutWithCsrfIntegrationTests(PhoneAuthWebApplicationFactory factory) => _factory = factory;
 
-    [Fact(DisplayName = "Logout with CSRF enforced succeeds with a pre-sign-in token, needs the Bearer token, and refresh stays CSRF-protected")]
-    [Trait("Category", "Security")]
-    public async Task Logout_WithCsrfEnforced_IsNotBlockedButStillRequiresBearer_AndRefreshStaysProtected()
+    private sealed record Session(HttpClient Client, List<string> CookiePairs, string Csrf, string Access, string RefreshCookie)
+    {
+        public async Task<HttpResponseMessage> Post(string path, string? bearer, bool withCsrfHeader)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, path);
+            request.Headers.Add("Cookie", string.Join("; ", CookiePairs.Append(RefreshCookie)));
+            if (withCsrfHeader) request.Headers.Add("X-XSRF-TOKEN", Csrf);
+            if (bearer is not null) request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearer);
+            request.Content = JsonContent.Create(new { RefreshToken = RefreshCookie["refresh_token=".Length..] });
+            return await Client.SendAsync(request);
+        }
+    }
+
+    private async Task<Session> SignIn()
     {
         var app = _factory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
             config.AddInMemoryCollection(new Dictionary<string, string?>
@@ -115,28 +127,44 @@ public sealed class LogoutWithCsrfIntegrationTests : IClassFixture<PhoneAuthWebA
         var access = JsonDocument.Parse(await login.Content.ReadAsStringAsync()).RootElement.GetProperty("accessToken").GetString()!;
         var refreshCookie = login.Headers.GetValues("Set-Cookie")
             .First(c => c.StartsWith("refresh_token=", StringComparison.Ordinal)).Split(';')[0];
+        return new Session(client, cookiePairs, csrf, access, refreshCookie);
+    }
 
-        async Task<HttpResponseMessage> Post(string path, string? bearer, bool withCsrfHeader)
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Post, path);
-            request.Headers.Add("Cookie", string.Join("; ", cookiePairs.Append(refreshCookie)));
-            if (withCsrfHeader) request.Headers.Add("X-XSRF-TOKEN", csrf);
-            if (bearer is not null) request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearer);
-            request.Content = JsonContent.Create(new { RefreshToken = refreshCookie["refresh_token=".Length..] });
-            return await client.SendAsync(request);
-        }
+    [Fact(DisplayName = "Logout with CSRF enforced succeeds with a pre-sign-in token and refresh stays CSRF-protected")]
+    [Trait("Category", "Security")]
+    public async Task Logout_WithCsrfEnforced_IsNotBlocked_AndRefreshStaysProtected()
+    {
+        var session = await SignIn();
 
         // Refresh (anonymous + ambient cookie) is still rejected without the CSRF header.
-        var refreshWithoutCsrf = await Post("/api/auth/refresh", bearer: null, withCsrfHeader: false);
+        var refreshWithoutCsrf = await session.Post("/api/auth/refresh", bearer: null, withCsrfHeader: false);
         Assert.Equal(HttpStatusCode.Forbidden, refreshWithoutCsrf.StatusCode);
         Assert.Contains("CSRF_VALIDATION_FAILED", await refreshWithoutCsrf.Content.ReadAsStringAsync());
 
-        // Logout without a Bearer token is refused by authorization, not waved through.
-        var logoutAnonymous = await Post("/api/auth/logout", bearer: null, withCsrfHeader: true);
-        Assert.Equal(HttpStatusCode.Unauthorized, logoutAnonymous.StatusCode);
-
         // Logout with Bearer and the pre-sign-in CSRF token succeeds and revokes the session.
-        var logout = await Post("/api/auth/logout", access, withCsrfHeader: true);
+        var logout = await session.Post("/api/auth/logout", session.Access, withCsrfHeader: true);
         Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+    }
+
+    [Fact(DisplayName = "Logout with an expired access token still revokes the refresh token, and a cross-site cookie-only logout is refused")]
+    [Trait("Category", "Security")]
+    public async Task Logout_WithExpiredAccessToken_RevokesTheSession_ButNeedsTheCsrfHeader()
+    {
+        var session = await SignIn();
+
+        // Cookie only, no Bearer, no CSRF header: what a cross-site form post looks like. Refused, session intact.
+        var crossSite = await session.Post("/api/auth/logout", bearer: null, withCsrfHeader: false);
+        Assert.Equal(HttpStatusCode.Forbidden, crossSite.StatusCode);
+        Assert.Contains("CSRF_VALIDATION_FAILED", await crossSite.Content.ReadAsStringAsync());
+
+        // The SPA's case: the 30-minute access token is dead, the cookie and the CSRF header are present.
+        var expired = await session.Post("/api/auth/logout", "expired.access.token", withCsrfHeader: true);
+        Assert.Equal(HttpStatusCode.NoContent, expired.StatusCode);
+        Assert.Contains(expired.Headers.GetValues("Set-Cookie"),
+            c => c.StartsWith("refresh_token=", StringComparison.Ordinal) && c.Contains("expires=", StringComparison.OrdinalIgnoreCase));
+
+        // The refresh token is really gone: it cannot silently restore the session.
+        var refresh = await session.Post("/api/auth/refresh", bearer: null, withCsrfHeader: true);
+        Assert.Equal(HttpStatusCode.Unauthorized, refresh.StatusCode);
     }
 }

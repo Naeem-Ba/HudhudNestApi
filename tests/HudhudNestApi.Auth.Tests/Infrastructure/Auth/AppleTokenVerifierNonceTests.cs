@@ -61,18 +61,20 @@ public sealed class AppleTokenVerifierNonceTests
         Assert.Null(result);
     }
 
-    [Fact]
-    public async Task VerifyAsync_Succeeds_WhenNoNonceWasExpected_RegardlessOfTheTokenClaim()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task VerifyAsync_Fails_WhenNoNonceWasSupplied_EvenForAGenuinelySignedToken(string? expectedNonce)
     {
-        // Backward compatible by design: a caller that does not pass expectedNonce (nothing
-        // in this codebase should reach Production without one, but the parameter is
-        // optional at the interface level) gets the pre-B-16 behaviour.
+        // The nonce used to be checked only when the caller sent one, so a stolen identity token
+        // could be replayed simply by leaving it out. It is now mandatory.
         var context = CreateVerifier();
-        var token = context.IssueToken(nonceClaim: null);
+        var token = context.IssueToken(nonceClaim: HashNonce("the-nonce-apple-saw"));
 
-        var result = await context.Verifier.VerifyAsync(token);
+        var result = await context.Verifier.VerifyAsync(token, expectedNonce: expectedNonce);
 
-        Assert.NotNull(result);
+        Assert.Null(result);
     }
 
     private static string HashNonce(string rawNonce)

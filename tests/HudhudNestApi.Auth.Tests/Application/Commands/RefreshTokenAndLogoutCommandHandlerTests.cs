@@ -593,6 +593,161 @@ public sealed class LogoutCommandHandlerTests
 {
     [Fact(
         DisplayName =
+            "Logout with only a live refresh token (expired access token) still revokes it and ends the user's access tokens")]
+    public async Task NoUserId_LiveRefreshToken_ResolvesTheOwner_AndRevokesIt()
+    {
+        var userId =
+            Guid.NewGuid();
+
+        var refreshTokens =
+            new Mock<IRefreshTokenRepository>();
+
+        refreshTokens
+            .Setup(x => x.GetByRefreshTokenAsync(
+                "refresh-token",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RefreshTokenRecord(
+                Guid.NewGuid(),
+                userId,
+                DateTime.UtcNow.AddDays(1),
+                IsRevoked: false));
+
+        refreshTokens
+            .Setup(x => x.RevokeUserTokenAsync(
+                userId,
+                "refresh-token",
+                It.IsAny<DateTime>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var identityService =
+            new Mock<ILogoutIdentityService>();
+
+        identityService
+            .Setup(x => x.FindByIdAsync(
+                userId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IdentityAccountSnapshot(
+                IdentityId: userId,
+                UserAccountId: userId,
+                Email: "naeem@example.com",
+                PhoneNumber: null,
+                EmailConfirmed: true,
+                PhoneConfirmed: false,
+                HasPassword: true,
+                IsDeleted: false,
+                UserName: "naeem@example.com",
+                SecurityStamp: "stamp"));
+
+        identityService
+            .Setup(x => x.UpdateSecurityStampAsync(
+                userId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(IdentityOperationResult.Success());
+
+        var cacheInvalidator =
+            new Mock<IUserSecurityStampCacheInvalidator>();
+
+        var handler =
+            new LogoutCommandHandler(
+                refreshTokens.Object,
+                identityService.Object,
+                cacheInvalidator.Object,
+                NullLogger<LogoutCommandHandler>.Instance);
+
+        await handler.Handle(
+            new LogoutCommand(
+                UserId: null,
+                RefreshToken: "refresh-token",
+                IpAddress: "198.51.100.20"),
+            CancellationToken.None);
+
+        refreshTokens.Verify(x => x.RevokeUserTokenAsync(
+            userId,
+            "refresh-token",
+            It.IsAny<DateTime>(),
+            "198.51.100.20",
+            It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        identityService.Verify(x => x.UpdateSecurityStampAsync(
+            userId,
+            It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        cacheInvalidator.Verify(x => x.InvalidateAsync(
+            userId,
+            It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Theory(
+        DisplayName =
+            "Logout without a user id does nothing for an unknown, revoked or expired refresh token")]
+    [InlineData("unknown")]
+    [InlineData("revoked")]
+    [InlineData("expired")]
+    public async Task NoUserId_DeadRefreshToken_ChangesNothing(string kind)
+    {
+        var refreshTokens =
+            new Mock<IRefreshTokenRepository>();
+
+        RefreshTokenRecord? stored = kind switch
+        {
+            "revoked" => new RefreshTokenRecord(
+                Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow.AddDays(1), IsRevoked: true),
+            "expired" => new RefreshTokenRecord(
+                Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow.AddMinutes(-1), IsRevoked: false),
+            _ => null
+        };
+
+        refreshTokens
+            .Setup(x => x.GetByRefreshTokenAsync(
+                "refresh-token",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stored);
+
+        var identityService =
+            new Mock<ILogoutIdentityService>();
+
+        var cacheInvalidator =
+            new Mock<IUserSecurityStampCacheInvalidator>();
+
+        var handler =
+            new LogoutCommandHandler(
+                refreshTokens.Object,
+                identityService.Object,
+                cacheInvalidator.Object,
+                NullLogger<LogoutCommandHandler>.Instance);
+
+        await handler.Handle(
+            new LogoutCommand(
+                UserId: null,
+                RefreshToken: "refresh-token"),
+            CancellationToken.None);
+
+        refreshTokens.Verify(x => x.RevokeUserTokenAsync(
+            It.IsAny<Guid>(),
+            It.IsAny<string>(),
+            It.IsAny<DateTime>(),
+            It.IsAny<string?>(),
+            It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        identityService.Verify(x => x.UpdateSecurityStampAsync(
+            It.IsAny<Guid>(),
+            It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        cacheInvalidator.Verify(x => x.InvalidateAsync(
+            It.IsAny<Guid>(),
+            It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact(
+        DisplayName =
             "Logout invalidates security-stamp cache even when the identity cannot be resolved")]
     public async Task
         MissingIdentity_InvalidatesSecurityStampCache_WithoutUpdatingIdentityStamp()

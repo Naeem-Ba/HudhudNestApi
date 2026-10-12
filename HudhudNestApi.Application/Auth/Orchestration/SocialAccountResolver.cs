@@ -60,7 +60,7 @@ public sealed class SocialAccountResolver
             ? new(SocialAccountResolutionKind.ExistingUnlinkedAccount, verified, account)
             : Conflict(
                 verified,
-                "An account already uses this email. Sign in to that account and link the social provider from account settings.");
+                "An account already uses this email. Sign in to that account with your email and password.");
     }
 
     private static SocialAccountResolution Conflict(

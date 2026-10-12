@@ -293,28 +293,28 @@ public sealed class AuthController : ControllerBase
 
     // POST /api/auth/logout
     //
-    // Exempt from CookieCsrfProtectionMiddleware on purpose. The middleware exists for
-    // requests whose only credential is the ambient refresh_token cookie; this endpoint also
-    // requires a valid Bearer access token ([Authorize]), which a cross-site page can neither
-    // read nor attach, so there is no CSRF exposure left to protect. Enforcing it here only
-    // broke real clients: antiforgery request tokens are bound to the authenticated user, and
-    // the SPA (like the Staging smoke) fetches its token once, before sign-in, so every logout
-    // that carried the refresh cookie was rejected with 403 CSRF_VALIDATION_FAILED and the
-    // refresh token was never revoked server-side. POST /api/auth/refresh keeps full CSRF
-    // protection (it is anonymous and cookie-driven).
-    [Authorize]
-    [IgnoreAntiforgeryToken]
+    // Works with a valid Bearer access token OR with the refresh_token cookie alone. It used to
+    // be [Authorize]: once the 30-minute access token had expired, logout answered 401, left the
+    // HttpOnly cookie in place and the refresh token valid, so the next page load silently
+    // restored the session (and the SPA deliberately does not refresh-and-retry a logout).
+    //
+    // CSRF: a request authenticated by a Bearer header is exempt in CookieCsrfProtectionMiddleware
+    // (the browser never attaches that header on its own). A request that carries only the
+    // ambient cookie is NOT exempt, so a cross-site page still cannot log a victim out: it needs
+    // the antiforgery header exactly like POST /api/auth/refresh.
+    [AllowAnonymous]
     [HttpPost("logout")]
     [EnableRateLimiting("auth-logout")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Logout(
         [FromBody] RefreshRequest? dto,
         CancellationToken ct)
     {
-        var userIdText = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(userIdText, out var userId))
-            return Unauthorized();
+        // Null when the access token is missing, expired or invalid; the command then
+        // identifies the owner from the refresh token itself.
+        Guid? userId = Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id)
+            ? id
+            : null;
 
         var refreshToken = RefreshTokenCookie.Read(Request, dto?.RefreshToken);
 

@@ -11,11 +11,6 @@ public interface IResetPasswordIdentityService
         string email,
         CancellationToken ct = default);
 
-    Task<bool> CheckPasswordAsync(
-        Guid identityId,
-        string password,
-        CancellationToken ct = default);
-
     Task<IdentityOperationResult> ResetPasswordAsync(
         Guid identityId,
         string token,

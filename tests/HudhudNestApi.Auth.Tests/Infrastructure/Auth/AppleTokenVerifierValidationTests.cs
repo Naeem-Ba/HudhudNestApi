@@ -32,6 +32,9 @@ public sealed class AppleTokenVerifierValidationTests
     private const string ClientId = "com.example.app";
     private const string AppleIssuer = "https://appleid.apple.com";
     private const string Subject = "apple-user-sub-123";
+    private const string RawNonce = "client-generated-raw-nonce";
+    private static readonly string ValidNonceHash =
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(RawNonce))).ToLowerInvariant();
 
     [Fact]
     public async Task VerifyAsync_Fails_WhenTheAudienceDoesNotMatchOurClientId()
@@ -39,7 +42,7 @@ public sealed class AppleTokenVerifierValidationTests
         var context = CreateVerifier();
         var token = context.IssueToken(audience: "some-other-app.example.com");
 
-        var result = await context.Verifier.VerifyAsync(token);
+        var result = await context.Verifier.VerifyAsync(token, RawNonce);
 
         Assert.Null(result);
     }
@@ -50,7 +53,7 @@ public sealed class AppleTokenVerifierValidationTests
         var context = CreateVerifier();
         var token = context.IssueToken(issuer: "https://not-apple.example.com");
 
-        var result = await context.Verifier.VerifyAsync(token);
+        var result = await context.Verifier.VerifyAsync(token, RawNonce);
 
         Assert.Null(result);
     }
@@ -63,7 +66,7 @@ public sealed class AppleTokenVerifierValidationTests
             notBefore: DateTime.UtcNow.AddMinutes(-30),
             expires: DateTime.UtcNow.AddMinutes(-10));
 
-        var result = await context.Verifier.VerifyAsync(token);
+        var result = await context.Verifier.VerifyAsync(token, RawNonce);
 
         Assert.Null(result);
     }
@@ -78,7 +81,7 @@ public sealed class AppleTokenVerifierValidationTests
         using var attackerRsa = RSA.Create(2048);
         var token = context.IssueToken(signingRsaOverride: attackerRsa, keyIdOverride: context.KeyId);
 
-        var result = await context.Verifier.VerifyAsync(token);
+        var result = await context.Verifier.VerifyAsync(token, RawNonce);
 
         Assert.Null(result);
     }
@@ -108,7 +111,7 @@ public sealed class AppleTokenVerifierValidationTests
             .Replace('+', '-').Replace('/', '_').TrimEnd('=');
         var tampered = $"{parts[0]}.{tamperedPayload}.{parts[2]}";
 
-        var result = await context.Verifier.VerifyAsync(tampered);
+        var result = await context.Verifier.VerifyAsync(tampered, RawNonce);
 
         Assert.Null(result);
     }
@@ -121,7 +124,7 @@ public sealed class AppleTokenVerifierValidationTests
         var context = CreateVerifier();
         var token = context.IssueToken();
 
-        var result = await context.Verifier.VerifyAsync(token);
+        var result = await context.Verifier.VerifyAsync(token, RawNonce);
 
         Assert.NotNull(result);
         Assert.Equal(Subject, result!.ProviderId);
@@ -199,7 +202,10 @@ public sealed class AppleTokenVerifierValidationTests
             {
                 new("sub", Subject),
                 new("email", "user@example.com"),
-                new("email_verified", "true")
+                new("email_verified", "true"),
+                // The nonce is mandatory, so a token with any other defect must still carry a
+                // valid one; otherwise these tests would fail for the nonce, not the defect.
+                new("nonce", ValidNonceHash)
             };
 
             var signingCredentials = new SigningCredentials(

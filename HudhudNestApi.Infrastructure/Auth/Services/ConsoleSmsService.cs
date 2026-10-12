@@ -63,6 +63,7 @@ public sealed class TwilioSmsService : ISmsService
     private readonly string _accountSid;
     private readonly string _authToken;
     private readonly string _fromNumber;
+    private readonly TimeSpan _timeout;
     private readonly ILogger<TwilioSmsService> _logger;
 
     public TwilioSmsService(
@@ -77,6 +78,11 @@ public sealed class TwilioSmsService : ISmsService
 
         _fromNumber = config["Twilio:FromNumber"]
             ?? throw new InvalidOperationException("Twilio:FromNumber is required");
+
+        // The SDK call below takes no cancellation token, so without a bound a stalled Twilio
+        // connection would hold the send-otp request open. Same 1-60 s window as the other providers.
+        _timeout = TimeSpan.FromSeconds(Math.Clamp(
+            config.GetValue<int?>("SmsProvider:TimeoutSeconds") ?? 10, 1, 60));
 
         _logger = logger;
     }
@@ -95,7 +101,8 @@ public sealed class TwilioSmsService : ISmsService
             var message = await Twilio.Rest.Api.V2010.Account.MessageResource.CreateAsync(
                 body: $"رمز التحقق الخاص بك هو: {otp}\nصالح لمدة 5 دقائق. لا تشاركه مع أحد.",
                 from: new Twilio.Types.PhoneNumber(_fromNumber),
-                to: new Twilio.Types.PhoneNumber(phoneNumber));
+                to: new Twilio.Types.PhoneNumber(phoneNumber))
+                .WaitAsync(_timeout, ct);
 
             var isFailed =
                 message.Status == Twilio.Rest.Api.V2010.Account.MessageResource.StatusEnum.Failed ||
@@ -111,6 +118,11 @@ public sealed class TwilioSmsService : ISmsService
             }
 
             return !isFailed;
+        }
+        catch (TimeoutException)
+        {
+            _logger.LogWarning("Twilio SMS timed out after {Seconds}s for {Phone}.", _timeout.TotalSeconds, PiiMasking.MaskPhone(phoneNumber));
+            return false;
         }
         catch (OperationCanceledException)
         {
