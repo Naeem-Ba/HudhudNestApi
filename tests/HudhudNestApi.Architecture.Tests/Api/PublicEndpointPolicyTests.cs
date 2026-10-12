@@ -34,6 +34,10 @@ public sealed class PublicEndpointPolicyTests
             "AuthController.ForgotPassword",
             "AuthController.ResetPassword",
             "AuthController.Refresh",
+            // Logout works from the refresh cookie alone once the access token has expired. A
+            // request that only carries the ambient cookie still needs the antiforgery header
+            // (CookieCsrfProtectionMiddleware) and the "auth-logout" rate limit applies.
+            "AuthController.Logout",
             "AuthController.SocialLoginGoogle",
             "AuthController.SocialLoginApple",
             "PhoneAuthController.LegacyPhoneOtpFlowRemoved",

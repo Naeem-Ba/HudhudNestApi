@@ -65,6 +65,9 @@ public sealed class ResetPasswordCommandHandler
         ResetPasswordCommand,
         ResetPasswordResult>
 {
+    // Same text Identity reports for a rejected token, so the unknown-address answer matches it.
+    private const string InvalidTokenError = "Invalid token.";
+
     private readonly IResetPasswordIdentityService _identity;
 
     private readonly IRefreshTokenRepository _refreshTokens;
@@ -114,24 +117,18 @@ public sealed class ResetPasswordCommandHandler
                 email,
                 ct);
 
+        // An unknown or deleted address answers exactly like a known address with a bad token
+        // (same status, same body), so this endpoint cannot be used to list registered emails.
         if (identity is null ||
             identity.IsDeleted)
         {
-            return ResetPasswordResult.BadRequest(
-                "Invalid password reset request.");
+            return ResetPasswordResult.Fail(
+                new[] { InvalidTokenError });
         }
 
-        var isSamePassword =
-            await _identity.CheckPasswordAsync(
-                identity.IdentityId,
-                request.NewPassword,
-                ct);
-
-        if (isSamePassword)
-        {
-            return ResetPasswordResult.ConflictResult(
-                "New password must be different from the current password.");
-        }
+        // Deliberately no "new password equals the current one" check here: it ran before the
+        // token was validated, so anyone who knew an address could probe the current password
+        // with a made-up token (409 = match) without ever touching the account lockout counter.
 
         var token =
             Uri.UnescapeDataString(

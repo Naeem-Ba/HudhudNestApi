@@ -6,8 +6,10 @@ using HudhudNestApi.Application.Common.Interfaces;
 
 namespace HudhudNestApi.Application.Auth.Commands.Logout;
 
+// UserId is null when the caller's access token was missing or expired and only the refresh
+// token (HttpOnly cookie) identifies the session; the handler then resolves the owner from it.
 public sealed record LogoutCommand(
-    Guid UserId,
+    Guid? UserId,
     string RefreshToken,
     string? IpAddress = null)
     : IRequest;
@@ -38,9 +40,31 @@ public sealed class LogoutCommandHandler
         LogoutCommand request,
         CancellationToken ct)
     {
+        var userId = request.UserId;
+
+        if (userId is null)
+        {
+            // No usable access token. Only a live refresh token proves who is logging out; an
+            // unknown, revoked or expired one changes nothing (the controller still clears the
+            // cookie).
+            var stored =
+                await _refreshTokens.GetByRefreshTokenAsync(
+                    request.RefreshToken,
+                    ct);
+
+            if (stored is null ||
+                stored.IsRevoked ||
+                stored.ExpiresAt <= DateTime.UtcNow)
+            {
+                return;
+            }
+
+            userId = stored.UserId;
+        }
+
         var revoked =
             await _refreshTokens.RevokeUserTokenAsync(
-                request.UserId,
+                userId.Value,
                 request.RefreshToken,
                 DateTime.UtcNow,
                 request.IpAddress,
@@ -48,7 +72,7 @@ public sealed class LogoutCommandHandler
 
         var identity =
             await _identity.FindByIdAsync(
-                request.UserId,
+                userId.Value,
                 ct);
 
         if (identity is not null &&
@@ -83,14 +107,14 @@ public sealed class LogoutCommandHandler
          * after an explicit logout operation.
          */
         await _securityStampCacheInvalidator.InvalidateAsync(
-            request.UserId,
+            userId.Value,
             ct);
 
         if (revoked)
         {
             _logger.LogInformation(
                 "Identity {IdentityId} logged out, refresh token was revoked, and security-stamp cache was invalidated.",
-                request.UserId);
+                userId.Value);
         }
     }
 }
@@ -101,7 +125,7 @@ public sealed class LogoutCommandValidator
     public LogoutCommandValidator()
     {
         RuleFor(x => x.UserId)
-            .NotEmpty();
+            .NotEqual(Guid.Empty);
 
         RuleFor(x => x.RefreshToken)
             .NotEmpty();

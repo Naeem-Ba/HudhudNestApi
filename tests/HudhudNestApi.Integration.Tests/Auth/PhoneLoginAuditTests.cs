@@ -578,6 +578,32 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
     }
 
     [Fact]
+    public async Task G1b_PhoneChange_MovesTheUserName_AndFreesTheOldNumber()
+    {
+        var (oldPhone, access, _) = await RegisterUser();
+        var newPhone = NewPhone();
+        var send = await Post("/api/auth/phone/change/send-otp", new { phoneNumber = newPhone }, bearer: access);
+        var challengeId = Guid.Parse(send.Str("challengeId")!);
+        var code = _factory.Sms.LastCodeFor(newPhone)!;
+        Assert.Equal(HttpStatusCode.OK,
+            (await Post("/api/auth/phone/change/verify", new { challengeId, code, currentPassword = Password }, bearer: access)).Status);
+
+        // For a phone-registered account UserName mirrors the number; leaving the old number there made it unregistrable.
+        await WithDb(async db =>
+        {
+            var user = await db.Users.SingleAsync(u => u.NormalizedPhoneNumber == newPhone);
+            Assert.Equal(newPhone, user.UserName);
+            Assert.False(await db.Users.AnyAsync(u => u.UserName == oldPhone));
+        });
+
+        // The old number is genuinely free: someone else can register with it.
+        var (_, reRegisterChallenge, reRegisterCode) = await SendRegistrationOtp(oldPhone);
+        var reRegistered = await Post("/api/auth/phone/registration/verify",
+            new { challengeId = reRegisterChallenge, code = reRegisterCode, password = Password, firstName = "Next", lastName = "Owner" });
+        Assert.Equal(HttpStatusCode.OK, reRegistered.Status);
+    }
+
+    [Fact]
     public async Task G2_PhoneChange_ToANumberAlreadyRegistered_IsNotOffered()
     {
         var (_, access, _) = await RegisterUser();

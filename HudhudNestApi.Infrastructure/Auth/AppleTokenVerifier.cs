@@ -88,21 +88,26 @@ internal sealed class AppleTokenVerifier : ISocialTokenVerifier
             // B-16 (RELEASE-BLOCKERS-AR.md): without this, a valid Apple identity token
             // obtained for one sign-in attempt could be replayed against this endpoint from
             // any other session within its validity window. The token's own signature only
-            // proves Apple issued it, not that it was issued for *this* request. Only
-            // enforced once a caller actually supplies a nonce — the frontend and backend
-            // ship this together, so no partial-rollout state where one side has it and the
-            // other does not is expected to reach Production.
-            if (!string.IsNullOrWhiteSpace(expectedNonce))
+            // proves Apple issued it, not that it was issued for *this* request.
+            //
+            // The nonce is mandatory. It used to be checked only when the caller supplied one,
+            // which let anyone holding a stolen token simply leave it out and skip the check.
+            // Both shipped clients (web and native iOS) always send it; the raw value lives only
+            // in the signing-in client, so a stolen token alone no longer works.
+            if (string.IsNullOrWhiteSpace(expectedNonce))
             {
-                var nonceClaim = principal.FindFirst("nonce")?.Value;
-                var expectedNonceHash = HashNonce(expectedNonce);
+                _logger.LogWarning("Apple sign-in was attempted without a nonce.");
+                return null;
+            }
 
-                if (string.IsNullOrWhiteSpace(nonceClaim) ||
-                    !string.Equals(nonceClaim, expectedNonceHash, StringComparison.Ordinal))
-                {
-                    _logger.LogWarning("Apple identity token nonce did not match the expected value.");
-                    return null;
-                }
+            var nonceClaim = principal.FindFirst("nonce")?.Value;
+            var expectedNonceHash = HashNonce(expectedNonce);
+
+            if (string.IsNullOrWhiteSpace(nonceClaim) ||
+                !string.Equals(nonceClaim, expectedNonceHash, StringComparison.Ordinal))
+            {
+                _logger.LogWarning("Apple identity token nonce did not match the expected value.");
+                return null;
             }
 
             var email = principal.FindFirst("email")?.Value;

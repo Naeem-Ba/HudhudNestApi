@@ -364,6 +364,12 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         {
             var now = _clock.GetUtcNow();
             foreach (var claimant in claimants) await ReleaseUnconfirmedClaimAsync(claimant, now, ipAddress, ct);
+            // A phone-registered account uses its number as the user name (NewVerifiedUser). Leave the
+            // old number behind as the user name and it stays reserved for good: nobody, including
+            // its next owner, can register it, and login by that number fails anyway. Accounts whose
+            // user name is something else (an email) are left alone.
+            if (string.Equals(user.UserName, user.NormalizedPhoneNumber, StringComparison.Ordinal))
+                user.UserName = challenge.NormalizedPhoneNumber;
             user.PhoneNumber = challenge.NormalizedPhoneNumber;
             user.NormalizedPhoneNumber = challenge.NormalizedPhoneNumber;
             user.PhoneNumberLookupHash = _lookupHasher.Compute(challenge.NormalizedPhoneNumber);
@@ -371,7 +377,14 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             SetVerified(user, _clock.GetUtcNow());
             await ConsumeAsync(challenge.Id, ct);
             await _users.UpdateSecurityStampAsync(user);
-            await _users.UpdateAsync(user);
+            var update = await _users.UpdateAsync(user);
+            if (!update.Succeeded)
+            {
+                // Identity reports a taken user name as a result, not an exception.
+                await transaction.RollbackAsync(ct);
+                await ReleaseAsync(challenge.Id, ct);
+                return Fail("PHONE_NUMBER_ALREADY_IN_USE");
+            }
             await transaction.CommitAsync(ct);
         }
         catch (DbUpdateException)
