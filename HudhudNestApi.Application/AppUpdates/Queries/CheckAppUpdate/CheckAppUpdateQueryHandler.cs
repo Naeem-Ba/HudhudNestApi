@@ -70,8 +70,10 @@ public sealed class CheckAppUpdateQueryHandler : IRequestHandler<CheckAppUpdateQ
 
     private static string? SelectReleaseNotes(EffectiveAppReleaseDto release, string? language) => language switch
     {
-        "ar" => release.ReleaseNotesAr,
-        "de" => release.ReleaseNotesDe,
+        // A language with no notes written falls back to English, so the dialog is never empty just because
+        // an admin filled in one language.
+        "ar" => release.ReleaseNotesAr ?? release.ReleaseNotesEn,
+        "de" => release.ReleaseNotesDe ?? release.ReleaseNotesEn,
         _ => release.ReleaseNotesEn,
     };
 }

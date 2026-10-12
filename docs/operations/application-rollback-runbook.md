@@ -36,6 +36,20 @@ export CONFIRM_AUTODEPLOY_DISABLED=true
 bash scripts/deployment/rollback-application.sh
 ```
 
+## Post-deploy verification (every production deploy)
+
+After `deploy-production` triggers the Render hook, the `verify-production-deploy` job
+(`scripts/deployment/verify-production-deploy.sh`, environment `production-release`) reads the Render deploys
+of the service and waits until the deploy whose commit is the gated `GITHUB_SHA` is `live`, then requires
+`/health/ready` to answer. It fails the run when that deploy ends as `build_failed`, `update_failed`,
+`pre_deploy_failed` or `canceled`, when it is replaced before it was verified, when it is not live within
+25 minutes, or when readiness does not answer. It changes nothing. A red `verify-production-deploy` means
+Production may not be running the gated commit: open Render, check what is live, and use the rollback
+procedure above if the live deploy is bad. Evidence: artifact `production-post-deploy-verification-<run id>`.
+
+Variables it needs (names only): secrets `RENDER_API_KEY` and `RENDER_SERVICE_ID` on the
+`production-release` environment, and `PRODUCTION_BASE_URL` (repository variable or secret).
+
 ## Automatic rollback policy
 
 No unattended rollback is enabled because the existing production deploy is provider-controlled and schema compatibility cannot be inferred safely. Failed health, readiness, critical smoke, or migration verification blocks the eligibility gate; an operator then runs the protected rollback. This is fail-closed and prevents an automatic unsafe database downgrade.

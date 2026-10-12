@@ -20,14 +20,16 @@ public sealed class AdminAppReleasesCrudTests : IClassFixture<AppUpdateApiTestFa
 
     public Task DisposeAsync() => Task.CompletedTask;
 
+    private const string PlayUrl = "https://play.google.com/store/apps/details?id=com.hudhudnest.app";
+
     private static object ValidCreatePayload(
         AppPlatform platform = AppPlatform.Android, string version = "1.1.0", string minimumSupportedVersion = "1.0.0",
-        bool isEnabled = true) => new
+        bool isEnabled = true, string? storeUrl = PlayUrl) => new
         {
             platform = platform.ToString(),
             version,
             minimumSupportedVersion,
-            storeUrl = (string?)null,
+            storeUrl,
             releaseNotesAr = "ar",
             releaseNotesEn = "en",
             releaseNotesDe = "de",
@@ -79,7 +81,7 @@ public sealed class AdminAppReleasesCrudTests : IClassFixture<AppUpdateApiTestFa
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
-    [Fact(DisplayName = "Malformed StoreUrl -> 422, empty StoreUrl accepted -> 201")]
+    [Fact(DisplayName = "Malformed or non-store StoreUrl -> 422, enabled store release without one -> 422, disabled draft without one -> 201")]
     public async Task StoreUrlValidation()
     {
         var admin = await AdminAsync();
@@ -96,8 +98,17 @@ public sealed class AdminAppReleasesCrudTests : IClassFixture<AppUpdateApiTestFa
         });
         Assert.Equal(HttpStatusCode.UnprocessableEntity, malformed.StatusCode);
 
-        var empty = await client.PostAsJsonAsync("/api/admin/app-releases", ValidCreatePayload());
-        Assert.Equal(HttpStatusCode.Created, empty.StatusCode);
+        var foreignHost = await client.PostAsJsonAsync(
+            "/api/admin/app-releases", ValidCreatePayload(storeUrl: "https://evil.example/store"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, foreignHost.StatusCode);
+
+        var enabledWithoutLink = await client.PostAsJsonAsync(
+            "/api/admin/app-releases", ValidCreatePayload(storeUrl: null));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, enabledWithoutLink.StatusCode);
+
+        var draftWithoutLink = await client.PostAsJsonAsync(
+            "/api/admin/app-releases", ValidCreatePayload(isEnabled: false, storeUrl: null));
+        Assert.Equal(HttpStatusCode.Created, draftWithoutLink.StatusCode);
     }
 
     [Fact(DisplayName = "Update persists changes")]
@@ -105,13 +116,13 @@ public sealed class AdminAppReleasesCrudTests : IClassFixture<AppUpdateApiTestFa
     {
         var admin = await AdminAsync();
         var client = _factory.AuthedClient(admin.AccessToken);
-        var id = await _factory.SeedReleaseAsync(AppPlatform.Android, "1.1.0", "1.0.0");
+        var id = await _factory.SeedReleaseAsync(AppPlatform.Android, "1.1.0", "1.0.0", storeUrl: PlayUrl);
 
         var response = await client.PutAsJsonAsync($"/api/admin/app-releases/{id}", new
         {
             version = "1.2.0",
             minimumSupportedVersion = "1.0.0",
-            storeUrl = (string?)null,
+            storeUrl = PlayUrl,
             releaseNotesAr = "updated-ar",
             releaseNotesEn = "updated-en",
             releaseNotesDe = "updated-de",
@@ -129,7 +140,7 @@ public sealed class AdminAppReleasesCrudTests : IClassFixture<AppUpdateApiTestFa
     {
         var admin = await AdminAsync();
         var client = _factory.AuthedClient(admin.AccessToken);
-        var id = await _factory.SeedReleaseAsync(AppPlatform.Android, "1.5.0", "1.0.0", isEnabled: false);
+        var id = await _factory.SeedReleaseAsync(AppPlatform.Android, "1.5.0", "1.0.0", isEnabled: false, storeUrl: PlayUrl);
 
         var beforeEnable = await client.GetAsync("/api/app-updates/check?platform=Android&currentVersion=1.0.0");
         var beforeBody = await beforeEnable.Content.ReadAsStringAsync();
@@ -148,6 +159,27 @@ public sealed class AdminAppReleasesCrudTests : IClassFixture<AppUpdateApiTestFa
         var afterDisable = await client.GetAsync("/api/app-updates/check?platform=Android&currentVersion=1.0.0");
         var afterDisableBody = await afterDisable.Content.ReadAsStringAsync();
         Assert.Contains("\"updateAvailable\":false", afterDisableBody);
+    }
+
+    [Fact(DisplayName = "A release without a store link cannot be enabled, and an enabled one cannot lose its link")]
+    public async Task StoreLink_IsRequiredWhileEnabled()
+    {
+        var admin = await AdminAsync();
+        var client = _factory.AuthedClient(admin.AccessToken);
+
+        var draft = await _factory.SeedReleaseAsync(AppPlatform.Android, "1.6.0", "1.0.0", isEnabled: false);
+        var enable = await client.PostAsync($"/api/admin/app-releases/{draft}/enable", content: null);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, enable.StatusCode);
+
+        var live = await _factory.SeedReleaseAsync(AppPlatform.Android, "1.7.0", "1.0.0", storeUrl: PlayUrl);
+        var removeLink = await client.PutAsJsonAsync($"/api/admin/app-releases/{live}", new
+        {
+            version = "1.7.0",
+            minimumSupportedVersion = "1.0.0",
+            storeUrl = (string?)null,
+            releaseDate = DateTime.UtcNow,
+        });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, removeLink.StatusCode);
     }
 
     [Fact(DisplayName = "Delete is a soft delete: row remains with IsDeleted=true, no longer in admin list")]

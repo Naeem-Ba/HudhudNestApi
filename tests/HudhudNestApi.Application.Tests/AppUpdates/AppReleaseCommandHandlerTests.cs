@@ -15,9 +15,11 @@ namespace HudhudNestApi.Application.Tests.AppUpdates;
 
 public sealed class AppReleaseCommandHandlerTests
 {
-    private static AppRelease NewRelease(bool isEnabled = true) => AppRelease.Create(
+    private const string PlayUrl = "https://play.google.com/store/apps/details?id=com.hudhudnest.app";
+
+    private static AppRelease NewRelease(bool isEnabled = true, string? storeUrl = PlayUrl) => AppRelease.Create(
         AppPlatform.Android, AppVersion.Parse("1.1.0"), AppVersion.Parse("1.0.0"),
-        null, "ar", "en", "de", DateTime.UtcNow, isEnabled);
+        storeUrl, "ar", "en", "de", DateTime.UtcNow, isEnabled);
 
     private static (Mock<IAppReleaseRepository> Repo, Mock<IAppReleaseCacheService> Cache, Mock<IUnitOfWork> Uow, Mock<IAuditLogService> Audit)
         Mocks() => (new Mock<IAppReleaseRepository>(), new Mock<IAppReleaseCacheService>(), new Mock<IUnitOfWork>(), new Mock<IAuditLogService>());
@@ -91,7 +93,7 @@ public sealed class AppReleaseCommandHandlerTests
 
         var handler = new UpdateAppReleaseCommandHandler(repo.Object, cache.Object, uow.Object, audit.Object);
         var command = new UpdateAppReleaseCommand(
-            release.Id, "1.2.0", "1.0.0", null, null, null, null, DateTime.UtcNow, Guid.NewGuid(), null);
+            release.Id, "1.2.0", "1.0.0", PlayUrl, null, null, null, DateTime.UtcNow, Guid.NewGuid(), null);
 
         await handler.Handle(command, default);
 
@@ -101,6 +103,62 @@ public sealed class AppReleaseCommandHandlerTests
         audit.Verify(x => x.LogAsync(
             command.PerformedByUserId, "AppReleaseUpdatedByAdmin", command.IpAddress,
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("https://evil.example/store")]
+    [InlineData("http://play.google.com/store/apps/details?id=x")]
+    [InlineData("https://play.google.com.evil.example/store")]
+    [InlineData("https://apps.apple.com/app/id1")]
+    public async Task Update_EnabledAndroidRelease_RejectsMissingOrUntrustedStoreLink(string? storeUrl)
+    {
+        var release = NewRelease(isEnabled: true);
+        var (repo, cache, uow, audit) = Mocks();
+        repo.Setup(x => x.GetByIdAsync(release.Id, It.IsAny<CancellationToken>())).ReturnsAsync(release);
+
+        var handler = new UpdateAppReleaseCommandHandler(repo.Object, cache.Object, uow.Object, audit.Object);
+        var command = new UpdateAppReleaseCommand(
+            release.Id, "1.2.0", "1.0.0", storeUrl, null, null, null, DateTime.UtcNow, Guid.NewGuid(), null);
+
+        await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, default));
+
+        Assert.Equal(PlayUrl, release.StoreUrl);
+        uow.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_DisabledRelease_MayStillHaveNoLink_ButNeverAnUntrustedOne()
+    {
+        var release = NewRelease(isEnabled: false);
+        var (repo, cache, uow, audit) = Mocks();
+        repo.Setup(x => x.GetByIdAsync(release.Id, It.IsAny<CancellationToken>())).ReturnsAsync(release);
+        var handler = new UpdateAppReleaseCommandHandler(repo.Object, cache.Object, uow.Object, audit.Object);
+
+        await handler.Handle(new UpdateAppReleaseCommand(
+            release.Id, "1.2.0", "1.0.0", null, null, null, null, DateTime.UtcNow, Guid.NewGuid(), null), default);
+        Assert.Null(release.StoreUrl);
+
+        await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(new UpdateAppReleaseCommand(
+            release.Id, "1.2.0", "1.0.0", "https://evil.example/x", null, null, null, DateTime.UtcNow, Guid.NewGuid(), null), default));
+    }
+
+    [Fact]
+    public async Task Enable_WithoutStoreLink_Throws_AndStaysDisabled()
+    {
+        var release = NewRelease(isEnabled: false, storeUrl: null);
+        var (repo, cache, uow, audit) = Mocks();
+        repo.Setup(x => x.GetByIdAsync(release.Id, It.IsAny<CancellationToken>())).ReturnsAsync(release);
+
+        var handler = new EnableAppReleaseCommandHandler(repo.Object, cache.Object, uow.Object, audit.Object);
+
+        await Assert.ThrowsAsync<ValidationException>(
+            () => handler.Handle(new EnableAppReleaseCommand(release.Id, Guid.NewGuid(), null), default));
+
+        Assert.False(release.IsEnabled);
+        uow.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        cache.Verify(x => x.InvalidateAsync(It.IsAny<AppPlatform>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
