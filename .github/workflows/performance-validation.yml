@@ -5,6 +5,10 @@ on:
   # on every pull request (profile `pr`) and every push (profile `release`) as the "Mandatory Concurrent
   # Performance Gate". Listing the same events here ran the identical job a second time per event.
   # What remains: the weekly run, a manual run, and the call from the gate.
+  # The weekly run uses the `release` profile because it is the only profile with an approved baseline
+  # (performance/baselines/approved-baseline.json). The `staging` profile (100000 properties) fails closed
+  # without performance/baselines/approved-staging-baseline.json (BUG-35), so scheduling it only produced a
+  # red run every Monday; run it by hand with `workflow_dispatch` once that baseline exists.
   schedule:
     - cron: '17 2 * * 1'
   workflow_dispatch:
@@ -80,7 +84,7 @@ jobs:
     timeout-minutes: 180
     env:
       PERF_ENVIRONMENT: CI
-      PERF_PROFILE: ${{ inputs.profile || (github.event_name == 'schedule' && 'staging') || ((github.event_name == 'pull_request' || github.event_name == 'push') && 'pr') || 'release' }}
+      PERF_PROFILE: ${{ inputs.profile || ((github.event_name == 'pull_request' || github.event_name == 'push') && 'pr') || 'release' }}
       PERF_COMMIT_SHA: ${{ github.sha }}
       PERF_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
       PERF_BASE_URL: http://localhost:58080
