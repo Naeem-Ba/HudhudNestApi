@@ -77,6 +77,11 @@ The database name must contain the configured marker. Redis and storage must be 
 explicitly isolated namespaces. Staging must not contain Production SMS, email, webhook, database,
 Redis, or storage credentials.
 
+Staging also never delivers to real people, whatever providers are configured: email reaches only
+`Staging__Email__AllowedRecipients__N` entries (full addresses or `@domain`; an empty list delivers
+nothing), SMS goes to the smoke sink or is suppressed, and the Telegram/WhatsApp gateways are not
+registered. See `docs/operations/environments-and-release-flow.md` section 3a.
+
 ## Local configuration validation
 
 ```bash

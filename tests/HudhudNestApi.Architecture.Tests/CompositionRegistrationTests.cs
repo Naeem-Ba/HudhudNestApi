@@ -10,6 +10,7 @@ using HudhudNestApi.Application.Admin.Interfaces;
 using HudhudNestApi.Application.Auth.Commands.Register;
 using HudhudNestApi.Application.Analytics.Interfaces;
 using HudhudNestApi.Application.Auth.Interfaces;
+using HudhudNestApi.Application.Auth.Phone;
 using HudhudNestApi.Application.Bookings.Interfaces;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Contact.Interfaces;
@@ -20,6 +21,8 @@ using HudhudNestApi.Application.Reviews.Interfaces;
 using HudhudNestApi.Application.Users.Interfaces;
 using HudhudNestApi.Application.Users.Messaging.Interfaces;
 using HudhudNestApi.Infrastructure;
+using HudhudNestApi.Infrastructure.Auth.Otp;
+using HudhudNestApi.Infrastructure.Auth.Services;
 using HudhudNestApi.Infrastructure.Email;
 using HudhudNestApi.Infrastructure.Health;
 using HudhudNestApi.Infrastructure.Identity.Services;
@@ -202,6 +205,86 @@ public sealed class CompositionRegistrationTests
         Assert.IsType<ResendEmailSender>(
             scope.ServiceProvider
                 .GetRequiredService<IApplicationEmailSender>());
+    }
+
+    [Fact]
+    public void Staging_wraps_the_configured_email_sender_so_only_allowed_recipients_receive_mail()
+    {
+        // StagingEnvironmentGuard demands Staging:ExternalNotificationsDisabled=true, so the sender
+        // that Staging resolves must honour it whichever provider is configured.
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        var configuration = CreateConfiguration(new Dictionary<string, string?>
+        {
+            ["Email:Provider"] = "Resend",
+            ["Email:From"] = "no-reply@example.com",
+            ["Email:Resend:ApiKey"] = "resend-test-key",
+            ["Staging:Email:AllowedRecipients:0"] = "tester@example.com",
+            ["ConnectionStrings:Redis"] = "localhost:6379"
+        });
+        services.AddSingleton(configuration);
+
+        services.AddInfrastructure(configuration, new TestHostEnvironment { EnvironmentName = "Staging" });
+
+        AssertScoped<IApplicationEmailSender>(services);
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        Assert.IsType<StagingRecipientFilteringEmailSender>(
+            scope.ServiceProvider.GetRequiredService<IApplicationEmailSender>());
+        Assert.IsType<StagingRecipientFilteringEmailSender>(
+            scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UI.Services.IEmailSender>());
+    }
+
+    [Fact]
+    public async Task Staging_without_the_smoke_sink_never_sends_a_real_sms_and_registers_no_chat_gateways()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        var configuration = CreateConfiguration(new Dictionary<string, string?>
+        {
+            ["OtpChannels:Telegram:Enabled"] = "true",
+            ["OtpChannels:WhatsApp:Enabled"] = "true",
+            ["ConnectionStrings:Redis"] = "localhost:6379"
+        });
+        services.AddSingleton(configuration);
+
+        services.AddInfrastructure(configuration, new TestHostEnvironment { EnvironmentName = "Staging" });
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var sms = scope.ServiceProvider.GetRequiredService<ISmsService>();
+        Assert.IsType<StagingSuppressedSmsService>(sms);
+        Assert.False(await sms.SendOtpAsync("+9715000000", "123456"));
+
+        Assert.Single(scope.ServiceProvider.GetServices<IOtpProvider>());
+    }
+
+    [Fact]
+    public void Non_staging_environments_keep_the_unwrapped_email_sender()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        var configuration = CreateConfiguration(new Dictionary<string, string?>
+        {
+            ["Email:Provider"] = "Resend",
+            ["Email:From"] = "no-reply@example.com",
+            ["Email:Resend:ApiKey"] = "resend-test-key"
+        });
+        services.AddSingleton(configuration);
+
+        services.AddInfrastructure(configuration, new TestHostEnvironment());
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        Assert.IsType<ResendEmailSender>(
+            scope.ServiceProvider.GetRequiredService<IApplicationEmailSender>());
     }
 
     [Fact]

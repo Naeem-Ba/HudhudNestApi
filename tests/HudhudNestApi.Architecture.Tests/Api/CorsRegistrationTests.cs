@@ -40,6 +40,33 @@ public sealed class CorsRegistrationTests
         Assert.True(policy.IsOriginAllowed("https://hudhudnest.com"));
     }
 
+    [Fact(DisplayName = "A pattern written without ^ and $ still has to match the whole origin")]
+    public void UnanchoredPattern_RejectsOriginWithTrailingOrLeadingText()
+    {
+        // The real patterns live in the hosting dashboard; one typed without anchors used to accept
+        // the attacker-controlled origins below on a credentialed policy.
+        var policy = BuildDefaultPolicy(
+            allowedOrigins: new[] { "https://hudhudnest.com" },
+            allowedOriginPatterns: new[] { @"https://deploy-preview-\d+--hudhudnest\.netlify\.app" });
+
+        Assert.True(policy.IsOriginAllowed("https://deploy-preview-101--hudhudnest.netlify.app"));
+        Assert.False(policy.IsOriginAllowed("https://deploy-preview-101--hudhudnest.netlify.app.evil.example"));
+        Assert.False(policy.IsOriginAllowed("https://evil.example/https://deploy-preview-1--hudhudnest.netlify.app"));
+    }
+
+    [Fact(DisplayName = "A pattern with alternation is anchored as a whole, not per branch")]
+    public void AlternationPattern_IsAnchoredAsAWhole()
+    {
+        var policy = BuildDefaultPolicy(
+            allowedOrigins: new[] { "https://hudhudnest.com" },
+            allowedOriginPatterns: new[] { @"https://a\.example|https://b\.example" });
+
+        Assert.True(policy.IsOriginAllowed("https://a.example"));
+        Assert.True(policy.IsOriginAllowed("https://b.example"));
+        Assert.False(policy.IsOriginAllowed("https://a.example.evil.example"));
+        Assert.False(policy.IsOriginAllowed("https://evil.example/https://b.example"));
+    }
+
     [Fact(DisplayName = "Without Cors:AllowedOriginPatterns, only the exact configured origin is allowed")]
     public void NoPatternsConfigured_OnlyExactOriginAllowed()
     {
