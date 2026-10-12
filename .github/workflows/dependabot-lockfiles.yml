@@ -1,0 +1,91 @@
+name: Dependabot lock files
+
+# Why this exists: Dependabot rewrites only the packages.lock.json of the project that lists a package
+# directly. Every other project that reaches it transitively keeps the old version in its lock file, and
+# CI restores with --locked-mode on purpose (supply-chain control), so the bump failed with NU1004 in
+# three checks (seen on MessagePack #285, FluentValidation #317, Swashbuckle #318, Twilio #329).
+#
+# What it does: on a Dependabot NuGet PR it runs `dotnet restore --force-evaluate`, which is exactly the
+# documented manual recipe (docs/development/central-package-management.md), and pushes the regenerated
+# lock files to the Dependabot branch. Locked-mode stays on everywhere; nothing is relaxed.
+#
+# The push uses a personal access token stored as the DEPENDABOT secret LOCKFILE_PUSH_TOKEN. A push made
+# with the default GITHUB_TOKEN would not start the CI checks again, and a Dependabot-triggered run only
+# receives a read-only GITHUB_TOKEN anyway. The loop guard is `github.actor`: the commit below is pushed
+# by the token's owner, so the resulting `synchronize` event is not a Dependabot event and skips this job.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-lockfiles-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    name: Refresh lock files on the Dependabot branch
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      startsWith(github.event.pull_request.head.ref, 'dependabot/nuget/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DOTNET_VERSION: '10.0.x'
+    steps:
+      - name: Require the push token
+        env:
+          LOCKFILE_PUSH_TOKEN: ${{ secrets.LOCKFILE_PUSH_TOKEN }}
+        run: |
+          if [ -z "${LOCKFILE_PUSH_TOKEN}" ]; then
+            echo "::error::The Dependabot secret LOCKFILE_PUSH_TOKEN is not set. See docs/development/central-package-management.md (Dependabot lock files). Until it exists, regenerate the lock files by hand."
+            exit 1
+          fi
+
+      - name: Checkout the Dependabot commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          # The token is handed to the push step only; restore must not see it.
+          persist-credentials: false
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Regenerate every lock file
+        run: dotnet restore HudhudNestApi.sln --force-evaluate
+
+      - name: Commit and push only if lock files changed
+        env:
+          LOCKFILE_PUSH_TOKEN: ${{ secrets.LOCKFILE_PUSH_TOKEN }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          changed="$(git status --porcelain)"
+          if [ -z "${changed}" ]; then
+            echo "Lock files already match the package versions; nothing to push."
+            exit 0
+          fi
+
+          # Refuse to push anything that is not a lock file: a restore must never edit other files.
+          unexpected="$(git status --porcelain | grep -v 'packages\.lock\.json$' || true)"
+          if [ -n "${unexpected}" ]; then
+            echo "::error::Restore changed files other than packages.lock.json; not pushing:"
+            echo "${unexpected}"
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- '*packages.lock.json'
+          git commit -m "chore(deps): refresh packages.lock.json files (restore --force-evaluate)"
+          git push "https://x-access-token:${LOCKFILE_PUSH_TOKEN}@github.com/${REPOSITORY}.git" "HEAD:refs/heads/${BRANCH}"
+          echo "Pushed regenerated lock files to ${BRANCH}; CI restarts on the new commit."

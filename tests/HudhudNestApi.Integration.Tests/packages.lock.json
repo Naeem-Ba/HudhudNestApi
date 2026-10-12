@@ -757,7 +757,7 @@
           "Microsoft.Extensions.Caching.StackExchangeRedis": "[10.0.12, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )",
           "System.IdentityModel.Tokens.Jwt": "[8.23.0, )",
-          "Twilio": "[8.0.2, )"
+          "Twilio": "[8.1.0, )"
         }
       },
       "CloudinaryDotNet": {
@@ -1107,9 +1107,9 @@
       },
       "Twilio": {
         "type": "CentralTransitive",
-        "requested": "[8.0.2, )",
-        "resolved": "8.0.2",
-        "contentHash": "j0ZySonKd8WJvaDiUXy8dLeHvKx+T4YavG6ltNHPM2qmT72MUe9Hhrj9N0bbuV5+GfLB4Vo8BMyvtkSzOUJZkg==",
+        "requested": "[8.1.0, )",
+        "resolved": "8.1.0",
+        "contentHash": "imSc7yGrsolNJ6JMySrwW5XVURWzPagktGjmk1dGAGL1K/je0dVNhyRWMp+dXMJ4EpC/QVv0sZW72nyVVmQfQQ==",
         "dependencies": {
           "Microsoft.IdentityModel.Tokens": "8.3.1",
           "Newtonsoft.Json": "13.0.1",
