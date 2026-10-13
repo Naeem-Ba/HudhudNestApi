@@ -69,6 +69,10 @@ public sealed class RateLimitingTests : IClassFixture<TestApplication>
                 password = "Password123!",
                 firstName = "Rate",
                 lastName = "Limit",
+                privacyPolicyAccepted = true,
+                privacyPolicyVersion = "2026-10-01",
+                termsAccepted = true,
+                termsVersion = "2026-10-01",
                 preferredLanguage = "ar",
                 preferredCurrency = "SYP"
             };

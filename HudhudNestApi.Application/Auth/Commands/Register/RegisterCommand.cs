@@ -20,17 +20,15 @@ public sealed record RegisterCommand(
     string Email,
     string Password,
 
-    // Optional and additive on purpose (docs/privacy/privacy-gaps.md, P1): an older
-    // client build that predates the consent checkbox simply omits these, and
-    // registration proceeds exactly as before -- just without a ConsentRecord, which is
-    // the pre-existing status quo, not a regression. Only ever set when the caller
-    // actually just checked an unchecked consent checkbox and submitted the form; see
-    // RegisterCommandHandler.RecordConsentIfAcceptedAsync.
+    // Both acceptances are required by RegisterCommandValidator (QA Phase 5, P5-D04): the
+    // checkbox used to be enforced only in the Angular form, so a direct API call could create
+    // an account with no ConsentRecord at all. The parameters keep their defaults so the
+    // command can still be constructed without them; the validator is what rejects that.
     bool PrivacyPolicyAccepted = false,
     string? PrivacyPolicyVersion = null,
     string? ConsentSource = null,
     // Terms of Service acceptance, recorded next to the privacy consent so each document is
-    // provable on its own. Optional/additive like the privacy fields: older clients omit them.
+    // provable on its own.
     bool TermsAccepted = false,
     string? TermsVersion = null,
     // The site language the client was showing ("ar", "en", "de"). Only picks the language
@@ -397,11 +395,10 @@ public sealed class RegisterCommandHandler
             .ToLowerInvariant();
 
     /// <summary>
-    /// Adds ConsentRecords to the same unit of work as the rest of registration, but only
-    /// for documents the caller actually sent a real acceptance for: a missing/empty version
-    /// or a false flag means an older client that predates the consent checkbox, not a
-    /// rejected consent, so it is silently skipped rather than failing the whole
-    /// registration over an optional field an old build never knew to send.
+    /// Adds the ConsentRecords to the same unit of work as the rest of registration, so a
+    /// consent record never exists for an account that failed to commit. The validator has
+    /// already rejected a missing or false acceptance; the guard in AddConsentIfAccepted stays
+    /// as defence in depth for callers that bypass the validation pipeline.
     /// </summary>
     private void TryRecordConsent(
         Guid userId,
@@ -444,6 +441,11 @@ public sealed class RegisterCommandHandler
 public sealed class RegisterCommandValidator
     : AbstractValidator<RegisterCommand>
 {
+    /// <summary>Stable error code for a missing or false consent, for localised clients.</summary>
+    public const string ConsentRequiredCode = "CONSENT_REQUIRED";
+
+    private const int MaxPolicyVersionLength = 64;
+
     private readonly IPasswordSecurityService _passwordSecurityService;
 
     public RegisterCommandValidator(
@@ -470,6 +472,31 @@ public sealed class RegisterCommandValidator
                         char.IsWhiteSpace))
             .WithMessage(
                 "Email must not contain whitespace.");
+
+        // Consent is enforced on the server, not only in the form (P5-D04): without these
+        // rules POST /api/auth/register created accounts with no ConsentRecord whenever the
+        // flags were false or absent.
+        RuleFor(x => x.PrivacyPolicyAccepted)
+            .Equal(true)
+            .WithMessage("The privacy policy must be accepted.")
+            .WithErrorCode(ConsentRequiredCode);
+
+        RuleFor(x => x.PrivacyPolicyVersion)
+            .NotEmpty()
+            .WithMessage("The accepted privacy policy version is required.")
+            .WithErrorCode(ConsentRequiredCode)
+            .MaximumLength(MaxPolicyVersionLength);
+
+        RuleFor(x => x.TermsAccepted)
+            .Equal(true)
+            .WithMessage("The terms of service must be accepted.")
+            .WithErrorCode(ConsentRequiredCode);
+
+        RuleFor(x => x.TermsVersion)
+            .NotEmpty()
+            .WithMessage("The accepted terms of service version is required.")
+            .WithErrorCode(ConsentRequiredCode)
+            .MaximumLength(MaxPolicyVersionLength);
 
         RuleFor(x => x.Password)
             .NotEmpty()

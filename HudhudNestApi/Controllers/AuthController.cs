@@ -419,10 +419,9 @@ public sealed class AuthController : ControllerBase
 
 // HTTP request DTOs kept in API layer to preserve the public API shape.
 //
-// PrivacyPolicyAccepted/PrivacyPolicyVersion/ConsentSource are additive and optional
-// (docs/privacy/privacy-gaps.md, P1) -- an older client build that predates the consent
-// checkbox simply omits them, and registration proceeds exactly as it did before this
-// change, just without a ConsentRecord (see RegisterCommand's doc comment).
+// PrivacyPolicyAccepted/TermsAccepted and their versions are required: RegisterCommandValidator
+// rejects a registration that omits them or sends false (QA Phase 5, P5-D04). The defaults only
+// let the body deserialize, so the answer is a 422 with a stable code and not a binding error.
 public sealed record RegisterRequest(
     string FirstName,
     string LastName,

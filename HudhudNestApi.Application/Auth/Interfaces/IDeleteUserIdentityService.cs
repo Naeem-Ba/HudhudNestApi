@@ -34,7 +34,10 @@ public interface IDeleteUserIdentityService
     ///     future new registration with the same provider account is not blocked by a
     ///     stale (LoginProvider, ProviderKey) row pointing at a deleted user.
     ///
-    /// Deliberately does not touch PasswordHash, SecurityStamp, or the soft-delete flags —
+    ///   - PasswordHash is cleared, so no credential derived from the person's password stays
+    ///     in the database.
+    ///
+    /// Deliberately does not touch SecurityStamp or the soft-delete flags —
     /// callers combine this with <see cref="UpdateSecurityStampAsync"/> and
     /// <see cref="SoftDeleteAsync"/> (see DeleteUserCommandHandler).
     /// </summary>

@@ -339,7 +339,11 @@ public sealed class RegisterCommandValidatorTests
             FirstName: "John",
             LastName: "Doe",
             Email: "john.doe@example.com",
-            Password: "SecurePass123!");
+            Password: "SecurePass123!",
+            PrivacyPolicyAccepted: true,
+            PrivacyPolicyVersion: "2026-10-01",
+            TermsAccepted: true,
+            TermsVersion: "2026-10-01");
 
         _passwordSecurityServiceMock
             .Setup(x => x.ValidatePasswordAsync("SecurePass123!", default))
@@ -351,6 +355,84 @@ public sealed class RegisterCommandValidatorTests
         // Assert
         result.ShouldNotHaveAnyValidationErrors();
     }
+
+    #region Consent Tests (P5-D04)
+
+    private static RegisterCommand WithConsent(
+        bool privacy = true,
+        string? privacyVersion = "2026-10-01",
+        bool terms = true,
+        string? termsVersion = "2026-10-01")
+        => new(
+            FirstName: "John",
+            LastName: "Doe",
+            Email: "john.doe@example.com",
+            Password: "SecurePass123!",
+            PrivacyPolicyAccepted: privacy,
+            PrivacyPolicyVersion: privacyVersion,
+            TermsAccepted: terms,
+            TermsVersion: termsVersion);
+
+    [Fact]
+    public async Task Validate_WithoutAnyConsent_RejectsAllFourFields()
+    {
+        var command = new RegisterCommand(
+            FirstName: "John",
+            LastName: "Doe",
+            Email: "john.doe@example.com",
+            Password: "SecurePass123!");
+
+        var result = await _validator.TestValidateAsync(command);
+
+        result.ShouldHaveValidationErrorFor(x => x.PrivacyPolicyAccepted)
+            .WithErrorCode(RegisterCommandValidator.ConsentRequiredCode);
+        result.ShouldHaveValidationErrorFor(x => x.PrivacyPolicyVersion);
+        result.ShouldHaveValidationErrorFor(x => x.TermsAccepted)
+            .WithErrorCode(RegisterCommandValidator.ConsentRequiredCode);
+        result.ShouldHaveValidationErrorFor(x => x.TermsVersion);
+    }
+
+    [Fact]
+    public async Task Validate_WithPrivacyPolicyDeclined_HasError()
+    {
+        var result = await _validator.TestValidateAsync(WithConsent(privacy: false));
+
+        result.ShouldHaveValidationErrorFor(x => x.PrivacyPolicyAccepted);
+        result.ShouldNotHaveValidationErrorFor(x => x.TermsAccepted);
+    }
+
+    [Fact]
+    public async Task Validate_WithTermsDeclined_HasError()
+    {
+        var result = await _validator.TestValidateAsync(WithConsent(terms: false));
+
+        result.ShouldHaveValidationErrorFor(x => x.TermsAccepted);
+        result.ShouldNotHaveValidationErrorFor(x => x.PrivacyPolicyAccepted);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Validate_WithBlankVersions_HasError(string? version)
+    {
+        var result = await _validator.TestValidateAsync(
+            WithConsent(privacyVersion: version, termsVersion: version));
+
+        result.ShouldHaveValidationErrorFor(x => x.PrivacyPolicyVersion);
+        result.ShouldHaveValidationErrorFor(x => x.TermsVersion);
+    }
+
+    [Fact]
+    public async Task Validate_WithAVersionLongerThanTheStoredLimit_HasError()
+    {
+        var result = await _validator.TestValidateAsync(
+            WithConsent(privacyVersion: new string('v', 65)));
+
+        result.ShouldHaveValidationErrorFor(x => x.PrivacyPolicyVersion);
+    }
+
+    #endregion
 
     [Fact]
     public async Task Validate_WithInvalidEmail_And_WeakPassword_ReturnsMultipleErrors()

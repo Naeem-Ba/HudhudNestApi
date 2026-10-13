@@ -65,4 +65,11 @@ public sealed class DeviceTokenService : IDeviceTokenService
             .Where(t => t.UserId == userId && t.Token == token)
             .ExecuteDeleteAsync(ct);
     }
+
+    public async Task RemoveAllForUserAsync(Guid userId, CancellationToken ct = default)
+    {
+        await _db.DeviceTokens
+            .Where(t => t.UserId == userId)
+            .ExecuteDeleteAsync(ct);
+    }
 }

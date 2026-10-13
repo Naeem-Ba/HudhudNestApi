@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Common;
 using MediatR;
 using HudhudNestApi.Application.Users.DTOs;
 using HudhudNestApi.Application.Users.Interfaces;
@@ -32,8 +33,8 @@ public sealed class GetMyConsentsQueryHandler
             record.Id,
             record.PolicyType.ToString(),
             record.PolicyVersion,
-            record.ConsentedAtUtc,
+            record.ConsentedAtUtc.AsUtc(),
             record.Source.ToString(),
-            record.WithdrawnAtUtc,
+            record.WithdrawnAtUtc.AsUtc(),
             record.IsActive);
 }
