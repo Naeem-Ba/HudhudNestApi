@@ -6,6 +6,7 @@ using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Events;
 using HudhudNestApi.Application.Listings.Interfaces;
+using HudhudNestApi.Domain.Listings;
 using HudhudNestApi.Domain.Listings.Entities;
 using HudhudNestApi.Domain.Users.Entities;
 
@@ -138,6 +139,16 @@ public sealed class CreatePropertyCommandHandler
             listingType: request.ListingType,
             countryCode: request.CountryCode,
             currencyCode: request.CurrencyCode);
+
+        // A listing is created already published, so its publication window starts now.
+        // PublishPropertyCommandHandler only sets ExpiresAt on a listing that is not yet
+        // published and returns early for one that is, so without this a new listing had no
+        // expiry date at all and never entered the expiry / warning / paid-extension lifecycle.
+        if (property.IsPublished)
+        {
+            property.ExpiresAt = (property.PublishedAt ?? DateTime.UtcNow)
+                .Add(ListingLifecyclePolicy.PublicationPeriod);
+        }
 
         // Set optional fields (public setters — no invariants to enforce)
         property.Street = request.Street;

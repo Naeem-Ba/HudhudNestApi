@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Application.Auth.Models;
 using HudhudNestApi.Application.Common.Interfaces;
@@ -43,6 +44,7 @@ public sealed class DeleteUserCommandHandler
     private readonly IDeleteUserIdentityService _identity;
     private readonly ILoginIdentityService _login;
     private readonly IUserAccountRepository _accounts;
+    private readonly IAgencyRepository _agencies;
     private readonly IRefreshTokenRepository _refreshTokens;
     private readonly IUserSecurityStampCacheInvalidator _securityStampCacheInvalidator;
     private readonly IMediaStorageService _storage;
@@ -54,6 +56,7 @@ public sealed class DeleteUserCommandHandler
         IDeleteUserIdentityService identity,
         ILoginIdentityService login,
         IUserAccountRepository accounts,
+        IAgencyRepository agencies,
         IRefreshTokenRepository refreshTokens,
         IUserSecurityStampCacheInvalidator securityStampCacheInvalidator,
         IMediaStorageService storage,
@@ -64,6 +67,7 @@ public sealed class DeleteUserCommandHandler
         _identity = identity;
         _login = login;
         _accounts = accounts;
+        _agencies = agencies;
         _refreshTokens = refreshTokens;
         _securityStampCacheInvalidator = securityStampCacheInvalidator;
         _storage = storage;
@@ -189,6 +193,9 @@ public sealed class DeleteUserCommandHandler
         var anonymizedEmail =
             BuildAnonymizedEmail(identity.IdentityId);
 
+        var transferredListings = 0;
+        Guid? listingsMovedTo = null;
+
         await _unitOfWork.BeginTransactionAsync(
             cancellationToken);
 
@@ -252,6 +259,45 @@ public sealed class DeleteUserCommandHandler
                 return DeleteUserResult.Fail(deleteResult.Errors);
             }
 
+            /*
+             * Product rule (owner decision, 2026-10-13): a member of a real-estate office keeps
+             * their listings up when the account goes, and inquiries about them reach the office
+             * owner. Handing the listings to the owner does both, since every message,
+             * notification and visit request is addressed from Property.OwnerId. Anyone not in an
+             * office keeps nothing running: their listings simply run out on their normal expiry
+             * date (ListingExpiryHostedService). The office owner's own deletion is not covered
+             * by the rule -- there is nobody to hand over to.
+             */
+            if (account.AgencyId is { } agencyId)
+            {
+                var agency =
+                    await _agencies.GetByIdAsync(
+                        agencyId,
+                        cancellationToken);
+
+                if (agency is not null &&
+                    agency.OwnerUserId != account.Id)
+                {
+                    var agencyOwner =
+                        await _accounts.GetByIdAsync(
+                            agency.OwnerUserId,
+                            cancellationToken);
+
+                    if (agencyOwner is not null &&
+                        !agencyOwner.IsDeleted)
+                    {
+                        transferredListings =
+                            await _agencies.TransferListingsAsync(
+                                account.Id,
+                                agencyOwner.Id,
+                                now,
+                                cancellationToken);
+
+                        listingsMovedTo = agencyOwner.Id;
+                    }
+                }
+            }
+
             account.Anonymize(now);
 
             await _unitOfWork.SaveChangesAsync(
@@ -311,7 +357,9 @@ public sealed class DeleteUserCommandHandler
                 new
                 {
                     userId = identity.IdentityId,
-                    timestamp = now
+                    timestamp = now,
+                    listingsTransferred = transferredListings,
+                    listingsTransferredTo = listingsMovedTo
                 }),
             ct: cancellationToken);
 

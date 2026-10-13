@@ -426,6 +426,32 @@ public sealed class ListingLifecycleTests
         Assert.Same(member, quotaPolicy.LastQueriedAccount);
     }
 
+    [Fact]
+    public async Task CreateProperty_GivesTheNewPublishedListingItsPublicationWindow()
+    {
+        // The factory creates a listing already published, and PublishProperty returns early for an
+        // already-published one, so a new listing used to have ExpiresAt == null: it never expired,
+        // was never warned about and could never be extended.
+        Property? added = null;
+        var repository = new Mock<IPropertyRepository>();
+        repository
+            .Setup(x => x.AddAsync(It.IsAny<Property>(), It.IsAny<CancellationToken>()))
+            .Callback<Property, CancellationToken>((p, _) => added = p)
+            .Returns(Task.CompletedTask);
+        var handler = CreatePropertyHandler(repository);
+
+        var before = DateTime.UtcNow;
+        await handler.Handle(ValidCreateCommand() with { OwnerId = Guid.NewGuid() }, CancellationToken.None);
+
+        Assert.NotNull(added);
+        Assert.True(added!.IsPublished);
+        Assert.NotNull(added.ExpiresAt);
+        Assert.InRange(
+            added.ExpiresAt!.Value,
+            before.Add(ListingLifecyclePolicy.PublicationPeriod),
+            DateTime.UtcNow.Add(ListingLifecyclePolicy.PublicationPeriod));
+    }
+
     // ── Application: quota check race is closed by an advisory lock (RELEASE-BLOCKERS-AR.md B-10) ──
 
     [Fact]

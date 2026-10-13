@@ -97,6 +97,27 @@ public sealed class AgencyRepository : IAgencyRepository
         return listings.Count;
     }
 
+    public async Task<int> TransferListingsAsync(
+        Guid fromUserId,
+        Guid toUserId,
+        DateTime utcNow,
+        CancellationToken ct = default)
+    {
+        // Loaded and mutated through the domain method, like ClearAgencyAttributionAsync, so the
+        // audit trail (UpdatedAt) and the change tracker stay truthful. The soft-delete query
+        // filter keeps already-deleted listings out.
+        var listings = await _db.Properties
+            .Where(p => p.OwnerId == fromUserId)
+            .ToListAsync(ct);
+
+        foreach (var listing in listings)
+        {
+            listing.TransferOwnership(toUserId, utcNow);
+        }
+
+        return listings.Count;
+    }
+
     public async Task<IReadOnlyList<Agency>> FindActiveByLocationAsync(
         int? neighborhoodId,
         int? districtId,
