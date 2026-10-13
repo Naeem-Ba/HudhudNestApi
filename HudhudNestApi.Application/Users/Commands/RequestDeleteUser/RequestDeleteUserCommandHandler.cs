@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Common;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Auth.Interfaces;
@@ -114,6 +115,6 @@ public sealed class RequestDeleteUserCommandHandler
             identity.IdentityId,
             scheduledFor);
 
-        return RequestDeleteUserResult.Ok(scheduledFor);
+        return RequestDeleteUserResult.Ok(scheduledFor.AsUtc());
     }
 }

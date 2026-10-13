@@ -17,7 +17,7 @@ namespace HudhudNestApi.Integration.Tests.Auth;
 ///
 /// These tests drive the real HTTP pipeline against real Postgres with the exact body the
 /// Angular app sends, which no test did before: the other registration tests call the command
-/// directly, never send the consent fields, and always seed the User role first.
+/// directly and always seed the User role first.
 /// </summary>
 [Collection("AuthPostgres")]
 public sealed class RegisterWithoutSeededRolesTests
@@ -40,6 +40,65 @@ public sealed class RegisterWithoutSeededRolesTests
         var user = await db.Users.AsNoTracking().SingleAsync(x => x.Email == email);
         Assert.Equal(2, await db.ConsentRecords.CountAsync(x => x.UserId == user.Id));
         Assert.True(await UserHasRoleAsync(db, user.Id, RoleNames.User));
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("privacy-declined")]
+    [InlineData("terms-declined")]
+    [InlineData("blank-version")]
+    public async Task RegisterWithoutBothConsents_Returns422_AndCreatesNoAccount(string variant)
+    {
+        await using var factory = new PostgresAuthTestFactory();
+        await factory.PrepareDatabaseAsync();
+        using var client = factory.CreateClient();
+        var email = UniqueEmail();
+
+        object body = variant switch
+        {
+            "missing" => new { firstName = "Naeem", lastName = "Test", email, password = Password },
+            "privacy-declined" => new
+            {
+                firstName = "Naeem",
+                lastName = "Test",
+                email,
+                password = Password,
+                privacyPolicyAccepted = false,
+                privacyPolicyVersion = "2026-10-01",
+                termsAccepted = true,
+                termsVersion = "2026-10-01"
+            },
+            "terms-declined" => new
+            {
+                firstName = "Naeem",
+                lastName = "Test",
+                email,
+                password = Password,
+                privacyPolicyAccepted = true,
+                privacyPolicyVersion = "2026-10-01",
+                termsAccepted = false,
+                termsVersion = "2026-10-01"
+            },
+            _ => new
+            {
+                firstName = "Naeem",
+                lastName = "Test",
+                email,
+                password = Password,
+                privacyPolicyAccepted = true,
+                privacyPolicyVersion = " ",
+                termsAccepted = true,
+                termsVersion = "2026-10-01"
+            }
+        };
+
+        var response = await client.PostAsJsonAsync("/api/auth/register", body);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.False(await db.Users.AsNoTracking().AnyAsync(x => x.Email == email));
+        Assert.Equal(0, await db.ConsentRecords.CountAsync());
     }
 
     [Fact]

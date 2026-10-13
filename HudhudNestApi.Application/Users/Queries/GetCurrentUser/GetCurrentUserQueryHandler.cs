@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Common;
 using MediatR;
 using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Application.Auth.Models;
@@ -99,7 +100,7 @@ public sealed class GetCurrentUserQueryHandler
             PendingPlanTier = pendingPlanTier,
             PlanSelectedAt = account.PlanSelectedAt,
             CreatedAt = account.CreatedAt,
-            DeletionScheduledFor = account.DeletionScheduledFor,
+            DeletionScheduledFor = account.DeletionScheduledFor.AsUtc(),
             Roles = roles.ToList().AsReadOnly()
         };
     }

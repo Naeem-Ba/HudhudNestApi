@@ -46,4 +46,10 @@ public interface IDeviceTokenService
 
     /// <summary>Removes the token, but only if it belongs to this user.</summary>
     Task UnregisterAsync(Guid userId, string token, CancellationToken ct = default);
+
+    /// <summary>
+    /// Removes every token bound to this user. Account deletion calls it: a device token is an
+    /// install identifier and must not outlive the person it identified.
+    /// </summary>
+    Task RemoveAllForUserAsync(Guid userId, CancellationToken ct = default);
 }

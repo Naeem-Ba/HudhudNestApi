@@ -279,6 +279,9 @@ public sealed class IdentityCredentialService
         user.NormalizedPhoneNumber = null;
         user.PhoneNumberLookupHash = null;
         user.PhoneNumberConfirmed = false;
+        // The anonymized address cannot be signed in to, but the hash would still be a
+        // crackable secret tied to a person's reused password (QA Phase 5, P5-D05).
+        user.PasswordHash = null;
         user.UpdatedAt = utcNow;
 
         var updateResult = await _users.UpdateAsync(user);

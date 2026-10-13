@@ -4,6 +4,7 @@ using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Application.Auth.Models;
 using HudhudNestApi.Application.Common.Interfaces;
+using HudhudNestApi.Application.Notifications.Push;
 using HudhudNestApi.Application.Users.Commands.DeleteUser;
 using HudhudNestApi.Application.Users.Interfaces;
 using HudhudNestApi.Domain.Agencies.Entities;
@@ -317,6 +318,11 @@ public sealed class DeleteUserCommandHandlerTests
         mocks.UnitOfWork.Verify(x => x.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
         mocks.UnitOfWork.Verify(x => x.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
 
+        // P5-D05: push device tokens go with the account.
+        mocks.DeviceTokens.Verify(
+            x => x.RemoveAllForUserAsync(userId, It.IsAny<CancellationToken>()),
+            Times.Once);
+
         mocks.RefreshTokens.Verify(
             x => x.RevokeActiveTokensForUserAsync(userId, It.IsAny<DateTime>(), "203.0.113.7", It.IsAny<CancellationToken>()),
             Times.Once);
@@ -499,6 +505,7 @@ public sealed class DeleteUserCommandHandlerTests
             Accounts: new Mock<IUserAccountRepository>(),
             Agencies: new Mock<IAgencyRepository>(),
             RefreshTokens: new Mock<IRefreshTokenRepository>(),
+            DeviceTokens: new Mock<IDeviceTokenService>(),
             CacheInvalidator: new Mock<IUserSecurityStampCacheInvalidator>(),
             Storage: new Mock<IMediaStorageService>(),
             UnitOfWork: new Mock<IUnitOfWork>(),
@@ -530,6 +537,7 @@ public sealed class DeleteUserCommandHandlerTests
             mocks.Accounts.Object,
             mocks.Agencies.Object,
             mocks.RefreshTokens.Object,
+            mocks.DeviceTokens.Object,
             mocks.CacheInvalidator.Object,
             mocks.Storage.Object,
             mocks.UnitOfWork.Object,
@@ -597,6 +605,7 @@ public sealed class DeleteUserCommandHandlerTests
         Mock<IUserAccountRepository> Accounts,
         Mock<IAgencyRepository> Agencies,
         Mock<IRefreshTokenRepository> RefreshTokens,
+        Mock<IDeviceTokenService> DeviceTokens,
         Mock<IUserSecurityStampCacheInvalidator> CacheInvalidator,
         Mock<IMediaStorageService> Storage,
         Mock<IUnitOfWork> UnitOfWork,

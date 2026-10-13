@@ -5,6 +5,7 @@ using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Application.Auth.Models;
 using HudhudNestApi.Application.Common.Interfaces;
+using HudhudNestApi.Application.Notifications.Push;
 using HudhudNestApi.Application.Users.Interfaces;
 using HudhudNestApi.Domain.Audit.Constants;
 
@@ -46,6 +47,7 @@ public sealed class DeleteUserCommandHandler
     private readonly IUserAccountRepository _accounts;
     private readonly IAgencyRepository _agencies;
     private readonly IRefreshTokenRepository _refreshTokens;
+    private readonly IDeviceTokenService _deviceTokens;
     private readonly IUserSecurityStampCacheInvalidator _securityStampCacheInvalidator;
     private readonly IMediaStorageService _storage;
     private readonly IUnitOfWork _unitOfWork;
@@ -58,6 +60,7 @@ public sealed class DeleteUserCommandHandler
         IUserAccountRepository accounts,
         IAgencyRepository agencies,
         IRefreshTokenRepository refreshTokens,
+        IDeviceTokenService deviceTokens,
         IUserSecurityStampCacheInvalidator securityStampCacheInvalidator,
         IMediaStorageService storage,
         IUnitOfWork unitOfWork,
@@ -69,6 +72,7 @@ public sealed class DeleteUserCommandHandler
         _accounts = accounts;
         _agencies = agencies;
         _refreshTokens = refreshTokens;
+        _deviceTokens = deviceTokens;
         _securityStampCacheInvalidator = securityStampCacheInvalidator;
         _storage = storage;
         _unitOfWork = unitOfWork;
@@ -297,6 +301,15 @@ public sealed class DeleteUserCommandHandler
                     }
                 }
             }
+
+            /*
+             * Push device tokens are install identifiers, not content the deletion rules keep:
+             * drop them with the account so no notification can ring on the phone afterwards
+             * and no identifier outlives the person (QA Phase 5, P5-D05).
+             */
+            await _deviceTokens.RemoveAllForUserAsync(
+                account.Id,
+                cancellationToken);
 
             account.Anonymize(now);
 
