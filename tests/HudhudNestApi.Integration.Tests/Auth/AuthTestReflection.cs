@@ -34,7 +34,12 @@ internal static class AuthTestReflection
             FirstName: firstName,
             LastName: lastName,
             Email: email,
-            Password: password);
+            Password: password,
+            // Registration requires both consents (P5-D04).
+            PrivacyPolicyAccepted: true,
+            PrivacyPolicyVersion: "2026-10-01",
+            TermsAccepted: true,
+            TermsVersion: "2026-10-01");
     }
 
     public static async Task<object?> SendAsync(
