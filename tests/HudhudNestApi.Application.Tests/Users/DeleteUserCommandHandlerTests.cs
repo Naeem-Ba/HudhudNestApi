@@ -1,10 +1,12 @@
 using Microsoft.Extensions.Logging;
 using Moq;
+using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Application.Auth.Models;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Users.Commands.DeleteUser;
 using HudhudNestApi.Application.Users.Interfaces;
+using HudhudNestApi.Domain.Agencies.Entities;
 using HudhudNestApi.Domain.Audit.Constants;
 using HudhudNestApi.Domain.Users.Entities;
 using Xunit;
@@ -390,12 +392,112 @@ public sealed class DeleteUserCommandHandlerTests
         Assert.True(result.Success);
     }
 
+    // Owner decision 2026-10-13: a member of an office keeps their listings up and inquiries reach the
+    // office owner; anyone else's listings just run out on their normal expiry date.
+    private static (UserAccount Member, Agency Agency, UserAccount Owner, HandlerMocks Mocks, DeleteUserCommandHandler Sut)
+        ArrangeMember(bool ownerDeleted = false)
+    {
+        var memberId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var member = CreateAccount(memberId);
+        var owner = CreateAccount(ownerId);
+        var agency = Agency.Create("Office", "office", ownerId, "SY", DateTime.UtcNow);
+        member.JoinAgency(agency.Id, DateTime.UtcNow);
+        if (ownerDeleted) owner.Anonymize(DateTime.UtcNow);
+
+        var identity = SucceedingIdentityMock(memberId);
+        var (sut, mocks) = CreateSut(identity);
+        mocks.Login
+            .Setup(x => x.VerifyPasswordWithLockoutAsync(memberId, ValidPassword, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(LoginPasswordVerificationResult.Success);
+        mocks.Accounts.Setup(x => x.GetByIdAsync(memberId, It.IsAny<CancellationToken>())).ReturnsAsync(member);
+        mocks.Accounts.Setup(x => x.GetByIdAsync(ownerId, It.IsAny<CancellationToken>())).ReturnsAsync(owner);
+        mocks.Agencies.Setup(x => x.GetByIdAsync(agency.Id, It.IsAny<CancellationToken>())).ReturnsAsync(agency);
+        mocks.Agencies
+            .Setup(x => x.TransferListingsAsync(memberId, ownerId, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(3);
+        return (member, agency, owner, mocks, sut);
+    }
+
+    [Fact]
+    public async Task Handle_AgencyMember_HandsListingsToTheAgencyOwner_InsideTheTransaction_AndAuditsIt()
+    {
+        var (member, _, owner, mocks, sut) = ArrangeMember();
+
+        var result = await sut.Handle(new DeleteUserCommand(member.Id, ValidPassword), CancellationToken.None);
+
+        Assert.True(result.Success);
+        mocks.Agencies.Verify(
+            x => x.TransferListingsAsync(member.Id, owner.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+        mocks.AuditLogs.Verify(x => x.LogAsync(
+            It.IsAny<Guid?>(), AuditActions.AccountDeletionCompleted, It.IsAny<string?>(), It.IsAny<string?>(),
+            It.Is<string?>(v => v!.Contains("\"listingsTransferred\":3") && v.Contains(owner.Id.ToString())),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_NotAnAgencyMember_TransfersNothing_ListingsRunOutOnTheirOwnExpiry()
+    {
+        var userId = Guid.NewGuid();
+        var identity = SucceedingIdentityMock(userId);
+        var (sut, mocks) = CreateSut(identity);
+        mocks.Login
+            .Setup(x => x.VerifyPasswordWithLockoutAsync(userId, ValidPassword, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(LoginPasswordVerificationResult.Success);
+        mocks.Accounts.Setup(x => x.GetByIdAsync(userId, It.IsAny<CancellationToken>())).ReturnsAsync(CreateAccount(userId));
+
+        var result = await sut.Handle(new DeleteUserCommand(userId, ValidPassword), CancellationToken.None);
+
+        Assert.True(result.Success);
+        mocks.Agencies.Verify(
+            x => x.TransferListingsAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_TheAgencyOwnerThemselves_HasNobodyToHandListingsTo()
+    {
+        var ownerId = Guid.NewGuid();
+        var owner = CreateAccount(ownerId);
+        var agency = Agency.Create("Office", "office", ownerId, "SY", DateTime.UtcNow);
+        owner.JoinAgency(agency.Id, DateTime.UtcNow);
+
+        var (sut, mocks) = CreateSut(SucceedingIdentityMock(ownerId));
+        mocks.Login
+            .Setup(x => x.VerifyPasswordWithLockoutAsync(ownerId, ValidPassword, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(LoginPasswordVerificationResult.Success);
+        mocks.Accounts.Setup(x => x.GetByIdAsync(ownerId, It.IsAny<CancellationToken>())).ReturnsAsync(owner);
+        mocks.Agencies.Setup(x => x.GetByIdAsync(agency.Id, It.IsAny<CancellationToken>())).ReturnsAsync(agency);
+
+        var result = await sut.Handle(new DeleteUserCommand(ownerId, ValidPassword), CancellationToken.None);
+
+        Assert.True(result.Success);
+        mocks.Agencies.Verify(
+            x => x.TransferListingsAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_AgencyOwnerAlreadyDeleted_TransfersNothing()
+    {
+        var (member, _, _, mocks, sut) = ArrangeMember(ownerDeleted: true);
+
+        var result = await sut.Handle(new DeleteUserCommand(member.Id, ValidPassword), CancellationToken.None);
+
+        Assert.True(result.Success);
+        mocks.Agencies.Verify(
+            x => x.TransferListingsAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
     private static (DeleteUserCommandHandler Sut, HandlerMocks Mocks) CreateSut(
         Mock<IDeleteUserIdentityService> identity)
     {
         var mocks = new HandlerMocks(
             Login: new Mock<ILoginIdentityService>(),
             Accounts: new Mock<IUserAccountRepository>(),
+            Agencies: new Mock<IAgencyRepository>(),
             RefreshTokens: new Mock<IRefreshTokenRepository>(),
             CacheInvalidator: new Mock<IUserSecurityStampCacheInvalidator>(),
             Storage: new Mock<IMediaStorageService>(),
@@ -426,6 +528,7 @@ public sealed class DeleteUserCommandHandlerTests
             identity.Object,
             mocks.Login.Object,
             mocks.Accounts.Object,
+            mocks.Agencies.Object,
             mocks.RefreshTokens.Object,
             mocks.CacheInvalidator.Object,
             mocks.Storage.Object,
@@ -492,6 +595,7 @@ public sealed class DeleteUserCommandHandlerTests
     private sealed record HandlerMocks(
         Mock<ILoginIdentityService> Login,
         Mock<IUserAccountRepository> Accounts,
+        Mock<IAgencyRepository> Agencies,
         Mock<IRefreshTokenRepository> RefreshTokens,
         Mock<IUserSecurityStampCacheInvalidator> CacheInvalidator,
         Mock<IMediaStorageService> Storage,

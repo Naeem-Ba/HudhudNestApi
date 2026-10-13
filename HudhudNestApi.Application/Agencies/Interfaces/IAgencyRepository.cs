@@ -58,6 +58,15 @@ public interface IAgencyRepository
     Task<int> ClearAgencyAttributionAsync(Guid agencyId, CancellationToken ct = default);
 
     /// <summary>
+    /// Moves every live listing owned by <paramref name="fromUserId"/> to <paramref name="toUserId"/>.
+    ///
+    /// Used when a member's account is deleted: the listings stay up and their inquiries reach the
+    /// agency owner. Changes are tracked and persisted by the caller's SaveChanges, inside its
+    /// transaction. Returns how many listings moved.
+    /// </summary>
+    Task<int> TransferListingsAsync(Guid fromUserId, Guid toUserId, DateTime utcNow, CancellationToken ct = default);
+
+    /// <summary>
     /// Active agencies matching exactly ONE location scope, excluding ids already selected.
     ///
     /// Added for Valuation Stage 4 (Office Matching)'s progressive geographic expansion:

@@ -444,6 +444,23 @@ public class Property : AuditableEntity
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// Hands the listing to another user -- used when its owner's account is deleted and the owner
+    /// belonged to an agency, so the listing stays up and inquiries reach the agency owner.
+    /// The responsible agent follows the listing only when it was the previous owner.
+    /// </summary>
+    public void TransferOwnership(Guid newOwnerId, DateTime utcNow)
+    {
+        if (newOwnerId == Guid.Empty)
+            throw new DomainException("A listing cannot be transferred to an empty owner id.");
+
+        var previousOwnerId = OwnerId;
+        OwnerId = newOwnerId;
+        if (AgentId == previousOwnerId)
+            AgentId = newOwnerId;
+        UpdatedAt = utcNow;
+    }
+
     // -- Featured placement (paid) -------------------------------
 
     /// <summary>
