@@ -110,6 +110,29 @@ public class Property : AuditableEntity
     public DateTime? ExpiryWarningSentAt { get; private set; }
 
     /// <summary>
+    /// When the listing became a closed deal (Sold or Rented); null while it is on the market.
+    /// Set by <see cref="ChangeStatus"/> and cleared again if the deal falls through and the
+    /// owner returns the listing to Available/Reserved. It starts the clock after which the
+    /// listing's photos are compressed to save storage (ListingImageCompactionHostedService).
+    /// </summary>
+    public DateTime? ClosedAt { get; private set; }
+
+    /// <summary>
+    /// When the photos of a closed deal were compressed; null means they are still original.
+    /// Idempotency stamp for the compaction sweep, kept even if the deal later reopens so the
+    /// same photos are never recompressed.
+    /// </summary>
+    public DateTime? ImagesCompactedAt { get; private set; }
+
+    /// <summary>
+    /// Normalised copy of the searchable text (title, description and place names), maintained
+    /// by the database as a stored generated column (see PropertyConfiguration) and read only
+    /// by keyword search. Never written from code. The normalisation rules live in
+    /// <c>SearchTextNormalizer</c>, which also normalises the query so both sides agree.
+    /// </summary>
+    public string SearchText { get; private set; } = string.Empty;
+
+    /// <summary>
     /// Last time the owner explicitly confirmed this listing is still available.
     /// Phase-0 "freshness" feature: the frontend shows a staleness banner (and the
     /// search/matching logic can eventually deprioritize) listings that have gone
@@ -334,9 +357,71 @@ public class Property : AuditableEntity
 
     public void ChangeStatus(PropertyStatus newStatus)
     {
+        var wasClosed = IsClosedDeal(Status);
         Status = newStatus;
         UpdatedAt = DateTime.UtcNow;
+
+        // Sold/Rented -> Sold/Rented keeps the original closing date; reopening clears it so the
+        // photo-compression clock restarts if the listing closes again later.
+        if (!IsClosedDeal(newStatus))
+            ClosedAt = null;
+        else if (!wasClosed)
+            ClosedAt = DateTime.UtcNow;
     }
+
+    /// <summary>Records that the photos of this closed deal were compressed.</summary>
+    public void MarkImagesCompacted()
+    {
+        ImagesCompactedAt = DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Notes that compression was tried and did not finish, moving the listing to the back of the
+    /// sweep's queue (it orders by UpdatedAt) so one stubborn listing cannot starve the others.
+    /// </summary>
+    public void MarkImageCompactionAttempted()
+    {
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>A deal that was concluded: the listing is documentation now, not an offer.</summary>
+    public static bool IsClosedDeal(PropertyStatus status)
+        => status == PropertyStatus.Sold || status == PropertyStatus.Rented;
+
+    // -- Public visibility ---------------------------------------
+    //
+    // One rule, written once (QA Phase 7, P7-D08). Before this, "public" meant IsPublished and
+    // not past ExpiresAt in a dozen places while Status was ignored, so an Archived listing
+    // stayed in search. The three questions the product asks:
+    //
+    //   OnMarket          search, lists, map, saved-search matching: Available and Reserved
+    //                     listings inside their publication window. A Reserved listing stays
+    //                     visible (flagged in the UI) until it sells, rents or returns to
+    //                     Available.
+    //   PubliclyViewable  the detail page by id: everything OnMarket, plus closed deals, which
+    //                     keep a page (with a Sold/Rented badge) because the agency page links
+    //                     to them. Archived and Expired never show.
+    //   ClosedDealOf      the agency page tabs: Sold or Rented listings only, with no
+    //                     publication window, because the record is kept for documentation.
+
+    /// <summary>SQL-translatable twin of the market rule above.</summary>
+    public static Expression<Func<Property, bool>> OnMarket(DateTime asOfUtc)
+        => property =>
+            property.IsPublished &&
+            (property.Status == PropertyStatus.Available || property.Status == PropertyStatus.Reserved) &&
+            (property.ExpiresAt == null || property.ExpiresAt > asOfUtc);
+
+    public static Expression<Func<Property, bool>> PubliclyViewable(DateTime asOfUtc)
+        => property =>
+            property.IsPublished &&
+            (((property.Status == PropertyStatus.Available || property.Status == PropertyStatus.Reserved) &&
+              (property.ExpiresAt == null || property.ExpiresAt > asOfUtc)) ||
+             property.Status == PropertyStatus.Sold ||
+             property.Status == PropertyStatus.Rented);
+
+    public static Expression<Func<Property, bool>> ClosedDealOf(PropertyStatus closedStatus)
+        => property => property.IsPublished && property.Status == closedStatus;
 
     /// <summary>
     /// Owner explicitly confirms the listing is still available. Cheap, single-tap

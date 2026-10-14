@@ -19,6 +19,7 @@ internal static class MediaInfrastructureRegistration
             services.AddSingleton<StagingSmokeMediaStorageService>();
             services.AddSingleton<IMediaStorageService>(sp =>
                 sp.GetRequiredService<StagingSmokeMediaStorageService>());
+            services.AddSingleton<IListingImageCompactor, NoOpListingImageCompactor>();
             return services;
         }
 
@@ -41,6 +42,7 @@ internal static class MediaInfrastructureRegistration
         services.AddHttpClient<CloudinaryMediaStorageService>();
         services.AddScoped<IMediaStorageService>(sp =>
             sp.GetRequiredService<CloudinaryMediaStorageService>());
+        services.AddSingleton<IListingImageCompactor, CloudinaryListingImageCompactor>();
 
         return services;
     }

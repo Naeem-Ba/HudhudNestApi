@@ -40,12 +40,9 @@ public sealed class PropertyImageRepository : IPropertyImageRepository
     {
         return _db.Properties
             .AsNoTracking()
-            .AnyAsync(
-                property =>
-                    property.Id == propertyId &&
-                    property.IsPublished &&
-                    (property.ExpiresAt == null || property.ExpiresAt > utcNow),
-                ct);
+            .Where(property => property.Id == propertyId)
+            .Where(Property.PubliclyViewable(utcNow))
+            .AnyAsync(ct);
     }
 
     public async Task<IReadOnlyList<PropertyImageDto>> GetImagesAsync(

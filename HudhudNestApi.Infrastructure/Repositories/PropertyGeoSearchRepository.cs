@@ -4,10 +4,14 @@ using System.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql;
+using NpgsqlTypes;
+using HudhudNestApi.Application.Listings.Currencies;
 using HudhudNestApi.Application.Listings.DTOs;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Properties.DTOs;
 using HudhudNestApi.Domain.Enums;
+using HudhudNestApi.Domain.Listings;
 using HudhudNestApi.Infrastructure.Performance;
 using HudhudNestApi.Infrastructure.Persistence;
 
@@ -37,21 +41,41 @@ public sealed class PropertyGeoSearchRepository : IPropertyGeoSearchRepository
         var pageSize = Math.Clamp(filter.PageSize, 1, 100);
         var offset = (page - 1) * pageSize;
         var radiusMeters = decimal.ToDouble(filter.RadiusKm) * 1000d;
-        var latitude = decimal.ToDouble(filter.Latitude);
-        var longitude = decimal.ToDouble(filter.Longitude);
+        // Validated as required before this point (SearchPropertiesNearbyQueryValidator).
+        var latitude = decimal.ToDouble(filter.Latitude ?? throw new ArgumentException("Latitude is required.", nameof(filter)));
+        var longitude = decimal.ToDouble(filter.Longitude ?? throw new ArgumentException("Longitude is required.", nameof(filter)));
 
-        const string filters = """
+        var rates = !string.IsNullOrWhiteSpace(filter.CurrencyCode) && (filter.MinPrice.HasValue || filter.MaxPrice.HasValue)
+            ? await PropertyRepository.LoadCurrencyRatesAsync(_db, ct)
+            : CurrencyRates.Empty;
+
+        // On the market = Available or Reserved inside the publication window (Property.OnMarket, in SQL).
+        // The price range follows the list endpoint: with a currency it is read in that currency and
+        // matches equivalent prices advertised in the other currencies. PriceFactor is "how many units
+        // of the listing's currency equal one unit of the chosen currency" (1 when no currency is
+        // chosen, or the listing is already in it); an unpriced currency yields NULL, which matches nothing.
+        const string priceFactor = """
+CASE
+    WHEN @currencyCode IS NULL OR p."CurrencyCode" = @currencyCode THEN 1
+    ELSE (SELECT r.rate FROM unnest(@rateCodes, @rateValues) AS r(code, rate) WHERE r.code = p."CurrencyCode")
+         / @selectedRate
+END
+""";
+
+        var filters = $"""
       p."IsDeleted" = FALSE
       AND p."IsPublished" = TRUE
+      AND p."Status" IN ('Available', 'Reserved')
       AND (p."ExpiresAt" IS NULL OR p."ExpiresAt" > now())
       AND p."GeoLocation" IS NOT NULL
       AND (@countryCode IS NULL OR p."CountryCode" = @countryCode)
       AND (@city IS NULL OR p."City" ILIKE '%' || @city || '%')
       AND (@region IS NULL OR p."Region" ILIKE '%' || @region || '%')
-      AND (@listingType IS NULL OR p."ListingType" = @listingType)
+      AND (@listingType IS NULL
+           OR p."ListingType" = @listingType
+           OR (@listingType <> 'ForRentAndSale' AND p."ListingType" = 'ForRentAndSale'))
       AND (@status IS NULL OR p."Status" = @status)
       AND (@condition IS NULL OR p."Condition" = @condition)
-      AND (@currencyCode IS NULL OR p."CurrencyCode" = @currencyCode)
       AND (@ownerId IS NULL OR p."OwnerId" = @ownerId)
       AND (@minRooms IS NULL OR p."Rooms" >= @minRooms)
       AND (@maxRooms IS NULL OR p."Rooms" <= @maxRooms)
@@ -62,15 +86,15 @@ public sealed class PropertyGeoSearchRepository : IPropertyGeoSearchRepository
       AND (@hasParkingSpace IS NULL OR p."HasParkingSpace" = @hasParkingSpace)
       AND (
             @minPrice IS NULL OR
-            p."ColdRent" >= @minPrice OR
-            p."WarmRent" >= @minPrice OR
-            p."PurchasePrice" >= @minPrice
+            p."ColdRent" >= @minPrice * ({priceFactor}) OR
+            p."WarmRent" >= @minPrice * ({priceFactor}) OR
+            p."PurchasePrice" >= @minPrice * ({priceFactor})
           )
       AND (
             @maxPrice IS NULL OR
-            (p."ColdRent" IS NULL OR p."ColdRent" <= @maxPrice) AND
-            (p."WarmRent" IS NULL OR p."WarmRent" <= @maxPrice) AND
-            (p."PurchasePrice" IS NULL OR p."PurchasePrice" <= @maxPrice)
+            (p."ColdRent" IS NULL OR p."ColdRent" <= @maxPrice * ({priceFactor})) AND
+            (p."WarmRent" IS NULL OR p."WarmRent" <= @maxPrice * ({priceFactor})) AND
+            (p."PurchasePrice" IS NULL OR p."PurchasePrice" <= @maxPrice * ({priceFactor}))
           )
 """;
 
@@ -163,12 +187,12 @@ ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
         }
 
         var totalCount = await ExecuteCountAsync(connection, countSql, filter, latitude,
-            longitude, radiusMeters, pageSize, offset, ct);
+            longitude, radiusMeters, pageSize, offset, rates, ct);
 
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         command.CommandType = CommandType.Text;
-        AddParameters(command, filter, latitude, longitude, radiusMeters, pageSize, offset);
+        AddParameters(command, filter, latitude, longitude, radiusMeters, pageSize, offset, rates);
 
         var items = new List<GeoPropertySearchResultDto>();
         var stopwatch = Stopwatch.StartNew();
@@ -217,8 +241,8 @@ ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
             _logger.LogError(
                 ex,
                 "Geo property search failed near lat {LatitudeRounded}, lng {LongitudeRounded} (rounded), radius {RadiusKm} km.",
-                Math.Round(filter.Latitude, 1),
-                Math.Round(filter.Longitude, 1),
+                Math.Round(filter.Latitude!.Value, 1),
+                Math.Round(filter.Longitude!.Value, 1),
                 filter.RadiusKm);
             throw;
         }
@@ -246,12 +270,13 @@ ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
         double radiusMeters,
         int pageSize,
         int offset,
+        CurrencyRates rates,
         CancellationToken ct)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         command.CommandType = CommandType.Text;
-        AddParameters(command, filter, latitude, longitude, radiusMeters, pageSize, offset);
+        AddParameters(command, filter, latitude, longitude, radiusMeters, pageSize, offset, rates);
         var stopwatch = Stopwatch.StartNew();
         try
         {
@@ -271,7 +296,8 @@ ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
         double longitude,
         double radiusMeters,
         int pageSize,
-        int offset)
+        int offset,
+        CurrencyRates rates)
     {
         AddParameter(command, "lat", latitude, DbType.Double);
         AddParameter(command, "lng", longitude, DbType.Double);
@@ -280,12 +306,11 @@ ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
         AddParameter(command, "offset", offset, DbType.Int32);
 
         AddParameter(command, "countryCode", NormalizeUpper(filter.CountryCode), DbType.String);
-        AddParameter(command, "city", NormalizeText(filter.City), DbType.String);
-        AddParameter(command, "region", NormalizeText(filter.Region), DbType.String);
+        AddParameter(command, "city", NormalizeLikeText(filter.City), DbType.String);
+        AddParameter(command, "region", NormalizeLikeText(filter.Region), DbType.String);
         AddParameter(command, "listingType", filter.ListingType?.ToString(), DbType.String);
         AddParameter(command, "status", filter.Status?.ToString(), DbType.String);
         AddParameter(command, "condition", filter.Condition?.ToString(), DbType.String);
-        AddParameter(command, "currencyCode", NormalizeUpper(filter.CurrencyCode), DbType.String);
         AddParameter(command, "ownerId", filter.OwnerId, DbType.Guid);
         AddParameter(command, "minRooms", filter.MinRooms, DbType.Int32);
         AddParameter(command, "maxRooms", filter.MaxRooms, DbType.Int32);
@@ -296,6 +321,16 @@ ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
         AddParameter(command, "hasParkingSpace", filter.HasParkingSpace, DbType.Boolean);
         AddParameter(command, "minPrice", filter.MinPrice, DbType.Decimal);
         AddParameter(command, "maxPrice", filter.MaxPrice, DbType.Decimal);
+
+        // Exchange rates for the currency-aware price range: parallel arrays read with unnest().
+        var codes = rates.UnitsPerUsd.Keys.ToArray();
+        var values = codes.Select(code => rates.UnitsPerUsd[code]).ToArray();
+        var selectedCode = NormalizeUpper(filter.CurrencyCode);
+        decimal? selectedRate = selectedCode is not null && rates.TryGetRate(selectedCode, out var rate) ? rate : null;
+        AddParameter(command, "currencyCode", selectedCode, DbType.String);
+        AddParameter(command, "selectedRate", selectedRate, DbType.Decimal);
+        command.Parameters.Add(new NpgsqlParameter("rateCodes", NpgsqlDbType.Array | NpgsqlDbType.Text) { Value = codes });
+        command.Parameters.Add(new NpgsqlParameter("rateValues", NpgsqlDbType.Array | NpgsqlDbType.Numeric) { Value = values });
     }
 
     private void RecordPerformanceDatabaseCommand(TimeSpan duration)
@@ -313,6 +348,13 @@ ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
         return string.IsNullOrWhiteSpace(value)
             ? null
             : value.Trim().ToUpperInvariant();
+    }
+
+    /// <summary>Trimmed text with LIKE metacharacters escaped, so a typed % or _ is matched literally.</summary>
+    private static string? NormalizeLikeText(string? value)
+    {
+        var text = NormalizeText(value);
+        return text is null ? null : SearchTextNormalizer.EscapeLike(text);
     }
 
     private static string? NormalizeText(string? value)

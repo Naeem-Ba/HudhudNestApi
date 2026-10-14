@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using HudhudNestApi.Domain.Common.Exceptions;
 
 
 namespace HudhudNestApi.Domain.Lookups.Entities;
@@ -65,7 +66,27 @@ public class Currency
 
     public void UpdateExchangeRate(decimal newRate)
     {
+        if (newRate <= 0)
+            throw new DomainException("Exchange rate must be greater than zero.");
+
+        // The base currency is the unit every rate is expressed in: its rate is 1 by definition.
+        if (IsBaseCurrency && newRate != 1m)
+            throw new DomainException("The rate of the base currency is always 1.");
+
         ExchangeRateToUSD = newRate;
         ExchangeRateUpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Descriptive fields an administrator may correct. Code and base-currency status never change.</summary>
+    public void UpdateDetails(string nameEn, string nameAr, string symbol, int decimalPlaces, bool isActive)
+    {
+        if (IsBaseCurrency && !isActive)
+            throw new DomainException("The base currency cannot be deactivated.");
+
+        NameEn = nameEn;
+        NameAr = nameAr;
+        Symbol = symbol;
+        DecimalPlaces = decimalPlaces;
+        IsActive = isActive;
     }
 }

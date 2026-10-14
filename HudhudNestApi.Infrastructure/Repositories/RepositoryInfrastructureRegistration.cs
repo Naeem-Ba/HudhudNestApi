@@ -8,6 +8,7 @@ using HudhudNestApi.Application.AppUpdates.Interfaces;
 using HudhudNestApi.Application.Bookings.Interfaces;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Contact.Interfaces;
+using HudhudNestApi.Application.Currencies.Interfaces;
 using HudhudNestApi.Application.Favorites.Interfaces;
 using HudhudNestApi.Application.Investments.Interfaces;
 using HudhudNestApi.Application.Listings.Interfaces;
@@ -81,6 +82,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IPropertyReviewRepository, PropertyReviewRepository>();
         services.AddScoped<IUserRatingRepository, UserRatingRepository>();
         services.AddScoped<IPropertyRepository, PropertyRepository>();
+        services.AddScoped<ICurrencyRepository, CurrencyRepository>();
         services.AddScoped<IPropertyPriceHistoryRepository, PropertyPriceHistoryRepository>();
         services.AddScoped<ISavedSearchRepository, SavedSearchRepository>();
         services.AddHostedService<SavedSearchMatchHostedService>();
