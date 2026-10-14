@@ -567,7 +567,10 @@ public sealed class PropertyRepository : IPropertyRepository
             .Select(currency => new { currency.Code, currency.ExchangeRateToUSD })
             .ToListAsync(ct);
 
-        return new CurrencyRates(rates.ToDictionary(row => row.Code, row => row.ExchangeRateToUSD));
+        // Only the search currencies are converted; other currencies match only themselves.
+        return new CurrencyRates(rates
+            .Where(row => SearchCurrencies.IsSupported(row.Code))
+            .ToDictionary(row => row.Code, row => row.ExchangeRateToUSD));
     }
 
     /// <summary>

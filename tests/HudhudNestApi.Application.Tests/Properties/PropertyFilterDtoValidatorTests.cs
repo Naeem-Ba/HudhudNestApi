@@ -52,7 +52,9 @@ public sealed class PropertyFilterDtoValidatorTests
 
     [Theory]
     [InlineData("USD")]
+    [InlineData("EUR")]
     [InlineData("SYP")]
+    [InlineData("eur")]
     public void ValidCurrencyCode_ShouldPass(string currencyCode)
     {
         var filter = new PropertyFilterDto { CurrencyCode = currencyCode };
@@ -60,6 +62,18 @@ public sealed class PropertyFilterDtoValidatorTests
         var result = _validator.TestValidate(filter);
 
         result.ShouldNotHaveValidationErrorFor(f => f.CurrencyCode);
+    }
+
+    [Theory(DisplayName = "Only the dollar, the euro and the Syrian pound can be searched by")]
+    [InlineData("TRY")]
+    [InlineData("AED")]
+    [InlineData("GBP")]
+    [InlineData("XXX")]
+    public void CurrencyOutsideTheSearchSet_ShouldFail(string currencyCode)
+    {
+        var result = _validator.TestValidate(new PropertyFilterDto { CurrencyCode = currencyCode });
+
+        result.ShouldHaveValidationErrorFor(f => f.CurrencyCode).WithErrorMessage("CurrencyCode must be one of USD, EUR, SYP.");
     }
 
     [Fact]

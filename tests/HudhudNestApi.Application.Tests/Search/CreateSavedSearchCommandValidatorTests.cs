@@ -30,6 +30,25 @@ public sealed class CreateSavedSearchCommandValidatorTests
         Assert.False(Validator.Validate(Command(name: "بحثي", currency: "USD", city: "   ")).IsValid);
     }
 
+    [Theory]
+    [InlineData("USD")]
+    [InlineData("eur")]
+    [InlineData("SYP")]
+    public void SearchCurrency_IsAccepted(string currency)
+        => Assert.True(Validator.Validate(Command(city: "دمشق", currency: currency)).IsValid);
+
+    [Theory]
+    [InlineData("TRY")]
+    [InlineData("GBP")]
+    public void CurrencyOutsideTheSearchSet_IsRejected(string currency)
+    {
+        var result = Validator.Validate(Command(city: "دمشق", currency: currency));
+
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("CurrencyCode", error.PropertyName);
+        Assert.Equal("CurrencyCode must be one of USD, EUR, SYP.", error.ErrorMessage);
+    }
+
     [Fact]
     public void AnySingleCriterion_IsAccepted()
     {

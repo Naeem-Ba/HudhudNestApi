@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using HudhudNestApi.Application.Listings.Currencies;
 using HudhudNestApi.Application.Properties.DTOs;
 using HudhudNestApi.Domain.Enums;
 
@@ -66,6 +67,12 @@ public sealed class PropertyFilterDtoValidator
             .Length(3)
             .When(filter =>
                 !string.IsNullOrWhiteSpace(filter.CurrencyCode));
+
+        RuleFor(filter => filter.CurrencyCode)
+            .Must(SearchCurrencies.IsSupported)
+            .WithMessage(SearchCurrencies.UnsupportedMessage)
+            .When(filter =>
+                !string.IsNullOrWhiteSpace(filter.CurrencyCode) && filter.CurrencyCode!.Trim().Length == 3);
 
         RuleFor(filter => filter.MinPrice)
             .GreaterThanOrEqualTo(0)
