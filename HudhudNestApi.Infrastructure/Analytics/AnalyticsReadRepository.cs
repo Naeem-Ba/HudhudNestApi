@@ -103,21 +103,31 @@ public sealed class AnalyticsReadRepository : IAnalyticsReadRepository
             query = query.Where(p => p.CountryCode == normalizedCountryCode);
         }
 
-        var insights = await query
+        // Aggregates are projected as plain numbers and turned into the DTO in memory: building the DTO (with a
+        // coalesce and a decimal cast around each aggregate) inside the grouped query is not translatable by
+        // EF Core, so the endpoint answered 500 on every call. Average ignores the nulls of the other listing type.
+        var rows = await query
             .GroupBy(p => new { p.City, p.CountryCode })
-            .Select(g => new CityMarketInsightDto(
+            .Select(g => new
+            {
                 g.Key.City,
                 g.Key.CountryCode,
-                (decimal)(g
-                    .Where(p => p.ListingType == ListingType.ForRent && p.ColdRent.HasValue)
-                    .Average(p => (double?)p.ColdRent) ?? 0),
-                (decimal)(g
-                    .Where(p => p.ListingType == ListingType.ForSale && p.PurchasePrice.HasValue)
-                    .Average(p => (double?)p.PurchasePrice) ?? 0),
-                g.Count()))
-            .OrderByDescending(c => c.TotalActiveListings)
+                AvgRent = g.Average(p => p.ListingType == ListingType.ForRent ? (double?)p.ColdRent : null),
+                AvgSale = g.Average(p => p.ListingType == ListingType.ForSale ? (double?)p.PurchasePrice : null),
+                Total = g.Count()
+            })
+            .OrderByDescending(c => c.Total)
             .Take(20)
             .ToListAsync(ct);
+
+        var insights = rows
+            .Select(r => new CityMarketInsightDto(
+                r.City,
+                r.CountryCode,
+                (decimal)(r.AvgRent ?? 0),
+                (decimal)(r.AvgSale ?? 0),
+                r.Total))
+            .ToList();
 
         return new MarketInsightsDto(
             Cities: insights.AsReadOnly(),

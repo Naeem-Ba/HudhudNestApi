@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using HudhudNestApi.Application.Investments.DTOs;
 using HudhudNestApi.Application.Investments.Interfaces;
 using HudhudNestApi.Domain.Investments.Entities;
+using HudhudNestApi.Domain.Investments.Enums;
 using HudhudNestApi.Infrastructure.Persistence;
 
 namespace HudhudNestApi.Infrastructure.Investments;
@@ -18,8 +19,8 @@ public sealed class InvestmentWatchlistRepository : IInvestmentWatchlistReposito
     public Task<InvestmentWatchlistItem?> GetAsync(Guid userId, Guid investmentProjectId, CancellationToken ct = default) =>
         _db.InvestmentWatchlistItems.FirstOrDefaultAsync(w => w.UserId == userId && w.InvestmentProjectId == investmentProjectId, ct);
 
-    public Task<bool> ProjectExistsAsync(Guid investmentProjectId, CancellationToken ct = default) =>
-        _db.InvestmentProjects.AnyAsync(p => p.Id == investmentProjectId, ct);
+    public Task<bool> ProjectExistsAndPublishedAsync(Guid investmentProjectId, CancellationToken ct = default) =>
+        _db.InvestmentProjects.AnyAsync(p => p.Id == investmentProjectId && p.Status == InvestmentProjectStatus.Published, ct);
 
     public void Add(InvestmentWatchlistItem item) => _db.InvestmentWatchlistItems.Add(item);
 

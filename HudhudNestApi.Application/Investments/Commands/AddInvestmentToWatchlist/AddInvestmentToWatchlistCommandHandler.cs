@@ -22,9 +22,11 @@ public sealed class AddInvestmentToWatchlistCommandHandler
         AddInvestmentToWatchlistCommand request,
         CancellationToken ct)
     {
-        var projectExists = await _watchlist.ProjectExistsAsync(request.InvestmentProjectId, ct);
-        if (!projectExists)
-            return InvestmentWatchlistMutationResult.NotFound("Investment project not found.");
+        // Same rule as expressing interest: an unpublished project is not public, so it answers
+        // exactly like a missing one (otherwise the watchlist would confirm its id exists).
+        var projectPublished = await _watchlist.ProjectExistsAndPublishedAsync(request.InvestmentProjectId, ct);
+        if (!projectPublished)
+            return InvestmentWatchlistMutationResult.NotFound("Investment project not found or not published.");
 
         var alreadyExists = await _watchlist.ExistsAsync(request.UserId, request.InvestmentProjectId, ct);
         if (alreadyExists)

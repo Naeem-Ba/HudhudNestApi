@@ -10,10 +10,10 @@ namespace HudhudNestApi.Application.Tests.Investments;
 public sealed class AddInvestmentToWatchlistCommandHandlerTests
 {
     [Fact]
-    public async Task Add_ReturnsNotFound_WhenProjectDoesNotExist()
+    public async Task Add_ReturnsNotFound_WhenProjectDoesNotExistOrIsNotPublished()
     {
         var watchlist = new Mock<IInvestmentWatchlistRepository>();
-        watchlist.Setup(x => x.ProjectExistsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        watchlist.Setup(x => x.ProjectExistsAndPublishedAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
 
         var handler = new AddInvestmentToWatchlistCommandHandler(watchlist.Object, Mock.Of<IUnitOfWork>());
         var result = await handler.Handle(new AddInvestmentToWatchlistCommand(Guid.NewGuid(), Guid.NewGuid()), default);
@@ -28,7 +28,7 @@ public sealed class AddInvestmentToWatchlistCommandHandlerTests
         var projectId = Guid.NewGuid();
 
         var watchlist = new Mock<IInvestmentWatchlistRepository>();
-        watchlist.Setup(x => x.ProjectExistsAsync(projectId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        watchlist.Setup(x => x.ProjectExistsAndPublishedAsync(projectId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
         watchlist.Setup(x => x.ExistsAsync(userId, projectId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
         var handler = new AddInvestmentToWatchlistCommandHandler(watchlist.Object, Mock.Of<IUnitOfWork>());
@@ -45,7 +45,7 @@ public sealed class AddInvestmentToWatchlistCommandHandlerTests
         var projectId = Guid.NewGuid();
 
         var watchlist = new Mock<IInvestmentWatchlistRepository>();
-        watchlist.Setup(x => x.ProjectExistsAsync(projectId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        watchlist.Setup(x => x.ProjectExistsAndPublishedAsync(projectId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
         watchlist.Setup(x => x.ExistsAsync(userId, projectId, It.IsAny<CancellationToken>())).ReturnsAsync(false);
 
         var handler = new AddInvestmentToWatchlistCommandHandler(watchlist.Object, Mock.Of<IUnitOfWork>());
