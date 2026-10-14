@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using FluentValidation;
+using HudhudNestApi.Domain.Lookups.Constants;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Commands.CreateProperty;
 using HudhudNestApi.Domain.Enums;
@@ -23,10 +24,6 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
     };
 
     // ISO 4217 currency codes
-    private static readonly HashSet<string> ValidCurrencyCodes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "EUR", "USD", "GBP", "SYP", "TRY", "AED", "SAR", "EGP", "JOD", "LBP"
-    };
 
     public CreatePropertyCommandValidator(ICommonLookupService lookups, ILocationHierarchyChecker locations)
     {
@@ -103,7 +100,7 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
         RuleFor(x => x.CurrencyCode)
             .NotEmpty()
             .Length(3)
-            .Must(c => ValidCurrencyCodes.Contains(c))
+            .Must(c => MarketCurrencies.IsSupported(c))
             .WithMessage("Invalid ISO 4217 currency code.");
 
 

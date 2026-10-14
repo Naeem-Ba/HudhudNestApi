@@ -45,9 +45,21 @@ the photo sizes and `ImagesCompactedAt`.
 * `sortBy=Price` orders by the effective price (sale price for sales, warm then cold rent for rents) converted to USD,
   listings without a price last, then `Id`. It requires `listingType=ForSale|ForRent` (422 otherwise). `PurchasePrice`/`ColdRent` still work.
 * Geo search and saved-search matching use the same conversion (one rate lookup per run).
-* **The seeded rates are placeholders** (e.g. SYP 14000). The seed only runs on an empty table, so Production keeps whatever it
-  has: set real rates through the admin endpoint. Currencies without a row (SAR, GBP, EGP, JOD, LBP at the time of writing)
-  can only match themselves; add them through the same endpoint (SAR is pegged at 3.75 per USD).
+* **Only three currencies are searchable: USD, EUR and SYP** (`SearchCurrencies`). The public list returns only
+  these, `currencyCode` with any other code is refused with 422, and only these take part in conversion. A listing
+  advertised in another currency (TRY, AED, SAR, ...) matches only searches in its own currency, is not converted and sorts
+  last under `sortBy=Price`.
+* **Listings are priced in the same three currencies.** `POST/PUT /api/properties` and short-stay listings accept only USD, EUR
+  or SYP (one list: `MarketCurrencies` in the domain). Listings created earlier in another currency stay as they are and can
+  still change status, but editing their currency requires one of the three, and the price must be entered again in it (the
+  amount is never converted for the owner). A body with no `currencyCode` (for example a status change) is not affected.
+  Display-currency preferences and the crowdfunding project currency are separate settings and were not changed.
+* **The rates are fixed, not live.** Migration `PinSearchCurrencyRates` set them to the values of 2026-10-14: EUR 0.8922
+  per dollar (1 EUR = 1.1208 USD) and SYP 13,400 per dollar (market quotes 13,350-13,425). It runs once, so a rate set
+  afterwards through the admin endpoint is kept. To change them until a pricing feed exists, use `PUT /api/admin/currencies/{code}`.
+* **Syrian pound scale:** the new pound (two zeros removed, 1 January 2026) would be about 134 per dollar. 13,400 assumes listing
+  prices are still entered in the old scale. If they are entered in the new scale, set SYP to the new-scale rate, or every
+  conversion involving SYP is off by a factor of 100.
 
 ## 3. Search text
 

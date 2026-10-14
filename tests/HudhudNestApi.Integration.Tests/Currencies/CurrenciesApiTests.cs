@@ -7,6 +7,7 @@ using HudhudNestApi.Domain.Audit.Constants;
 using HudhudNestApi.Domain.Users.Constants;
 using HudhudNestApi.Infrastructure.Persistence;
 using HudhudNestApi.Infrastructure.Persistence.Seeds;
+using HudhudNestApi.Infrastructure.Repositories;
 using HudhudNestApi.Integration.Tests.AppUpdates;
 
 namespace HudhudNestApi.Integration.Tests.Currencies;
@@ -33,9 +34,9 @@ public sealed class CurrenciesApiTests : IClassFixture<AppUpdateApiTestFactory>,
 
     private static object Body(decimal rate, bool? active = null) => new
     {
-        nameEn = "Turkish Lira",
-        nameAr = "الليرة التركية",
-        symbol = "₺",
+        nameEn = "Euro",
+        nameAr = "اليورو",
+        symbol = "€",
         decimalPlaces = 2,
         exchangeRateToUsd = rate,
         isActive = active
@@ -52,7 +53,8 @@ public sealed class CurrenciesApiTests : IClassFixture<AppUpdateApiTestFactory>,
         Assert.Equal("USD", items[0].GetProperty("code").GetString());
         Assert.True(items[0].GetProperty("isBase").GetBoolean());
         Assert.All(items, i => Assert.Equal(i.GetProperty("code").GetString()!.Trim(), i.GetProperty("code").GetString()));
-        Assert.Contains(items, i => i.GetProperty("code").GetString() == "SYP");
+        // Only the search currencies are offered: the base first, then by code.
+        Assert.Equal(["USD", "EUR", "SYP"], items.Select(i => i.GetProperty("code").GetString()!).ToArray());
     }
 
     [Fact(DisplayName = "An administrator sets a rate, it shows in the public list, and the change is audited")]
@@ -61,12 +63,12 @@ public sealed class CurrenciesApiTests : IClassFixture<AppUpdateApiTestFactory>,
         var admin = await _factory.SeedUserAsync("admin-currency", RoleNames.Admin);
         var client = _factory.AuthedClient(admin.AccessToken);
 
-        var response = await client.PutAsJsonAsync("/api/admin/currencies/try", Body(41.5m));
+        var response = await client.PutAsJsonAsync("/api/admin/currencies/eur", Body(0.9m));
         Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 
         var list = await _factory.CreateClient().GetFromJsonAsync<JsonElement>("/api/lookups/currencies");
-        var tryRow = list.EnumerateArray().Single(i => i.GetProperty("code").GetString() == "TRY");
-        Assert.Equal(41.5m, tryRow.GetProperty("exchangeRateToUsd").GetDecimal());
+        var eurRow = list.EnumerateArray().Single(i => i.GetProperty("code").GetString() == "EUR");
+        Assert.Equal(0.9m, eurRow.GetProperty("exchangeRateToUsd").GetDecimal());
 
         using var scope = _factory.Services.CreateScope();
         var actions = await scope.ServiceProvider.GetRequiredService<AppDbContext>().AuditLogs
@@ -90,8 +92,22 @@ public sealed class CurrenciesApiTests : IClassFixture<AppUpdateApiTestFactory>,
         });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
+        // A currency outside the search set is stored but neither offered nor used to convert prices.
         var list = await _factory.CreateClient().GetFromJsonAsync<JsonElement>("/api/lookups/currencies");
-        Assert.Contains(list.EnumerateArray(), i => i.GetProperty("code").GetString() == "GBP");
+        Assert.DoesNotContain(list.EnumerateArray(), i => i.GetProperty("code").GetString() == "GBP");
+
+        using var scope = _factory.Services.CreateScope();
+        var rates = await PropertyRepository.LoadCurrencyRatesAsync(scope.ServiceProvider.GetRequiredService<AppDbContext>());
+        Assert.False(rates.TryGetRate("GBP", out _));
+        Assert.True(rates.TryGetRate("SYP", out _));
+    }
+
+    [Fact(DisplayName = "Searching by a currency outside the search set is refused with 422")]
+    public async Task Search_RefusesOtherCurrencies()
+    {
+        var response = await _factory.CreateClient().GetAsync("/api/properties?currencyCode=TRY&maxPrice=1000");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     [Theory]

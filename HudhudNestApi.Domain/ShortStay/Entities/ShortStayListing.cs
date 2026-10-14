@@ -26,11 +26,8 @@ public sealed class ShortStayListing : AuditableEntity
 
     public const string DefaultCurrencyCode = "SYP";
 
-    /// <summary>Kept identical to CreatePropertyCommandValidator.ValidCurrencyCodes.</summary>
-    public static readonly IReadOnlySet<string> SupportedCurrencyCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "EUR", "USD", "GBP", "SYP", "TRY", "AED", "SAR", "EGP", "JOD", "LBP"
-    };
+    /// <summary>Same three currencies as every other listing: <see cref="Lookups.Constants.MarketCurrencies"/>.</summary>
+    public static readonly IReadOnlySet<string> SupportedCurrencyCodes = Lookups.Constants.MarketCurrencies.CodeSet;
 
     // ── Basic info ────────────────────────────────────────────────
     public string Title { get; private set; } = string.Empty;

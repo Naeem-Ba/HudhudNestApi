@@ -1,6 +1,7 @@
 using MediatR;
 using HudhudNestApi.Application.Currencies.DTOs;
 using HudhudNestApi.Application.Currencies.Interfaces;
+using HudhudNestApi.Application.Listings.Currencies;
 
 namespace HudhudNestApi.Application.Currencies.Queries.GetCurrencies;
 
@@ -17,7 +18,9 @@ public sealed class GetCurrenciesQueryHandler : IRequestHandler<GetCurrenciesQue
     {
         var currencies = await _currencies.GetActiveAsync(ct);
 
+        // Only the search currencies are offered; the rest of the table is not a price list.
         return currencies
+            .Where(c => SearchCurrencies.IsSupported(c.Code))
             .OrderByDescending(c => c.IsBaseCurrency)
             .ThenBy(c => c.Code.Trim(), StringComparer.Ordinal)
             .Select(c => new CurrencyDto(

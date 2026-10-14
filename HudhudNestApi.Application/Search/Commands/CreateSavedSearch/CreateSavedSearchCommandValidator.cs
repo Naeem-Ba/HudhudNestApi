@@ -1,4 +1,5 @@
 using FluentValidation;
+using HudhudNestApi.Application.Listings.Currencies;
 
 namespace HudhudNestApi.Application.Search.Commands.CreateSavedSearch;
 
@@ -14,6 +15,11 @@ public sealed class CreateSavedSearchCommandValidator : AbstractValidator<Create
             .OverridePropertyName("Criteria")
             .WithErrorCode("SavedSearchCriteriaRequired")
             .WithMessage("يجب تحديد معيار واحد على الأقل للبحث المحفوظ.");
+
+        RuleFor(x => x.CurrencyCode)
+            .Must(SearchCurrencies.IsSupported)
+            .WithMessage(SearchCurrencies.UnsupportedMessage)
+            .When(x => !string.IsNullOrWhiteSpace(x.CurrencyCode));
     }
 
     private static bool HasAtLeastOneCriterion(CreateSavedSearchCommand c) =>
