@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using HudhudNestApi.Domain.Lookups.Constants;
 using HudhudNestApi.Application.Listings.Commands.UpdateProperty;
 using HudhudNestApi.Domain.Listings.Enums;
 
@@ -12,10 +13,6 @@ public sealed class UpdatePropertyCommandValidator
         "DE", "SY", "US", "GB", "FR", "AE", "SA", "TR", "EG", "JO", "LB"
     };
 
-    private static readonly HashSet<string> ValidCurrencyCodes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "EUR", "USD", "GBP", "SYP", "TRY", "AED", "SAR", "EGP", "JOD", "LBP"
-    };
 
     public UpdatePropertyCommandValidator()
     {
@@ -68,7 +65,7 @@ public sealed class UpdatePropertyCommandValidator
 
         RuleFor(command => command.CurrencyCode)
             .Length(3)
-            .Must(currencyCode => currencyCode is not null && ValidCurrencyCodes.Contains(currencyCode))
+            .Must(currencyCode => MarketCurrencies.IsSupported(currencyCode))
             .WithMessage("Invalid ISO 4217 currency code.")
             .When(command => command.CurrencyCode is not null);
 
