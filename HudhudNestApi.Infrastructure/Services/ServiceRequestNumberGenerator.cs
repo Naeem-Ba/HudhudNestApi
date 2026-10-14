@@ -22,7 +22,7 @@ public sealed class ServiceRequestNumberGenerator : IServiceRequestNumberGenerat
     public async Task<string> NextAsync(CancellationToken ct = default)
     {
         var next = await _db.Database
-            .SqlQueryRaw<long>($"SELECT nextval('{SequenceName}')")
+            .SqlQueryRaw<long>($"SELECT nextval('{SequenceName}') AS \"Value\"")
             .SingleAsync(ct);
 
         return $"SR-{DateTime.UtcNow.Year}-{next:D6}";
