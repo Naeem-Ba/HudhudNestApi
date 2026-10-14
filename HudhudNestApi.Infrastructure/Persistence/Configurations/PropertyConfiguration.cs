@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using HudhudNestApi.Domain.Agencies.Entities;
 using HudhudNestApi.Domain.Enums;
+using HudhudNestApi.Domain.Listings;
 using HudhudNestApi.Domain.Listings.Entities;
 using HudhudNestApi.Domain.Listings.Enums;
 
@@ -309,5 +310,22 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
         // otherwise EF folds it into the PendingWarning index above.
         builder.HasIndex(p => p.ExpiresAt, "IX_Properties_Visible_ExpiresAt")
             .HasFilter("NOT \"IsDeleted\" AND \"IsPublished\"");
+
+        // Keyword search column (QA Phase 7, P7-D05): the title, description and place names with
+        // Arabic spelling variants folded together, maintained by PostgreSQL so no write path can
+        // forget it. SearchTextNormalizer.ToSqlExpression and SearchTextNormalizer.Normalize are
+        // the two halves of the same rule. The GIN trigram index serving it is created by the
+        // migration SQL (the model does not describe operator classes), like the City/Region ones.
+        builder.Property(p => p.SearchText)
+            .HasComputedColumnSql(
+                SearchTextNormalizer.ToSqlExpression(
+                    "\"Title\"", "\"Description\"", "\"City\"", "\"Region\"", "\"DistrictText\"", "\"NeighborhoodText\""),
+                stored: true);
+
+        // Closed-deal bookkeeping: the photo compression sweep reads exactly the closed deals that
+        // have not been compressed yet, so index only those.
+        builder.HasIndex(p => p.ClosedAt)
+            .HasDatabaseName("IX_Properties_ClosedAt_PendingCompaction")
+            .HasFilter("\"ClosedAt\" IS NOT NULL AND \"ImagesCompactedAt\" IS NULL");
     }
 }

@@ -1,9 +1,12 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Linq.Expressions;
+using Microsoft.EntityFrameworkCore;
 using HudhudNestApi.Infrastructure.Persistence;
 using HudhudNestApi.Application.Properties.DTOs;
 using HudhudNestApi.Domain.Listings.Entities;
 using HudhudNestApi.Application.Listings.Interfaces;
+using HudhudNestApi.Application.Listings.Currencies;
 using HudhudNestApi.Domain.Enums;
+using HudhudNestApi.Domain.Listings;
 
 namespace HudhudNestApi.Infrastructure.Repositories;
 
@@ -57,13 +60,9 @@ public sealed class PropertyRepository : IPropertyRepository
             // these, every generated caption fell back to "عقار ... في سوريا" for every listing.
             .Include(property => property.PropertyType)
             .Include(property => property.Governorate)
-            .FirstOrDefaultAsync(
-                property =>
-                    property.Id == id &&
-                    property.IsPublished &&
-                    (property.ExpiresAt == null ||
-                     property.ExpiresAt > now),
-                ct);
+            .Where(property => property.Id == id)
+            .Where(Property.PubliclyViewable(now))
+            .FirstOrDefaultAsync(ct);
     }
     public async Task<PagedResult<Property>> GetPagedAsync(
         PropertyFilterDto filter,
@@ -73,7 +72,11 @@ public sealed class PropertyRepository : IPropertyRepository
             .AsNoTracking()
             .AsQueryable();
 
-        query = ApplyFilter(query, filter, await ResolveLocationFallbackAsync(_db, filter, ct));
+        var rates = NeedsCurrencyRates(filter)
+            ? await LoadCurrencyRatesAsync(_db, ct)
+            : CurrencyRates.Empty;
+
+        query = ApplyFilter(query, filter, await ResolveLocationFallbackAsync(_db, filter, ct), rates);
 
         // -- Count (before pagination) -------------------------
         var totalCount = await query.CountAsync(ct);
@@ -87,7 +90,7 @@ public sealed class PropertyRepository : IPropertyRepository
         // (offset 10,000). Sorting by Id last keeps pages stable when sort keys tie.
         var page = Math.Max(filter.Page, 1);
         var pageSize = Math.Clamp(filter.PageSize, 1, 100);
-        var pageIds = await ApplySort(query, filter, DateTime.UtcNow)
+        var pageIds = await ApplySort(query, filter, DateTime.UtcNow, rates)
             .ThenBy(p => p.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -144,12 +147,9 @@ public sealed class PropertyRepository : IPropertyRepository
 
         return await _db.Properties
             .AsNoTracking()
-            .AnyAsync(
-                property =>
-                    property.Id == id &&
-                    property.IsPublished &&
-                    (property.ExpiresAt == null || property.ExpiresAt > now),
-                ct);
+            .Where(property => property.Id == id)
+            .Where(Property.PubliclyViewable(now))
+            .AnyAsync(ct);
     }
 
     public async Task<(int SoldCount, int RentedCount)> GetDealCountsByOwnerAsync(
@@ -177,11 +177,15 @@ public sealed class PropertyRepository : IPropertyRepository
         // Deleted listings are already excluded by the global query filter on Property
         // (AppDbContext: HasQueryFilter(e => !e.IsDeleted)), so only Expired needs an
         // explicit exclusion here — an expired listing in its grace window must not hold
-        // the owner's single free slot hostage.
+        // the owner's single free slot hostage. Neither may a concluded deal (Sold/Rented):
+        // it is kept for documentation indefinitely and is no longer an offer.
         return await _db.Properties
             .AsNoTracking()
             .CountAsync(
-                p => p.OwnerId == ownerId && p.Status != PropertyStatus.Expired,
+                p => p.OwnerId == ownerId &&
+                     p.Status != PropertyStatus.Expired &&
+                     p.Status != PropertyStatus.Sold &&
+                     p.Status != PropertyStatus.Rented,
                 ct);
     }
 
@@ -195,7 +199,10 @@ public sealed class PropertyRepository : IPropertyRepository
         return await _db.Properties
             .AsNoTracking()
             .CountAsync(
-                p => p.AgencyId == agencyId && p.Status != PropertyStatus.Expired,
+                p => p.AgencyId == agencyId &&
+                     p.Status != PropertyStatus.Expired &&
+                     p.Status != PropertyStatus.Sold &&
+                     p.Status != PropertyStatus.Rented,
                 ct);
     }
 
@@ -317,11 +324,11 @@ public sealed class PropertyRepository : IPropertyRepository
         int? neighborhoodId,
         DateTime nowUtc)
     {
-        query = query.Where(p =>
-            p.ListingType == listingType &&
-            p.IsPublished &&
-            (p.ExpiresAt == null || p.ExpiresAt > nowUtc) &&
-            p.GovernorateId == governorateId);
+        query = query
+            .Where(Property.OnMarket(nowUtc))
+            .Where(p =>
+                p.ListingType == listingType &&
+                p.GovernorateId == governorateId);
 
         if (propertyTypeId.HasValue)
             query = query.Where(p => p.PropertyTypeId == propertyTypeId.Value);
@@ -414,27 +421,32 @@ public sealed class PropertyRepository : IPropertyRepository
     public static IQueryable<Property> ApplyFilter(
         IQueryable<Property> query,
         PropertyFilterDto filter,
-        LocationTextFallback? locationFallback = null)
+        LocationTextFallback? locationFallback = null,
+        CurrencyRates? rates = null)
     {
-        if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
+        // Keyword search (QA Phase 7, P7-D05): every word must appear somewhere in the title,
+        // description or place names, in any order ("modern flat" finds "Flat, modern kitchen"),
+        // after Arabic spelling variants are folded on both sides. A typed % or _ is literal text.
+        foreach (var word in SearchTextNormalizer.SplitWords(filter.SearchTerm))
         {
-            var term = filter.SearchTerm.Trim();
-            query = query.Where(p =>
-                EF.Functions.ILike(p.Title, $"%{term}%") ||
-                EF.Functions.ILike(p.Description, $"%{term}%"));
+            var pattern = $"%{SearchTextNormalizer.EscapeLike(word)}%";
+            query = query.Where(p => EF.Functions.ILike(p.SearchText, pattern, "\\"));
         }
 
         if (!string.IsNullOrWhiteSpace(filter.CountryCode))
             query = query.Where(p => p.CountryCode == filter.CountryCode.ToUpperInvariant());
 
         if (!string.IsNullOrWhiteSpace(filter.City))
-            query = query.Where(p => EF.Functions.ILike(p.City, $"%{filter.City.Trim()}%"));
+        {
+            var cityPattern = $"%{SearchTextNormalizer.EscapeLike(filter.City.Trim())}%";
+            query = query.Where(p => EF.Functions.ILike(p.City, cityPattern, "\\"));
+        }
 
         if (!string.IsNullOrWhiteSpace(filter.Region))
-            query = query.Where(p => EF.Functions.ILike(p.Region!, $"%{filter.Region.Trim()}%"));
-
-        if (!string.IsNullOrWhiteSpace(filter.CurrencyCode))
-            query = query.Where(p => p.CurrencyCode == filter.CurrencyCode.ToUpperInvariant());
+        {
+            var regionPattern = $"%{SearchTextNormalizer.EscapeLike(filter.Region.Trim())}%";
+            query = query.Where(p => EF.Functions.ILike(p.Region!, regionPattern, "\\"));
+        }
 
         // Structured location filters take precedence in matching accuracy over the
         // free-text City/Region filters above — callers may pass both, in which case
@@ -492,38 +504,7 @@ public sealed class PropertyRepository : IPropertyRepository
         if (filter.Condition.HasValue)
             query = query.Where(p => p.Condition == filter.Condition.Value);
 
-        if (filter.MinPrice.HasValue)
-        {
-            query = filter.ListingType switch
-            {
-                ListingType.ForRent =>
-                    query.Where(p => p.ColdRent >= filter.MinPrice || p.WarmRent >= filter.MinPrice),
-                ListingType.ForSale =>
-                    query.Where(p => p.PurchasePrice >= filter.MinPrice),
-                _ => // ForRentAndSale أو غير محدد
-                    query.Where(p =>
-                        (p.ColdRent >= filter.MinPrice || p.WarmRent >= filter.MinPrice) ||
-                        p.PurchasePrice >= filter.MinPrice)
-            };
-        }
-
-        if (filter.MaxPrice.HasValue)
-        {
-            query = filter.ListingType switch
-            {
-                ListingType.ForRent =>
-                    query.Where(p =>
-                        (p.ColdRent == null || p.ColdRent <= filter.MaxPrice) &&
-                        (p.WarmRent == null || p.WarmRent <= filter.MaxPrice)),
-                ListingType.ForSale =>
-                    query.Where(p => p.PurchasePrice == null || p.PurchasePrice <= filter.MaxPrice),
-                _ =>
-                    query.Where(p =>
-                        (p.PurchasePrice == null || p.PurchasePrice <= filter.MaxPrice) &&
-                        (p.ColdRent == null || p.ColdRent <= filter.MaxPrice) &&
-                        (p.WarmRent == null || p.WarmRent <= filter.MaxPrice))
-            };
-        }
+        query = ApplyPriceRange(query, filter, rates);
 
         if (filter.MinRooms.HasValue)
             query = query.Where(p => p.Rooms >= filter.MinRooms);
@@ -557,16 +538,97 @@ public sealed class PropertyRepository : IPropertyRepository
                 filter.AmenityIds.All(aid =>
                     p.PropertyAmenities.Any(pa => pa.AmenityId == aid)));
 
-        // Only published listings by default
+        // Public visibility (QA Phase 7, P7-D08). Search shows listings that are on the market
+        // (Available and Reserved, inside their publication window); Archived, Expired, Sold and
+        // Rented never appear here. The one exception is an agency page asking for its closed
+        // deals by status, which is how the Sold and Rented tabs are served.
         var now = DateTime.UtcNow;
 
-        query = query.Where(property =>
-            property.IsPublished &&
-            (property.ExpiresAt == null ||
-             property.ExpiresAt > now));
+        query = filter.AgencyId.HasValue && filter.Status is PropertyStatus.Sold or PropertyStatus.Rented
+            ? query.Where(Property.ClosedDealOf(filter.Status!.Value))
+            : query.Where(Property.OnMarket(now));
 
         return query;
     }
+
+    /// <summary>
+    /// Whether this request has to be answered with exchange rates: a price range written in a
+    /// chosen currency, or ordering by price (which compares listings of different currencies).
+    /// </summary>
+    public static bool NeedsCurrencyRates(PropertyFilterDto filter)
+        => (!string.IsNullOrWhiteSpace(filter.CurrencyCode) && (filter.MinPrice.HasValue || filter.MaxPrice.HasValue)) ||
+           string.Equals(filter.SortBy, PriceSortKey, StringComparison.OrdinalIgnoreCase);
+
+    public static async Task<CurrencyRates> LoadCurrencyRatesAsync(AppDbContext db, CancellationToken ct = default)
+    {
+        var rates = await db.Currencies
+            .AsNoTracking()
+            .Where(currency => currency.IsActive && currency.ExchangeRateToUSD > 0)
+            .Select(currency => new { currency.Code, currency.ExchangeRateToUSD })
+            .ToListAsync(ct);
+
+        return new CurrencyRates(rates.ToDictionary(row => row.Code, row => row.ExchangeRateToUSD));
+    }
+
+    /// <summary>
+    /// MinPrice/MaxPrice. With a CurrencyCode the range is written in that currency and matches
+    /// every listing whose price, converted into it, lies inside — a 100,000 USD ceiling keeps
+    /// the dollar flat and the euro flat worth less than that, and drops the lira flat priced at
+    /// 5,000,000,000 (QA Phase 7, P7-D01). Without a CurrencyCode the numbers are compared as
+    /// written, as before, for clients that predate the currency selector.
+    /// </summary>
+    private static IQueryable<Property> ApplyPriceRange(
+        IQueryable<Property> query, PropertyFilterDto filter, CurrencyRates? rates)
+    {
+        if (!filter.MinPrice.HasValue && !filter.MaxPrice.HasValue)
+            return query;
+
+        if (!string.IsNullOrWhiteSpace(filter.CurrencyCode))
+        {
+            var range = ListingPriceExpressions.PriceRange(
+                filter.ListingType, filter.MinPrice, filter.MaxPrice,
+                filter.CurrencyCode.Trim().ToUpperInvariant(), rates ?? CurrencyRates.Empty);
+            return range is null ? query : query.Where(range);
+        }
+
+        if (filter.MinPrice.HasValue)
+        {
+            query = filter.ListingType switch
+            {
+                ListingType.ForRent =>
+                    query.Where(p => p.ColdRent >= filter.MinPrice || p.WarmRent >= filter.MinPrice),
+                ListingType.ForSale =>
+                    query.Where(p => p.PurchasePrice >= filter.MinPrice),
+                _ => // ForRentAndSale أو غير محدد
+                    query.Where(p =>
+                        (p.ColdRent >= filter.MinPrice || p.WarmRent >= filter.MinPrice) ||
+                        p.PurchasePrice >= filter.MinPrice)
+            };
+        }
+
+        if (filter.MaxPrice.HasValue)
+        {
+            query = filter.ListingType switch
+            {
+                ListingType.ForRent =>
+                    query.Where(p =>
+                        (p.ColdRent == null || p.ColdRent <= filter.MaxPrice) &&
+                        (p.WarmRent == null || p.WarmRent <= filter.MaxPrice)),
+                ListingType.ForSale =>
+                    query.Where(p => p.PurchasePrice == null || p.PurchasePrice <= filter.MaxPrice),
+                _ =>
+                    query.Where(p =>
+                        (p.PurchasePrice == null || p.PurchasePrice <= filter.MaxPrice) &&
+                        (p.ColdRent == null || p.ColdRent <= filter.MaxPrice) &&
+                        (p.WarmRent == null || p.WarmRent <= filter.MaxPrice))
+            };
+        }
+
+        return query;
+    }
+
+    /// <summary>SortBy value that orders by the listing's price across currencies.</summary>
+    public const string PriceSortKey = "Price";
 
     /// <summary>
     /// Applies the result ordering, including paid featured placement.
@@ -589,12 +651,28 @@ public sealed class PropertyRepository : IPropertyRepository
     public static IOrderedQueryable<Property> ApplySort(
         IQueryable<Property> query,
         PropertyFilterDto filter,
-        DateTime nowUtc)
+        DateTime nowUtc,
+        CurrencyRates? rates = null)
     {
         // Property.CurrentlyFeatured is the SQL-translatable twin of the domain's
         // IsCurrentlyFeatured — a listing whose paid window has already elapsed is not
         // promoted, even in the hours before the sweep clears its flag.
         var featuredFirst = Property.CurrentlyFeatured(nowUtc);
+
+        // Cheapest/most expensive first across currencies (QA Phase 7, P7-D01/D02): the key is the
+        // price converted to dollars for the listing type being browsed, and listings without a
+        // price go last whichever way the list is ordered instead of first in descending order.
+        if (string.Equals(filter.SortBy, PriceSortKey, StringComparison.OrdinalIgnoreCase) &&
+            filter.ListingType is ListingType.ForSale or ListingType.ForRent)
+        {
+            var priceInUsd = ListingPriceExpressions.EffectivePriceInUsd(filter.ListingType!.Value, rates ?? CurrencyRates.Empty);
+            var missing = Expression.Lambda<Func<Property, bool>>(
+                Expression.Equal(priceInUsd.Body, Expression.Constant(null, typeof(decimal?))),
+                priceInUsd.Parameters);
+
+            var byMissing = query.OrderBy(missing);
+            return filter.SortDescending ? byMissing.ThenByDescending(priceInUsd) : byMissing.ThenBy(priceInUsd);
+        }
 
         return (filter.SortBy?.ToLowerInvariant(), filter.SortDescending) switch
         {

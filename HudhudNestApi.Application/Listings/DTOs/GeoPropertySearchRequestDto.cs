@@ -10,8 +10,12 @@ namespace HudhudNestApi.Application.Listings.DTOs;
 /// </summary>
 public sealed class GeoPropertySearchRequestDto
 {
-    public decimal Latitude { get; set; }
-    public decimal Longitude { get; set; }
+    /// <summary>
+    /// Required (validated). Nullable only so that a request without coordinates can be told
+    /// apart from one at 0,0 and refused with a message instead of silently searching the Atlantic.
+    /// </summary>
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
 
     /// <summary>Search radius in kilometers. Default: 5 km.</summary>
     public decimal RadiusKm { get; set; } = 5m;

@@ -1001,6 +1001,9 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
 
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<decimal?>("ColdRent")
                         .HasColumnType("decimal(18,4)");
 
@@ -1130,6 +1133,9 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<DateTime?>("ImagesCompactedAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<string>("InternetType")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
@@ -1226,6 +1232,12 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Property<int?>("Rooms")
                         .HasColumnType("integer");
 
+                    b.Property<string>("SearchText")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("text")
+                        .HasComputedColumnSql("translate(regexp_replace(coalesce(\"Title\", '') || ' ' || coalesce(\"Description\", '') || ' ' || coalesce(\"City\", '') || ' ' || coalesce(\"Region\", '') || ' ' || coalesce(\"DistrictText\", '') || ' ' || coalesce(\"NeighborhoodText\", ''), '[\\u064B-\\u065F\\u0670\\u0640]', '', 'g'), 'أإآٱىةؤئ٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', 'اااايهوي01234567890123456789')", true);
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1302,6 +1314,10 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("AgentId");
 
                     b.HasIndex("City");
+
+                    b.HasIndex("ClosedAt")
+                        .HasDatabaseName("IX_Properties_ClosedAt_PendingCompaction")
+                        .HasFilter("\"ClosedAt\" IS NOT NULL AND \"ImagesCompactedAt\" IS NULL");
 
                     b.HasIndex("CountryCode");
 

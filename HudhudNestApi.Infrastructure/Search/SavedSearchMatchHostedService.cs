@@ -89,6 +89,9 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
                     var now = DateTime.UtcNow;
                     var matchedCount = 0;
 
+                    // One read of the rate table per sweep, shared by every search that prices in a currency.
+                    var rates = await PropertyRepository.LoadCurrencyRatesAsync(db, ct);
+
                     foreach (var savedSearch in allSearches)
                     {
                         // First run for a search only looks forward from its creation — never
@@ -97,7 +100,7 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
 
                         var filter = ToFilterDto(savedSearch);
                         var query = PropertyRepository.ApplyFilter(db.Properties.AsNoTracking(), filter,
-                            await PropertyRepository.ResolveLocationFallbackAsync(db, filter, ct))
+                            await PropertyRepository.ResolveLocationFallbackAsync(db, filter, ct), rates)
                             .Where(p => p.CreatedAt > since);
 
                         var matches = await query

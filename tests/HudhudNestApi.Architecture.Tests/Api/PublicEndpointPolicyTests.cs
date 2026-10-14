@@ -110,6 +110,7 @@ public sealed class PublicEndpointPolicyTests
             "LookupsController.GetGovernorates",
             "LookupsController.GetDistricts",
             "LookupsController.GetNeighborhoods",
+            "CurrenciesController.GetAll",
             "LookupsController.GetPropertyTypeCatalog",
 
             // Public plan catalog for the /pricing marketing page — FRONTEND_BACKEND_CONTRACT.md §11.2.

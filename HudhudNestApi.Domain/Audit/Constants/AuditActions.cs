@@ -50,5 +50,6 @@ public static class AuditActions
     public const string AppReleaseUpdatedByAdmin = "AppReleaseUpdatedByAdmin";
     public const string AppReleaseEnabledByAdmin = "AppReleaseEnabledByAdmin";
     public const string AppReleaseDisabledByAdmin = "AppReleaseDisabledByAdmin";
+    public const string CurrencyRateUpdatedByAdmin = "CurrencyRateUpdatedByAdmin";
     public const string AppReleaseDeletedByAdmin = "AppReleaseDeletedByAdmin";
 }

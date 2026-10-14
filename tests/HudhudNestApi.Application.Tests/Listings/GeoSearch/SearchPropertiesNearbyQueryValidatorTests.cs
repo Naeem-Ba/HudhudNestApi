@@ -92,4 +92,50 @@ public sealed class SearchPropertiesNearbyQueryValidatorTests
 
         result.ShouldHaveValidationErrorFor(x => x.Filter);
     }
+
+    [Fact(DisplayName = "A request without coordinates is refused instead of searching 0,0 (P7-D07)")]
+    public void MissingCoordinates_ShouldFail()
+    {
+        var query = new SearchPropertiesNearbyQuery(new GeoPropertySearchRequestDto { RadiusKm = 5m });
+
+        var result = _validator.TestValidate(query);
+
+        result.ShouldHaveValidationErrorFor(x => x.Filter.Latitude);
+        result.ShouldHaveValidationErrorFor(x => x.Filter.Longitude);
+    }
+
+    [Fact]
+    public void ReversedRoomsAndArea_ShouldFail()
+    {
+        var query = new SearchPropertiesNearbyQuery(new GeoPropertySearchRequestDto
+        {
+            Latitude = 33.5m,
+            Longitude = 36.3m,
+            MinRooms = 4,
+            MaxRooms = 1,
+            MinArea = 200,
+            MaxArea = 50
+        });
+
+        var result = _validator.TestValidate(query);
+
+        Assert.Equal(2, result.Errors.Count);
+    }
+
+    [Fact]
+    public void NulInCityOrRegion_ShouldFail()
+    {
+        var query = new SearchPropertiesNearbyQuery(new GeoPropertySearchRequestDto
+        {
+            Latitude = 33.5m,
+            Longitude = 36.3m,
+            City = "a\0b",
+            Region = "c\0d"
+        });
+
+        var result = _validator.TestValidate(query);
+
+        result.ShouldHaveValidationErrorFor(x => x.Filter.City);
+        result.ShouldHaveValidationErrorFor(x => x.Filter.Region);
+    }
 }

@@ -4,6 +4,7 @@ using HudhudNestApi.Application.Analytics.Interfaces;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Domain.Bookings.Enums;
 using HudhudNestApi.Domain.Enums;
+using HudhudNestApi.Domain.Listings.Entities;
 using HudhudNestApi.Infrastructure.Persistence;
 
 namespace HudhudNestApi.Infrastructure.Analytics;
@@ -71,6 +72,7 @@ public sealed class AnalyticsReadRepository : IAnalyticsReadRepository
                 p.City == property.City &&
                 p.Id != property.Id &&
                 p.IsPublished &&
+                (p.Status == PropertyStatus.Available || p.Status == PropertyStatus.Reserved) &&
                 p.Area.HasValue &&
                 p.Area.Value > 0 &&
                 p.ColdRent.HasValue)
@@ -94,8 +96,11 @@ public sealed class AnalyticsReadRepository : IAnalyticsReadRepository
         string? countryCode,
         CancellationToken ct = default)
     {
+        // Market statistics describe what can be bought or rented today: listings on the market
+        // (Available/Reserved, inside their window), not archived ones or concluded deals.
         var query = _db.Properties
-            .Where(p => p.IsPublished && !p.IsDeleted);
+            .Where(p => !p.IsDeleted)
+            .Where(Property.OnMarket(DateTime.UtcNow));
 
         if (!string.IsNullOrWhiteSpace(countryCode))
         {

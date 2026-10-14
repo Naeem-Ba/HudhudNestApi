@@ -124,14 +124,18 @@ public sealed class ListingExpiryHostedService : BackgroundService
                     // placement is still paid for.
                     var unfeatured = await ClearElapsedFeaturedAsync(db, now, ct);
 
-                    if (warned + expired + deleted + unfeatured > 0)
+                    // Slowest phase (one provider call per photo), so it runs last and is capped.
+                    var compacted = await CompactClosedDealImagesAsync(db, scope.ServiceProvider, now, ct);
+
+                    if (warned + expired + deleted + unfeatured + compacted > 0)
                     {
                         _logger.LogInformation(
-                            "Listing expiry sweep complete. Warned={Warned}, Expired={Expired}, Deleted={Deleted}, Unfeatured={Unfeatured}.",
+                            "Listing expiry sweep complete. Warned={Warned}, Expired={Expired}, Deleted={Deleted}, Unfeatured={Unfeatured}, Compacted={Compacted}.",
                             warned,
                             expired,
                             deleted,
-                            unfeatured);
+                            unfeatured,
+                            compacted);
                     }
                 },
                 ct);
@@ -158,6 +162,8 @@ public sealed class ListingExpiryHostedService : BackgroundService
             .Where(p =>
                 p.IsPublished &&
                 p.Status != PropertyStatus.Expired &&
+                p.Status != PropertyStatus.Sold &&
+                p.Status != PropertyStatus.Rented &&
                 p.ExpiresAt != null &&
                 p.ExpiresAt > now &&
                 p.ExpiresAt <= warningThreshold &&
@@ -198,6 +204,10 @@ public sealed class ListingExpiryHostedService : BackgroundService
         var candidates = await db.Properties
             .Where(p =>
                 p.Status != PropertyStatus.Expired &&
+                // A concluded deal is a record, not an offer with a clock: it never expires and
+                // is never deleted by this sweep (QA Phase 7, P7-D08).
+                p.Status != PropertyStatus.Sold &&
+                p.Status != PropertyStatus.Rented &&
                 p.ExpiresAt != null &&
                 p.ExpiresAt <= now)
             .OrderBy(p => p.ExpiresAt)
@@ -353,5 +363,96 @@ public sealed class ListingExpiryHostedService : BackgroundService
 
         await db.SaveChangesAsync(ct);
         return candidates.Count;
+    }
+    /// <summary>
+    /// How long after a deal closes its photos stay untouched. A buyer or renter who backs out
+    /// returns the listing to the market inside this window with its original photos.
+    /// </summary>
+    internal static readonly TimeSpan CompactionDelayAfterClose = TimeSpan.FromDays(14);
+
+    /// <summary>Listings per sweep: each photo is a provider round trip, so a backlog drains over several sweeps.</summary>
+    private const int MaxCompactedListingsPerRun = 20;
+
+    /// <summary>
+    /// Phase 5 — shrink the photos of closed deals (Sold/Rented) once the reversal window has
+    /// passed, to save storage while keeping them as documentation (QA Phase 7, P7-D08).
+    /// </summary>
+    /// <remarks>
+    /// A listing is stamped (<see cref="Property.ImagesCompactedAt"/>) only when every one of its
+    /// photos succeeded; otherwise it is retried on a later sweep, behind the others (it keeps
+    /// logging a warning each time, which is how a photo that can never be compacted is noticed).
+    /// </remarks>
+    private async Task<int> CompactClosedDealImagesAsync(
+        AppDbContext db,
+        IServiceProvider services,
+        DateTime now,
+        CancellationToken ct)
+    {
+        var cutoff = now.Subtract(CompactionDelayAfterClose);
+
+        var candidates = await db.Properties
+            .Include(p => p.Images)
+            .Where(p =>
+                (p.Status == PropertyStatus.Sold || p.Status == PropertyStatus.Rented) &&
+                p.ClosedAt != null &&
+                p.ClosedAt <= cutoff &&
+                p.ImagesCompactedAt == null)
+            .OrderBy(p => p.UpdatedAt)
+            .Take(MaxCompactedListingsPerRun)
+            .ToListAsync(ct);
+
+        if (candidates.Count == 0)
+            return 0;
+
+        var compactor = services.GetRequiredService<IListingImageCompactor>();
+        var completed = 0;
+
+        foreach (var property in candidates)
+        {
+            var allSucceeded = true;
+
+            foreach (var image in property.Images.Where(i => !i.IsDeleted && !string.IsNullOrWhiteSpace(i.PublicId)))
+            {
+                try
+                {
+                    var result = await compactor.CompactAsync(image.PublicId, image.Url, ct);
+                    if (result.Succeeded)
+                    {
+                        if (!string.IsNullOrWhiteSpace(result.NewUrl))
+                            image.Url = result.NewUrl;
+                    }
+                    else
+                    {
+                        allSucceeded = false;
+                        _logger.LogWarning(
+                            "Could not compact image {PublicId} of closed listing {PropertyId}: {Error}",
+                            image.PublicId, property.Id, result.Error);
+                    }
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    allSucceeded = false;
+                    _logger.LogWarning(ex, "Could not compact image {PublicId} of closed listing {PropertyId}.", image.PublicId, property.Id);
+                }
+            }
+
+            if (allSucceeded)
+            {
+                property.MarkImagesCompacted();
+                completed++;
+            }
+            else
+            {
+                property.MarkImageCompactionAttempted();
+            }
+
+            await db.SaveChangesAsync(ct);
+        }
+
+        return completed;
     }
 }
