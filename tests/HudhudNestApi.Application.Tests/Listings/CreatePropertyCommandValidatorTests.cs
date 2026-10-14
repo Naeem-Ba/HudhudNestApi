@@ -181,20 +181,31 @@ public sealed class CreatePropertyCommandValidatorTests
     [Trait("Category", "PropertyValidator")]
     [InlineData("EUR")]  // يورو
     [InlineData("USD")]  // دولار
-    [InlineData("GBP")]  // جنيه إسترليني
     [InlineData("SYP")]  // ليرة سورية
-    [InlineData("TRY")]  // ليرة تركية
-    [InlineData("AED")]  // درهم إماراتي
-    [InlineData("SAR")]  // ريال سعودي
-    [InlineData("EGP")]  // جنيه مصري
-    [InlineData("JOD")]  // دينار أردني
-    [InlineData("LBP")]  // ليرة لبنانية
     public async Task ValidCurrencyCode_AllSupportedCodes_PassWithNoError(string currency)
     {
         var cmd = ValidCommand() with { CurrencyCode = currency };
 
         (await _validator.TestValidateAsync(cmd))
                   .ShouldNotHaveValidationErrorFor(x => x.CurrencyCode);
+    }
+
+    // Listings are priced in the dollar, the euro or the Syrian pound only.
+    [Theory]
+    [Trait("Category", "PropertyValidator")]
+    [InlineData("GBP")]
+    [InlineData("TRY")]
+    [InlineData("AED")]
+    [InlineData("SAR")]
+    [InlineData("EGP")]
+    [InlineData("JOD")]
+    [InlineData("LBP")]
+    public async Task CurrencyCode_OutsideTheThreeMarketCurrencies_IsRefused(string currency)
+    {
+        var cmd = ValidCommand() with { CurrencyCode = currency };
+
+        (await _validator.TestValidateAsync(cmd))
+                  .ShouldHaveValidationErrorFor(x => x.CurrencyCode);
     }
 
     // ── ForSale: PurchasePrice فقط ────────────────────────────────────
