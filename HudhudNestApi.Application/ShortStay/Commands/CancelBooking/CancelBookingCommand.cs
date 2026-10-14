@@ -30,9 +30,13 @@ public sealed class CancelBookingCommandHandler : IRequestHandler<CancelBookingC
         var booking = await _bookings.GetByIdWithListingAsync(request.BookingId, ct)
             ?? throw new NotFoundException($"Booking {request.BookingId} was not found.");
 
+        // A non-guest gets 403 like every other booking command; the state rules (terminal and
+        // checked-in bookings) stay in Booking.Cancel.
+        if (booking.GuestId != request.GuestId)
+            throw new ForbiddenException("Only the guest can cancel this booking.");
+
         var listing = booking.Unit!.RoomType.ShortStayListing;
 
-        // Booking.Cancel already enforces GuestId == actorId and rejects terminal/checked-in states.
         booking.Cancel(request.GuestId, request.Reason);
         await _bookings.ReleaseRangeAsync(booking.Id, ct);
         await _uow.SaveChangesAsync(ct);

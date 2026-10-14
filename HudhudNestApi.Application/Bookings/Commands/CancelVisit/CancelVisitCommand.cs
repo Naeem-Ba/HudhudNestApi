@@ -41,6 +41,11 @@ public sealed class CancelVisitCommandHandler : IRequestHandler<CancelVisitComma
         var property = await _properties.GetByIdAsync(visit.PropertyId, ct)
             ?? throw new NotFoundException("Property was not found.");
 
+        // The domain rule would also refuse (as a 400 business-rule violation); answering 403 here
+        // matches every other visit command, where a non-party gets "forbidden", not "bad request".
+        if (visit.RequesterId != request.RequesterId)
+            throw new ForbiddenException("Only the requester can cancel this visit.");
+
         visit.Cancel(request.RequesterId);
         await _uow.SaveChangesAsync(ct);
 

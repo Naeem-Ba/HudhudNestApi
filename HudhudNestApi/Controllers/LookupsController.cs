@@ -105,7 +105,16 @@ public sealed class LookupsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Refresh(string key, CancellationToken ct)
     {
-        await _lookups.RefreshAsync(key, ct);
+        try
+        {
+            await _lookups.RefreshAsync(key, ct);
+        }
+        catch (ArgumentException)
+        {
+            // An unknown cache key is the caller's mistake (documented 400), not a server fault.
+            return BadRequest(new { message = $"Unsupported lookup cache key '{key}'." });
+        }
+
         return NoContent();
     }
 
