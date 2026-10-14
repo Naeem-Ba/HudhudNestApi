@@ -146,4 +146,20 @@ public enum NotificationType
     /// Raised by SendMessageCommandHandler.
     /// </summary>
     AgencyMemberInquiry = 39,
+
+    // ── Service provider onboarding and management. RelatedEntityId is the
+    // ServiceProviderApplication id for the application events and the ServiceProvider id
+    // for the provider status events. Raised by the provider application/admin handlers.
+
+    /// <summary>An admin asked the applicant for more information.</summary>
+    ServiceProviderApplicationInfoRequested = 40,
+
+    /// <summary>The application was approved and the provider profile is active.</summary>
+    ServiceProviderApplicationApproved = 41,
+
+    /// <summary>The application was rejected, with the reason.</summary>
+    ServiceProviderApplicationRejected = 42,
+
+    /// <summary>The provider was suspended, reactivated or had its approval revoked.</summary>
+    ServiceProviderStatusChanged = 43,
 }

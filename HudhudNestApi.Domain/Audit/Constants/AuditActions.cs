@@ -52,4 +52,14 @@ public static class AuditActions
     public const string AppReleaseDisabledByAdmin = "AppReleaseDisabledByAdmin";
     public const string CurrencyRateUpdatedByAdmin = "CurrencyRateUpdatedByAdmin";
     public const string AppReleaseDeletedByAdmin = "AppReleaseDeletedByAdmin";
+
+    // -- Admin dashboard: service provider onboarding and management -----
+    public const string ServiceProviderApplicationInfoRequestedByAdmin = "ServiceProviderApplicationInfoRequestedByAdmin";
+    public const string ServiceProviderApplicationApprovedByAdmin = "ServiceProviderApplicationApprovedByAdmin";
+    public const string ServiceProviderApplicationRejectedByAdmin = "ServiceProviderApplicationRejectedByAdmin";
+    public const string ServiceProviderUpdatedByAdmin = "ServiceProviderUpdatedByAdmin";
+    public const string ServiceProviderSuspendedByAdmin = "ServiceProviderSuspendedByAdmin";
+    public const string ServiceProviderReactivatedByAdmin = "ServiceProviderReactivatedByAdmin";
+    public const string ServiceProviderRevokedByAdmin = "ServiceProviderRevokedByAdmin";
+    public const string ServiceProviderVerificationChangedByAdmin = "ServiceProviderVerificationChangedByAdmin";
 }

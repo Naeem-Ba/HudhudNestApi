@@ -25,7 +25,11 @@ public static class ServiceMapper
             IsActive: provider.IsActive,
             AverageRating: averageRating,
             ReviewCount: reviewCount,
-            CreatedAt: provider.CreatedAt);
+            CreatedAt: provider.CreatedAt,
+            Status: provider.Status,
+            StatusReason: provider.StatusReason,
+            ApprovedCategories: Domain.Services.ServiceCategorySet.FromNames(provider.ApprovedCategories),
+            CoverageGovernorateIds: provider.CoverageGovernorateIds);
 
     public static ServiceOfferingDto ToDto(ServiceOffering offering)
         => new(
@@ -42,7 +46,8 @@ public static class ServiceMapper
             CurrencyId: offering.CurrencyId,
             EstimatedDurationDays: offering.EstimatedDurationDays,
             IsActive: offering.IsActive,
-            CreatedAt: offering.CreatedAt);
+            CreatedAt: offering.CreatedAt,
+            ProviderCoverageGovernorateIds: offering.ServiceProvider?.CoverageGovernorateIds ?? []);
 
     public static ServiceRequestDto ToDto(ServiceRequest request)
         => new(
@@ -71,7 +76,8 @@ public static class ServiceMapper
             RejectionReason: request.RejectionReason,
             CancellationReason: request.CancellationReason,
             CompletedAt: request.CompletedAt,
-            CreatedAt: request.CreatedAt);
+            CreatedAt: request.CreatedAt,
+            UpdatedAt: request.UpdatedAt);
 
     public static ServiceRequestStatusHistoryDto ToDto(ServiceRequestStatusHistory entry)
         => new(

@@ -31,6 +31,14 @@ public static class NotificationKeys
     public const string ServiceCancelledDetail = "service.detail.cancelled";
     public const string ServiceReviewAddedDetail = "service.detail.review_added";
 
+    // Service provider onboarding and management.
+    public const string ProviderApplicationInfoRequested = "msg.provider_application_info_requested";
+    public const string ProviderApplicationApproved = "msg.provider_application_approved";
+    public const string ProviderApplicationRejected = "msg.provider_application_rejected";
+    public const string ProviderSuspended = "msg.provider_suspended";
+    public const string ProviderReactivated = "msg.provider_reactivated";
+    public const string ProviderRevoked = "msg.provider_revoked";
+
     // Short-stay details.
     public const string ShortStayRequestedDetail = "shortstay.detail.requested";
     public const string ShortStayApprovedDetail = "shortstay.detail.approved";

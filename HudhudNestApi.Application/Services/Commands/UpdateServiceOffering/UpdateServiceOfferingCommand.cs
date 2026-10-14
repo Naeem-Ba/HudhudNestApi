@@ -47,6 +47,11 @@ public sealed class UpdateServiceOfferingCommandHandler
             request.Title, request.Description, request.BasePrice,
             request.CurrencyId, request.EstimatedDurationDays, DateTime.UtcNow);
 
+        // An offering can only go (back) on sale in a category the admin still approves for this
+        // provider; switching one off is always allowed.
+        if (request.IsActive && !offering.IsActive && !provider.IsApprovedFor(offering.Category))
+            throw new ForbiddenException("هذه الفئة غير معتمدة لك، فلا يمكن تفعيل العرض فيها.", "SERVICE_CATEGORY_NOT_APPROVED");
+
         if (request.IsActive) offering.Activate(DateTime.UtcNow);
         else offering.Deactivate(DateTime.UtcNow);
 

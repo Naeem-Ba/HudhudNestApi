@@ -51,6 +51,7 @@ public static class DependencyInjection
         // Scans for all AbstractValidator<T> in this assembly
         services.AddValidatorsFromAssembly(assembly);
         services.AddScoped<RefreshTokenReuseHandler>();
+        services.AddScoped<Services.ProviderOnboarding.ProviderAdminDetailBuilder>();
         services.AddScoped<IAuthenticationSessionIssuer, AuthenticationSessionIssuer>();
         services.AddScoped<SocialIdentityValidator>();
         services.AddScoped<SocialAccountResolver>();

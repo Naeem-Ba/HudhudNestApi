@@ -197,6 +197,32 @@ public static class NotificationCatalog
             "A new review ({rating}/5) was added for the service request ({number}).",
             "Für die Serviceanfrage ({number}) wurde eine neue Bewertung ({rating}/5) abgegeben."),
 
+        // ---- service provider onboarding and management ----
+        ["msg.provider_application_info_requested"] = new(
+            "طلب انضمامك كمزوّد خدمة ({ref}) يحتاج إلى معلومات إضافية: {message}",
+            "Your service provider application ({ref}) needs more information: {message}",
+            "Ihre Bewerbung als Dienstleister ({ref}) benötigt weitere Angaben: {message}"),
+        ["msg.provider_application_approved"] = new(
+            "تم اعتمادك مزوّد خدمة في هدهد نيست (الطلب {ref}). يمكنك الآن إضافة خدماتك من لوحة المزوّد.",
+            "You are now an approved HudhudNest service provider (application {ref}). You can add your services from the provider dashboard.",
+            "Sie sind jetzt ein zugelassener HudhudNest-Dienstleister (Bewerbung {ref}). Sie können Ihre Leistungen im Anbieter-Bereich anlegen."),
+        ["msg.provider_application_rejected"] = new(
+            "تم رفض طلب انضمامك كمزوّد خدمة ({ref}). السبب: {reason}",
+            "Your service provider application ({ref}) was rejected. Reason: {reason}",
+            "Ihre Bewerbung als Dienstleister ({ref}) wurde abgelehnt. Grund: {reason}"),
+        ["msg.provider_suspended"] = new(
+            "تم إيقاف ملف مزوّد الخدمة '{name}' مؤقتًا، ولن يظهر للعملاء أو يستقبل طلبات جديدة. السبب: {reason}",
+            "Your service provider profile '{name}' was suspended and will not be shown or receive new requests. Reason: {reason}",
+            "Ihr Dienstleisterprofil '{name}' wurde ausgesetzt und wird nicht angezeigt und erhält keine neuen Anfragen. Grund: {reason}"),
+        ["msg.provider_reactivated"] = new(
+            "أُعيد تفعيل ملف مزوّد الخدمة '{name}'، وأصبحت خدماتك المعتمدة ظاهرة للعملاء مجددًا.",
+            "Your service provider profile '{name}' is active again and your approved services are visible to customers.",
+            "Ihr Dienstleisterprofil '{name}' ist wieder aktiv und Ihre zugelassenen Leistungen sind wieder sichtbar."),
+        ["msg.provider_revoked"] = new(
+            "تم إلغاء اعتماد '{name}' كمزوّد خدمة في هدهد نيست. السبب: {reason}",
+            "The approval of '{name}' as a HudhudNest service provider was revoked. Reason: {reason}",
+            "Die Zulassung von '{name}' als HudhudNest-Dienstleister wurde widerrufen. Grund: {reason}"),
+
         // ---- details: short stay ----
         ["shortstay.detail.requested"] = new(
             "طلب حجز جديد لـ '{title}' من {from} إلى {to}.",

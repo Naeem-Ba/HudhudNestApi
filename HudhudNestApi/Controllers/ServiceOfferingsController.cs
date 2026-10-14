@@ -10,6 +10,7 @@ using HudhudNestApi.Application.Services.DTOs;
 using HudhudNestApi.Application.Services.Queries.GetActiveOfferingsByCategory;
 using HudhudNestApi.Application.Services.Queries.GetServiceCategories;
 using HudhudNestApi.Application.Services.Queries.GetServiceOfferingById;
+using HudhudNestApi.Application.Services.ProviderOnboarding;
 using HudhudNestApi.Domain.Services.Enums;
 
 namespace HudhudNestApi.Controllers;
@@ -34,15 +35,30 @@ public sealed class ServiceOfferingsController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>Bookable offerings per category, all 13 categories (zero included).</summary>
+    [HttpGet("categories/availability")]
+    [AllowAnonymous]
+    [EnableRateLimiting("public-read")]
+    [ProducesResponseType(typeof(IReadOnlyList<ServiceCategoryAvailabilityDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAvailability([FromQuery] int? governorateId, CancellationToken ct)
+        => Ok(await _mediator.Send(new GetServiceCategoryAvailabilityQuery(governorateId), ct));
+
     [HttpGet]
     [AllowAnonymous]
     [EnableRateLimiting("public-read")]
     [ProducesResponseType(typeof(IReadOnlyList<ServiceOfferingDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetByCategory([FromQuery] ServiceCategory category, CancellationToken ct)
+    public async Task<IActionResult> GetByCategory(
+        [FromQuery] ServiceCategory category, [FromQuery] int? governorateId, CancellationToken ct)
     {
-        var result = await _mediator.Send(new GetActiveOfferingsByCategoryQuery(category), ct);
+        var result = await _mediator.Send(new GetActiveOfferingsByCategoryQuery(category, governorateId), ct);
         return Ok(result);
     }
+
+    /// <summary>The calling provider's own offerings, active or not (empty for a non-provider).</summary>
+    [HttpGet("mine")]
+    [ProducesResponseType(typeof(IReadOnlyList<ServiceOfferingDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMine(CancellationToken ct)
+        => Ok(await _mediator.Send(new GetMyServiceOfferingsQuery(GetUserId()), ct));
 
     [HttpGet("{id:guid}")]
     [AllowAnonymous]

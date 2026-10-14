@@ -35,5 +35,6 @@ public sealed record PropertySummary(
     decimal? Latitude = null,
     decimal? Longitude = null,
     decimal? EstimatedValue = null,
-    string? CurrencyCode = null
+    string? CurrencyCode = null,
+    int? GovernorateId = null
 );

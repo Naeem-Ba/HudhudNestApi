@@ -107,6 +107,8 @@ public sealed class AppDbContext
     public DbSet<ServiceRequestStatusHistory> ServiceRequestStatusHistories => Set<ServiceRequestStatusHistory>();
     public DbSet<ServiceRequestDocument> ServiceRequestDocuments => Set<ServiceRequestDocument>();
     public DbSet<ServiceReview> ServiceReviews => Set<ServiceReview>();
+    public DbSet<ServiceProviderApplication> ServiceProviderApplications => Set<ServiceProviderApplication>();
+    public DbSet<ServiceProviderEvent> ServiceProviderEvents => Set<ServiceProviderEvent>();
 
     // Social Distribution Domain (Phase 3)
     public DbSet<SocialChannel> SocialChannels => Set<SocialChannel>();
@@ -162,6 +164,9 @@ public sealed class AppDbContext
 
         // Load all IEntityTypeConfiguration<T> classes from this assembly
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+
+        // SPA-000001… reference numbers for provider applications (see ServiceProviderApplication.Number).
+        builder.HasSequence<long>(Configurations.ServiceProviderApplicationConfiguration.NumberSequence);
 
         // -- Rename Identity tables to clean English names -------
         builder.Entity<ApplicationUser>().ToTable("Users");
@@ -227,6 +232,8 @@ public sealed class AppDbContext
         builder.Entity<ServiceRequestStatusHistory>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ServiceRequestDocument>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ServiceReview>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<ServiceProviderApplication>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<ServiceProviderEvent>().HasQueryFilter(e => !e.IsDeleted);
 
         // Social Distribution Domain (Phase 3)
         builder.Entity<SocialChannel>().HasQueryFilter(e => !e.IsDeleted);

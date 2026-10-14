@@ -115,6 +115,9 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IServiceReviewRepository, ServiceReviewRepository>();
         services.AddScoped<IServiceRequestDocumentRepository, ServiceRequestDocumentRepository>();
         services.AddScoped<IServiceRequestNumberGenerator, ServiceRequestNumberGenerator>();
+        services.AddScoped<IServiceProviderApplicationRepository, ServiceProviderApplicationRepository>();
+        services.AddScoped<IServiceProviderEventRepository, ServiceProviderEventRepository>();
+        services.AddScoped<IGovernorateLookup, GovernorateLookup>();
 
         // Short-Stay Accommodation subsystem
         services.AddScoped<IAccommodationTypeRepository, AccommodationTypeRepository>();

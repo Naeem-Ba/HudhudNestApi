@@ -208,6 +208,31 @@ public sealed class NotificationService : INotificationService
             messageId);
     }
 
+    public async Task NotifyServiceProviderUpdateAsync(
+        Guid recipientId,
+        NotificationType type,
+        NotificationText message,
+        Guid relatedEntityId,
+        CancellationToken ct = default)
+    {
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(relatedEntityId, "Related entity id is required.", nameof(relatedEntityId));
+
+        var lang = await LanguageOfAsync(recipientId, ct);
+
+        await PersistAndPushAsync(
+            New(recipientId, type,
+                NotificationCatalog.Render(message ?? NotificationText.Empty, lang),
+                relatedEntityId: relatedEntityId),
+            ct);
+
+        _logger.LogInformation(
+            "Service provider notification created. RecipientId={RecipientId}, Type={Type}, RelatedEntityId={RelatedEntityId}",
+            recipientId,
+            type,
+            relatedEntityId);
+    }
+
     public async Task NotifyAgencyInvitationReceivedAsync(
         Guid recipientId,
         Guid invitationId,

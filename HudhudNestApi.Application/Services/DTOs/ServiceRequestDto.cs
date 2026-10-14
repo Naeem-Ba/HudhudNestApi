@@ -26,4 +26,5 @@ public sealed record ServiceRequestDto(
     string? RejectionReason,
     string? CancellationReason,
     DateTime? CompletedAt,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    DateTime? UpdatedAt = null);

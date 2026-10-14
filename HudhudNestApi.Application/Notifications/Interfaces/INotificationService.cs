@@ -125,6 +125,18 @@ public interface INotificationService
         NotificationText detail,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Service provider onboarding and management: application decisions and provider status
+    /// changes. <paramref name="message"/> is rendered in the recipient's language; admin-written
+    /// text inside it (a reason, a question) is passed through verbatim.
+    /// </summary>
+    Task NotifyServiceProviderUpdateAsync(
+        Guid recipientId,
+        NotificationType type,
+        NotificationText message,
+        Guid relatedEntityId,
+        CancellationToken ct = default);
+
     Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(
         Guid userId,
         int page,

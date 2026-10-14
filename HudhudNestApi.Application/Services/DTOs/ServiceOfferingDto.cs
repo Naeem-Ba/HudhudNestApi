@@ -14,4 +14,5 @@ public sealed record ServiceOfferingDto(
     int? CurrencyId,
     int? EstimatedDurationDays,
     bool IsActive,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    IReadOnlyList<int>? ProviderCoverageGovernorateIds = null);
