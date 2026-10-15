@@ -55,11 +55,12 @@ the photo sizes and `ImagesCompactedAt`.
   amount is never converted for the owner). A body with no `currencyCode` (for example a status change) is not affected.
   Display-currency preferences and the crowdfunding project currency are separate settings and were not changed.
 * **The rates are fixed, not live.** Migration `PinSearchCurrencyRates` set them to the values of 2026-10-14: EUR 0.8922
-  per dollar (1 EUR = 1.1208 USD) and SYP 13,400 per dollar (market quotes 13,350-13,425). It runs once, so a rate set
-  afterwards through the admin endpoint is kept. To change them until a pricing feed exists, use `PUT /api/admin/currencies/{code}`.
-* **Syrian pound scale:** the new pound (two zeros removed, 1 January 2026) would be about 134 per dollar. 13,400 assumes listing
-  prices are still entered in the old scale. If they are entered in the new scale, set SYP to the new-scale rate, or every
-  conversion involving SYP is off by a factor of 100.
+  per dollar (1 EUR = 1.1208 USD). It runs once, so a rate set afterwards through the admin endpoint is kept. To change them
+  until a pricing feed exists, use `PUT /api/admin/currencies/{code}`.
+* **Syrian pound scale (decided 2026-10-15): the redenominated pound**, two zeros removed on 1 January 2026, about 134 per
+  dollar (the old-scale market quote was 13,350 to 13,425). `PinSearchCurrencyRates` first pinned 13,400; migration
+  `SetSypRateToRedenominatedScale` corrects it to 134, only while the stored rate is still above 1,000, so a value already set on
+  the new scale is kept. Listing prices in SYP must be entered on the same scale, otherwise every conversion is off by 100.
 
 ## 3. Search text
 
