@@ -15,4 +15,8 @@ public sealed record ServiceProviderDto(
     bool IsActive,
     double? AverageRating,
     int ReviewCount,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    ServiceProviderStatus Status = ServiceProviderStatus.Active,
+    string? StatusReason = null,
+    IReadOnlyList<ServiceCategory>? ApprovedCategories = null,
+    IReadOnlyList<int>? CoverageGovernorateIds = null);

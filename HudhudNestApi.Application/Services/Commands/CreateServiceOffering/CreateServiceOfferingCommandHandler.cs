@@ -28,6 +28,14 @@ public sealed class CreateServiceOfferingCommandHandler
         var provider = await _providers.GetByUserIdAsync(request.ActorUserId, ct)
             ?? throw new NotFoundException("لا يوجد ملف مزوّد خدمة لهذا المستخدم.");
 
+        // A provider sells only what an admin approved it for; the public catalog applies the
+        // same rule, this stops an unapproved offering from being created in the first place.
+        if (provider.Status == Domain.Services.Enums.ServiceProviderStatus.Revoked)
+            throw new ForbiddenException("تم إلغاء اعتمادك كمزوّد خدمة.", "SERVICE_PROVIDER_REVOKED");
+
+        if (!provider.IsApprovedFor(request.Category))
+            throw new ForbiddenException("هذه الفئة غير معتمدة لك. تواصل مع الإدارة لإضافتها.", "SERVICE_CATEGORY_NOT_APPROVED");
+
         var offering = ServiceOffering.Create(
             provider.Id,
             request.Category,

@@ -20,9 +20,13 @@ public sealed class ServiceRequestHandlerTests
 {
     private static readonly DateTime UtcNow = DateTime.UtcNow;
 
-    private static ServiceProvider MakeProvider(Guid? userId = null) =>
-        ServiceProvider.Create(
+    private static ServiceProvider MakeProvider(Guid? userId = null)
+    {
+        var provider = ServiceProvider.Create(
             userId ?? Guid.NewGuid(), null, "HudhudNest Verify", null, null, null, UtcNow);
+        provider.SetApprovedScope([ServiceCategory.Verification], [1], UtcNow);
+        return provider;
+    }
 
     private static ServiceOffering MakeOffering(Guid providerId, bool isActive = true)
     {

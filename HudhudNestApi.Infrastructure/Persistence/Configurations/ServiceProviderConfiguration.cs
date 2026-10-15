@@ -24,6 +24,31 @@ public sealed class ServiceProviderConfiguration : IEntityTypeConfiguration<Serv
             .HasMaxLength(30)
             .IsRequired();
 
+        builder.Property(p => p.Status)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(Domain.Services.Enums.ServiceProviderStatus.Active)
+            .HasSentinel((Domain.Services.Enums.ServiceProviderStatus)(-1))
+            .IsRequired();
+
+        builder.Property(p => p.StatusReason).HasMaxLength(2000);
+
+        // Admin-approved scope, same native-array approach as Plan.FeatureKeys.
+        builder.Property(p => p.ApprovedCategories)
+            .HasColumnType("text[]")
+            .HasDefaultValueSql("'{}'::text[]")
+            .IsRequired();
+        builder.Property(p => p.CoverageGovernorateIds)
+            .HasColumnType("integer[]")
+            .HasDefaultValueSql("'{}'::integer[]")
+            .IsRequired();
+
+        // Two admins changing the same provider at once get a 409, not a silent overwrite.
+        builder.Property<uint>("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsRowVersion();
+
         // One UserAccount runs at most one provider profile (see class remarks). Restrict:
         // an account with a provider profile must deactivate/transfer it first, matching the
         // Restrict convention used for every other UserAccount-owning relationship.

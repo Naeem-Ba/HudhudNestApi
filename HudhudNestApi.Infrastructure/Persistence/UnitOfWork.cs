@@ -38,6 +38,15 @@ public sealed class UnitOfWork : IUnitOfWork
             // submissions to the SAME invitation could otherwise hit.
             ["IX_ValuationOfficeResponses_InvitationId"] =
                 "تم إرسال رد على هذه الدعوة بالفعل من قبل عملية أخرى.",
+
+            // ServiceProviderApplicationConfiguration: one open application per account. The
+            // handler checks first; this is the backstop for two submissions racing.
+            ["IX_ServiceProviderApplications_OpenPerApplicant"] =
+                "لديك طلب انضمام مفتوح بالفعل. تابعه من صفحة الانضمام كمزوّد خدمة.",
+
+            // ServiceProviderConfiguration: one live provider profile per account.
+            ["IX_ServiceProviders_UserId"] =
+                "لهذا المستخدم ملف مزوّد خدمة بالفعل.",
         };
 
     private readonly AppDbContext _db;

@@ -35,6 +35,9 @@ public sealed class CreateServiceProviderCommandHandler
             request.ContactPhone,
             DateTime.UtcNow);
 
+        if (request.ApprovedCategories is { Count: > 0 } && request.CoverageGovernorateIds is { Count: > 0 })
+            provider.SetApprovedScope(request.ApprovedCategories, request.CoverageGovernorateIds, DateTime.UtcNow);
+
         await _providers.AddAsync(provider, ct);
         await _uow.SaveChangesAsync(ct);
 

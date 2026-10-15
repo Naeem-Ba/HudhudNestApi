@@ -15,9 +15,14 @@ namespace HudhudNestApi.Domain.Services.Entities;
 /// with it. If a provider profile needs to be associated with an agency, that is set here
 /// explicitly, once, by whoever creates the provider profile.
 ///
-/// A provider does not declare which categories it serves directly — that is derived from its
-/// active ServiceOfferings. Avoids a second place that can drift out of sync with what the
-/// provider is actually offering.
+/// <see cref="ApprovedCategories"/> and <see cref="CoverageGovernorateIds"/> are what an admin
+/// APPROVED, not what the provider currently sells: a provider may only publish offerings in an
+/// approved category, and only offerings whose category is still approved are shown publicly.
+/// What it actually sells is still its active ServiceOfferings.
+///
+/// <see cref="Status"/> is the provider's standing today (see <see cref="ServiceProviderStatus"/>);
+/// <see cref="IsActive"/> is kept as its stored, query-friendly shadow (Status == Active) and is
+/// only ever written by the methods below, so the two cannot disagree.
 /// </summary>
 public sealed class ServiceProvider : AuditableEntity
 {
@@ -49,8 +54,28 @@ public sealed class ServiceProvider : AuditableEntity
     public ServiceProviderVerificationLevel VerificationLevel { get; private set; } =
         ServiceProviderVerificationLevel.None;
 
-    /// <summary>Whether the provider is publicly listed and can receive new requests.</summary>
+    /// <summary>Whether the provider is publicly listed and can receive new requests (Status == Active).</summary>
     public bool IsActive { get; private set; } = true;
+
+    public ServiceProviderStatus Status { get; private set; } = ServiceProviderStatus.Active;
+
+    /// <summary>Why the provider was suspended or revoked. Cleared on reactivation.</summary>
+    public string? StatusReason { get; private set; }
+
+    /// <summary>ServiceCategory names an admin approved (see <see cref="ServiceCategorySet"/>).</summary>
+    public string[] ApprovedCategories { get; private set; } = [];
+
+    /// <summary>
+    /// Governorate ids the provider is approved to serve. Empty means no restriction was ever
+    /// recorded (profiles created before approvals existed); every approval sets at least one.
+    /// </summary>
+    public int[] CoverageGovernorateIds { get; private set; } = [];
+
+    public bool IsApprovedFor(ServiceCategory category) =>
+        ApprovedCategories.Contains(category.ToString());
+
+    public bool Covers(int? governorateId) =>
+        governorateId is null || CoverageGovernorateIds.Length == 0 || CoverageGovernorateIds.Contains(governorateId.Value);
 
     public static ServiceProvider Create(
         Guid userId,
@@ -112,15 +137,75 @@ public sealed class ServiceProvider : AuditableEntity
         UpdatedAt = utcNow;
     }
 
-    public void Activate(DateTime utcNow)
+    /// <summary>Admin-approved scope. Categories may be empty only for a legacy profile; approvals require one.</summary>
+    public void SetApprovedScope(
+        IEnumerable<ServiceCategory> categories, IEnumerable<int> governorateIds, DateTime utcNow)
     {
-        IsActive = true;
+        var names = ServiceCategorySet.ToNames(categories);
+        var governorates = ServiceCategorySet.NormalizeIds(governorateIds);
+
+        if (names.Length == 0)
+            throw new DomainException("اختر نوع خدمة معتمدًا واحدًا على الأقل.");
+
+        if (governorates.Length == 0)
+            throw new DomainException("اختر محافظة واحدة على الأقل لنطاق التغطية.");
+
+        ApprovedCategories = names;
+        CoverageGovernorateIds = governorates;
         UpdatedAt = utcNow;
     }
 
-    public void Deactivate(DateTime utcNow)
+    /// <summary>
+    /// Approval of a (new) application for this profile: back to Active, whatever it was. A
+    /// Revoked profile is re-activated here and only here.
+    /// </summary>
+    public void ActivateByApproval(DateTime utcNow)
     {
-        IsActive = false;
+        Status = ServiceProviderStatus.Active;
+        IsActive = true;
+        StatusReason = null;
         UpdatedAt = utcNow;
+    }
+
+    public void Suspend(string reason, DateTime utcNow)
+    {
+        if (Status != ServiceProviderStatus.Active)
+            throw new InvalidStateTransitionException("يمكن إيقاف المزوّد النشط فقط.");
+
+        Status = ServiceProviderStatus.Suspended;
+        IsActive = false;
+        StatusReason = RequireReason(reason);
+        UpdatedAt = utcNow;
+    }
+
+    public void Reactivate(DateTime utcNow)
+    {
+        if (Status != ServiceProviderStatus.Suspended)
+            throw new InvalidStateTransitionException(
+                "يمكن إعادة تفعيل المزوّد الموقوف فقط. المزوّد الملغى اعتماده يعود بطلب انضمام جديد.");
+
+        Status = ServiceProviderStatus.Active;
+        IsActive = true;
+        StatusReason = null;
+        UpdatedAt = utcNow;
+    }
+
+    public void Revoke(string reason, DateTime utcNow)
+    {
+        if (Status == ServiceProviderStatus.Revoked)
+            throw new InvalidStateTransitionException("اعتماد هذا المزوّد ملغى بالفعل.");
+
+        Status = ServiceProviderStatus.Revoked;
+        IsActive = false;
+        StatusReason = RequireReason(reason);
+        UpdatedAt = utcNow;
+    }
+
+    private static string RequireReason(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("السبب مطلوب.");
+
+        return reason.Trim();
     }
 }

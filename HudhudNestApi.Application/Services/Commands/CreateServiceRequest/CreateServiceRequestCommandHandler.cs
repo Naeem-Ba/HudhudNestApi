@@ -70,6 +70,12 @@ public sealed class CreateServiceRequestCommandHandler
         if (!provider.IsActive)
             throw new ConflictException("مزوّد هذه الخدمة غير نشط حالياً.");
 
+        if (!provider.IsApprovedFor(offering.Category))
+            throw new ConflictException("هذه الخدمة غير متاحة حالياً.");
+
+        if (!provider.Covers(property.GovernorateId))
+            throw new ConflictException("مزوّد هذه الخدمة لا يغطي محافظة هذا العقار.");
+
         var hasActive = await _requests.HasActiveRequestAsync(
             request.PropertyId, request.RequesterId, request.ServiceOfferingId, ct);
 

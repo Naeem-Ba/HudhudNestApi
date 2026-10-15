@@ -23,4 +23,7 @@ public interface IServiceRequestRepository
     /// user from spamming duplicate requests for the same service.</summary>
     Task<bool> HasActiveRequestAsync(
         Guid propertyId, Guid requesterId, Guid serviceOfferingId, CancellationToken ct = default);
+
+    /// <summary>Requests a provider still has to finish (not Completed/Reviewed/Rejected/Cancelled).</summary>
+    Task<int> CountOpenByServiceProviderIdAsync(Guid serviceProviderId, CancellationToken ct = default);
 }

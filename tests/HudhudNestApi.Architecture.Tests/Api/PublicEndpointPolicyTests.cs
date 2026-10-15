@@ -120,6 +120,9 @@ public sealed class PublicEndpointPolicyTests
             // compares services/providers before signing up, same rationale as the property
             // catalogue above.
             "ServiceOfferingsController.GetCategories",
+            // Category counts for the public /services page and "My services": numbers of bookable
+            // offerings per category, no provider or user data; read-limited like the endpoints above.
+            "ServiceOfferingsController.GetAvailability",
             "ServiceOfferingsController.GetByCategory",
             "ServiceOfferingsController.GetById",
             "ServiceProvidersController.GetReviews",

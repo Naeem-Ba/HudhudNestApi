@@ -61,6 +61,10 @@ public sealed class AcceptServiceRequestCommandHandler
         var fromStatus = serviceRequest.Status;
         var now = DateTime.UtcNow;
 
+        // Suspended or revoked: no new work. Already accepted requests can still be finished.
+        if (!provider.IsActive)
+            throw new ConflictException("ملف مزوّد الخدمة موقوف أو ملغى اعتماده، فلا يمكن قبول طلبات جديدة.");
+
         serviceRequest.Accept(request.QuotedPrice, request.QuotedPriceCurrencyId, request.ProviderNote, now);
 
         await _history.AddAsync(

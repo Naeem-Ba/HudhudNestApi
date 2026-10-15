@@ -49,4 +49,13 @@ public sealed class ServiceRequestRepository : IServiceRequestRepository
             r.Status != ServiceRequestStatus.Rejected &&
             r.Status != ServiceRequestStatus.Cancelled,
             ct);
+
+    public async Task<int> CountOpenByServiceProviderIdAsync(Guid serviceProviderId, CancellationToken ct = default)
+        => await _db.ServiceRequests.CountAsync(r =>
+            r.ServiceProviderId == serviceProviderId &&
+            r.Status != ServiceRequestStatus.Completed &&
+            r.Status != ServiceRequestStatus.Reviewed &&
+            r.Status != ServiceRequestStatus.Rejected &&
+            r.Status != ServiceRequestStatus.Cancelled,
+            ct);
 }

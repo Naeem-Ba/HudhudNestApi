@@ -32,7 +32,8 @@ public sealed class ServiceProvidersController : ControllerBase
     {
         var result = await _mediator.Send(
             new CreateServiceProviderCommand(
-                dto.UserId, dto.AgencyId, dto.DisplayName, dto.Bio, dto.ContactEmail, dto.ContactPhone),
+                dto.UserId, dto.AgencyId, dto.DisplayName, dto.Bio, dto.ContactEmail, dto.ContactPhone,
+                dto.ApprovedCategories, dto.CoverageGovernorateIds),
             ct);
 
         return CreatedAtAction(nameof(GetMine), result);
@@ -68,7 +69,9 @@ public sealed class ServiceProvidersController : ControllerBase
     public async Task<IActionResult> SetVerification(
         Guid id, [FromBody] SetServiceProviderVerifiedRequest dto, CancellationToken ct)
     {
-        var result = await _mediator.Send(new SetServiceProviderVerifiedCommand(id, dto.Level), ct);
+        Guid? adminId = Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var parsed) ? parsed : null;
+        var result = await _mediator.Send(
+            new SetServiceProviderVerifiedCommand(id, dto.Level, adminId, HttpContext.Connection.RemoteIpAddress?.ToString()), ct);
         return Ok(result);
     }
 
@@ -102,7 +105,9 @@ public sealed record CreateServiceProviderRequest(
     string DisplayName,
     string? Bio,
     string? ContactEmail,
-    string? ContactPhone);
+    string? ContactPhone,
+    IReadOnlyList<ServiceCategory>? ApprovedCategories = null,
+    IReadOnlyList<int>? CoverageGovernorateIds = null);
 
 public sealed record UpdateServiceProviderProfileRequest(
     string DisplayName,
