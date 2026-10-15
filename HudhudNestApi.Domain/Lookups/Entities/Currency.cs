@@ -29,7 +29,7 @@ public class Currency
 
     /// <summary>
     /// كم وحدة من هذه العملة = 1 دولار.
-    /// مثال: SYP/USD = 14000 (أي 14000 ليرة = 1 دولار)
+    /// مثال: SYP/USD = 134 (أي 134 ليرة جديدة = 1 دولار، بعد حذف الصفرين في 2026-01-01)
     /// </summary>
     public decimal ExchangeRateToUSD { get; private set; }
 

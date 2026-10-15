@@ -37,7 +37,7 @@ public static class CurrencySeed
                 nameEn: "Syrian Pound",
                 nameAr: "الليرة السورية",
                 symbol: "ل.س",
-                exchangeRateToUSD: 13400m,  // ثابت بسعر 2026-10-14 ريثما يُربط بمصدر تسعير خارجي
+                exchangeRateToUSD: 134m,    // ثابت بسعر 2026-10-14 بمقياس الليرة الجديدة (حذف صفرين، 2026-01-01) ريثما يُربط بمصدر تسعير خارجي
                 decimalPlaces: 0),           // الليرة السورية بدون كسور
 
             Currency.Create(
