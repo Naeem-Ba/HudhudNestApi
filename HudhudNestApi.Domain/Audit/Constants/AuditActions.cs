@@ -53,6 +53,11 @@ public static class AuditActions
     public const string CurrencyRateUpdatedByAdmin = "CurrencyRateUpdatedByAdmin";
     public const string AppReleaseDeletedByAdmin = "AppReleaseDeletedByAdmin";
 
+    // -- Admin dashboard: marketing offers ---------------------------------
+    public const string OfferCreatedByAdmin = "OfferCreatedByAdmin";
+    public const string OfferUpdatedByAdmin = "OfferUpdatedByAdmin";
+    public const string OfferStatusChangedByAdmin = "OfferStatusChangedByAdmin";
+
     // -- Admin dashboard: service provider onboarding and management -----
     public const string ServiceProviderApplicationInfoRequestedByAdmin = "ServiceProviderApplicationInfoRequestedByAdmin";
     public const string ServiceProviderApplicationApprovedByAdmin = "ServiceProviderApplicationApprovedByAdmin";

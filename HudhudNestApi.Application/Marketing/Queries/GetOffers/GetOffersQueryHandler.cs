@@ -1,7 +1,6 @@
 using MediatR;
 using HudhudNestApi.Application.Marketing.DTOs;
 using HudhudNestApi.Application.Marketing.Interfaces;
-using HudhudNestApi.Domain.Marketing.Entities;
 
 namespace HudhudNestApi.Application.Marketing.Queries.GetOffers;
 
@@ -18,26 +17,11 @@ public sealed class GetOffersQueryHandler
         CancellationToken cancellationToken)
     {
         var offers = await _offers.GetAllAsync(cancellationToken);
+        var nowUtc = DateTime.UtcNow;
 
         return offers
             .OrderByDescending(o => o.CreatedAt)
-            .Select(ToDto)
+            .Select(o => OfferAdminMapper.ToDto(o, nowUtc))
             .ToList();
     }
-
-    private static OfferAdminDto ToDto(Offer offer) => new(
-        offer.Id,
-        offer.Name,
-        offer.Description,
-        offer.DiscountType.ToString(),
-        offer.DiscountValue,
-        offer.TargetPlanTier,
-        offer.StartsAtUtc,
-        offer.EndsAtUtc,
-        offer.MaxRedemptions,
-        offer.RedeemedCount,
-        offer.Status.ToString(),
-        offer.Terms,
-        offer.CreatedAt,
-        offer.UpdatedAt);
 }

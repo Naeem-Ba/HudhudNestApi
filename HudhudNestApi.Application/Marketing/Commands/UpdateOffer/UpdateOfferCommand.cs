@@ -13,4 +13,6 @@ public sealed record UpdateOfferCommand(
     string? TargetPlanTier,
     DateTime? EndsAtUtc,
     int? MaxRedemptions,
-    string? Terms) : IRequest<bool>;
+    string? Terms,
+    Guid PerformedByUserId,
+    string? IpAddress) : IRequest<bool>;

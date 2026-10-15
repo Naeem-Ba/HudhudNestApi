@@ -144,8 +144,35 @@ public sealed class Offer : BaseEntity
         Status = OfferStatus.Active;
     }
 
+    /// <summary>
+    /// The admin "activate" action: <see cref="Activate"/> plus the business rules that stop
+    /// an offer from being switched on when it could never be shown anyway. Repeating it on an
+    /// offer that is already Active is a harmless no-op (a double click or a retried request
+    /// must not fail or change anything). An offer whose start date is still in the future may
+    /// be activated — it simply stays hidden from the public until that moment.
+    /// </summary>
+    public void ActivateAt(DateTime nowUtc)
+    {
+        if (Status == OfferStatus.Active)
+            return;
+
+        if (Status == OfferStatus.Ended)
+            throw new DomainException("لا يمكن إعادة تفعيل عرض منتهٍ.");
+
+        if (EndsAtUtc.HasValue && EndsAtUtc.Value <= nowUtc)
+            throw new DomainException("لا يمكن تفعيل عرض انتهى تاريخه. عدّل تاريخ الانتهاء أولًا.");
+
+        if (MaxRedemptions.HasValue && RedeemedCount >= MaxRedemptions.Value)
+            throw new DomainException("لا يمكن تفعيل عرض استُنفد عدد مستفيديه. ارفع الحد الأقصى أولًا.");
+
+        Status = OfferStatus.Active;
+    }
+
     public void Pause()
     {
+        if (Status == OfferStatus.Paused)
+            return;
+
         if (Status != OfferStatus.Active)
             throw new DomainException("لا يمكن إيقاف عرض غير مفعّل مؤقتًا إلا إذا كان نشطًا.");
 

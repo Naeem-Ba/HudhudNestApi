@@ -110,4 +110,110 @@ public sealed class OfferTests
 
         Assert.Equal(200, offer.MaxRedemptions);
     }
+
+    // ── ActivateAt: the admin "activate" action and its business rules ──────────────────────
+
+    [Fact]
+    public void ActivateAt_FromDraft_BecomesActive()
+    {
+        var offer = Offer.Create("عرض", OfferDiscountType.Percentage, 20m, Now);
+
+        offer.ActivateAt(Now);
+
+        Assert.Equal(OfferStatus.Active, offer.Status);
+    }
+
+    [Fact]
+    public void ActivateAt_WhenAlreadyActive_IsANoOp()
+    {
+        var offer = Offer.Create("عرض", OfferDiscountType.Percentage, 20m, Now);
+        offer.ActivateAt(Now);
+
+        offer.ActivateAt(Now);
+
+        Assert.Equal(OfferStatus.Active, offer.Status);
+    }
+
+    [Fact]
+    public void ActivateAt_FromPaused_BecomesActiveAgain()
+    {
+        var offer = Offer.Create("عرض", OfferDiscountType.Percentage, 20m, Now);
+        offer.ActivateAt(Now);
+        offer.Pause();
+
+        offer.ActivateAt(Now);
+
+        Assert.Equal(OfferStatus.Active, offer.Status);
+    }
+
+    [Fact]
+    public void ActivateAt_WhenEnded_Throws()
+    {
+        var offer = Offer.Create("عرض", OfferDiscountType.Percentage, 20m, Now);
+        offer.End();
+
+        Assert.Throws<DomainException>(() => offer.ActivateAt(Now));
+        Assert.Equal(OfferStatus.Ended, offer.Status);
+    }
+
+    [Fact]
+    public void ActivateAt_AfterTheEndDate_ThrowsAndStaysDraft()
+    {
+        var offer = Offer.Create(
+            "عرض منتهٍ", OfferDiscountType.Percentage, 20m, Now, endsAtUtc: Now.AddDays(10));
+
+        var ex = Assert.Throws<DomainException>(() => offer.ActivateAt(Now.AddDays(10)));
+
+        Assert.Contains("انتهى", ex.Message);
+        Assert.Equal(OfferStatus.Draft, offer.Status);
+    }
+
+    [Fact]
+    public void ActivateAt_BeforeTheStartDate_IsAllowedButNotYetRedeemable()
+    {
+        var offer = Offer.Create(
+            "عرض قادم", OfferDiscountType.Percentage, 20m, Now.AddDays(5));
+
+        offer.ActivateAt(Now);
+
+        Assert.Equal(OfferStatus.Active, offer.Status);
+        Assert.False(offer.IsCurrentlyRedeemable(Now));
+        Assert.True(offer.IsCurrentlyRedeemable(Now.AddDays(5)));
+    }
+
+    [Fact]
+    public void ActivateAt_WhenTheCapIsAlreadyReached_Throws()
+    {
+        var offer = Offer.Create(
+            "عرض مستنفد", OfferDiscountType.Percentage, 20m, Now, maxRedemptions: 3);
+        // RedeemedCount is only ever moved by the repository's atomic UPDATE; reflection stands
+        // in for three earlier redemptions here.
+        typeof(Offer).GetProperty(nameof(Offer.RedeemedCount))!.SetValue(offer, 3);
+
+        var ex = Assert.Throws<DomainException>(() => offer.ActivateAt(Now));
+
+        Assert.Contains("استُنفد", ex.Message);
+        Assert.Equal(OfferStatus.Draft, offer.Status);
+    }
+
+    [Fact]
+    public void Pause_WhenAlreadyPaused_IsANoOp()
+    {
+        var offer = Offer.Create("عرض", OfferDiscountType.Percentage, 20m, Now);
+        offer.ActivateAt(Now);
+        offer.Pause();
+
+        offer.Pause();
+
+        Assert.Equal(OfferStatus.Paused, offer.Status);
+    }
+
+    [Fact]
+    public void Pause_WhenEnded_Throws()
+    {
+        var offer = Offer.Create("عرض", OfferDiscountType.Percentage, 20m, Now);
+        offer.End();
+
+        Assert.Throws<DomainException>(() => offer.Pause());
+    }
 }

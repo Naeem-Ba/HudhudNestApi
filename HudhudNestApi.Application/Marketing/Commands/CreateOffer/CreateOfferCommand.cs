@@ -14,4 +14,6 @@ public sealed record CreateOfferCommand(
     string? TargetPlanTier,
     DateTime? EndsAtUtc,
     int? MaxRedemptions,
-    string? Terms) : IRequest<Guid>;
+    string? Terms,
+    Guid PerformedByUserId,
+    string? IpAddress) : IRequest<Guid>;

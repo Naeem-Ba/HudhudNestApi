@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +9,6 @@ using HudhudNestApi.Application.Marketing.Commands.UpdateOffer;
 using HudhudNestApi.Application.Marketing.DTOs;
 using HudhudNestApi.Application.Marketing.Queries.GetActiveOffer;
 using HudhudNestApi.Application.Marketing.Queries.GetOffers;
-using HudhudNestApi.Domain.Marketing.Enums;
 using HudhudNestApi.Domain.Users.Constants;
 
 namespace HudhudNestApi.Controllers;
@@ -68,7 +68,9 @@ public sealed class OffersController : ControllerBase
                 dto.TargetPlanTier,
                 dto.EndsAtUtc,
                 dto.MaxRedemptions,
-                dto.Terms),
+                dto.Terms,
+                GetUserId(),
+                GetIpAddress()),
             ct);
 
         return CreatedAtAction(nameof(GetAll), new { id }, new { id });
@@ -95,31 +97,61 @@ public sealed class OffersController : ControllerBase
                 dto.TargetPlanTier,
                 dto.EndsAtUtc,
                 dto.MaxRedemptions,
-                dto.Terms),
+                dto.Terms,
+                GetUserId(),
+                GetIpAddress()),
             ct);
 
         return updated ? NoContent() : NotFound();
     }
 
-    /// <summary>Body is the bare enum name: "Active" | "Paused" | "Ended".</summary>
+    /// <summary>
+    /// Body: <c>{ "status": "Active" | "Paused" | "Ended" }</c> as application/json. Returns the
+    /// offer as it is now (including <c>isPubliclyVisible</c>). A transition the lifecycle does
+    /// not allow (re-activating an ended offer, activating an expired one) answers 400 with an
+    /// Arabic <c>message</c>; repeating the current status is a harmless 200.
+    /// </summary>
     [HttpPut("{id:guid}/status")]
     [Authorize(Roles = RoleNames.Admin)]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [Consumes("application/json")]
+    [ProducesResponseType(typeof(OfferAdminDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status415UnsupportedMediaType)]
     public async Task<IActionResult> SetStatus(
         Guid id,
-        [FromBody] OfferStatus status,
+        [FromBody] SetOfferStatusRequest request,
         CancellationToken ct)
     {
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
+
+        if (request.Status is not { } status || !Enum.IsDefined(status))
+            return BadRequest(new { message = "حالة العرض غير معروفة. القيم المسموحة: Active أو Paused أو Ended." });
+
         try
         {
-            var updated = await _sender.Send(new SetOfferStatusCommand(id, status), ct);
-            return updated ? NoContent() : NotFound();
+            var offer = await _sender.Send(
+                new SetOfferStatusCommand(id, status, GetUserId(), GetIpAddress()), ct);
+            return offer is null ? NotFound() : Ok(offer);
         }
         catch (ArgumentOutOfRangeException ex)
         {
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    private Guid GetUserId()
+    {
+        var raw = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub")
+            ?? User.FindFirstValue("userId");
+
+        if (Guid.TryParse(raw, out var id))
+            return id;
+
+        throw new UnauthorizedAccessException("Missing or invalid authenticated user id claim.");
+    }
+
+    private string? GetIpAddress() => HttpContext.Connection.RemoteIpAddress?.ToString();
 }
