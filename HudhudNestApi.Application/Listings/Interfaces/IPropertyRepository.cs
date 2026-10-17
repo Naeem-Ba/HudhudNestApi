@@ -125,6 +125,10 @@ public interface IPropertyRepository
     // Update — repository just tracks, UnitOfWork saves
     void Update(Property property);
 
+    /// <summary>Makes the property's amenity set exactly <paramref name="amenityIds"/> (adds the missing
+    /// links, removes the others). Queued on the unit of work; nothing is saved here.</summary>
+    Task SetAmenitiesAsync(Guid propertyId, IReadOnlyCollection<Guid> amenityIds, CancellationToken ct = default);
+
     // Delete — soft delete via MarkAsDeleted() domain method
     void Remove(Property property);
 }

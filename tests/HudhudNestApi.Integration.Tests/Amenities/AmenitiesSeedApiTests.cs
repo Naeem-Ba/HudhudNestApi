@@ -83,4 +83,49 @@ public sealed class AmenitiesSeedApiTests : IClassFixture<AppUpdateApiTestFactor
         Assert.Contains(list, a => a.GetProperty("iconName").GetString() == "wifi"
                                    && !string.IsNullOrWhiteSpace(a.GetProperty("name").GetString()));
     }
+
+    [Fact(DisplayName = "Editing a listing replaces its amenities: added, kept and removed links all land in the database")]
+    public async Task SetAmenities_ReplacesTheStoredSet()
+    {
+        await WithContextAsync(AmenitiesSeed.SeedAsync);
+        var owner = await _factory.SeedUserAsync("amenity-owner");
+
+        Guid propertyId = Guid.Empty;
+        List<Guid> ids = [];
+        await WithContextAsync(async ctx =>
+        {
+            ids = await ctx.Amenities.OrderBy(a => a.Name).Select(a => a.Id).Take(3).ToListAsync();
+            var property = HudhudNestApi.Domain.Listings.Entities.Property.Create(
+                "شقة", "وصف الشقة للاختبار", owner.Id, HudhudNestApi.Domain.Enums.ListingType.ForRent);
+            ctx.Properties.Add(property);
+            await ctx.SaveChangesAsync();
+            propertyId = property.Id;
+        });
+
+        async Task Apply(params Guid[] wanted)
+        {
+            using var scope = _factory.Services.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<HudhudNestApi.Application.Listings.Interfaces.IPropertyRepository>();
+            var uow = scope.ServiceProvider.GetRequiredService<HudhudNestApi.Application.Common.Interfaces.IUnitOfWork>();
+            await repo.SetAmenitiesAsync(propertyId, wanted);
+            await uow.SaveChangesAsync();
+        }
+
+        async Task<List<Guid>> Stored()
+        {
+            List<Guid> result = [];
+            await WithContextAsync(async ctx =>
+                result = await ctx.PropertyAmenities.Where(pa => pa.PropertyId == propertyId).Select(pa => pa.AmenityId).ToListAsync());
+            return result;
+        }
+
+        await Apply(ids[0], ids[1]);
+        Assert.Equal(new[] { ids[0], ids[1] }.Order(), (await Stored()).Order());
+
+        await Apply(ids[1], ids[2]);
+        Assert.Equal(new[] { ids[1], ids[2] }.Order(), (await Stored()).Order());
+
+        await Apply();
+        Assert.Empty(await Stored());
+    }
 }

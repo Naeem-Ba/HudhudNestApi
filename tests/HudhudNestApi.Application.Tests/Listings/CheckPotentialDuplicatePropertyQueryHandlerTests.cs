@@ -171,6 +171,7 @@ public sealed class CheckPotentialDuplicatePropertyQueryHandlerTests
             CancellationToken ct = default)
             => throw new NotImplementedException();
 
+        public Task SetAmenitiesAsync(Guid propertyId, IReadOnlyCollection<Guid> amenityIds, CancellationToken ct = default) => throw new NotImplementedException();
         public void Update(Property property) => throw new NotImplementedException();
 
         public void Remove(Property property) => throw new NotImplementedException();

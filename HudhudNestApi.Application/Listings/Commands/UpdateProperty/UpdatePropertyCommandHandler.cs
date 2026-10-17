@@ -148,6 +148,24 @@ public sealed class UpdatePropertyCommandHandler
         // PUT body, and the listing lifetime may only move through publishing or a paid, admin-
         // confirmed extension (security audit 2026-10-03, F-01).
 
+        if (request.AmenityIds is not null)
+        {
+            var distinct = request.AmenityIds.Distinct().ToList();
+            var known = (await _lookups.GetAmenitiesAsync(cancellationToken))
+                .Select(a => a.Id)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (distinct.Any(id => !known.Contains(id.ToString())))
+            {
+                throw new ValidationException(new[]
+                {
+                    new ValidationFailure("AmenityIds", "Unknown amenity.")
+                });
+            }
+
+            await _repo.SetAmenitiesAsync(property.Id, distinct, cancellationToken);
+        }
+
         if (request.Status.HasValue)
             property.ChangeStatus(request.Status.Value);
 
