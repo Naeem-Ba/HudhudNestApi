@@ -367,6 +367,20 @@ public sealed class PropertyRepository : IPropertyRepository
         _db.Properties.Update(property);
     }
 
+    public async Task SetAmenitiesAsync(Guid propertyId, IReadOnlyCollection<Guid> amenityIds, CancellationToken ct = default)
+    {
+        var wanted = amenityIds.ToHashSet();
+        var current = await _db.PropertyAmenities
+            .Where(pa => pa.PropertyId == propertyId)
+            .ToListAsync(ct);
+
+        _db.PropertyAmenities.RemoveRange(current.Where(pa => !wanted.Contains(pa.AmenityId)));
+
+        var have = current.Select(pa => pa.AmenityId).ToHashSet();
+        foreach (var amenityId in wanted.Where(id => !have.Contains(id)))
+            _db.PropertyAmenities.Add(new PropertyAmenity { PropertyId = propertyId, AmenityId = amenityId });
+    }
+
     public void Remove(Property property)
     {
         // Soft delete is handled in AppDbContext.SaveChangesAsync()

@@ -77,6 +77,11 @@ public sealed record UpdatePropertyCommand(
     DateTime? ExpiresAt,           // Ignored by the handler — see UpdatePropertyCommandHandler (F-01)
 
     // Publishing — triggers domain methods Publish()/Unpublish()
-    bool? IsPublished
+    bool? IsPublished,
+
+    // Amenities (the "المرافق" checkboxes). null = leave the stored set alone; a list (even an empty
+    // one) replaces it. The create path accepted these but the edit path silently dropped them, so
+    // amenities picked while editing were never saved.
+    List<Guid>? AmenityIds = null
 ) : IRequest<bool>;
 
