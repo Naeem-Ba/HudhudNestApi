@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Moq;
+using HudhudNestApi.Application.Bookings.Interfaces;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Commands.DeleteProperty;
 using HudhudNestApi.Application.Listings.Events;
@@ -19,6 +20,8 @@ namespace HudhudNestApi.Application.Tests.Listings;
 /// </summary>
 public sealed class DeletePropertyCommandHandlerTests
 {
+    private static readonly Mock<IListingVisitCleanup> _visitCleanup = new();
+
     [Fact]
     public async Task Handle_DeletesEachImageFromStorage_ByPublicId()
     {
@@ -63,6 +66,7 @@ public sealed class DeletePropertyCommandHandlerTests
             storage.Object,
             uow.Object,
             auditLogs.Object,
+            _visitCleanup.Object,
             publisher.Object,
             logger.Object);
 
@@ -216,6 +220,7 @@ public sealed class DeletePropertyCommandHandlerTests
             storage.Object,
             uow.Object,
             auditLogs.Object,
+            _visitCleanup.Object,
             publisher.Object,
             logger.Object);
 

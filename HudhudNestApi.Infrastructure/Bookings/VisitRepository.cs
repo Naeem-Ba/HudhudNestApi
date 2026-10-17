@@ -61,6 +61,15 @@ public sealed class VisitRepository : IVisitRepository
             .OrderByDescending(v => v.CreatedAt)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<VisitRequest>> GetOpenByPropertyIdAsync(
+        Guid propertyId, CancellationToken ct = default)
+        => await _db.VisitRequests
+            .Where(v => v.PropertyId == propertyId &&
+                        (v.Status == VisitStatus.Pending ||
+                         v.Status == VisitStatus.Confirmed ||
+                         v.Status == VisitStatus.RescheduleProposed))
+            .ToListAsync(ct);
+
     public async Task<bool> HasCompletedVisitAsync(
     Guid propertyId,
     Guid requesterId,

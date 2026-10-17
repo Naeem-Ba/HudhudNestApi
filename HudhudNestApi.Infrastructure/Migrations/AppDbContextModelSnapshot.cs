@@ -1252,6 +1252,16 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<DateTime?>("TakenDownAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("TakenDownByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TakenDownReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1360,6 +1370,10 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("PropertyTypeId");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("TakenDownAt")
+                        .HasDatabaseName("IX_Properties_TakenDownAt")
+                        .HasFilter("\"TakenDownAt\" IS NOT NULL");
 
                     b.HasIndex("CountryCode", "City");
 

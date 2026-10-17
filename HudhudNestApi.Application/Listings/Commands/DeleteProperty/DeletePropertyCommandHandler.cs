@@ -1,6 +1,7 @@
 ﻿using System.Text.Json;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using HudhudNestApi.Application.Bookings.Interfaces;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Events;
 using HudhudNestApi.Application.Listings.Interfaces;
@@ -17,6 +18,7 @@ public sealed class DeletePropertyCommandHandler
     private readonly IMediaStorageService _storage;
     private readonly IUnitOfWork _uow;
     private readonly IAuditLogService _auditLogs;
+    private readonly IListingVisitCleanup _visitCleanup;
     private readonly IPublisher _publisher;
     private readonly ILogger<DeletePropertyCommandHandler> _logger;
 
@@ -27,6 +29,7 @@ public sealed class DeletePropertyCommandHandler
         IMediaStorageService storage,
         IUnitOfWork uow,
         IAuditLogService auditLogs,
+        IListingVisitCleanup visitCleanup,
         IPublisher publisher,
         ILogger<DeletePropertyCommandHandler> logger)
     {
@@ -36,6 +39,7 @@ public sealed class DeletePropertyCommandHandler
         _storage = storage;
         _uow = uow;
         _auditLogs = auditLogs;
+        _visitCleanup = visitCleanup;
         _publisher = publisher;
         _logger = logger;
     }
@@ -94,6 +98,17 @@ public sealed class DeletePropertyCommandHandler
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to publish PropertyDeletedEvent after deleting property {PropertyId}.", property.Id);
+        }
+
+        // Open visit requests would otherwise stay on both sides' screens for a listing nobody can open any
+        // more (QA Phase 8, P8-D08). Best-effort like everything after the commit: the delete has happened.
+        try
+        {
+            await _visitCleanup.CancelOpenVisitsAsync(property.Id, property.Title, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Failed to cancel the open visits of the deleted property {PropertyId}.", property.Id);
         }
 
         // Best-effort, deliberately outside the transaction above: the property row is

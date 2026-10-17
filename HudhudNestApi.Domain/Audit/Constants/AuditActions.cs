@@ -40,6 +40,8 @@ public static class AuditActions
     public const string ListingFeaturedByAdmin = "ListingFeaturedByAdmin";
     public const string ListingUnfeaturedByAdmin = "ListingUnfeaturedByAdmin";
     public const string ListingExtendedByAdmin = "ListingExtendedByAdmin";
+    public const string ListingTakenDownByAdmin = "ListingTakenDownByAdmin";
+    public const string ListingRestoredByAdmin = "ListingRestoredByAdmin";
 
     // -- Admin dashboard: valuation module (Stage 8) -----------------------
     public const string ValuationOfficeFlaggedForReviewByAdmin = "ValuationOfficeFlaggedForReviewByAdmin";

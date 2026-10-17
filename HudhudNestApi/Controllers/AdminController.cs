@@ -220,6 +220,49 @@ public sealed class AdminController : ControllerBase
         return ToActionResult(result);
     }
 
+    // POST /api/admin/properties/{propertyId}/take-down  { reason }
+    [HttpPost("properties/{propertyId:guid}/take-down")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> TakeDownListing(
+        Guid propertyId,
+        [FromBody] TakeDownListingRequest request,
+        CancellationToken ct)
+    {
+        var actorId = GetCurrentUserId();
+        if (actorId is null)
+            return Unauthorized();
+
+        var result = await _listings.TakeDownListingAsync(
+            propertyId, request.Reason, actorId.Value, GetClientIp(), ct);
+
+        return ToActionResult(result);
+    }
+
+    // POST /api/admin/properties/{propertyId}/restore  { reason? }
+    [HttpPost("properties/{propertyId:guid}/restore")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RestoreListing(
+        Guid propertyId,
+        [FromBody] RestoreListingRequest request,
+        CancellationToken ct)
+    {
+        var actorId = GetCurrentUserId();
+        if (actorId is null)
+            return Unauthorized();
+
+        var result = await _listings.RestoreListingAsync(
+            propertyId, request.Reason, actorId.Value, GetClientIp(), ct);
+
+        return ToActionResult(result);
+    }
+
     // GET /api/admin/roles
     [HttpGet("roles")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -443,6 +486,10 @@ public sealed record CancelSubscriptionRequest(string? Reason);
 public sealed record FeatureListingRequest(int? Days, string? Reason);
 
 public sealed record UnfeatureListingRequest(string? Reason);
+
+public sealed record TakeDownListingRequest(string? Reason);
+
+public sealed record RestoreListingRequest(string? Reason);
 
 public sealed record ExtendListingRequest(int Days, string? Reason);
 

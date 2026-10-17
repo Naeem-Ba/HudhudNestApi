@@ -132,6 +132,18 @@ public static class NotificationCatalog
             "ينتهي نشر إعلانك '{title}' خلال {days} يوماً. مدِّده للإبقاء عليه ظاهراً.",
             "Your listing '{title}' stops being published in {days} days. Extend it to keep it visible.",
             "Die Veröffentlichung Ihrer Anzeige '{title}' endet in {days} Tagen. Verlängern Sie sie, damit sie sichtbar bleibt."),
+        ["msg.listing_taken_down"] = new(
+            "أوقفت الإدارة إعلانك '{title}' ولم يعد ظاهراً للعموم. السبب: {detail}",
+            "An administrator took your listing '{title}' down and it is no longer public. Reason: {detail}",
+            "Ein Administrator hat Ihre Anzeige '{title}' offline genommen, sie ist nicht mehr öffentlich. Grund: {detail}"),
+        ["msg.listing_restored"] = new(
+            "أعادت الإدارة نشر إعلانك '{title}' وهو ظاهر للعموم من جديد.",
+            "An administrator restored your listing '{title}' and it is public again.",
+            "Ein Administrator hat Ihre Anzeige '{title}' wiederhergestellt, sie ist wieder öffentlich."),
+        ["msg.visit_cancelled_by_host"] = new(
+            "أُلغي طلب زيارتك للعقار '{title}' لأن الإعلان لم يعد متاحاً. {detail}",
+            "Your visit request for the property '{title}' was cancelled because the listing is no longer available. {detail}",
+            "Ihre Besichtigungsanfrage für die Immobilie '{title}' wurde storniert, da die Anzeige nicht mehr verfügbar ist. {detail}"),
         ["msg.listing_expired"] = new(
             "انتهت مدة نشر إعلانك '{title}' ولم يعد ظاهراً في نتائج البحث. أمامك {days} يوماً لتمديده قبل حذفه.",
             "Your listing '{title}' is no longer published and no longer appears in search results. You have {days} days to extend it before it is deleted.",
@@ -160,6 +172,8 @@ public static class NotificationCatalog
             "طلب الزيارة بتاريخ {at}.{note}", "Visit request for {at}.{note}", "Besichtigungsanfrage für den {at}.{note}"),
         ["visit.detail.cancelled"] = new(
             "{name} — الموعد الملغى: {at}.", "{name} — cancelled time: {at}.", "{name} — stornierter Termin: {at}."),
+        ["visit.detail.cancelled_listing_removed"] = new(
+            "الموعد الملغى: {at}.", "Cancelled time: {at}.", "Stornierter Termin: {at}."),
         ["visit.detail.proposed"] = new(
             "الموعد الجديد المقترح: {at}.{note}", "Proposed new time: {at}.{note}", "Vorgeschlagener neuer Termin: {at}.{note}"),
         ["visit.detail.reschedule_accepted"] = new(

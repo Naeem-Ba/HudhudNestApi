@@ -1318,4 +1318,93 @@ public sealed class CreatePropertyCommandValidatorTests
     }
 
     #endregion
+
+    // ══════════════════════════════════════════════════════════════════
+    // QA Phase 8, P8-D01: values the database cannot store used to pass the
+    // validator and come back as a 500.
+    // ══════════════════════════════════════════════════════════════════
+    #region Database-safe input (P8-D01)
+
+    [Fact]
+    [Trait("Category", "PropertyValidator")]
+    public async Task UnknownPropertyType_FailsWithAValidationError()
+    {
+        var cmd = ValidCommand() with { PropertyTypeId = 9999 };
+
+        (await _validator.TestValidateAsync(cmd)).ShouldHaveValidationErrorFor(x => x.PropertyTypeId);
+    }
+
+    [Theory]
+    [Trait("Category", "PropertyValidator")]
+    [InlineData(1_000_000_000_000)]
+    [InlineData(1_000_000_000_000_000)]
+    public async Task PriceAtOrAboveTheCap_Fails(long amount)
+    {
+        var cmd = ValidCommand() with { ColdRent = null, WarmRent = null, ListingType = ListingType.ForSale, PurchasePrice = amount, LegalStatus = LegalStatusType.GreenDeed };
+
+        (await _validator.TestValidateAsync(cmd)).ShouldHaveValidationErrorFor(x => x.PurchasePrice);
+    }
+
+    [Fact]
+    [Trait("Category", "PropertyValidator")]
+    public async Task RentDepositAndCostsAboveTheCap_Fail()
+    {
+        var cmd = ValidCommand() with { ColdRent = 2_000_000_000_000m, WarmRent = 3_000_000_000_000m, Deposit = 2_000_000_000_000m, AdditionalCosts = 2_000_000_000_000m };
+        var result = await _validator.TestValidateAsync(cmd);
+
+        result.ShouldHaveValidationErrorFor(x => x.ColdRent);
+        result.ShouldHaveValidationErrorFor(x => x.WarmRent);
+        result.ShouldHaveValidationErrorFor(x => x.Deposit);
+        result.ShouldHaveValidationErrorFor(x => x.AdditionalCosts);
+    }
+
+    [Fact]
+    [Trait("Category", "PropertyValidator")]
+    public async Task AreaPastTheColumnPrecision_Fails()
+    {
+        var cmd = ValidCommand() with { Area = 100_000_000m };
+
+        (await _validator.TestValidateAsync(cmd)).ShouldHaveValidationErrorFor(x => x.Area);
+    }
+
+    [Fact]
+    [Trait("Category", "PropertyValidator")]
+    public async Task ARealisticLargePrice_StillPasses()
+    {
+        var cmd = ValidCommand() with { ColdRent = 900_000_000_000m, WarmRent = 900_000_000_000m, Deposit = 0m };
+
+        (await _validator.TestValidateAsync(cmd)).ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Theory]
+    [Trait("Category", "PropertyValidator")]
+    [InlineData("Title")]
+    [InlineData("Description")]
+    [InlineData("City")]
+    [InlineData("Street")]
+    [InlineData("Region")]
+    [InlineData("PostalCode")]
+    [InlineData("DistrictText")]
+    [InlineData("NeighborhoodText")]
+    public async Task NulCharacterInText_Fails(string field)
+    {
+        var bad = "abc\0def";
+        var cmd = field switch
+        {
+            "Title" => ValidCommand() with { Title = bad },
+            "Description" => ValidCommand() with { Description = bad },
+            "City" => ValidCommand() with { City = bad },
+            "Street" => ValidCommand() with { Street = bad },
+            "Region" => ValidCommand() with { Region = bad },
+            "PostalCode" => ValidCommand() with { PostalCode = bad },
+            "DistrictText" => ValidCommand() with { DistrictText = bad },
+            _ => ValidCommand() with { NeighborhoodText = bad },
+        };
+
+        var result = await _validator.TestValidateAsync(cmd);
+
+        Assert.Contains(result.Errors, e => e.PropertyName == field && e.ErrorCode == "INVALID_CHARACTER");
+    }
+
+    #endregion
 }

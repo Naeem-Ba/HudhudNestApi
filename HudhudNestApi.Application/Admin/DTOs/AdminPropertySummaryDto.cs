@@ -16,4 +16,9 @@ public sealed class AdminPropertySummaryDto
     public bool IsFeatured { get; init; }
     public DateTime? FeaturedUntil { get; init; }
     public DateTime CreatedAt { get; init; }
+
+    /// <summary>True while an administrator's take-down is in force (QA Phase 8, P8-D10).</summary>
+    public bool IsTakenDown { get; init; }
+    public DateTime? TakenDownAt { get; init; }
+    public string? TakenDownReason { get; init; }
 }

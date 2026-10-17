@@ -80,9 +80,19 @@ public sealed class CloudinaryMediaStorageService : IMediaStorageService
             Overwrite = false
         };
 
-        var result = await _cloudinary.UploadAsync(
-            uploadParams,
-            cancellationToken);
+        ImageUploadResult result;
+        try
+        {
+            result = await _cloudinary.UploadAsync(
+                uploadParams,
+                cancellationToken);
+        }
+        catch (Exception ex) when (IsProviderUnreachable(ex, cancellationToken))
+        {
+            // The provider is down or timed out. This escaped as an unhandled 500 with the exception text
+            // (QA Phase 8, P8-D06); report it as a failed upload instead, like a provider-side error.
+            return MediaUploadResult.Failed(ProviderUnavailableMessage);
+        }
 
         if (result.Error is not null)
         {
@@ -100,6 +110,17 @@ public sealed class CloudinaryMediaStorageService : IMediaStorageService
             result.SecureUrl.AbsoluteUri,
             result.PublicId);
     }
+
+    /// <summary>Shown to the user when the image provider cannot be reached.</summary>
+    public const string ProviderUnavailableMessage =
+        "خدمة تخزين الصور غير متاحة حالياً. حاول مرة أخرى بعد قليل.";
+
+    /// <summary>
+    /// A network failure or a timeout of the provider call, as opposed to the caller cancelling the request.
+    /// </summary>
+    internal static bool IsProviderUnreachable(Exception ex, CancellationToken callerToken)
+        => ex is HttpRequestException or IOException or TimeoutException
+           || (ex is OperationCanceledException && !callerToken.IsCancellationRequested);
 
     public async Task DeleteImageAsync(
         string publicId,

@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using HudhudNestApi.Application.Common.Validation;
 
 namespace HudhudNestApi.Application.Users.Messaging.Commands.SendMessage;
 
@@ -15,7 +16,8 @@ public sealed class SendMessageCommandValidator : AbstractValidator<SendMessageC
 
         RuleFor(x => x.Content)
             .NotEmpty()
-            .MaximumLength(3000);
+            .MaximumLength(3000)
+            .NoNulCharacters();
     }
 }
 

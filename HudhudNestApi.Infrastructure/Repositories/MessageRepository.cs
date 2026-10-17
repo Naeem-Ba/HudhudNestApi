@@ -21,6 +21,23 @@ public sealed class MessageRepository : IMessageRepository
         await _db.Messages.AddAsync(message, ct);
     }
 
+    public async Task<int> CountSentAboutPropertySinceAsync(
+        Guid propertyId, Guid senderId, DateTime sinceUtc, CancellationToken ct = default)
+        => await _db.Messages
+            .AsNoTracking()
+            .CountAsync(m => m.PropertyId == propertyId && m.SenderId == senderId && m.CreatedAt >= sinceUtc, ct);
+
+    public async Task<bool> HasRecentUnreadAsync(
+        Guid propertyId, Guid senderId, Guid receiverId, DateTime sinceUtc, CancellationToken ct = default)
+        => await _db.Messages
+            .AsNoTracking()
+            .AnyAsync(m =>
+                m.PropertyId == propertyId &&
+                m.SenderId == senderId &&
+                m.ReceiverId == receiverId &&
+                !m.IsRead &&
+                m.CreatedAt >= sinceUtc, ct);
+
     public async Task<Message?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         return await _db.Messages

@@ -13,6 +13,7 @@ using HudhudNestApi.Application.Listings.Commands.RequestListingExtension;
 using HudhudNestApi.Application.Listings.Events;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Listings.Mappers;
+using HudhudNestApi.Application.Listings.Services;
 using HudhudNestApi.Domain.Common.Exceptions;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings;
@@ -839,6 +840,235 @@ public sealed class ListingLifecycleTests
             CancellationToken.None));
     }
 
+    // ── QA Phase 8 fixes ─────────────────────────────────────────
+
+    [Theory(DisplayName = "P8-D02: a sold, rented or archived listing cannot be extended and is left untouched")]
+    [InlineData(PropertyStatus.Sold)]
+    [InlineData(PropertyStatus.Rented)]
+    [InlineData(PropertyStatus.Archived)]
+    public void ExtendPublication_OnClosedOrArchivedListing_Throws(PropertyStatus status)
+    {
+        var property = CreateListing();
+        var expiresAt = DateTime.UtcNow.AddDays(2);
+        property.ExpiresAt = expiresAt;
+        property.ChangeStatus(status);
+
+        Assert.Throws<InvalidStateTransitionException>(
+            () => property.ExtendPublication(ListingLifecyclePolicy.PublicationPeriod, DateTime.UtcNow));
+
+        Assert.Equal(status, property.Status);
+        Assert.Equal(expiresAt, property.ExpiresAt);
+    }
+
+    [Fact(DisplayName = "P8-D04: paying early adds a full period to the days that are left")]
+    public void ExtendPublication_OnALiveListing_AddsToTheRemainingDays()
+    {
+        var property = CreateListing();
+        var now = DateTime.UtcNow;
+        var currentExpiry = now.AddDays(4);
+        property.ExpiresAt = currentExpiry;
+
+        property.ExtendPublication(ListingLifecyclePolicy.PublicationPeriod, now);
+
+        Assert.Equal(currentExpiry.Add(ListingLifecyclePolicy.PublicationPeriod), property.ExpiresAt);
+    }
+
+    [Fact(DisplayName = "P8-D04: an expired listing still gets a full period from the payment")]
+    public void ExtendPublication_OnAnExpiredListing_StartsFromThePayment()
+    {
+        var property = CreateListing();
+        property.ExpiresAt = DateTime.UtcNow.AddDays(-3);
+        property.MarkExpired();
+
+        var paidAt = DateTime.UtcNow;
+        property.ExtendPublication(ListingLifecyclePolicy.PublicationPeriod, paidAt);
+
+        Assert.Equal(paidAt.Add(ListingLifecyclePolicy.PublicationPeriod), property.ExpiresAt);
+    }
+
+    [Fact(DisplayName = "P8-D02: extending a reserved listing keeps it reserved")]
+    public void ExtendPublication_OnAReservedListing_KeepsItReserved()
+    {
+        var property = CreateListing();
+        property.ExpiresAt = DateTime.UtcNow.AddDays(2);
+        property.ChangeStatus(PropertyStatus.Reserved);
+
+        property.ExtendPublication(ListingLifecyclePolicy.PublicationPeriod, DateTime.UtcNow);
+
+        Assert.Equal(PropertyStatus.Reserved, property.Status);
+    }
+
+    [Fact(DisplayName = "An extension does not publish a listing the owner took offline")]
+    public void ExtendPublication_OnAnUnpublishedLiveListing_LeavesItUnpublished()
+    {
+        var property = CreateListing();
+        property.ExpiresAt = DateTime.UtcNow.AddDays(2);
+        property.Unpublish();
+
+        property.ExtendPublication(ListingLifecyclePolicy.PublicationPeriod, DateTime.UtcNow);
+
+        Assert.False(property.IsPublished);
+    }
+
+    [Fact(DisplayName = "P8-D03: publishing an expired listing is refused, so the paid extension is the only way back")]
+    public void Publish_OnAnExpiredListing_Throws()
+    {
+        var property = CreateListing();
+        var expiresAt = DateTime.UtcNow.AddDays(-2);
+        property.ExpiresAt = expiresAt;
+        property.MarkExpired();
+
+        Assert.Throws<InvalidStateTransitionException>(() => property.Publish());
+
+        Assert.False(property.IsPublished);
+        Assert.Equal(PropertyStatus.Expired, property.Status);
+        Assert.Equal(expiresAt, property.ExpiresAt);
+    }
+
+    [Fact(DisplayName = "P8-D10: a take-down hides the listing, blocks publishing and extending, and can be lifted")]
+    public void TakeDown_HidesTheListing_AndOnlyRestoreBringsItBack()
+    {
+        var property = CreateListing();
+        property.ExpiresAt = DateTime.UtcNow.AddDays(10);
+        var admin = Guid.NewGuid();
+
+        property.TakeDown(admin, "  إعلان مخالف  ");
+
+        Assert.True(property.IsTakenDown);
+        Assert.False(property.IsPublished);
+        Assert.Equal("إعلان مخالف", property.TakenDownReason);
+        Assert.Equal(admin, property.TakenDownByUserId);
+        Assert.Throws<InvalidStateTransitionException>(() => property.Publish());
+        Assert.Throws<InvalidStateTransitionException>(
+            () => property.ExtendPublication(ListingLifecyclePolicy.PublicationPeriod, DateTime.UtcNow));
+        Assert.Throws<InvalidStateTransitionException>(() => property.TakeDown(admin, "again"));
+
+        property.RestoreFromTakeDown();
+
+        Assert.False(property.IsTakenDown);
+        Assert.True(property.IsPublished);
+        Assert.Null(property.TakenDownReason);
+        Assert.Null(property.TakenDownByUserId);
+        Assert.Throws<InvalidStateTransitionException>(() => property.RestoreFromTakeDown());
+    }
+
+    [Theory(DisplayName = "P8-D10: a take-down needs a reason of a sensible length")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void TakeDown_WithoutAReason_Throws(string reason)
+        => Assert.Throws<DomainException>(() => CreateListing().TakeDown(Guid.NewGuid(), reason));
+
+    [Fact]
+    public void TakeDown_WithAnOverlongReason_Throws()
+        => Assert.Throws<DomainException>(
+            () => CreateListing().TakeDown(Guid.NewGuid(), new string('x', Property.MaxTakeDownReasonLength + 1)));
+
+    [Fact]
+    public void TakeDown_EndsTheFeaturedPlacement()
+    {
+        var property = CreateListing();
+        property.MarkFeatured(TimeSpan.FromDays(7), DateTime.UtcNow);
+        Assert.True(property.IsFeatured);
+
+        property.TakeDown(Guid.NewGuid(), "reason");
+
+        Assert.False(property.IsFeatured);
+    }
+
+    [Theory(DisplayName = "P8-D02: no extension quote for a sold, rented or archived listing")]
+    [InlineData(PropertyStatus.Sold)]
+    [InlineData(PropertyStatus.Rented)]
+    [InlineData(PropertyStatus.Archived)]
+    public async Task RequestExtension_OnClosedOrArchivedListing_IsRejectedWithoutACharge(PropertyStatus status)
+    {
+        var property = CreateListing();
+        property.ExpiresAt = DateTime.UtcNow.AddDays(2);
+        property.ChangeStatus(status);
+        var handler = RequestExtensionHandler(property, existingPendingFee: null, out var extensions);
+
+        await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
+            new RequestListingExtensionCommand(property.Id, property.OwnerId), CancellationToken.None));
+
+        extensions.Verify(x => x.AddAsync(It.IsAny<Transaction>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact(DisplayName = "P8-D02: confirming a fee for a listing that was sold meanwhile is refused and the fee stays pending")]
+    public async Task ConfirmExtension_OnAListingSoldSinceTheQuote_IsRejected()
+    {
+        var property = CreateListing();
+        property.ExpiresAt = DateTime.UtcNow.AddDays(2);
+        var fee = BuildPendingFee(property.Id, property.OwnerId);
+        property.ChangeStatus(PropertyStatus.Sold);
+        var handler = ConfirmExtensionHandler(property, fee);
+
+        await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
+            new ConfirmListingExtensionPaymentCommand(fee.Id, Guid.NewGuid()), CancellationToken.None));
+
+        Assert.Equal(TransactionStatus.Pending, fee.Status);
+        Assert.Equal(PropertyStatus.Sold, property.Status);
+    }
+
+    [Fact(DisplayName = "P8-D05: bringing an expired listing back is refused when the plan limit is already used")]
+    public async Task RequestExtension_OnExpiredListing_WhenThePlanIsFull_IsRejected()
+    {
+        var property = CreateListing();
+        property.ExpiresAt = DateTime.UtcNow.AddDays(-2);
+        property.MarkExpired();
+        var handler = RequestExtensionHandler(
+            property, existingPendingFee: null, out var extensions, planLimit: 1, activeListings: 1);
+
+        await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
+            new RequestListingExtensionCommand(property.Id, property.OwnerId), CancellationToken.None));
+
+        extensions.Verify(x => x.AddAsync(It.IsAny<Transaction>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact(DisplayName = "P8-D05: ...but an expired listing can come back while there is room")]
+    public async Task RequestExtension_OnExpiredListing_WhenThereIsRoom_IssuesTheQuote()
+    {
+        var property = CreateListing();
+        property.ExpiresAt = DateTime.UtcNow.AddDays(-2);
+        property.MarkExpired();
+        var handler = RequestExtensionHandler(
+            property, existingPendingFee: null, out var extensions, planLimit: 2, activeListings: 1);
+
+        var quote = await handler.Handle(
+            new RequestListingExtensionCommand(property.Id, property.OwnerId), CancellationToken.None);
+
+        Assert.False(quote.IsExistingPendingFee);
+        extensions.Verify(x => x.AddAsync(It.IsAny<Transaction>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact(DisplayName = "P8-D05: an early extension of a live listing is not blocked by the plan limit (it is already counted)")]
+    public async Task RequestExtension_OnLiveListing_IsNotBlockedByThePlanLimit()
+    {
+        var property = CreateListing();
+        property.ExpiresAt = DateTime.UtcNow.AddDays(2);
+        var handler = RequestExtensionHandler(
+            property, existingPendingFee: null, out _, planLimit: 1, activeListings: 1);
+
+        var quote = await handler.Handle(
+            new RequestListingExtensionCommand(property.Id, property.OwnerId), CancellationToken.None);
+
+        Assert.False(quote.IsExistingPendingFee);
+    }
+
+    [Fact(DisplayName = "P8-D05: confirming the revival of an expired listing re-checks the plan limit")]
+    public async Task ConfirmExtension_OnExpiredListing_WhenThePlanIsFull_IsRejected()
+    {
+        var property = CreateListing();
+        property.ExpiresAt = DateTime.UtcNow.AddDays(-2);
+        property.MarkExpired();
+        var fee = BuildPendingFee(property.Id, property.OwnerId);
+        var handler = ConfirmExtensionHandler(property, fee, planLimit: 1, activeListings: 1);
+
+        await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
+            new ConfirmListingExtensionPaymentCommand(fee.Id, Guid.NewGuid()), CancellationToken.None));
+
+        Assert.Equal(TransactionStatus.Pending, fee.Status);
+        Assert.Equal(PropertyStatus.Expired, property.Status);
+    }
+
     // ── Fixtures ─────────────────────────────────────────────────
 
     private static Property CreateListing() => Property.Create(
@@ -870,8 +1100,10 @@ public sealed class ListingLifecycleTests
             (identity ?? DefaultIdentity()).Object,
             (unitOfWork ?? new Mock<IUnitOfWork>()).Object,
             Mock.Of<ILocationSuggestionService>(),
-            quotaPolicy ?? new FakeListingQuotaPolicy(50),
-            new PropertyOnlyActiveListingCounter(repository.Object),
+            new ListingQuotaGuard(
+                quotaPolicy ?? new FakeListingQuotaPolicy(50),
+                new PropertyOnlyActiveListingCounter(repository.Object),
+                NullLogger<ListingQuotaGuard>.Instance),
             (publisher ?? new Mock<IPublisher>()).Object,
             NullLogger<CreatePropertyCommandHandler>.Instance);
 
@@ -969,12 +1201,17 @@ public sealed class ListingLifecycleTests
     private static RequestListingExtensionCommandHandler RequestExtensionHandler(
         Property property,
         Transaction? existingPendingFee,
-        out Mock<IListingFeeRepository> extensions)
+        out Mock<IListingFeeRepository> extensions,
+        int planLimit = 50,
+        int activeListings = 0)
     {
         var properties = new Mock<IPropertyRepository>();
         properties
             .Setup(x => x.GetByIdAsync(property.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(property);
+        properties
+            .Setup(x => x.CountActiveListingsByOwnerAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(activeListings);
 
         extensions = new Mock<IListingFeeRepository>();
         extensions
@@ -987,6 +1224,11 @@ public sealed class ListingLifecycleTests
 
         return new RequestListingExtensionCommandHandler(
             properties.Object,
+            DefaultAgencies().Object,
+            new ListingQuotaGuard(
+                new FakeListingQuotaPolicy(planLimit),
+                new PropertyOnlyActiveListingCounter(properties.Object),
+                NullLogger<ListingQuotaGuard>.Instance),
             extensions.Object,
             Mock.Of<IUnitOfWork>(),
             NullLogger<RequestListingExtensionCommandHandler>.Instance);
@@ -995,7 +1237,9 @@ public sealed class ListingLifecycleTests
     private static ConfirmListingExtensionPaymentCommandHandler ConfirmExtensionHandler(
         Property property,
         Transaction fee,
-        Mock<IPublisher>? publisher = null)
+        Mock<IPublisher>? publisher = null,
+        int planLimit = 50,
+        int activeListings = 0)
     {
         var extensions = new Mock<IListingFeeRepository>();
         extensions
@@ -1006,10 +1250,18 @@ public sealed class ListingLifecycleTests
         properties
             .Setup(x => x.GetByIdAsync(property.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(property);
+        properties
+            .Setup(x => x.CountActiveListingsByOwnerAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(activeListings);
 
         return new ConfirmListingExtensionPaymentCommandHandler(
             extensions.Object,
             properties.Object,
+            DefaultAgencies().Object,
+            new ListingQuotaGuard(
+                new FakeListingQuotaPolicy(planLimit),
+                new PropertyOnlyActiveListingCounter(properties.Object),
+                NullLogger<ListingQuotaGuard>.Instance),
             Mock.Of<IUnitOfWork>(),
             (publisher ?? new Mock<IPublisher>()).Object,
             NullLogger<ConfirmListingExtensionPaymentCommandHandler>.Instance);

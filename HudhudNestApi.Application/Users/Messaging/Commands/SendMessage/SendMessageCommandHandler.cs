@@ -6,6 +6,7 @@ using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Application.Users.Interfaces;
+using HudhudNestApi.Application.Users.Messaging;
 using HudhudNestApi.Application.Users.Messaging.DTOs;
 using HudhudNestApi.Application.Users.Messaging.Interfaces;
 using HudhudNestApi.Domain.Messaging.Entities;
@@ -136,6 +137,35 @@ public sealed class SendMessageCommandHandler
         var now =
             DateTime.UtcNow;
 
+        // One visitor could send dozens of messages a minute to one owner, each raising a notification
+        // (QA Phase 8, P8-D07). Counted per (sender, listing); the daily cap is the backstop for a slow drip.
+        var inBurst = await _messages.CountSentAboutPropertySinceAsync(
+            property.Id, senderId, now - MessagingLimits.BurstWindow, cancellationToken);
+
+        if (inBurst >= MessagingLimits.MaxMessagesPerBurstWindow)
+        {
+            throw new TooManyRequestsException(
+                "أرسلت رسائل كثيرة عن هذا الإعلان خلال وقت قصير. انتظر بضع دقائق ثم تابع.",
+                "MESSAGE_RATE_LIMIT",
+                MessagingLimits.BurstWindow);
+        }
+
+        var today = await _messages.CountSentAboutPropertySinceAsync(
+            property.Id, senderId, now - MessagingLimits.DailyWindow, cancellationToken);
+
+        if (today >= MessagingLimits.MaxMessagesPerDay)
+        {
+            throw new TooManyRequestsException(
+                "بلغت الحد اليومي للرسائل عن هذا الإعلان. حاول مرة أخرى غداً.",
+                "MESSAGE_DAILY_LIMIT",
+                TimeSpan.FromHours(1));
+        }
+
+        // The receiver has already been pointed at this conversation by an earlier unread message: a new
+        // push for every line of a burst only teaches them to mute the app.
+        var receiverAlreadyNotified = await _messages.HasRecentUnreadAsync(
+            property.Id, senderId, receiverId, now - MessagingLimits.NotificationCoalesceWindow, cancellationToken);
+
         var message =
             new Message
             {
@@ -183,24 +213,27 @@ public sealed class SendMessageCommandHandler
          */
         try
         {
-            await _notifications.NotifyNewMessageAsync(
-                recipientId:
-                    receiverId,
+            if (!receiverAlreadyNotified)
+            {
+                await _notifications.NotifyNewMessageAsync(
+                    recipientId:
+                        receiverId,
 
-                senderId:
-                    senderId,
+                    senderId:
+                        senderId,
 
-                senderName:
-                    senderDisplayName,
+                    senderName:
+                        senderDisplayName,
 
-                messageId:
-                    message.Id,
+                    messageId:
+                        message.Id,
 
-                propertyId:
-                    property.Id,
+                    propertyId:
+                        property.Id,
 
-                ct:
-                    cancellationToken);
+                    ct:
+                        cancellationToken);
+            }
         }
         catch (Exception ex)
         {
@@ -223,7 +256,7 @@ public sealed class SendMessageCommandHandler
          * publisher stays the receiver) and its content is not copied. Skipped when the owner
          * already is the receiver (the owner published the listing). Also non-critical.
          */
-        if (senderId != property.OwnerId && property.AgencyId is { } agencyId)
+        if (!receiverAlreadyNotified && senderId != property.OwnerId && property.AgencyId is { } agencyId)
         {
             try
             {

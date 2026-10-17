@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using HudhudNestApi.Application.Bookings.Interfaces;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Events;
 using HudhudNestApi.Application.Notifications.Interfaces;
@@ -116,7 +117,7 @@ public sealed class ListingExpiryHostedService : BackgroundService
                     // hearing about the first one.
                     var warned = await WarnExpiringSoonAsync(db, notifications, now, ct);
                     var expired = await ExpireElapsedAsync(db, notifications, publisher, now, ct);
-                    var deleted = await DeleteAfterGraceAsync(db, mediaStorage, now, ct);
+                    var deleted = await DeleteAfterGraceAsync(db, mediaStorage, scope.ServiceProvider.GetRequiredService<IListingVisitCleanup>(), now, ct);
 
                     // Independent of the three phases above and ordered last only because it
                     // is the cheapest: a listing can lose its featured placement while its
@@ -161,6 +162,7 @@ public sealed class ListingExpiryHostedService : BackgroundService
         var candidates = await db.Properties
             .Where(p =>
                 p.IsPublished &&
+                p.TakenDownAt == null &&
                 p.Status != PropertyStatus.Expired &&
                 p.Status != PropertyStatus.Sold &&
                 p.Status != PropertyStatus.Rented &&
@@ -203,6 +205,9 @@ public sealed class ListingExpiryHostedService : BackgroundService
     {
         var candidates = await db.Properties
             .Where(p =>
+                // An administrator's take-down is a hold, not a publication window: the clock does not
+                // run on it, and the owner is not told it "expired" while it is hidden (QA Phase 8, P8-D10).
+                p.TakenDownAt == null &&
                 p.Status != PropertyStatus.Expired &&
                 // A concluded deal is a record, not an offer with a clock: it never expires and
                 // is never deleted by this sweep (QA Phase 7, P7-D08).
@@ -280,6 +285,7 @@ public sealed class ListingExpiryHostedService : BackgroundService
     private async Task<int> DeleteAfterGraceAsync(
         AppDbContext db,
         IMediaStorageService mediaStorage,
+        IListingVisitCleanup visitCleanup,
         DateTime now,
         CancellationToken ct)
     {
@@ -307,6 +313,20 @@ public sealed class ListingExpiryHostedService : BackgroundService
         }
 
         await db.SaveChangesAsync(ct);
+
+        // A visit still open on a listing that has just been deleted would stay on both sides' screens
+        // for good (QA Phase 8, P8-D08). One failure must not stop the sweep.
+        foreach (var property in candidates)
+        {
+            try
+            {
+                await visitCleanup.CancelOpenVisitsAsync(property.Id, property.Title, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "Failed to cancel the open visits of the expired-and-deleted listing {PropertyId}.", property.Id);
+            }
+        }
 
         foreach (var publicId in imagePublicIds)
         {

@@ -49,6 +49,14 @@ public interface IVisitRepository
         Guid propertyId,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// The visits of one listing that are still open (Pending, Confirmed or RescheduleProposed). Tracked,
+    /// so the caller can close them. Used when the listing is deleted.
+    /// </summary>
+    Task<IReadOnlyList<VisitRequest>> GetOpenByPropertyIdAsync(
+        Guid propertyId,
+        CancellationToken ct = default);
+
     // ✅ جديد — مطلوب لـ Review Eligibility Validation
     /// <summary>
     /// يتحقق من أن المستخدم أتمَّ زيارة لهذا العقار (Status = Completed).

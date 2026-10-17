@@ -1,9 +1,11 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
+using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Events;
 using HudhudNestApi.Application.Listings.Interfaces;
+using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings;
 using HudhudNestApi.Domain.Transactions.Enums;
 
@@ -21,6 +23,8 @@ public sealed class ConfirmListingExtensionPaymentCommandHandler
 {
     private readonly IListingFeeRepository _extensions;
     private readonly IPropertyRepository _properties;
+    private readonly IAgencyRepository _agencies;
+    private readonly IListingQuotaGuard _quotaGuard;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPublisher _publisher;
     private readonly ILogger<ConfirmListingExtensionPaymentCommandHandler> _logger;
@@ -28,12 +32,16 @@ public sealed class ConfirmListingExtensionPaymentCommandHandler
     public ConfirmListingExtensionPaymentCommandHandler(
         IListingFeeRepository extensions,
         IPropertyRepository properties,
+        IAgencyRepository agencies,
+        IListingQuotaGuard quotaGuard,
         IUnitOfWork unitOfWork,
         IPublisher publisher,
         ILogger<ConfirmListingExtensionPaymentCommandHandler> logger)
     {
         _extensions = extensions;
         _properties = properties;
+        _agencies = agencies;
+        _quotaGuard = quotaGuard;
         _unitOfWork = unitOfWork;
         _publisher = publisher;
         _logger = logger;
@@ -72,12 +80,38 @@ public sealed class ConfirmListingExtensionPaymentCommandHandler
                 "لم يعد الإعلان قابلاً للاسترجاع — انقضت مهلة السماح قبل تأكيد الدفع.");
         }
 
+        // The fee was quoted while the listing could still be extended; it may have been sold, archived or
+        // taken down since. Confirming would resurrect it (QA Phase 8, P8-D02), so refuse and leave the
+        // fee Pending for the administrator to settle with the owner.
+        if (!property.CanBeExtended)
+        {
+            throw new ConflictException(
+                "لا يمكن تأكيد هذا التمديد: الإعلان مباع أو مؤجَّر أو مؤرشف أو موقوف من الإدارة. " +
+                "عالج الرسوم مع المالك دون تمديد.");
+        }
+
         var now = DateTime.UtcNow;
 
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
         try
         {
+            // Bringing an expired listing back adds one to the active count, which expiry had released.
+            // Same advisory lock as creation, so a concurrent create cannot take the last seat between
+            // the check and the extension (QA Phase 8, P8-D05).
+            if (property.Status == PropertyStatus.Expired)
+            {
+                var owner = await _agencies.GetUserAccountAsync(property.OwnerId, cancellationToken)
+                    ?? throw new ConflictException("تعذّر العثور على صاحب الإعلان.");
+
+                var lockKey = owner.AgencyId is { } agencyId
+                    ? ListingQuotaLock.ForAgency(agencyId)
+                    : ListingQuotaLock.ForOwner(owner.Id);
+
+                await _unitOfWork.AcquireAdvisoryLockAsync(lockKey, cancellationToken);
+                await _quotaGuard.EnsureCapacityAsync(owner, cancellationToken);
+            }
+
             fee.MarkCompleted();
             property.ExtendPublication(ListingLifecyclePolicy.PublicationPeriod, now);
 

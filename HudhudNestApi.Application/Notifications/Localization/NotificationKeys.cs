@@ -8,6 +8,7 @@ public static class NotificationKeys
     public const string VisitConfirmedDetail = "visit.detail.confirmed";
     public const string VisitDeclinedDetail = "visit.detail.declined";
     public const string VisitCancelledDetail = "visit.detail.cancelled";
+    public const string VisitCancelledListingRemovedDetail = "visit.detail.cancelled_listing_removed";
     public const string VisitProposedDetail = "visit.detail.proposed";
     public const string VisitRescheduleAcceptedDetail = "visit.detail.reschedule_accepted";
     public const string VisitRescheduleDeclinedDetail = "visit.detail.reschedule_declined";

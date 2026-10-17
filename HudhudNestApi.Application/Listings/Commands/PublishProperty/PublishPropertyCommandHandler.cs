@@ -42,6 +42,9 @@ public sealed class PublishPropertyCommandHandler
         if (property.IsPublished)
             return;
 
+        // Before the image check: a taken-down or expired listing needs a different action, not photos.
+        property.EnsureCanBePublished();
+
         if (property.Images.All(image => image.IsDeleted))
             throw new ValidationException(
             [
