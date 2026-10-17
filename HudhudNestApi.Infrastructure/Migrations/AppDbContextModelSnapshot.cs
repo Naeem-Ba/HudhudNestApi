@@ -3100,6 +3100,9 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
 
@@ -3112,14 +3115,28 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("ExpiredAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ExpiredWaitingOn")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<decimal?>("FinalPrice")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<int?>("FinalPriceCurrencyId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Intent")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastActivityAt")
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("NotCompletedAt")
                         .HasColumnType("timestamp without time zone");
@@ -3148,6 +3165,9 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Property<string>("RejectionReason")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("ReminderSentAt")
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("RequestNumber")
                         .IsRequired()
@@ -3219,6 +3239,8 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasIndex("Status");
 
+                    b.HasIndex("Status", "LastActivityAt");
+
                     b.HasIndex("PropertyId", "RequesterId", "ServiceOfferingId", "Status");
 
                     b.ToTable("ServiceRequests", (string)null);
@@ -3272,6 +3294,52 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("ServiceRequestId");
 
                     b.ToTable("ServiceRequestDocuments", (string)null);
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Services.Entities.ServiceRequestMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("SenderParty")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("SenderUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ServiceRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SenderUserId");
+
+                    b.HasIndex("ServiceRequestId", "CreatedAt");
+
+                    b.ToTable("ServiceRequestMessages", (string)null);
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.Services.Entities.ServiceRequestStatusHistory", b =>
@@ -6189,6 +6257,21 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
             modelBuilder.Entity("HudhudNestApi.Domain.Services.Entities.ServiceRequestDocument", b =>
                 {
+                    b.HasOne("HudhudNestApi.Domain.Services.Entities.ServiceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Services.Entities.ServiceRequestMessage", b =>
+                {
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("SenderUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("HudhudNestApi.Domain.Services.Entities.ServiceRequest", null)
                         .WithMany()
                         .HasForeignKey("ServiceRequestId")

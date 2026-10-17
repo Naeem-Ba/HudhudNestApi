@@ -84,6 +84,27 @@ public sealed class ServiceRequest : AuditableEntity
 
     public DateTime? RequesterFeedbackAt { get; private set; }
 
+    // ── The conversation stage ───────────────────────────────────────
+    /// <summary>Which button opened the conversation. Null on rows created before the Inquiry stage existed.</summary>
+    public ServiceRequestIntent? Intent { get; private set; }
+
+    /// <summary>
+    /// When the customer confirmed the request. Null while it is only an inquiry. Rows that existed
+    /// before the Inquiry stage were backfilled with their CreatedAt.
+    /// </summary>
+    public DateTime? ConfirmedAt { get; private set; }
+
+    /// <summary>Last message or status change. Drives the one-month expiry.</summary>
+    public DateTime LastActivityAt { get; private set; }
+
+    /// <summary>The in-app "please confirm your request" reminder was sent at this time (once).</summary>
+    public DateTime? ReminderSentAt { get; private set; }
+
+    public DateTime? ExpiredAt { get; private set; }
+
+    /// <summary>Whose turn it was when the request expired: who stayed silent.</summary>
+    public ServiceParty? ExpiredWaitingOn { get; private set; }
+
     // ── Navigation (EF) ───────────────────────────────────────────
     public HudhudNestApi.Domain.Listings.Entities.Property? Property { get; private set; }
 
@@ -93,6 +114,10 @@ public sealed class ServiceRequest : AuditableEntity
 
     public ServiceOffering? ServiceOffering { get; private set; }
 
+    /// <summary>
+    /// Opens a conversation. The request starts as an <see cref="ServiceRequestStatus.Inquiry"/>: it is
+    /// recorded for the statistics but is not a request until the customer confirms it.
+    /// </summary>
     public static ServiceRequest Create(
         string requestNumber,
         Guid propertyId,
@@ -101,7 +126,8 @@ public sealed class ServiceRequest : AuditableEntity
         Guid serviceOfferingId,
         ServiceCategory category,
         string? requesterNote,
-        DateTime utcNow)
+        DateTime utcNow,
+        ServiceRequestIntent intent = ServiceRequestIntent.Request)
     {
         if (string.IsNullOrWhiteSpace(requestNumber))
             throw new DomainException("رقم الطلب مطلوب.");
@@ -115,6 +141,9 @@ public sealed class ServiceRequest : AuditableEntity
         if (serviceProviderId == Guid.Empty || serviceOfferingId == Guid.Empty)
             throw new DomainException("لا يمكن إنشاء طلب خدمة بلا مزوّد وخدمة محددَين.");
 
+        if (!Enum.IsDefined(intent))
+            throw new DomainException("نوع التواصل غير معروف.");
+
         return new ServiceRequest
         {
             RequestNumber = requestNumber.Trim(),
@@ -124,13 +153,85 @@ public sealed class ServiceRequest : AuditableEntity
             ServiceOfferingId = serviceOfferingId,
             Category = category,
             RequesterNote = string.IsNullOrWhiteSpace(requesterNote) ? null : requesterNote.Trim(),
-            // Skips directly to UnderReview — see the enum's remarks: the MVP has no real
-            // triage/routing queue that would hold a request at "Submitted" for any real
-            // duration, so there is nothing for a request to wait on between the two states.
-            Status = ServiceRequestStatus.UnderReview,
+            Intent = intent,
+            Status = ServiceRequestStatus.Inquiry,
             CreatedAt = utcNow,
             UpdatedAt = utcNow,
+            LastActivityAt = utcNow,
         };
+    }
+
+    /// <summary>
+    /// The customer turns the inquiry into a request. Only then does the provider have to answer it,
+    /// and only then does it count as a request. Skips the old Submitted stage exactly as Create used
+    /// to: there is no triage queue for a request to wait in.
+    /// </summary>
+    public void Confirm(DateTime utcNow)
+    {
+        EnsureStatus(ServiceRequestStatus.Inquiry, "تأكيد");
+
+        Status = ServiceRequestStatus.UnderReview;
+        ConfirmedAt = utcNow;
+        Touch(utcNow);
+    }
+
+    /// <summary>A message was exchanged: the request is alive and its month starts again.</summary>
+    public void RecordMessage(DateTime utcNow)
+    {
+        if (!CanExchangeMessages)
+        {
+            throw new InvalidStateTransitionException(
+                $"لا يمكن تبادل الرسائل على طلب خدمة في الحالة '{Status}'.");
+        }
+
+        Touch(utcNow);
+    }
+
+    /// <summary>Messages are exchanged until the request is delivered or closed.</summary>
+    public bool CanExchangeMessages => Status is
+        ServiceRequestStatus.Inquiry or ServiceRequestStatus.UnderReview
+        or ServiceRequestStatus.Accepted or ServiceRequestStatus.Scheduled
+        or ServiceRequestStatus.InProgress;
+
+    /// <summary>True when the customer should be reminded to confirm: still an inquiry, never reminded, old enough.</summary>
+    public bool IsConfirmReminderDue(DateTime utcNow)
+        => Status == ServiceRequestStatus.Inquiry
+           && ReminderSentAt is null
+           && CreatedAt <= utcNow - ServiceRequestLifecyclePolicy.ConfirmReminderAfter;
+
+    public void MarkReminderSent(DateTime utcNow)
+    {
+        ReminderSentAt = utcNow;
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>
+    /// Stages the system may close for inactivity. InProgress is deliberately not here: the provider
+    /// is doing the work and closes it with an outcome; a long job must not be cancelled under them.
+    /// A scheduled request whose date has not come yet is not abandoned either.
+    /// </summary>
+    public bool IsExpirable(DateTime utcNow)
+    {
+        var stage = Status is ServiceRequestStatus.Inquiry or ServiceRequestStatus.UnderReview
+            or ServiceRequestStatus.Accepted
+            || (Status == ServiceRequestStatus.Scheduled && (ScheduledAt is null || ScheduledAt <= utcNow));
+
+        return stage && LastActivityAt <= utcNow - ServiceRequestLifecyclePolicy.ExpireAfterInactivity;
+    }
+
+    /// <summary>Closed by the system. The conversation, the notes and the history are all kept.</summary>
+    public void Expire(ServiceParty waitingOn, DateTime utcNow)
+    {
+        if (!IsExpirable(utcNow))
+        {
+            throw new InvalidStateTransitionException(
+                $"لا يمكن إنهاء طلب خدمة في الحالة '{Status}' تلقائيًا.");
+        }
+
+        Status = ServiceRequestStatus.Expired;
+        ExpiredAt = utcNow;
+        ExpiredWaitingOn = waitingOn;
+        Touch(utcNow);
     }
 
     public void Accept(decimal? quotedPrice, int? quotedPriceCurrencyId, string? providerNote, DateTime utcNow)
@@ -147,12 +248,15 @@ public sealed class ServiceRequest : AuditableEntity
         QuotedPrice = quotedPrice;
         QuotedPriceCurrencyId = quotedPriceCurrencyId;
         ProviderNote = string.IsNullOrWhiteSpace(providerNote) ? null : providerNote.Trim();
-        UpdatedAt = utcNow;
+        Touch(utcNow);
     }
 
     public void Reject(string reason, DateTime utcNow, ServiceOutcomeReason? reasonCode = null)
     {
-        EnsureStatus(ServiceRequestStatus.UnderReview, "رفض");
+        // The provider may also decline while it is still an inquiry: "I cannot do this" is an answer
+        // the customer should get, and the reason feeds the statistics.
+        if (Status != ServiceRequestStatus.Inquiry)
+            EnsureStatus(ServiceRequestStatus.UnderReview, "رفض");
 
         if (string.IsNullOrWhiteSpace(reason))
             throw new DomainException("سبب رفض الطلب مطلوب.");
@@ -160,7 +264,7 @@ public sealed class ServiceRequest : AuditableEntity
         Status = ServiceRequestStatus.Rejected;
         RejectionReason = reason.Trim();
         OutcomeReason = reasonCode;
-        UpdatedAt = utcNow;
+        Touch(utcNow);
     }
 
     public void Schedule(DateTime scheduledAt, DateTime utcNow)
@@ -172,7 +276,7 @@ public sealed class ServiceRequest : AuditableEntity
 
         Status = ServiceRequestStatus.Scheduled;
         ScheduledAt = scheduledAt;
-        UpdatedAt = utcNow;
+        Touch(utcNow);
     }
 
     public void Start(DateTime utcNow)
@@ -180,7 +284,7 @@ public sealed class ServiceRequest : AuditableEntity
         EnsureStatus(ServiceRequestStatus.Scheduled, "بدء");
 
         Status = ServiceRequestStatus.InProgress;
-        UpdatedAt = utcNow;
+        Touch(utcNow);
     }
 
     /// <summary>
@@ -203,7 +307,7 @@ public sealed class ServiceRequest : AuditableEntity
         FinalPrice = finalPrice;
         FinalPriceCurrencyId = finalPriceCurrencyId;
         CompletedAt = utcNow;
-        UpdatedAt = utcNow;
+        Touch(utcNow);
     }
 
     /// <summary>
@@ -225,7 +329,7 @@ public sealed class ServiceRequest : AuditableEntity
         OutcomeReason = reason;
         OutcomeNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
         NotCompletedAt = utcNow;
-        UpdatedAt = utcNow;
+        Touch(utcNow);
     }
 
     /// <summary>
@@ -264,16 +368,17 @@ public sealed class ServiceRequest : AuditableEntity
         RequesterReason = reason;
         RequesterFeedbackNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
         RequesterFeedbackAt = utcNow;
-        UpdatedAt = utcNow;
+        Touch(utcNow);
     }
 
     /// <summary>
-    /// The provider's contact details are shown to the requester only while the request is
-    /// alive or was delivered. A rejected, cancelled or not-delivered request ends the
+    /// The provider's contact details are shown to the requester only after the provider accepted a
+    /// request the customer confirmed, and only while it is alive or was delivered. Until then the two
+    /// talk inside the app. A rejected, cancelled, expired or not-delivered request ends the
     /// introduction: the provider's number must not outlive a "no".
     /// </summary>
     public bool ProviderContactVisible => Status is
-        ServiceRequestStatus.UnderReview or ServiceRequestStatus.Accepted
+        ServiceRequestStatus.Accepted
         or ServiceRequestStatus.Scheduled or ServiceRequestStatus.InProgress
         or ServiceRequestStatus.Completed or ServiceRequestStatus.Reviewed;
 
@@ -283,7 +388,7 @@ public sealed class ServiceRequest : AuditableEntity
         EnsureStatus(ServiceRequestStatus.Completed, "تحويل إلى مُقيَّم");
 
         Status = ServiceRequestStatus.Reviewed;
-        UpdatedAt = utcNow;
+        Touch(utcNow);
     }
 
     public void Cancel(string? reason, DateTime utcNow, ServiceRequesterReason? requesterReason = null)
@@ -292,7 +397,8 @@ public sealed class ServiceRequest : AuditableEntity
             or ServiceRequestStatus.Reviewed
             or ServiceRequestStatus.Rejected
             or ServiceRequestStatus.Cancelled
-            or ServiceRequestStatus.NotCompleted)
+            or ServiceRequestStatus.NotCompleted
+            or ServiceRequestStatus.Expired)
         {
             throw new InvalidStateTransitionException(
                 $"لا يمكن إلغاء طلب الخدمة بعد أن أصبحت حالته '{Status}'.");
@@ -301,7 +407,13 @@ public sealed class ServiceRequest : AuditableEntity
         Status = ServiceRequestStatus.Cancelled;
         CancellationReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
         RequesterReason = requesterReason;
+        Touch(utcNow);
+    }
+
+    private void Touch(DateTime utcNow)
+    {
         UpdatedAt = utcNow;
+        LastActivityAt = utcNow;
     }
 
     /// <summary>Where the provider may close a request: after accepting it, whether or not it

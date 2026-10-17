@@ -115,6 +115,8 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IServiceReviewRepository, ServiceReviewRepository>();
         services.AddScoped<IServiceRequestAdminRepository, ServiceRequestAdminRepository>();
         services.AddScoped<IServiceRequestDocumentRepository, ServiceRequestDocumentRepository>();
+        services.AddScoped<IServiceRequestMessageRepository, ServiceRequestMessageRepository>();
+        services.AddHostedService<ServiceRequestLifecycleHostedService>();
         services.AddScoped<IServiceRequestNumberGenerator, ServiceRequestNumberGenerator>();
         services.AddScoped<IServiceProviderApplicationRepository, ServiceProviderApplicationRepository>();
         services.AddScoped<IServiceProviderEventRepository, ServiceProviderEventRepository>();

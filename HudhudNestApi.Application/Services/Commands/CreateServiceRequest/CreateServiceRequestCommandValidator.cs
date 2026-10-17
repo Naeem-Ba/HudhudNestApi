@@ -13,5 +13,12 @@ public sealed class CreateServiceRequestCommandValidator : AbstractValidator<Cre
         RuleFor(x => x.RequesterNote)
             .MaximumLength(1000)
             .When(x => x.RequesterNote is not null);
+
+        // The first message of the conversation: required whenever the new flow is used.
+        RuleFor(x => x.RequesterNote)
+            .NotEmpty().WithMessage("اكتب رسالتك للمزوّد.")
+            .When(x => x.Intent is not null);
+
+        RuleFor(x => x.Intent!.Value).IsInEnum().When(x => x.Intent is not null);
     }
 }

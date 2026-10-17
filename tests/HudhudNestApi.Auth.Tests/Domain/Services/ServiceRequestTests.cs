@@ -10,7 +10,7 @@ public sealed class ServiceRequestTests
 {
     private static readonly DateTime UtcNow = new(2026, 8, 28, 12, 0, 0, DateTimeKind.Utc);
 
-    private static ServiceRequest CreateUnderReview() =>
+    private static ServiceRequest CreateInquiry(ServiceRequestIntent intent = ServiceRequestIntent.Request) =>
         ServiceRequest.Create(
             "SR-2026-000001",
             Guid.NewGuid(),
@@ -19,15 +19,178 @@ public sealed class ServiceRequestTests
             Guid.NewGuid(),
             ServiceCategory.Verification,
             "من فضلكم تحققوا من سند الملكية.",
-            UtcNow);
+            UtcNow,
+            intent);
 
-    [Fact(DisplayName = "Create: sets status directly to UnderReview")]
-    public void Create_ValidInputs_SetsUnderReview()
+    /// <summary>A request the customer has confirmed: what every later transition starts from.</summary>
+    private static ServiceRequest CreateUnderReview()
+    {
+        var request = CreateInquiry();
+        request.Confirm(UtcNow);
+        return request;
+    }
+
+    [Fact(DisplayName = "Create: starts as an inquiry that is not yet a request")]
+    public void Create_ValidInputs_StartsAsInquiry()
+    {
+        var request = CreateInquiry(ServiceRequestIntent.Inquire);
+
+        Assert.Equal(ServiceRequestStatus.Inquiry, request.Status);
+        Assert.Equal(ServiceRequestIntent.Inquire, request.Intent);
+        Assert.Null(request.ConfirmedAt);
+        Assert.Equal(UtcNow, request.LastActivityAt);
+        Assert.Equal("SR-2026-000001", request.RequestNumber);
+    }
+
+    [Fact(DisplayName = "Confirm: turns the inquiry into a request under review and stamps ConfirmedAt")]
+    public void Confirm_FromInquiry_MovesToUnderReview()
+    {
+        var request = CreateInquiry();
+        var later = UtcNow.AddHours(3);
+
+        request.Confirm(later);
+
+        Assert.Equal(ServiceRequestStatus.UnderReview, request.Status);
+        Assert.Equal(later, request.ConfirmedAt);
+        Assert.Equal(later, request.LastActivityAt);
+    }
+
+    [Fact(DisplayName = "Confirm: only once, and never after the request moved on")]
+    public void Confirm_Twice_Throws()
     {
         var request = CreateUnderReview();
 
-        Assert.Equal(ServiceRequestStatus.UnderReview, request.Status);
-        Assert.Equal("SR-2026-000001", request.RequestNumber);
+        Assert.Throws<InvalidStateTransitionException>(() => request.Confirm(UtcNow));
+    }
+
+    [Fact(DisplayName = "Accept: an unconfirmed inquiry cannot be accepted")]
+    public void Accept_FromInquiry_Throws()
+    {
+        var request = CreateInquiry();
+
+        Assert.Throws<InvalidStateTransitionException>(() => request.Accept(null, null, null, UtcNow));
+    }
+
+    [Fact(DisplayName = "Reject: the provider may decline while it is still an inquiry")]
+    public void Reject_FromInquiry_MovesToRejected()
+    {
+        var request = CreateInquiry();
+
+        request.Reject("لا أغطي هذه المنطقة.", UtcNow, ServiceOutcomeReason.OutsideCoverage);
+
+        Assert.Equal(ServiceRequestStatus.Rejected, request.Status);
+        Assert.Null(request.ConfirmedAt);
+    }
+
+    [Fact(DisplayName = "Cancel: the customer can withdraw an inquiry")]
+    public void Cancel_FromInquiry_MovesToCancelled()
+    {
+        var request = CreateInquiry();
+
+        request.Cancel(null, UtcNow);
+
+        Assert.Equal(ServiceRequestStatus.Cancelled, request.Status);
+        Assert.Null(request.ConfirmedAt);
+    }
+
+    [Fact(DisplayName = "RecordMessage: moves the activity clock; closed requests take no messages")]
+    public void RecordMessage_TouchesActivity_AndStopsWhenClosed()
+    {
+        var request = CreateInquiry();
+        var later = UtcNow.AddDays(3);
+
+        request.RecordMessage(later);
+        Assert.Equal(later, request.LastActivityAt);
+
+        request.Cancel(null, later);
+        Assert.False(request.CanExchangeMessages);
+        Assert.Throws<InvalidStateTransitionException>(() => request.RecordMessage(later));
+    }
+
+    [Theory(DisplayName = "IsConfirmReminderDue: only an unconfirmed inquiry, once, after two days")]
+    [InlineData(47, true, false)]
+    [InlineData(49, true, true)]
+    [InlineData(49, false, false)]
+    public void IsConfirmReminderDue_Rules(int hours, bool neverReminded, bool expected)
+    {
+        var request = CreateInquiry();
+        if (!neverReminded) request.MarkReminderSent(UtcNow.AddHours(48));
+
+        Assert.Equal(expected, request.IsConfirmReminderDue(UtcNow.AddHours(hours)));
+    }
+
+    [Fact(DisplayName = "IsConfirmReminderDue: a confirmed request is never reminded")]
+    public void IsConfirmReminderDue_Confirmed_False()
+    {
+        var request = CreateUnderReview();
+
+        Assert.False(request.IsConfirmReminderDue(UtcNow.AddDays(5)));
+    }
+
+    [Theory(DisplayName = "Expire: stages that expire after a month without contact")]
+    [InlineData("inquiry", true)]
+    [InlineData("under_review", true)]
+    [InlineData("accepted", true)]
+    [InlineData("scheduled_past", true)]
+    [InlineData("scheduled_future", false)]
+    [InlineData("in_progress", false)]
+    public void Expire_ByStage(string stage, bool expirable)
+    {
+        var request = CreateInquiry();
+        if (stage != "inquiry") request.Confirm(UtcNow);
+        if (stage is "accepted" or "scheduled_past" or "scheduled_future" or "in_progress")
+            request.Accept(null, null, null, UtcNow);
+        if (stage is "scheduled_past")
+            request.Schedule(UtcNow.AddDays(1), UtcNow);
+        if (stage is "scheduled_future" or "in_progress")
+            request.Schedule(UtcNow.AddDays(60), UtcNow);
+        if (stage == "in_progress")
+            request.Start(UtcNow);
+
+        var now = UtcNow.AddDays(31);
+
+        Assert.Equal(expirable, request.IsExpirable(now));
+
+        if (expirable)
+        {
+            request.Expire(ServiceParty.Provider, now);
+            Assert.Equal(ServiceRequestStatus.Expired, request.Status);
+            Assert.Equal(now, request.ExpiredAt);
+            Assert.Equal(ServiceParty.Provider, request.ExpiredWaitingOn);
+        }
+        else
+        {
+            Assert.Throws<InvalidStateTransitionException>(() => request.Expire(ServiceParty.Provider, now));
+        }
+    }
+
+    [Fact(DisplayName = "Expire: a message inside the month keeps the request alive")]
+    public void Expire_AfterRecentMessage_NotExpirable()
+    {
+        var request = CreateInquiry();
+        request.RecordMessage(UtcNow.AddDays(20));
+
+        Assert.False(request.IsExpirable(UtcNow.AddDays(31)));
+        Assert.True(request.IsExpirable(UtcNow.AddDays(51)));
+    }
+
+    [Fact(DisplayName = "Expired is final: no cancel, no messages, no confirm")]
+    public void Expired_IsFinal()
+    {
+        var request = CreateInquiry();
+        request.Expire(ServiceParty.Requester, UtcNow.AddDays(31));
+
+        Assert.Throws<InvalidStateTransitionException>(() => request.Cancel(null, UtcNow));
+        Assert.Throws<InvalidStateTransitionException>(() => request.RecordMessage(UtcNow));
+        Assert.Throws<InvalidStateTransitionException>(() => request.Confirm(UtcNow));
+    }
+
+    [Fact(DisplayName = "Create: an unknown intent is refused")]
+    public void Create_UnknownIntent_Throws()
+    {
+        Assert.Throws<DomainException>(() => ServiceRequest.Create(
+            "SR-2026-000003", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            ServiceCategory.Verification, null, UtcNow, (ServiceRequestIntent)99));
     }
 
     [Theory(DisplayName = "Create: missing required id throws DomainException")]
@@ -383,8 +546,10 @@ public sealed class ServiceRequestTests
         Assert.Equal(ServiceOutcomeReason.OutsideCoverage, request.OutcomeReason);
     }
 
-    [Theory(DisplayName = "ProviderContactVisible: only while the request is alive or delivered")]
-    [InlineData("under_review", true)]
+    [Theory(DisplayName = "ProviderContactVisible: only after acceptance, while the request is alive or delivered")]
+    [InlineData("inquiry", false)]
+    [InlineData("under_review", false)]
+    [InlineData("expired", false)]
     [InlineData("accepted", true)]
     [InlineData("completed", true)]
     [InlineData("rejected", false)]
@@ -392,9 +557,10 @@ public sealed class ServiceRequestTests
     [InlineData("not_completed", false)]
     public void ProviderContactVisible_ByStatus(string state, bool expected)
     {
-        var request = CreateUnderReview();
+        var request = state == "inquiry" ? CreateInquiry() : CreateUnderReview();
         switch (state)
         {
+            case "expired": request.Expire(ServiceParty.Provider, UtcNow.AddDays(31)); break;
             case "accepted": request.Accept(null, null, null, UtcNow); break;
             case "completed": request.Accept(null, null, null, UtcNow); request.Complete(null, null, UtcNow); break;
             case "rejected": request.Reject("لا.", UtcNow); break;

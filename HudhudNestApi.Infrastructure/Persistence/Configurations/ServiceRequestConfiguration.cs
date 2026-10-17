@@ -36,6 +36,10 @@ public sealed class ServiceRequestConfiguration : IEntityTypeConfiguration<Servi
         builder.Property(r => r.RequesterReason).HasConversion<string>().HasMaxLength(30);
         builder.Property(r => r.RequesterFeedbackNote).HasMaxLength(500);
 
+        // The conversation stage.
+        builder.Property(r => r.Intent).HasConversion<string>().HasMaxLength(20);
+        builder.Property(r => r.ExpiredWaitingOn).HasConversion<string>().HasMaxLength(20);
+
         builder.Property(r => r.QuotedPrice).HasColumnType("decimal(18,2)");
         builder.Property(r => r.FinalPrice).HasColumnType("decimal(18,2)");
 
@@ -82,6 +86,9 @@ public sealed class ServiceRequestConfiguration : IEntityTypeConfiguration<Servi
         builder.HasIndex(r => r.Status);
         builder.HasIndex(r => r.CreatedAt);
         builder.HasIndex(r => r.ServiceOfferingId);
+
+        // The lifecycle sweep reads only open stages ordered by the quiet time.
+        builder.HasIndex(r => new { r.Status, r.LastActivityAt });
 
         // Backstop for IServiceRequestRepository.HasActiveRequestAsync's duplicate check.
         builder.HasIndex(r => new { r.PropertyId, r.RequesterId, r.ServiceOfferingId, r.Status });

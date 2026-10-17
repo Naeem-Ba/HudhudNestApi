@@ -1,4 +1,5 @@
 using HudhudNestApi.Application.Services.DTOs;
+using HudhudNestApi.Application.Services.Interfaces;
 using HudhudNestApi.Domain.Services.Entities;
 
 namespace HudhudNestApi.Application.Services.Mapping;
@@ -59,11 +60,14 @@ public static class ServiceMapper
 
     /// <summary>
     /// The audience decides what is shown. The provider's phone/email are an introduction the
-    /// requester earned by asking for the service, so only the requester (and an admin) get
-    /// them; the customer's own feedback and reason likewise stay between the customer and the
+    /// requester earned once the provider accepted their confirmed request, so only the requester
+    /// (and an admin) get them; the customer's own feedback and reason likewise stay between the customer and the
     /// admin, never in the provider's inbox.
     /// </summary>
-    public static ServiceRequestDto ToDto(ServiceRequest request, ServiceRequestAudience audience = ServiceRequestAudience.Provider)
+    public static ServiceRequestDto ToDto(
+        ServiceRequest request,
+        ServiceRequestAudience audience = ServiceRequestAudience.Provider,
+        ServiceRequestMessageStats? messages = null)
     {
         var includeProviderContact = audience != ServiceRequestAudience.Provider;
         var includeFeedback = audience != ServiceRequestAudience.Provider;
@@ -104,7 +108,15 @@ public static class ServiceMapper
             RequesterAnswer: includeFeedback ? request.RequesterAnswer : null,
             RequesterReason: includeFeedback ? request.RequesterReason : null,
             RequesterFeedbackNote: includeFeedback ? request.RequesterFeedbackNote : null,
-            RequesterFeedbackAt: includeFeedback ? request.RequesterFeedbackAt : null);
+            RequesterFeedbackAt: includeFeedback ? request.RequesterFeedbackAt : null,
+            Intent: request.Intent,
+            ConfirmedAt: request.ConfirmedAt,
+            LastActivityAt: request.LastActivityAt,
+            ExpiredAt: request.ExpiredAt,
+            ExpiredWaitingOn: request.ExpiredWaitingOn,
+            MessageCount: messages?.Total ?? 0,
+            UnreadMessageCount: messages?.Unread ?? 0,
+            LastMessageAt: messages?.LastAt);
     }
 
     private static ServiceProviderContactDto? ContactOf(ServiceProvider? provider)

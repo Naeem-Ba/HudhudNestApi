@@ -35,7 +35,26 @@ public sealed record ServiceRequestDto(
     ServiceRequesterAnswer? RequesterAnswer = null,
     ServiceRequesterReason? RequesterReason = null,
     string? RequesterFeedbackNote = null,
-    DateTime? RequesterFeedbackAt = null);
+    DateTime? RequesterFeedbackAt = null,
+    ServiceRequestIntent? Intent = null,
+    DateTime? ConfirmedAt = null,
+    DateTime? LastActivityAt = null,
+    DateTime? ExpiredAt = null,
+    ServiceParty? ExpiredWaitingOn = null,
+    int MessageCount = 0,
+    int UnreadMessageCount = 0,
+    DateTime? LastMessageAt = null);
+
+/// <summary>One message of a request thread, as the viewer sees it.</summary>
+public sealed record ServiceRequestMessageDto(
+    Guid Id,
+    Guid ServiceRequestId,
+    ServiceParty SenderParty,
+    string SenderName,
+    string Body,
+    DateTime CreatedAt,
+    DateTime? ReadAt,
+    bool IsMine);
 
 /// <summary>
 /// How to reach the provider. Present ONLY on a request DTO returned to its own requester (or an

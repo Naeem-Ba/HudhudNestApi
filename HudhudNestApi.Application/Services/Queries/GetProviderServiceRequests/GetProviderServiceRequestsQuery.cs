@@ -18,12 +18,14 @@ public sealed class GetProviderServiceRequestsQueryHandler
 {
     private readonly IServiceProviderRepository _providers;
     private readonly IServiceRequestRepository _requests;
+    private readonly IServiceRequestMessageRepository _messages;
 
     public GetProviderServiceRequestsQueryHandler(
-        IServiceProviderRepository providers, IServiceRequestRepository requests)
+        IServiceProviderRepository providers, IServiceRequestRepository requests, IServiceRequestMessageRepository messages)
     {
         _providers = providers;
         _requests = requests;
+        _messages = messages;
     }
 
     public async Task<IReadOnlyList<ServiceRequestDto>> Handle(
@@ -34,10 +36,16 @@ public sealed class GetProviderServiceRequestsQueryHandler
 
         var requests = await _requests.GetByServiceProviderIdAsync(provider.Id, ct);
 
-        return requests
+        var visible = requests
             .Where(r => request.StatusFilter is null || r.Status == request.StatusFilter)
             .OrderByDescending(r => r.CreatedAt)
-            .Select(r => ServiceMapper.ToDto(r))
+            .ToList();
+
+        var stats = await _messages.GetStatsAsync(visible.Select(r => r.Id).ToList(), ServiceParty.Provider, ct);
+
+        return visible
+            .Select(r => ServiceMapper.ToDto(
+                r, ServiceRequestAudience.Provider, stats.GetValueOrDefault(r.Id, ServiceRequestMessageStats.Empty)))
             .ToList()
             .AsReadOnly();
     }

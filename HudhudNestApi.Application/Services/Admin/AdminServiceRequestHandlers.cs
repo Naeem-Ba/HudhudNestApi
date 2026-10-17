@@ -79,17 +79,20 @@ public sealed class GetAdminServiceRequestDetailQueryHandler
     private readonly IServiceRequestStatusHistoryRepository _history;
     private readonly IServiceReviewRepository _reviews;
     private readonly IUserAccountRepository _users;
+    private readonly IServiceRequestMessageRepository _messages;
 
     public GetAdminServiceRequestDetailQueryHandler(
         IServiceRequestRepository requests,
         IServiceRequestStatusHistoryRepository history,
         IServiceReviewRepository reviews,
-        IUserAccountRepository users)
+        IUserAccountRepository users,
+        IServiceRequestMessageRepository messages)
     {
         _requests = requests;
         _history = history;
         _reviews = reviews;
         _users = users;
+        _messages = messages;
     }
 
     public async Task<AdminServiceRequestDetailDto> Handle(
@@ -115,23 +118,28 @@ public sealed class GetAdminServiceRequestDetailQueryHandler
                 review.IsHidden, review.HiddenReason, review.CreatedAt);
         }
 
+        var thread = await _messages.GetThreadAsync(serviceRequest.Id, ct);
+        var stats = new ServiceRequestMessageStats(thread.Count, 0, thread.Count == 0 ? null : thread[^1].CreatedAt);
+
         return new AdminServiceRequestDetailDto(
-            ServiceMapper.ToDto(serviceRequest, ServiceRequestAudience.Admin),
+            ServiceMapper.ToDto(serviceRequest, ServiceRequestAudience.Admin, stats),
             entries.OrderBy(e => e.CreatedAt).Select(e => ServiceMapper.ToDto(e)).ToList(),
             reviewDto,
-            NeedsAttention(serviceRequest, DateTime.UtcNow));
+            NeedsAttention(serviceRequest, DateTime.UtcNow),
+            Commands.ServiceConversation.GetServiceRequestMessagesQueryHandler.ToDtos(
+                serviceRequest, serviceRequest.ServiceProvider!, viewer: null, thread));
     }
 
-    /// <summary>Same rule as the list filter: disputed by the customer, or open and untouched for a week.</summary>
+    /// <summary>Same rule as the list filter: disputed by the customer, or open (an unconfirmed inquiry counts) and untouched for a week.</summary>
     internal static bool NeedsAttention(ServiceRequest r, DateTime utcNow)
     {
         if (r.RequesterAnswer == ServiceRequesterAnswer.Disputed)
             return true;
 
-        var open = r.Status is ServiceRequestStatus.UnderReview or ServiceRequestStatus.Accepted
-            or ServiceRequestStatus.Scheduled or ServiceRequestStatus.InProgress;
+        var open = r.Status is ServiceRequestStatus.Inquiry or ServiceRequestStatus.UnderReview
+            or ServiceRequestStatus.Accepted or ServiceRequestStatus.Scheduled or ServiceRequestStatus.InProgress;
 
-        return open && r.UpdatedAt < utcNow - IServiceRequestAdminRepository.StaleAfter;
+        return open && r.LastActivityAt < utcNow - IServiceRequestAdminRepository.StaleAfter;
     }
 }
 

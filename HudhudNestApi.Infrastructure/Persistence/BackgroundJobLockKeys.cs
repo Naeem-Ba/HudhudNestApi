@@ -36,4 +36,6 @@ public static class BackgroundJobLockKeys
     public const long SocialPublicationDispatch = 20260908_1007;
 
     public const long ValuationInquiryExpiry = 20260912_1008;
+
+    public const long ServiceRequestLifecycle = 20261017_1009;
 }

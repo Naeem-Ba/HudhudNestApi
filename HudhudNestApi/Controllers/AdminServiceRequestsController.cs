@@ -37,9 +37,10 @@ public sealed class AdminServiceRequestsController : ControllerBase
         [FromQuery] bool needsAttention = false,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
+        [FromQuery] bool? confirmed = null,
         CancellationToken ct = default)
         => Ok(await _mediator.Send(new SearchAdminServiceRequestsQuery(new AdminServiceRequestFilter(
-            search, status, category, offeringId, providerId, from, to, needsAttention, page, pageSize)), ct));
+            search, status, category, offeringId, providerId, from, to, needsAttention, page, pageSize, confirmed)), ct));
 
     [HttpGet("stats")]
     [ProducesResponseType(typeof(ServiceStatsDto), StatusCodes.Status200OK)]

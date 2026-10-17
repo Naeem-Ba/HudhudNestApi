@@ -106,6 +106,7 @@ public sealed class AppDbContext
     public DbSet<ServiceRequest> ServiceRequests => Set<ServiceRequest>();
     public DbSet<ServiceRequestStatusHistory> ServiceRequestStatusHistories => Set<ServiceRequestStatusHistory>();
     public DbSet<ServiceRequestDocument> ServiceRequestDocuments => Set<ServiceRequestDocument>();
+    public DbSet<ServiceRequestMessage> ServiceRequestMessages => Set<ServiceRequestMessage>();
     public DbSet<ServiceReview> ServiceReviews => Set<ServiceReview>();
     public DbSet<ServiceProviderApplication> ServiceProviderApplications => Set<ServiceProviderApplication>();
     public DbSet<ServiceProviderEvent> ServiceProviderEvents => Set<ServiceProviderEvent>();
@@ -231,6 +232,7 @@ public sealed class AppDbContext
         builder.Entity<ServiceRequest>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ServiceRequestStatusHistory>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ServiceRequestDocument>().HasQueryFilter(e => !e.IsDeleted);
+        builder.Entity<ServiceRequestMessage>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ServiceReview>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ServiceProviderApplication>().HasQueryFilter(e => !e.IsDeleted);
         builder.Entity<ServiceProviderEvent>().HasQueryFilter(e => !e.IsDeleted);

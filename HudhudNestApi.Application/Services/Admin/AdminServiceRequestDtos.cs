@@ -15,7 +15,8 @@ public sealed record AdminServiceRequestFilter(
     DateTime? To = null,
     bool NeedsAttentionOnly = false,
     int Page = 1,
-    int PageSize = 20);
+    int PageSize = 20,
+    bool? Confirmed = null);
 
 public sealed record AdminServiceRequestSummaryDto(
     Guid Id,
@@ -35,7 +36,12 @@ public sealed record AdminServiceRequestSummaryDto(
     int? Rating,
     bool NeedsAttention,
     DateTime CreatedAt,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    ServiceRequestIntent? Intent = null,
+    DateTime? ConfirmedAt = null,
+    DateTime? LastActivityAt = null,
+    ServiceParty? ExpiredWaitingOn = null,
+    int MessageCount = 0);
 
 public sealed record AdminServiceReviewDto(
     Guid Id,
@@ -51,7 +57,8 @@ public sealed record AdminServiceRequestDetailDto(
     ServiceRequestDto Request,
     IReadOnlyList<ServiceRequestStatusHistoryDto> History,
     AdminServiceReviewDto? Review,
-    bool NeedsAttention);
+    bool NeedsAttention,
+    IReadOnlyList<ServiceRequestMessageDto>? Messages = null);
 
 public sealed record ReasonCountDto(string Reason, int Count);
 
@@ -70,10 +77,17 @@ public sealed record ServiceStatsRowDto(
     int Cancelled,
     int Disputed,
     double? AverageRating,
-    int RatingCount)
+    int RatingCount,
+    int Inquiries = 0,
+    int OpenInquiries = 0,
+    int InquiriesDropped = 0,
+    int Expired = 0)
 {
     /// <summary>Requests that ended one way or the other.</summary>
-    public int Closed => Completed + NotCompleted + Rejected + Cancelled;
+    public int Closed => Completed + NotCompleted + Rejected + Cancelled + Expired;
+
+    /// <summary>Confirmed requests / all conversations. Null until someone made contact.</summary>
+    public double? ConversionRate => Inquiries == 0 ? null : (double)Requested / Inquiries;
 
     /// <summary>Completed / closed. Null until something closed, so an empty row never shows 0%.</summary>
     public double? CompletionRate => Closed == 0 ? null : (double)Completed / Closed;
@@ -87,4 +101,5 @@ public sealed record ServiceStatsDto(
     IReadOnlyList<ServiceStatsRowDto> ByOffering,
     IReadOnlyList<ServiceStatsRowDto> ByProvider,
     IReadOnlyList<ReasonCountDto> ProviderReasons,
-    IReadOnlyList<ReasonCountDto> RequesterReasons);
+    IReadOnlyList<ReasonCountDto> RequesterReasons,
+    IReadOnlyList<ReasonCountDto>? ExpiryReasons = null);

@@ -24,16 +24,19 @@ public sealed class ServiceRequestAdminRepository : IServiceRequestAdminReposito
         if (filter.ProviderId is { } providerId) query = query.Where(r => r.ServiceProviderId == providerId);
         if (filter.From is { } from) query = query.Where(r => r.CreatedAt >= from);
         if (filter.To is { } to) query = query.Where(r => r.CreatedAt <= to);
+        if (filter.Confirmed is { } confirmed)
+            query = confirmed ? query.Where(r => r.ConfirmedAt != null) : query.Where(r => r.ConfirmedAt == null);
 
         if (filter.NeedsAttentionOnly)
         {
             query = query.Where(r =>
                 r.RequesterAnswer == ServiceRequesterAnswer.Disputed
-                || ((r.Status == ServiceRequestStatus.UnderReview
+                || ((r.Status == ServiceRequestStatus.Inquiry
+                        || r.Status == ServiceRequestStatus.UnderReview
                         || r.Status == ServiceRequestStatus.Accepted
                         || r.Status == ServiceRequestStatus.Scheduled
                         || r.Status == ServiceRequestStatus.InProgress)
-                    && r.UpdatedAt < staleBefore));
+                    && r.LastActivityAt < staleBefore));
         }
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
@@ -76,6 +79,11 @@ public sealed class ServiceRequestAdminRepository : IServiceRequestAdminReposito
                     .FirstOrDefault(),
                 r.CreatedAt,
                 r.UpdatedAt,
+                r.Intent,
+                r.ConfirmedAt,
+                r.LastActivityAt,
+                r.ExpiredWaitingOn,
+                MessageCount = _db.ServiceRequestMessages.Count(m => m.ServiceRequestId == r.Id),
             })
             .ToListAsync(ct);
 
@@ -98,9 +106,14 @@ public sealed class ServiceRequestAdminRepository : IServiceRequestAdminReposito
             r.RequesterReason,
             r.Rating,
             r.RequesterAnswer == ServiceRequesterAnswer.Disputed
-                || (IsOpen(r.Status) && r.UpdatedAt < staleBefore),
+                || (IsOpen(r.Status) && r.LastActivityAt < staleBefore),
             r.CreatedAt,
-            r.UpdatedAt)).ToList();
+            r.UpdatedAt,
+            r.Intent,
+            r.ConfirmedAt,
+            r.LastActivityAt,
+            r.ExpiredWaitingOn,
+            r.MessageCount)).ToList();
 
         return (items, total);
     }
@@ -121,7 +134,14 @@ public sealed class ServiceRequestAdminRepository : IServiceRequestAdminReposito
                 g.Key.ServiceOfferingId,
                 g.Key.ServiceProviderId,
                 g.Key.Category,
-                Requested = g.Count(),
+                Inquiries = g.Count(),
+                OpenInquiries = g.Count(r => r.Status == ServiceRequestStatus.Inquiry),
+                // Conversations that never became a request: dropped by either side or by the clock.
+                InquiriesDropped = g.Count(r => r.ConfirmedAt == null
+                    && (r.Status == ServiceRequestStatus.Rejected
+                        || r.Status == ServiceRequestStatus.Cancelled
+                        || r.Status == ServiceRequestStatus.Expired)),
+                Requested = g.Count(r => r.ConfirmedAt != null),
                 Open = g.Count(r => r.Status == ServiceRequestStatus.UnderReview
                     || r.Status == ServiceRequestStatus.Accepted
                     || r.Status == ServiceRequestStatus.Scheduled
@@ -129,8 +149,10 @@ public sealed class ServiceRequestAdminRepository : IServiceRequestAdminReposito
                 Completed = g.Count(r => r.Status == ServiceRequestStatus.Completed
                     || r.Status == ServiceRequestStatus.Reviewed),
                 NotCompleted = g.Count(r => r.Status == ServiceRequestStatus.NotCompleted),
-                Rejected = g.Count(r => r.Status == ServiceRequestStatus.Rejected),
-                Cancelled = g.Count(r => r.Status == ServiceRequestStatus.Cancelled),
+                // Confirmed requests only: a withdrawn inquiry is not a cancelled request.
+                Rejected = g.Count(r => r.ConfirmedAt != null && r.Status == ServiceRequestStatus.Rejected),
+                Cancelled = g.Count(r => r.ConfirmedAt != null && r.Status == ServiceRequestStatus.Cancelled),
+                Expired = g.Count(r => r.ConfirmedAt != null && r.Status == ServiceRequestStatus.Expired),
                 Disputed = g.Count(r => r.RequesterAnswer == ServiceRequesterAnswer.Disputed),
             })
             .ToListAsync(ct);
@@ -171,8 +193,9 @@ public sealed class ServiceRequestAdminRepository : IServiceRequestAdminReposito
             ratingByOffering.TryGetValue(o.Id, out var r);
             offeringRows.Add((o.Id, o.Title, o.ProviderName, o.ServiceProviderId, o.Category, o.IsActive,
                 c is null
-                    ? new Cell(0, 0, 0, 0, 0, 0, 0, r.Sum, r.Count)
-                    : new Cell(c.Requested, c.Open, c.Completed, c.NotCompleted, c.Rejected, c.Cancelled, c.Disputed, r.Sum, r.Count)));
+                    ? new Cell(0, 0, 0, 0, 0, 0, 0, r.Sum, r.Count, 0, 0, 0, 0)
+                    : new Cell(c.Requested, c.Open, c.Completed, c.NotCompleted, c.Rejected, c.Cancelled, c.Disputed, r.Sum, r.Count,
+                        c.Inquiries, c.OpenInquiries, c.InquiriesDropped, c.Expired)));
         }
 
         var byOffering = offeringRows
@@ -205,30 +228,41 @@ public sealed class ServiceRequestAdminRepository : IServiceRequestAdminReposito
             .Select(g => new { Reason = g.Key, Count = g.Count() })
             .ToListAsync(ct);
 
+        // Who stayed silent when a request expired: the provider never answered, or the customer did not come back.
+        var expiry = await requests
+            .Where(r => r.ExpiredWaitingOn != null)
+            .GroupBy(r => r.ExpiredWaitingOn!.Value)
+            .Select(g => new { Party = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+
         return new ServiceStatsDto(
             from, to, totals, byCategory, byOffering, byProvider,
             providerReasons.OrderByDescending(x => x.Count).Select(x => new ReasonCountDto(x.Reason.ToString(), x.Count)).ToList(),
-            requesterReasons.OrderByDescending(x => x.Count).Select(x => new ReasonCountDto(x.Reason.ToString(), x.Count)).ToList());
+            requesterReasons.OrderByDescending(x => x.Count).Select(x => new ReasonCountDto(x.Reason.ToString(), x.Count)).ToList(),
+            expiry.OrderByDescending(x => x.Count).Select(x => new ReasonCountDto(x.Party.ToString(), x.Count)).ToList());
     }
 
     private sealed record Cell(
         int Requested, int Open, int Completed, int NotCompleted, int Rejected, int Cancelled, int Disputed,
-        int RatingSum, int RatingCount);
+        int RatingSum, int RatingCount,
+        int Inquiries, int OpenInquiries, int InquiriesDropped, int Expired);
 
     private static Cell Sum(IEnumerable<Cell> cells)
-        => cells.Aggregate(new Cell(0, 0, 0, 0, 0, 0, 0, 0, 0), (a, c) => new Cell(
+        => cells.Aggregate(new Cell(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (a, c) => new Cell(
             a.Requested + c.Requested, a.Open + c.Open, a.Completed + c.Completed,
             a.NotCompleted + c.NotCompleted, a.Rejected + c.Rejected, a.Cancelled + c.Cancelled,
-            a.Disputed + c.Disputed, a.RatingSum + c.RatingSum, a.RatingCount + c.RatingCount));
+            a.Disputed + c.Disputed, a.RatingSum + c.RatingSum, a.RatingCount + c.RatingCount,
+            a.Inquiries + c.Inquiries, a.OpenInquiries + c.OpenInquiries,
+            a.InquiriesDropped + c.InquiriesDropped, a.Expired + c.Expired));
 
     private static ServiceStatsRowDto ToRow(string key, Guid? id, string? label, string? subLabel, bool? active, Cell c)
         => new(key, id, label, subLabel, active, c.Requested, c.Open, c.Completed, c.NotCompleted, c.Rejected,
             c.Cancelled, c.Disputed,
             c.RatingCount == 0 ? null : Math.Round((double)c.RatingSum / c.RatingCount, 2),
-            c.RatingCount);
+            c.RatingCount, c.Inquiries, c.OpenInquiries, c.InquiriesDropped, c.Expired);
 
     private static bool IsOpen(ServiceRequestStatus s)
-        => s is ServiceRequestStatus.UnderReview or ServiceRequestStatus.Accepted
+        => s is ServiceRequestStatus.Inquiry or ServiceRequestStatus.UnderReview or ServiceRequestStatus.Accepted
             or ServiceRequestStatus.Scheduled or ServiceRequestStatus.InProgress;
 
     private static string EscapeLike(string s)

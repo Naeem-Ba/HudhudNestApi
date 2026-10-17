@@ -135,8 +135,8 @@ public sealed class ServiceOutcomeTrackingTests : IAsyncLifetime
 
     // ── contact reveal ───────────────────────────────────────────────
 
-    [Fact(DisplayName = "Provider contact: hidden from the ad, revealed to the requester on request, never shown to the provider's inbox")]
-    public async Task ProviderContact_RevealedOnlyToRequester()
+    [Fact(DisplayName = "Provider contact: hidden from the ad and before acceptance, revealed to the requester once accepted, never shown to the provider's inbox")]
+    public async Task ProviderContact_RevealedOnlyToRequesterAfterAcceptance()
     {
         var anonymous = _factory.CreateClient();
         var ad = await anonymous.GetStringAsync("/api/ServiceOfferings?category=Verification");
@@ -148,8 +148,12 @@ public sealed class ServiceOutcomeTrackingTests : IAsyncLifetime
         var created = await ReadJson(await CustomerClient.PostAsJsonAsync("/api/ServiceRequests",
             new { propertyId = _property, serviceOfferingId = _offering }), HttpStatusCode.Created);
         var id = created.GetProperty("id").GetGuid();
-        Assert.Equal(ProviderPhone, created.GetProperty("providerContact").GetProperty("phone").GetString());
-        Assert.Equal(ProviderEmail, created.GetProperty("providerContact").GetProperty("email").GetString());
+
+        // Asking for the service does not reveal the number: the two talk inside the app first.
+        Assert.Equal(JsonValueKind.Null, created.GetProperty("providerContact").ValueKind);
+        Assert.DoesNotContain("777 4242", await CustomerClient.GetStringAsync("/api/ServiceRequests/mine"));
+
+        await ReadJson(await ProviderClient.PutAsJsonAsync($"/api/ServiceRequests/{id}/accept", new { providerNote = "ok" }), HttpStatusCode.OK);
 
         var mine = await ReadJson(await CustomerClient.GetAsync("/api/ServiceRequests/mine"), HttpStatusCode.OK);
         Assert.Equal(ProviderPhone, mine.EnumerateArray().Single().GetProperty("providerContact").GetProperty("phone").GetString());
@@ -162,6 +166,7 @@ public sealed class ServiceOutcomeTrackingTests : IAsyncLifetime
 
         var asCustomer = await ReadJson(await CustomerClient.GetAsync($"/api/ServiceRequests/{id}"), HttpStatusCode.OK);
         Assert.Equal(ProviderPhone, asCustomer.GetProperty("providerContact").GetProperty("phone").GetString());
+        Assert.Equal(ProviderEmail, asCustomer.GetProperty("providerContact").GetProperty("email").GetString());
     }
 
     [Fact(DisplayName = "Provider contact: disappears once the request is rejected")]

@@ -166,4 +166,16 @@ public enum NotificationType
     /// <summary>The provider closed an accepted ServiceRequest as not delivered. Sent to the requester,
     /// who is asked why it did not happen from their side.</summary>
     ServiceRequestNotCompleted = 44,
+
+    /// <summary>A customer opened a conversation about a service. Sent to the provider.</summary>
+    ServiceInquiryReceived = 45,
+
+    /// <summary>A new message in a service request thread. Sent to the other side.</summary>
+    ServiceRequestMessage = 46,
+
+    /// <summary>The customer has not confirmed an inquiry after two days. Sent to the customer.</summary>
+    ServiceRequestConfirmReminder = 47,
+
+    /// <summary>A month without contact: the request was closed by the system. Sent to both sides.</summary>
+    ServiceRequestExpired = 48,
 }

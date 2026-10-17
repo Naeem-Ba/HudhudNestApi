@@ -9,6 +9,7 @@ using HudhudNestApi.Application.Services.Interfaces;
 using HudhudNestApi.Application.Services.Mapping;
 using HudhudNestApi.Domain.Notifications.Enums;
 using HudhudNestApi.Domain.Services.Entities;
+using HudhudNestApi.Domain.Services.Enums;
 
 namespace HudhudNestApi.Application.Services.Commands.CreateServiceRequest;
 
@@ -26,6 +27,7 @@ public sealed class CreateServiceRequestCommandHandler
     private readonly IServiceProviderRepository _providers;
     private readonly IServiceRequestRepository _requests;
     private readonly IServiceRequestStatusHistoryRepository _history;
+    private readonly IServiceRequestMessageRepository _messages;
     private readonly IServiceRequestNumberGenerator _numbers;
     private readonly IUnitOfWork _uow;
     private readonly INotificationService _notifications;
@@ -37,6 +39,7 @@ public sealed class CreateServiceRequestCommandHandler
         IServiceProviderRepository providers,
         IServiceRequestRepository requests,
         IServiceRequestStatusHistoryRepository history,
+        IServiceRequestMessageRepository messages,
         IServiceRequestNumberGenerator numbers,
         IUnitOfWork uow,
         INotificationService notifications,
@@ -47,6 +50,7 @@ public sealed class CreateServiceRequestCommandHandler
         _providers = providers;
         _requests = requests;
         _history = history;
+        _messages = messages;
         _numbers = numbers;
         _uow = uow;
         _notifications = notifications;
@@ -84,6 +88,8 @@ public sealed class CreateServiceRequestCommandHandler
 
         var requestNumber = await _numbers.NextAsync(ct);
         var now = DateTime.UtcNow;
+        // A null intent is an app version from before the conversation stage: confirm at once.
+        var legacy = request.Intent is null;
 
         var serviceRequest = ServiceRequest.Create(
             requestNumber,
@@ -93,19 +99,42 @@ public sealed class CreateServiceRequestCommandHandler
             offering.Id,
             offering.Category,
             request.RequesterNote,
-            now);
+            now,
+            request.Intent ?? ServiceRequestIntent.Request);
 
         await _requests.AddAsync(serviceRequest, ct);
 
         await _history.AddAsync(
-            Domain.Services.Entities.ServiceRequestStatusHistory.Record(
+            ServiceRequestStatusHistory.Record(
                 serviceRequest.Id,
                 fromStatus: null,
                 toStatus: serviceRequest.Status,
                 changedByUserId: request.RequesterId,
-                note: "تم تقديم الطلب واستلامه للمراجعة.",
+                note: "فتح العميل محادثة مع المزوّد حول الخدمة.",
                 utcNow: now),
             ct);
+
+        if (!string.IsNullOrWhiteSpace(request.RequesterNote))
+        {
+            await _messages.AddAsync(
+                ServiceRequestMessage.Create(
+                    serviceRequest.Id, request.RequesterId, ServiceParty.Requester, request.RequesterNote, now),
+                ct);
+        }
+
+        if (legacy)
+        {
+            serviceRequest.Confirm(now);
+            await _history.AddAsync(
+                ServiceRequestStatusHistory.Record(
+                    serviceRequest.Id,
+                    ServiceRequestStatus.Inquiry,
+                    serviceRequest.Status,
+                    request.RequesterId,
+                    "تم تقديم الطلب واستلامه للمراجعة.",
+                    now),
+                ct);
+        }
 
         await _uow.SaveChangesAsync(ct);
 
@@ -118,8 +147,11 @@ public sealed class CreateServiceRequestCommandHandler
                 recipientId: provider.UserId,
                 propertyId: property.Id,
                 propertyTitle: property.Title,
-                type: NotificationType.ServiceRequestSubmitted,
-                detail: NotificationText.Of(NotificationKeys.ServiceSubmittedDetail, ("number", requestNumber), ("title", property.Title)),
+                type: legacy ? NotificationType.ServiceRequestSubmitted : NotificationType.ServiceInquiryReceived,
+                detail: NotificationText.Of(
+                    legacy ? NotificationKeys.ServiceSubmittedDetail : NotificationKeys.ServiceInquiryDetail,
+                    ("number", requestNumber), ("title", property.Title)),
+                relatedEntityId: serviceRequest.Id,
                 ct: ct);
         }
         catch (Exception ex)
@@ -132,6 +164,9 @@ public sealed class CreateServiceRequestCommandHandler
         }
 
         var reloaded = await _requests.GetByIdAsync(serviceRequest.Id, ct) ?? serviceRequest;
-        return ServiceMapper.ToDto(reloaded, ServiceRequestAudience.Requester);
+        var stats = await _messages.GetStatsAsync([reloaded.Id], ServiceParty.Requester, ct);
+        return ServiceMapper.ToDto(
+            reloaded, ServiceRequestAudience.Requester,
+            stats.GetValueOrDefault(reloaded.Id, ServiceRequestMessageStats.Empty));
     }
 }
