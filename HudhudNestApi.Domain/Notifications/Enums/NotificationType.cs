@@ -162,4 +162,19 @@ public enum NotificationType
 
     /// <summary>The provider was suspended, reactivated or had its approval revoked.</summary>
     ServiceProviderStatusChanged = 43,
+
+    /// <summary>
+    /// An administrator took the recipient's listing down. The message carries the reason; the listing is
+    /// hidden and cannot be re-published or extended by its owner.
+    /// </summary>
+    ListingTakenDown = 44,
+
+    /// <summary>An administrator lifted a take-down and the listing is public again.</summary>
+    ListingRestored = 45,
+
+    /// <summary>
+    /// A visit the recipient had requested was cancelled because the listing was deleted or removed.
+    /// Sent to the visitor; RelatedEntityId is the visit request id.
+    /// </summary>
+    VisitCancelledByHost = 46,
 }

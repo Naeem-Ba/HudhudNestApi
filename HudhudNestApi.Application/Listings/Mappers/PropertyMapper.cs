@@ -96,6 +96,8 @@ public static class PropertyMapper
         IsPublished = p.IsPublished,
         PublishedAt = p.PublishedAt,
         ExpiresAt = p.ExpiresAt,
+        IsTakenDown = p.IsTakenDown,
+        TakenDownReason = p.TakenDownReason,
 
         // Paid featured placement — effective value, not the raw flag. See PropertyDto.
         IsFeatured = p.IsCurrentlyFeatured(asOfUtc ?? DateTime.UtcNow),

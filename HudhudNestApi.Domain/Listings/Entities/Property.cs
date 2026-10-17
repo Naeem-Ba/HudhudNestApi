@@ -99,6 +99,24 @@ public class Property : AuditableEntity
     public DateTime? PublishedAt { get; private set; }
     public DateTime? ExpiresAt { get; set; }
 
+    // -- Administrative take-down (QA Phase 8, P8-D10) -----------
+    /// <summary>
+    /// When an administrator took this listing down; null while it has not been. A taken-down listing is
+    /// unpublished (so every public read path already hides it) and its owner cannot publish or extend it
+    /// again - only an administrator can restore it. The owner still sees it, with the reason.
+    /// </summary>
+    public DateTime? TakenDownAt { get; private set; }
+
+    /// <summary>The administrator who took the listing down.</summary>
+    public Guid? TakenDownByUserId { get; private set; }
+
+    /// <summary>Why the listing was taken down; shown to the owner. Always set together with <see cref="TakenDownAt"/>.</summary>
+    public string? TakenDownReason { get; private set; }
+
+    public const int MaxTakeDownReasonLength = 500;
+
+    public bool IsTakenDown => TakenDownAt is not null;
+
     /// <summary>
     /// When the owner was last warned that this listing is about to expire. Null means
     /// no warning is outstanding for the current publication window.
@@ -336,9 +354,28 @@ public class Property : AuditableEntity
     {
         if (IsPublished)
             throw new DomainException("Property is already published.");
+
+        EnsureCanBePublished();
+
         IsPublished = true;
         PublishedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Publishing used to reset ExpiresAt of an Expired listing without payment (QA Phase 8, P8-D03):
+    /// the only way back from Expired is the paid extension, and a taken-down listing needs an admin.
+    /// Public so a caller can refuse before it spends time on other checks (the image requirement).
+    /// </summary>
+    public void EnsureCanBePublished()
+    {
+        if (IsTakenDown)
+            throw new InvalidStateTransitionException(
+                "أوقفت الإدارة هذا الإعلان ولا يمكن نشره من جديد. تواصل مع الإدارة لاستعادته.");
+
+        if (Status == PropertyStatus.Expired)
+            throw new InvalidStateTransitionException(
+                "انتهت مدة نشر هذا الإعلان. جدّد النشر عبر التمديد بدل إعادة نشره.");
     }
 
     public void Unpublish()
@@ -483,11 +520,84 @@ public class Property : AuditableEntity
         if (period <= TimeSpan.Zero)
             throw new DomainException("Extension period must be positive.");
 
-        ExpiresAt = fromUtc.Add(period);
+        // A concluded deal or an archived listing is not an offer with a clock, and extending it used to
+        // put a sold listing back on the market (QA Phase 8, P8-D02).
+        if (!CanBeExtended)
+            throw new InvalidStateTransitionException(
+                IsTakenDown
+                    ? "أوقفت الإدارة هذا الإعلان ولا يمكن تمديده."
+                    : "لا يمكن تمديد إعلان مباع أو مؤجَّر أو مؤرشف.");
+
+        var reviving = Status == PropertyStatus.Expired;
+
+        // An early extension adds to the days that are left instead of discarding them (P8-D04); a
+        // listing that already expired starts a fresh window from the payment.
+        var windowStart = !reviving && ExpiresAt is { } current && current > fromUtc ? current : fromUtc;
+
+        ExpiresAt = windowStart.Add(period);
         ExpiryWarningSentAt = null;
-        Status = PropertyStatus.Available;
+
+        if (reviving)
+        {
+            // Only an expired listing is brought back; a Reserved one stays Reserved and an
+            // owner-unpublished one stays unpublished.
+            Status = PropertyStatus.Available;
+            IsPublished = true;
+            PublishedAt ??= fromUtc;
+        }
+
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Whether a publication extension makes sense: not for a concluded deal, an archived listing or one an
+    /// administrator took down.
+    /// </summary>
+    public bool CanBeExtended
+        => !IsTakenDown &&
+           Status != PropertyStatus.Sold &&
+           Status != PropertyStatus.Rented &&
+           Status != PropertyStatus.Archived;
+
+    /// <summary>
+    /// Takes the listing off the site on an administrator's decision. It is unpublished, so every public
+    /// read path hides it, and any featured placement ends. Reversible with <see cref="RestoreFromTakeDown"/>.
+    /// </summary>
+    public void TakeDown(Guid administratorId, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("A reason is required to take a listing down.");
+
+        reason = reason.Trim();
+        if (reason.Length > MaxTakeDownReasonLength)
+            throw new DomainException($"The reason must be at most {MaxTakeDownReasonLength} characters.");
+
+        if (IsTakenDown)
+            throw new InvalidStateTransitionException("هذا الإعلان موقوف من الإدارة مسبقاً.");
+
+        var now = DateTime.UtcNow;
+        TakenDownAt = now;
+        TakenDownByUserId = administratorId;
+        TakenDownReason = reason;
+        IsPublished = false;
+        IsFeatured = false;
+        UpdatedAt = now;
+    }
+
+    /// <summary>
+    /// Lifts an administrative take-down and publishes the listing again. If its publication window has
+    /// meanwhile elapsed the next expiry sweep handles it as usual; an administrator can extend it.
+    /// </summary>
+    public void RestoreFromTakeDown()
+    {
+        if (!IsTakenDown)
+            throw new InvalidStateTransitionException("هذا الإعلان غير موقوف من الإدارة.");
+
+        TakenDownAt = null;
+        TakenDownByUserId = null;
+        TakenDownReason = null;
         IsPublished = true;
-        PublishedAt ??= fromUtc;
+        PublishedAt ??= DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
 

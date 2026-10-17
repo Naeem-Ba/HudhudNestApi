@@ -116,6 +116,15 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
             .IsFixedLength()
             .HasDefaultValue("SYP");
 
+        // -- Administrative take-down (QA Phase 8, P8-D10) ----
+        builder.Property(p => p.TakenDownReason)
+            .HasMaxLength(Property.MaxTakeDownReasonLength);
+
+        // Lets the admin screen list what is taken down without scanning the table.
+        builder.HasIndex(p => p.TakenDownAt)
+            .HasDatabaseName("IX_Properties_TakenDownAt")
+            .HasFilter("\"TakenDownAt\" IS NOT NULL");
+
         // -- Physical -----------------------------------------
         builder.Property(p => p.Area)
             .HasColumnType("decimal(10,2)");

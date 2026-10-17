@@ -1,4 +1,5 @@
 using MediatR;
+using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Enums;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
@@ -38,19 +39,22 @@ public sealed class UploadPropertyImagesCommandHandler
     private readonly IMediaStorageService _storage;
     private readonly IMediaFolderBuilder _folderBuilder;
     private readonly IUnitOfWork _uow;
+    private readonly ILogger<UploadPropertyImagesCommandHandler>? _logger;
 
     public UploadPropertyImagesCommandHandler(
         IPropertyImageRepository images,
         IPropertyOwnershipService ownership,
         IMediaStorageService storage,
         IMediaFolderBuilder folderBuilder,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        ILogger<UploadPropertyImagesCommandHandler>? logger = null)
     {
         _images = images;
         _ownership = ownership;
         _storage = storage;
         _folderBuilder = folderBuilder;
         _uow = uow;
+        _logger = logger;
     }
 
     public async Task<UploadPropertyImagesResult> Handle(
@@ -183,9 +187,19 @@ public sealed class UploadPropertyImagesCommandHandler
     {
         foreach (var publicId in uploadedPublicIds)
         {
-            if (!string.IsNullOrWhiteSpace(publicId))
+            if (string.IsNullOrWhiteSpace(publicId))
+                continue;
+
+            // Best-effort: this runs because an upload already failed, usually because the provider is
+            // unreachable, and a delete that fails for the same reason must not turn the 4xx into a 500
+            // (QA Phase 8, P8-D06). The orphan is logged for clean-up.
+            try
             {
                 await _storage.DeleteImageAsync(publicId, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger?.LogWarning(ex, "Could not delete the partly uploaded image {PublicId}.", publicId);
             }
         }
     }

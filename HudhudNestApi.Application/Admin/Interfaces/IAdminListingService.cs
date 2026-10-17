@@ -43,4 +43,22 @@ public interface IAdminListingService
         Guid performedByUserId,
         string? ipAddress,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Takes a listing off the site with a reason the owner is shown (QA Phase 8, P8-D10). Reversible with
+    /// <see cref="RestoreListingAsync"/>; the owner cannot publish or extend it meanwhile.
+    /// </summary>
+    Task<AdminOperationResult> TakeDownListingAsync(
+        Guid propertyId,
+        string? reason,
+        Guid performedByUserId,
+        string? ipAddress,
+        CancellationToken ct = default);
+
+    Task<AdminOperationResult> RestoreListingAsync(
+        Guid propertyId,
+        string? reason,
+        Guid performedByUserId,
+        string? ipAddress,
+        CancellationToken ct = default);
 }

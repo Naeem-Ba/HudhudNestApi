@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Domain.Common.Exceptions;
 
@@ -169,6 +170,23 @@ public sealed class ExceptionHandlingMiddleware
                 code = "CSRF_VALIDATION_FAILED"
             });
         }
+        catch (TooManyRequestsException ex)
+        {
+            // 429 - a data-dependent limit (e.g. messages already sent about one listing), as opposed to the
+            // per-minute HTTP limiter, which answers before the request reaches a handler.
+            _logger.LogInformation("Rate limit by rule {Code}: {Message}", ex.Code, ex.Message);
+
+            context.Response.Headers.RetryAfter = ((int)Math.Ceiling(ex.RetryAfter.TotalSeconds)).ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+
+            await WriteJson(context, StatusCodes.Status429TooManyRequests, new
+            {
+                title = "Too Many Requests",
+                status = StatusCodes.Status429TooManyRequests,
+                message = ex.Message,
+                code = ex.Code
+            });
+        }
         catch (ForbiddenException ex)
         {
             _logger.LogWarning(
@@ -227,6 +245,27 @@ public sealed class ExceptionHandlingMiddleware
                 title = "Forbidden",
                 status = StatusCodes.Status403Forbidden,
                 message = ex.Message
+            });
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.NumericValueOutOfRange or PostgresErrorCodes.CharacterNotInRepertoire
+        })
+        {
+            // Safety net (QA Phase 8, P8-D01). Validators are the first line, but a value the database
+            // cannot store - a number past a column's precision, a NUL character in text - is always the
+            // caller's input, never a server fault. A 500 here told the owner nothing and paged us for it.
+            _logger.LogWarning(
+                "Database rejected a value for {Method} {Path}: {SqlState}",
+                context.Request.Method,
+                context.Request.Path,
+                ((PostgresException)ex.InnerException!).SqlState);
+
+            await WriteJson(context, StatusCodes.Status422UnprocessableEntity, new
+            {
+                title = "Validation Error",
+                status = StatusCodes.Status422UnprocessableEntity,
+                message = "إحدى القيم المرسلة غير مقبولة (رقم كبير جداً أو نص يحوي رموزاً غير صالحة)."
             });
         }
         catch (Exception ex)

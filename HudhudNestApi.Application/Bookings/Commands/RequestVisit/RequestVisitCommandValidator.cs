@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using HudhudNestApi.Application.Common.Validation;
 
 namespace HudhudNestApi.Application.Bookings.Commands.RequestVisit;
 
@@ -21,7 +22,8 @@ public sealed class RequestVisitCommandValidator : AbstractValidator<RequestVisi
         RuleFor(x => x.VisitorName)
             .NotEmpty()
             .WithMessage("الاسم مطلوب.")
-            .MaximumLength(150);
+            .MaximumLength(150)
+            .NoNulCharacters();
 
         RuleFor(x => x.VisitorPhone)
             .NotEmpty()
@@ -31,6 +33,7 @@ public sealed class RequestVisitCommandValidator : AbstractValidator<RequestVisi
 
         RuleFor(x => x.VisitorNote)
             .MaximumLength(500)
+            .NoNulCharacters()
             .When(x => x.VisitorNote is not null);
     }
 }

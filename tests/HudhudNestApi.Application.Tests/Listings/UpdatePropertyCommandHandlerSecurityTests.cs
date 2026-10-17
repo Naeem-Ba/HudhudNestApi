@@ -49,6 +49,7 @@ public sealed class UpdatePropertyCommandHandlerSecurityTests
             Mock.Of<INotificationService>(),
             Mock.Of<ILocationSuggestionService>(),
             Mock.Of<ILocationHierarchyChecker>(),
+            Mock.Of<ICommonLookupService>(),
             Mock.Of<IPublisher>(),
             NullLogger<UpdatePropertyCommandHandler>.Instance);
 

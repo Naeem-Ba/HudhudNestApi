@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Exceptions;
+using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.DTOs;
 using HudhudNestApi.Application.Listings.Interfaces;
@@ -34,17 +35,23 @@ public sealed class RequestListingExtensionCommandHandler
     private static readonly Guid? PlatformReceiverId = null;
 
     private readonly IPropertyRepository _properties;
+    private readonly IAgencyRepository _agencies;
+    private readonly IListingQuotaGuard _quotaGuard;
     private readonly IListingFeeRepository _extensions;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<RequestListingExtensionCommandHandler> _logger;
 
     public RequestListingExtensionCommandHandler(
         IPropertyRepository properties,
+        IAgencyRepository agencies,
+        IListingQuotaGuard quotaGuard,
         IListingFeeRepository extensions,
         IUnitOfWork unitOfWork,
         ILogger<RequestListingExtensionCommandHandler> logger)
     {
         _properties = properties;
+        _agencies = agencies;
+        _quotaGuard = quotaGuard;
         _extensions = extensions;
         _unitOfWork = unitOfWork;
         _logger = logger;
@@ -61,6 +68,16 @@ public sealed class RequestListingExtensionCommandHandler
 
         if (property.OwnerId != request.RequestingUserId)
             throw new ForbiddenException("Only the listing owner can pay to extend it.");
+
+        // A concluded deal, an archived listing or one the administration took down is not extended;
+        // quoting a fee for it only led to an administrator confirming a payment that resurrected a
+        // sold listing (QA Phase 8, P8-D02).
+        if (!property.CanBeExtended)
+        {
+            throw new ConflictException(property.IsTakenDown
+                ? "أوقفت الإدارة هذا الإعلان ولا يمكن تمديده."
+                : "لا يمكن تمديد إعلان مباع أو مؤجَّر أو مؤرشف. أعده إلى «متاح» أولاً إن أردت متابعة عرضه.");
+        }
 
         var now = DateTime.UtcNow;
 
@@ -84,6 +101,16 @@ public sealed class RequestListingExtensionCommandHandler
         {
             throw new ConflictException(
                 "انتهت مهلة استرجاع هذا الإعلان ولم يعد التمديد ممكناً.");
+        }
+
+        // An expired listing does not count toward the plan limit, so the owner may have filled that seat
+        // while it was expired. Bringing it back must not exceed the limit (QA Phase 8, P8-D05); say so
+        // before they pay, not after.
+        if (isExpired)
+        {
+            var owner = await _agencies.GetUserAccountAsync(property.OwnerId, cancellationToken)
+                ?? throw new NotFoundException("Property owner was not found.");
+            await _quotaGuard.EnsureCapacityAsync(owner, cancellationToken);
         }
 
         var existing = await _extensions.GetPendingFeeAsync(

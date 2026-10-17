@@ -6,11 +6,14 @@ using HudhudNestApi.Application.Admin.Interfaces;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Events;
 using HudhudNestApi.Application.Listings.Interfaces;
+using HudhudNestApi.Application.Notifications.Interfaces;
+using HudhudNestApi.Application.Notifications.Localization;
 using HudhudNestApi.Application.Properties.DTOs;
 using HudhudNestApi.Domain.Audit.Constants;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings;
 using HudhudNestApi.Domain.Listings.Entities;
+using HudhudNestApi.Domain.Notifications.Enums;
 
 namespace HudhudNestApi.Application.Admin.Services;
 
@@ -29,6 +32,7 @@ public sealed class AdminListingService : IAdminListingService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAuditLogService _auditLogs;
     private readonly IPublisher _publisher;
+    private readonly INotificationService _notifications;
     private readonly ILogger<AdminListingService> _logger;
 
     public AdminListingService(
@@ -36,12 +40,14 @@ public sealed class AdminListingService : IAdminListingService
         IUnitOfWork unitOfWork,
         IAuditLogService auditLogs,
         IPublisher publisher,
+        INotificationService notifications,
         ILogger<AdminListingService> logger)
     {
         _properties = properties;
         _unitOfWork = unitOfWork;
         _auditLogs = auditLogs;
         _publisher = publisher;
+        _notifications = notifications;
         _logger = logger;
     }
 
@@ -239,6 +245,117 @@ public sealed class AdminListingService : IAdminListingService
         return AdminOperationResult.Ok($"Listing extended to {property.ExpiresAt:O}.");
     }
 
+    public async Task<AdminOperationResult> TakeDownListingAsync(
+        Guid propertyId,
+        string? reason,
+        Guid performedByUserId,
+        string? ipAddress,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            return AdminOperationResult.BadRequest("A reason is required to take a listing down.");
+
+        reason = reason.Trim();
+        if (reason.Length > Property.MaxTakeDownReasonLength)
+            return AdminOperationResult.BadRequest(
+                $"The reason must be at most {Property.MaxTakeDownReasonLength} characters.");
+
+        var property = await _properties.GetByIdAsync(propertyId, ct);
+        if (property is null)
+            return AdminOperationResult.NotFoundResult("Listing not found.");
+
+        if (property.IsTakenDown)
+            return AdminOperationResult.ConflictResult("Listing is already taken down.");
+
+        var oldSnapshot = SnapshotListing(property);
+
+        await _unitOfWork.BeginTransactionAsync(ct);
+        try
+        {
+            property.TakeDown(performedByUserId, reason);
+
+            _properties.Update(property);
+            await _unitOfWork.SaveChangesAsync(ct);
+            await _unitOfWork.CommitTransactionAsync(ct);
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
+
+        await LogAsync(
+            AuditActions.ListingTakenDownByAdmin,
+            performedByUserId, ipAddress, property.OwnerId, propertyId, reason,
+            oldSnapshot, SnapshotListing(property), ct);
+
+        _logger.LogInformation(
+            "Listing taken down by admin. PropertyId={PropertyId}, By={By}", propertyId, performedByUserId);
+
+        // The take-down is committed; telling the owner is best-effort.
+        await TryNotifyOwnerAsync(property, NotificationType.ListingTakenDown, NotificationText.FromLiteral(reason), ct);
+
+        return AdminOperationResult.Ok("Listing taken down.");
+    }
+
+    public async Task<AdminOperationResult> RestoreListingAsync(
+        Guid propertyId,
+        string? reason,
+        Guid performedByUserId,
+        string? ipAddress,
+        CancellationToken ct = default)
+    {
+        var property = await _properties.GetByIdAsync(propertyId, ct);
+        if (property is null)
+            return AdminOperationResult.NotFoundResult("Listing not found.");
+
+        if (!property.IsTakenDown)
+            return AdminOperationResult.ConflictResult("Listing is not taken down.");
+
+        var oldSnapshot = SnapshotListing(property);
+
+        await _unitOfWork.BeginTransactionAsync(ct);
+        try
+        {
+            property.RestoreFromTakeDown();
+
+            _properties.Update(property);
+            await _unitOfWork.SaveChangesAsync(ct);
+            await _unitOfWork.CommitTransactionAsync(ct);
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
+
+        await LogAsync(
+            AuditActions.ListingRestoredByAdmin,
+            performedByUserId, ipAddress, property.OwnerId, propertyId, reason,
+            oldSnapshot, SnapshotListing(property), ct);
+
+        _logger.LogInformation(
+            "Listing restored by admin. PropertyId={PropertyId}, By={By}", propertyId, performedByUserId);
+
+        await TryNotifyOwnerAsync(property, NotificationType.ListingRestored, NotificationText.Empty, ct);
+
+        return AdminOperationResult.Ok("Listing restored.");
+    }
+
+    private async Task TryNotifyOwnerAsync(
+        Property property, NotificationType type, NotificationText detail, CancellationToken ct)
+    {
+        try
+        {
+            await _notifications.NotifyPropertyUpdateAsync(
+                property.OwnerId, property.Id, property.Title, type, detail, relatedEntityId: null, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Failed to notify the owner about an admin listing action. PropertyId={PropertyId}", property.Id);
+        }
+    }
+
     private static bool IsValidDuration(int days, out string error)
     {
         if (days < ListingLifecyclePolicy.MinAdminGrantDays
@@ -264,7 +381,10 @@ public sealed class AdminListingService : IAdminListingService
         ExpiresAt = p.ExpiresAt,
         IsFeatured = p.IsFeatured,
         FeaturedUntil = p.FeaturedUntil,
-        CreatedAt = p.CreatedAt
+        CreatedAt = p.CreatedAt,
+        IsTakenDown = p.IsTakenDown,
+        TakenDownAt = p.TakenDownAt,
+        TakenDownReason = p.TakenDownReason
     };
 
     private static object SnapshotListing(Property p) => new
@@ -273,7 +393,8 @@ public sealed class AdminListingService : IAdminListingService
         isPublished = p.IsPublished,
         expiresAt = p.ExpiresAt,
         isFeatured = p.IsFeatured,
-        featuredUntil = p.FeaturedUntil
+        featuredUntil = p.FeaturedUntil,
+        isTakenDown = p.IsTakenDown
     };
 
     private Task LogAsync(

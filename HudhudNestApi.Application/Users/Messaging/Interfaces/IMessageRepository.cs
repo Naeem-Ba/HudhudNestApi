@@ -74,6 +74,27 @@ public interface IMessageRepository
         CancellationToken ct = default);
 
     /// <summary>
+    /// How many messages <paramref name="senderId"/> has sent about one listing since
+    /// <paramref name="sinceUtc"/> (to anyone). Basis of the per-listing sending limit.
+    /// </summary>
+    Task<int> CountSentAboutPropertySinceAsync(
+        Guid propertyId,
+        Guid senderId,
+        DateTime sinceUtc,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Whether <paramref name="receiverId"/> still has an unread message from <paramref name="senderId"/>
+    /// about the listing that was created at or after <paramref name="sinceUtc"/>.
+    /// </summary>
+    Task<bool> HasRecentUnreadAsync(
+        Guid propertyId,
+        Guid senderId,
+        Guid receiverId,
+        DateTime sinceUtc,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Count unread messages for a user.
     /// </summary>
     Task<int> CountUnreadAsync(Guid receiverId, CancellationToken ct = default);

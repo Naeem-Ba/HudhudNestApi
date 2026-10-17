@@ -166,9 +166,9 @@
 | /F-PRP-02/ | بوابة الأهلية: تأكيد بريد/هاتف + اختيار خطة + الحصة | م | في المعالج + `ListingEligibilityGuard` | M | ✅ | ADR 4.1، `IListingQuotaPolicy` |
 | /F-PRP-03/ | الحصة تُفرَض في الخادم بقفل استشاري داخل معاملة؛ الإقامة القصيرة تشاركها | م | ضمني | M | ✅ | `ListingQuotaLock`، `ActiveListingCounter` |
 | /F-PRP-04/ | تعديل وحذف العقار للمالك فقط (من التوكن لا الجسم) | م | `PUT/DELETE /api/Properties/{id}` | M | ✅ | `IPropertyOwnershipService` |
-| /F-PRP-05/ | نشر/إلغاء نشر | م | `POST|PATCH /api/Properties/{id}/publish` | M | ✅ | |
+| /F-PRP-05/ | نشر/إلغاء نشر. إعادة نشر إعلان «منتهي» أو «موقوف إداريًا» مرفوضة (409): الأول يُجدَّد بالتمديد المدفوع والثاني يستعيده المسؤول | م | `POST|PATCH /api/Properties/{id}/publish` | M | ✅ | |
 | /F-PRP-06/ | دورة الصلاحية: 30 يومًا، تحذير قبل 5، مهلة 30 يومًا ثم حذف | نظام | `ListingExpiryHostedService` | M | ✅ | `ListingLifecyclePolicy` |
-| /F-PRP-07/ | تمديد برسم 1$ بطلب → تأكيد إداري لوصول التحويل | م / Admin | `POST /api/Properties/{id}/extension`, `/extension/{transactionId}/confirm` | M | ✅ | |
+| /F-PRP-07/ | تمديد برسم 1$ بطلب → تأكيد إداري لوصول التحويل. لا تمديد لإعلان مباع/مؤجَّر/مؤرشف أو موقوف إداريًا (409)؛ النافذة الجديدة تبدأ من `max(الآن، ExpiresAt)` فلا تضيع أيام مدفوعة؛ الإعلان «المحجوز» يبقى محجوزًا؛ استرجاع إعلان «منتهي» يعيد فحص حصة الخطة (409 إن تجاوزها) | م / Admin | `POST /api/Properties/{id}/extension`, `/extension/{transactionId}/confirm` | M | ✅ | |
 | /F-PRP-08/ | إعلان مميّز 30 يومًا بـ 5$ بنفس آلية الدفع | م / Admin | `POST /{id}/featured`, `/featured/{transactionId}/confirm` | S | ✅ | |
 | /F-PRP-09/ | تأكيد التوفّر من المالك | م | `PATCH /api/Properties/{id}/confirm-availability` | S | ✅ | شريط «قديم» بعد 30 يومًا |
 | /F-PRP-10/ | عقارات المستخدم وصفحة الإدارة | م | `GET /api/Properties/mine`, `/{id}/manage` | M | ✅ | |
@@ -177,6 +177,9 @@
 | /F-PRP-13/ | اقتراح مواقع جديدة وموافقة المسؤول | م / Admin | `/api/admin/location-suggestions` | K | ✅ | |
 | /F-PRP-14/ | **الصور:** رفع (≤10/طلب، ≤20/عقار، ≤5MB، JPEG/PNG/WebP بتوقيع ثنائي)، رئيسية، حذف، تنظيف عند الفشل | م | `POST/GET/PATCH/DELETE /api/properties/{id}/images…` | M | ✅ | `UploadPropertyImagesCommandHandler` |
 | /F-PRP-15/ | عرض قائمة وتفاصيل عامين مع Output Cache (30/60 ث) | ز | `GET /api/Properties`, `/{id}` | M | ✅ | `OutputCacheRegistration` |
+| /F-PRP-16/ | **إدخال آمن:** رفض حرف NUL في النصوص الحرة (إعلان، رسالة، زيارة)، سقف للمبالغ (≤ 10¹²) والمساحة، وجود المحافظة/نوع العقار وتناسق (محافظة، منطقة، حي) → 422 بدل 500؛ شبكة أمان في الوسيط تحوّل أخطاء PostgreSQL 22021/22003 إلى 422 | م | `POST|PUT /api/Properties`, `/api/Messages`, `/api/Visits` | M | ✅ | `ValidationRuleExtensions`، `ExceptionHandlingMiddleware` |
+| /F-PRP-17/ | **إيقاف إعلان إداريًا:** سبب إلزامي (≤ 500)، يختفي علنًا، المالك يرى السبب ولا يستطيع النشر/التمديد، الاستعادة بيد المسؤول، تدقيق + إشعار للمالك، ولا يلمسه كنس الانتهاء. لا يسحب منشورات التوزيع الاجتماعي المنشورة سابقًا (لا حدث لذلك) | Admin | `POST /api/Admin/properties/{id}/take-down`, `/restore` | M | ✅ | `AdminListingService`، ترحيل `AddListingTakeDown` |
+| /F-PRP-18/ | حذف الإعلان (المالك أو الحذف التلقائي بعد المهلة) يلغي طلبات الزيارة المعلّقة/المؤكدة/المقترح تأجيلها ويخطر الزائر | م / نظام | `DELETE /api/Properties/{id}` | M | ✅ | `ListingVisitCleanup` |
 
 ### 4.4 البحث والاكتشاف (SRC)
 

@@ -58,5 +58,10 @@ public sealed class LocationHierarchyCheckerTests : IAsyncLifetime
         Assert.False(await checker.IsConsistentAsync(otherGovernorateId, district.Id, null));
         Assert.False(await checker.IsConsistentAsync(null, otherDistrictId, neighborhood.Id)); // neighborhood of another district
         Assert.False(await checker.IsConsistentAsync(district.GovernorateId, district.Id, int.MaxValue));
+
+        // QA Phase 8, P8-D01: an id that does not exist anywhere used to pass and then fail at the foreign key.
+        Assert.False(await checker.IsConsistentAsync(int.MaxValue, null, null));
+        Assert.False(await checker.IsConsistentAsync(null, int.MaxValue, null));
+        Assert.False(await checker.IsConsistentAsync(null, null, int.MaxValue));
     }
 }
