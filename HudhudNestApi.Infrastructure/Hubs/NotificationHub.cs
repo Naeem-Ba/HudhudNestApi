@@ -16,6 +16,9 @@ public sealed class NotificationHub : Hub
     public const string ReceiveNotificationEvent = "ReceiveNotification";
     public const string UnreadCountChangedEvent = "UnreadCountChanged";
 
+    /// <summary>Sent to every connection of the user when notifications were marked read elsewhere.</summary>
+    public const string NotificationsReadEvent = "NotificationsRead";
+
     private readonly INotificationService _notifications;
     private readonly ILogger<NotificationHub> _logger;
 
@@ -109,18 +112,10 @@ public sealed class NotificationHub : Hub
             throw new HubException("Authentication is required.");
         }
 
+        // The service broadcasts the new count to all of the user's connections (other tabs and devices too).
         await _notifications.MarkAsReadAsync(
             notificationId,
             userId.Value,
-            Context.ConnectionAborted);
-
-        var unreadCount = await _notifications.GetUnreadCountAsync(
-            userId.Value,
-            Context.ConnectionAborted);
-
-        await Clients.Caller.SendAsync(
-            UnreadCountChangedEvent,
-            unreadCount,
             Context.ConnectionAborted);
     }
 

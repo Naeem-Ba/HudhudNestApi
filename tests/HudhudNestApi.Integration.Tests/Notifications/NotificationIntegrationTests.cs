@@ -422,6 +422,104 @@ public sealed class NotificationIntegrationTests
         Assert.Contains(newColdRent.ToString("0.##"), notification.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Feature", "Notifications")]
+    public async Task Preferences_AreOwnedByTheCaller_ValidatedAndRequireSignIn()
+    {
+        var alice = await CreateUserAsync("prefs-a");
+        var bob = await CreateUserAsync("prefs-b");
+        var aliceClient = await CreateAuthenticatedClientAsync(alice.Id);
+        var bobClient = await CreateAuthenticatedClientAsync(bob.Id);
+
+        var anonymous = await _factory.CreateClient().GetAsync("/api/notifications/preferences");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+
+        var save = await aliceClient.PutAsJsonAsync("/api/notifications/preferences", new
+        {
+            MutedCategories = new[] { "social" },
+            PushPreview = 1,
+            QuietHoursEnabled = true,
+            QuietStartMinute = 1320,
+            QuietEndMinute = 420,
+            TimeZoneId = "Europe/Berlin",
+        });
+        Assert.Equal(HttpStatusCode.OK, save.StatusCode);
+
+        var mine = await aliceClient.GetStringAsync("/api/notifications/preferences");
+        Assert.Contains("social", mine);
+        Assert.Contains("Europe/Berlin", mine);
+
+        // Another account never sees or changes it: the user id comes from the token, not the body.
+        var theirs = await bobClient.GetStringAsync("/api/notifications/preferences");
+        Assert.DoesNotContain("Europe/Berlin", theirs);
+
+        var bad = await aliceClient.PutAsJsonAsync("/api/notifications/preferences", new { MutedCategories = new[] { "account" } });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        var badZone = await aliceClient.PutAsJsonAsync("/api/notifications/preferences", new { TimeZoneId = "Not/AZone" });
+        Assert.Equal(HttpStatusCode.BadRequest, badZone.StatusCode);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Feature", "Notifications")]
+    public async Task MutedMessagesCategory_StopsMessageNotifications_ForThatRecipientOnly()
+    {
+        var owner = await CreateUserAsync("mute-owner");
+        var visitor = await CreateUserAsync("mute-visitor");
+        var property = await CreatePropertyForOwnerAsync(owner.Id);
+        var ownerClient = await CreateAuthenticatedClientAsync(owner.Id);
+        var visitorClient = await CreateAuthenticatedClientAsync(visitor.Id);
+
+        var mute = await ownerClient.PutAsJsonAsync("/api/notifications/preferences", new { MutedCategories = new[] { "messages" } });
+        Assert.Equal(HttpStatusCode.OK, mute.StatusCode);
+
+        var send = await visitorClient.PostAsJsonAsync("/api/messages",
+            new { PropertyId = property.Id, ReceiverId = (Guid?)null, Content = "Is it still available?" });
+        Assert.Equal(HttpStatusCode.Created, send.StatusCode);
+
+        Assert.Equal(0, await CountNotificationsForUserAsync(owner.Id));
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Feature", "Notifications")]
+    public async Task Listing_CarriesCategoryPriorityAndTarget_AndAnotherUserCannotTouchTheNotification()
+    {
+        var owner = await CreateUserAsync("tgt-owner");
+        var intruder = await CreateUserAsync("tgt-intruder");
+        var property = await CreatePropertyForOwnerAsync(owner.Id);
+        var stored = await CreateStoredNotificationAsync(owner.Id, NotificationType.NewMessage, "m");
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var row = await db.Notifications.SingleAsync(n => n.Id == stored.Id);
+            row.PropertyId = property.Id;
+            await db.SaveChangesAsync();
+        }
+
+        var ownerClient = await CreateAuthenticatedClientAsync(owner.Id);
+        var intruderClient = await CreateAuthenticatedClientAsync(intruder.Id);
+
+        var list = await ownerClient.GetStringAsync("/api/notifications");
+        using var doc = JsonDocument.Parse(list);
+        var first = doc.RootElement.EnumerateArray().First();
+        Assert.Equal("messages", GetJsonProperty(first, "Category").GetString());
+        Assert.Equal("messages", GetJsonProperty(GetJsonProperty(first, "Target"), "Kind").GetString());
+        Assert.Equal(property.Id, GetJsonProperty(GetJsonProperty(first, "Target"), "PropertyId").GetGuid());
+
+        // Another account cannot mark it read, remove it, or see it.
+        await intruderClient.PatchAsync($"/api/notifications/{stored.Id}/read", null);
+        var softDelete = await intruderClient.PatchAsync($"/api/notifications/{stored.Id}/soft-delete", null);
+        var hardDelete = await intruderClient.DeleteAsync($"/api/notifications/{stored.Id}");
+        Assert.Equal(HttpStatusCode.NotFound, softDelete.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, hardDelete.StatusCode);
+        Assert.Equal("[]", (await intruderClient.GetStringAsync("/api/notifications")).Replace(" ", ""));
+
+        var after = await GetSingleNotificationForUserAsync(owner.Id);
+        Assert.False(after.IsRead);
+    }
+
     private async Task<Notification> CreateStoredNotificationAsync(
         Guid recipientId,
         NotificationType type,

@@ -38,4 +38,6 @@ public static class BackgroundJobLockKeys
     public const long ValuationInquiryExpiry = 20260912_1008;
 
     public const long ServiceRequestLifecycle = 20261017_1009;
+
+    public const long NotificationRetention = 20261017_1010;
 }

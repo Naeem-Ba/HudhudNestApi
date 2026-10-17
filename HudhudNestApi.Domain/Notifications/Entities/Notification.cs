@@ -20,6 +20,16 @@ public sealed class Notification : BaseEntity
 
     public Guid? RelatedEntityId { get; set; }
 
+    /// <summary>Urgency of the event. Defaults to Normal; the service sets it from the type catalog.</summary>
+    public NotificationPriority Priority { get; set; } = NotificationPriority.Normal;
+
+    /// <summary>
+    /// Natural idempotency key of the business event (for example "msg:{messageId}"). A second
+    /// attempt to create a notification with the same key for the same recipient is ignored, so a
+    /// retry or a repeated event can never ring twice. Null for events that may legitimately repeat.
+    /// </summary>
+    public string? DedupeKey { get; set; }
+
     public bool IsRead { get; set; }
 
     public DateTime? ReadAt { get; set; }

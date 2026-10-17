@@ -68,6 +68,8 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
     /// coordination two instances would notify the same owner of the same match twice. See
     /// B-6 in RELEASE-BLOCKERS-AR.md.
     /// </summary>
+    private const int MaxMatchesPerSearchPerRun = 10;
+
     internal async Task RunOnceAsync(CancellationToken ct)
     {
         using var scope = _scopeFactory.CreateScope();
@@ -104,8 +106,10 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
                             .Where(p => p.CreatedAt > since);
 
                         var matches = await query
-                            .OrderByDescending(p => p.CreatedAt)
-                            .Take(10) // Cap per run — an unusually broad saved search should not spam the user.
+                            // Oldest first: when more than the cap match, the rest are picked up by the next
+                            // sweep (the cursor below only advances past what was actually handled).
+                            .OrderBy(p => p.CreatedAt)
+                            .Take(MaxMatchesPerSearchPerRun) // Cap per run — an unusually broad saved search should not spam the user.
                             .ToListAsync(ct);
 
                         if (matches.Count == 0)
@@ -125,7 +129,7 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
                         // returns tracked entities specifically so this mutation is picked up
                         // by the single SaveChangesAsync call below — no explicit Update()
                         // call needed.
-                        savedSearch.MarkMatched();
+                        savedSearch.MarkMatchedUpTo(matches[^1].CreatedAt);
                         matchedCount += matches.Count;
                     }
 

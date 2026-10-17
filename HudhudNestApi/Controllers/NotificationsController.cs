@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Notifications.DTOs;
 using HudhudNestApi.Application.Notifications.Interfaces;
+using HudhudNestApi.Application.Notifications.Preferences;
 
 namespace HudhudNestApi.Controllers;
 
@@ -13,13 +15,51 @@ public sealed class NotificationsController : ControllerBase
 {
     private readonly INotificationService _notifications;
     private readonly ICurrentUserService _currentUser;
+    private readonly NotificationPreferenceService _preferences;
 
     public NotificationsController(
         INotificationService notifications,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        NotificationPreferenceService preferences)
     {
         _notifications = notifications;
         _currentUser = currentUser;
+        _preferences = preferences;
+    }
+
+    /// <summary>The signed-in user's notification preferences (defaults when never saved).</summary>
+    [HttpGet("preferences")]
+    [ProducesResponseType(typeof(NotificationPreferencesDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetPreferences(CancellationToken ct)
+    {
+        if (_currentUser.UserId is not { } userId)
+            return Unauthorized();
+
+        return Ok(await _preferences.GetAsync(userId, ct));
+    }
+
+    /// <summary>Saves the signed-in user's preferences. Only the fields sent change; the user id comes from the token.</summary>
+    [HttpPut("preferences")]
+    [EnableRateLimiting("user-write")]
+    [ProducesResponseType(typeof(NotificationPreferencesDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> UpdatePreferences(
+        [FromBody] UpdateNotificationPreferencesRequest request,
+        CancellationToken ct)
+    {
+        if (_currentUser.UserId is not { } userId)
+            return Unauthorized();
+
+        try
+        {
+            return Ok(await _preferences.UpdateAsync(userId, request, ct));
+        }
+        catch (NotificationPreferenceValidationException ex)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: ex.Message);
+        }
     }
 
     [HttpGet]

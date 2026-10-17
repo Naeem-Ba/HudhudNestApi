@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using HudhudNestApi.Application.Notifications;
 using HudhudNestApi.Application.Notifications.DTOs;
 using HudhudNestApi.Application.Notifications.Interfaces;
+using HudhudNestApi.Application.Notifications.Preferences;
 using HudhudNestApi.Application.Notifications.Localization;
 using HudhudNestApi.Application.Notifications.Push;
 using HudhudNestApi.Domain.Notifications.Entities;
@@ -29,19 +31,22 @@ public sealed class NotificationService : INotificationService
     private readonly ILogger<NotificationService> _logger;
     private readonly IRecipientLanguageResolver? _languages;
     private readonly IPushNotificationDispatcher? _push;
+    private readonly INotificationPreferenceStore? _preferences;
 
     public NotificationService(
         INotificationRepository notifications,
         IHubContext<NotificationHub> hub,
         ILogger<NotificationService> logger,
         IRecipientLanguageResolver? languages = null,
-        IPushNotificationDispatcher? push = null)
+        IPushNotificationDispatcher? push = null,
+        INotificationPreferenceStore? preferences = null)
     {
         _notifications = notifications;
         _hub = hub;
         _logger = logger;
         _languages = languages;
         _push = push;
+        _preferences = preferences;
     }
 
     public async Task NotifyNewMessageAsync(
@@ -61,7 +66,8 @@ public sealed class NotificationService : INotificationService
         await PersistAndPushAsync(
             New(recipientId, NotificationType.NewMessage,
                 Say(lang, "msg.new_message", ("sender", NameOr(senderName, "generic.user"))),
-                propertyId: propertyId, relatedEntityId: messageId),
+                propertyId: propertyId, relatedEntityId: messageId,
+                dedupeKey: $"msg:{messageId:N}"),
             ct);
 
         _logger.LogInformation(
@@ -139,7 +145,8 @@ public sealed class NotificationService : INotificationService
                 Say(lang, "msg.saved_search_match",
                     ("title", NameOr(propertyTitle, "generic.property")),
                     ("search", NameOr(savedSearchName, "generic.saved_search"))),
-                propertyId: propertyId),
+                propertyId: propertyId,
+                dedupeKey: $"ssm:{propertyId:N}"),
             ct);
 
         _logger.LogInformation(
@@ -199,7 +206,8 @@ public sealed class NotificationService : INotificationService
                 ("title", NameOr(propertyTitle, "generic.property_noun")),
                 ("agency", NameOr(agencyName, "generic.agency"))),
             propertyId: propertyId,
-            relatedEntityId: messageId);
+            relatedEntityId: messageId,
+            dedupeKey: $"ami:{messageId:N}");
 
         await PersistAndPushAsync(notification, ct);
 
@@ -253,7 +261,8 @@ public sealed class NotificationService : INotificationService
                 Say(lang, "msg.agency_invitation_received",
                     ("inviter", NameOr(inviterName, "generic.user")),
                     ("agency", NameOr(agencyName, "generic.agency"))),
-                relatedEntityId: invitationId),
+                relatedEntityId: invitationId,
+                dedupeKey: $"agi:{invitationId:N}"),
             ct);
 
         _logger.LogInformation(
@@ -308,7 +317,8 @@ public sealed class NotificationService : INotificationService
                 Say(lang, hadPreliminaryEstimate
                     ? "msg.valuation_expired_with_estimate"
                     : "msg.valuation_expired_no_estimate"),
-                relatedEntityId: inquiryId),
+                relatedEntityId: inquiryId,
+                dedupeKey: $"val-exp:{inquiryId:N}"),
             ct);
 
         _logger.LogInformation(
@@ -332,7 +342,8 @@ public sealed class NotificationService : INotificationService
         await PersistAndPushAsync(
             New(recipientId, NotificationType.ValuationOfficeInvitationExpired,
                 Say(lang, "msg.valuation_office_invitation_expired"),
-                relatedEntityId: invitationId),
+                relatedEntityId: invitationId,
+                dedupeKey: $"val-inv-exp:{invitationId:N}"),
             ct);
 
         _logger.LogInformation(
@@ -355,7 +366,8 @@ public sealed class NotificationService : INotificationService
         await PersistAndPushAsync(
             New(recipientId, NotificationType.ValuationResultReady,
                 Say(lang, "msg.valuation_result_ready"),
-                relatedEntityId: inquiryId),
+                relatedEntityId: inquiryId,
+                dedupeKey: $"val-ready:{inquiryId:N}"),
             ct);
 
         _logger.LogInformation(
@@ -377,7 +389,8 @@ public sealed class NotificationService : INotificationService
         await PersistAndPushAsync(
             New(recipientId, NotificationType.ValuationInquiryReminderSoon,
                 Say(lang, "msg.valuation_reminder_soon"),
-                relatedEntityId: inquiryId),
+                relatedEntityId: inquiryId,
+                dedupeKey: $"val-rem:{inquiryId:N}"),
             ct);
 
         _logger.LogInformation(
@@ -458,7 +471,10 @@ public sealed class NotificationService : INotificationService
                 "MarkAsRead ignored. NotificationId={NotificationId}, UserId={UserId}",
                 notificationId,
                 userId);
+            return;
         }
+
+        await BroadcastReadStateAsync(userId, new[] { notificationId }, ct);
     }
 
     public async Task MarkAllAsReadAsync(
@@ -476,6 +492,11 @@ public sealed class NotificationService : INotificationService
             "Marked all notifications as read. UserId={UserId}, AffectedRows={AffectedRows}",
             userId,
             affectedRows);
+
+        if (affectedRows > 0)
+        {
+            await BroadcastReadStateAsync(userId, null, ct);
+        }
     }
 
     public async Task<int> GetUnreadCountAsync(
@@ -653,12 +674,15 @@ public sealed class NotificationService : INotificationService
         NotificationType type,
         string message,
         Guid? propertyId = null,
-        Guid? relatedEntityId = null) =>
+        Guid? relatedEntityId = null,
+        string? dedupeKey = null) =>
         new()
         {
             RecipientId = recipientId,
             Type = type,
             Message = message,
+            Priority = NotificationKindCatalog.Describe(type).Priority,
+            DedupeKey = dedupeKey,
             PropertyId = propertyId,
             RelatedEntityId = relatedEntityId,
             CreatedAt = DateTime.UtcNow,
@@ -669,7 +693,28 @@ public sealed class NotificationService : INotificationService
         Notification notification,
         CancellationToken ct)
     {
-        await _notifications.AddAsync(notification, ct);
+        var kind = NotificationKindCatalog.Describe(notification.Type);
+        var prefs = await PreferencesOfAsync(notification.RecipientId, ct);
+
+        // The recipient switched this category off (mandatory events are never switched off).
+        if (!NotificationDeliveryPolicy.ShouldStore(prefs, kind))
+        {
+            _logger.LogInformation(
+                "Notification skipped by the recipient's preferences. RecipientId={RecipientId}, Type={Type}",
+                notification.RecipientId,
+                notification.Type);
+            return;
+        }
+
+        if (!await _notifications.AddAsync(notification, ct))
+        {
+            // Same business event already notified: no second live or device delivery.
+            _logger.LogInformation(
+                "Duplicate notification ignored. RecipientId={RecipientId}, Type={Type}",
+                notification.RecipientId,
+                notification.Type);
+            return;
+        }
 
         var dto = MapToDto(notification);
         var groupName = NotificationHub.GetGroupName(notification.RecipientId);
@@ -680,14 +725,47 @@ public sealed class NotificationService : INotificationService
             dto,
             ct);
 
-        await PushSafeAsync(notification, ct);
+        var decision = NotificationDeliveryPolicy.DecidePush(prefs, kind, DateTime.UtcNow);
+        if (decision == PushDecision.Skip)
+        {
+            return;
+        }
+
+        await PushSafeAsync(notification, decision == PushDecision.Generic, kind, ct);
     }
 
-    private async Task PushSafeAsync(Notification notification, CancellationToken ct)
+    private async Task<NotificationPreference?> PreferencesOfAsync(Guid recipientId, CancellationToken ct)
+    {
+        if (_preferences is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await _preferences.FindAsync(recipientId, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A lookup failure must not lose the notification: deliver with the defaults.
+            _logger.LogWarning(ex, "Notification preference lookup failed. RecipientId={RecipientId}", recipientId);
+            return null;
+        }
+    }
+
+    private async Task PushSafeAsync(Notification notification, bool generic, NotificationKind kind, CancellationToken ct)
     {
         if (_push is null)
         {
             return;
+        }
+
+        // Generic: a category-level sentence without names, in the recipient's language.
+        var body = notification.Message;
+        if (generic)
+        {
+            var lang = await LanguageOfAsync(notification.RecipientId, ct);
+            body = Say(lang, $"push.generic.{kind.Category}");
         }
 
         // The device push repeats the stored, already-localized text and nothing more.
@@ -700,11 +778,13 @@ public sealed class NotificationService : INotificationService
                 notification.RecipientId,
                 new PushPayload(
                     PushTitle,
-                    notification.Message,
+                    body,
                     notification.Type,
                     notification.Id,
                     notification.PropertyId,
-                    notification.RelatedEntityId),
+                    notification.RelatedEntityId,
+                    NotificationKindCatalog.Describe(notification.Type).TargetKind,
+                    NotificationKindCatalog.Describe(notification.Type).Category),
                 budget.Token);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -717,6 +797,29 @@ public sealed class NotificationService : INotificationService
                 ex,
                 "Push delivery failed. NotificationId={NotificationId}",
                 notification.Id);
+        }
+    }
+
+    /// <summary>
+    /// Tells every open connection of the user (other tabs, other devices) that notifications were read, so
+    /// their lists and badges agree. <paramref name="ids"/> null means "all".
+    /// </summary>
+    private async Task BroadcastReadStateAsync(Guid userId, IReadOnlyList<Guid>? ids, CancellationToken ct)
+    {
+        try
+        {
+            var unread = await _notifications.GetUnreadCountAsync(userId, ct);
+            var group = _hub.Clients.Group(NotificationHub.GetGroupName(userId));
+            await group.SendAsync(NotificationHub.UnreadCountChangedEvent, unread, ct);
+            await group.SendAsync(NotificationHub.NotificationsReadEvent, new { ids, all = ids is null }, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Read-state broadcast failed. UserId={UserId}", userId);
         }
     }
 
@@ -758,7 +861,10 @@ public sealed class NotificationService : INotificationService
             RelatedEntityId = notification.RelatedEntityId,
             IsRead = notification.IsRead,
             ReadAt = notification.ReadAt,
-            CreatedAt = notification.CreatedAt
+            CreatedAt = notification.CreatedAt,
+            Category = NotificationKindCatalog.Describe(notification.Type).Category,
+            Priority = notification.Priority,
+            Target = NotificationKindCatalog.TargetFor(notification.Type, notification.PropertyId, notification.RelatedEntityId),
         };
     }
 }

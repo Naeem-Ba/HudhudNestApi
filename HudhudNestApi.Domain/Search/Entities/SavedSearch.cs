@@ -90,4 +90,19 @@ public class SavedSearch : BaseEntity
         LastMatchedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
+
+    /// <summary>
+    /// Advances the "matched up to" point to the creation time of the last listing that was handled, never
+    /// backwards. Listings created after it stay eligible for the next sweep, so a cap on how many are
+    /// notified per sweep cannot drop the remaining ones.
+    /// </summary>
+    public void MarkMatchedUpTo(DateTime handledListingCreatedAtUtc)
+    {
+        if (LastMatchedAt is null || handledListingCreatedAtUtc > LastMatchedAt)
+        {
+            LastMatchedAt = handledListingCreatedAtUtc;
+        }
+
+        UpdatedAt = DateTime.UtcNow;
+    }
 }

@@ -130,9 +130,11 @@ public sealed partial class NotificationServiceSignalRTests
     [Trait("Feature", "Notifications")]
     public async Task Push_CarriesTheSameLocalizedText_ToTheRecipientOnly()
     {
-        var (service, repo, languages, push) = Build();
+        // With the full preview chosen, the push repeats the stored text (the default is a name-free sentence).
+        var (service, repo, push, prefs, languages) = BuildWithPrefs();
         var guest = Guid.NewGuid();
         languages.ByUser[guest] = "en";
+        prefs.Rows[guest] = new() { UserId = guest, PushPreview = HudhudNestApi.Domain.Notifications.Entities.PushPreviewLevel.Full };
 
         await service.NotifyShortStayBookingUpdateAsync(
             guest, Guid.NewGuid(), "Villa Rosa", NotificationType.ShortStayBookingConfirmed,
