@@ -77,7 +77,7 @@ for attempt in $(seq 1 "${READY_ATTEMPTS}"); do
   log "readiness attempt ${attempt}/${READY_ATTEMPTS} failed"
   sleep "${INTERVAL}"
 done
-[ "${ready}" = "true" ] || fail "Deploy ${deploy_id} is live but ${BASE_URL}/health/ready did not answer successfully."
+[ "${ready}" = "true" ] || fail "Deploy ${deploy_id} is live but ${BASE_URL}/health/ready did not answer successfully. A database that is behind this build (Migrator not run) answers 503 too: check the Render logs for 'migration(s) not applied'."
 
 mkdir -p artifacts/production-release
 jq -n --arg commitSha "${EXPECTED_COMMIT_SHA}" --arg deployId "${deploy_id}" \

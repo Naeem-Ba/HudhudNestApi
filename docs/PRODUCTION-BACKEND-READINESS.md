@@ -297,8 +297,10 @@ No BLOCKER or HIGH finding here — this is the strongest area of the audit. No 
 
 - `/health/live` — always returns healthy if the process is running (`Predicate = _ => false`, i.e. no
   dependency checks) — correct liveness semantics (process up, not "everything downstream is fine").
-- `/health/ready` — gated on tag `"ready"`, which currently covers `postgresql-postgis` and `redis` —
-  correctly distinguishes readiness (dependencies reachable) from liveness.
+- `/health/ready` — gated on tag `"ready"`, which currently covers `postgresql-postgis`, `pending-migrations` and `redis` —
+  correctly distinguishes readiness (dependencies reachable) from liveness. `pending-migrations` answers 503 while the
+  database is behind the migrations this build ships with (the Migrator is a manual step before a deploy, and a deploy
+  without it used to look healthy while queries on new columns failed); the log line names the missing migrations.
 - Response body is minimal by design (`HealthCheckResponseWriter`): status, duration, per-check name —
   no connection strings, no exception details, no internal paths. Good.
 - Both endpoints are `.AllowAnonymous()` — appropriate for a load balancer / uptime check, and
