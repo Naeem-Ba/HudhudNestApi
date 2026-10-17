@@ -15,4 +15,6 @@ public sealed record ServiceOfferingDto(
     int? EstimatedDurationDays,
     bool IsActive,
     DateTime CreatedAt,
-    IReadOnlyList<int>? ProviderCoverageGovernorateIds = null);
+    IReadOnlyList<int>? ProviderCoverageGovernorateIds = null,
+    double? AverageRating = null,
+    int ReviewCount = 0);

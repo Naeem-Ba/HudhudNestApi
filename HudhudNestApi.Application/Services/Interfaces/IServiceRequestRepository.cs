@@ -19,11 +19,11 @@ public interface IServiceRequestRepository
         Guid serviceProviderId, CancellationToken ct = default);
 
     /// <summary>True if the requester already has a live (not terminal) request for this
-    /// property+offering pair — mirrors IVisitRepository.HasPendingVisitAsync, prevents a
+    /// property+offering pair (an unconfirmed inquiry counts) — mirrors IVisitRepository.HasPendingVisitAsync, prevents a
     /// user from spamming duplicate requests for the same service.</summary>
     Task<bool> HasActiveRequestAsync(
         Guid propertyId, Guid requesterId, Guid serviceOfferingId, CancellationToken ct = default);
 
-    /// <summary>Requests a provider still has to finish (not Completed/Reviewed/Rejected/Cancelled).</summary>
+    /// <summary>Requests a provider still has to finish (not Completed/Reviewed/Rejected/Cancelled/NotCompleted/Expired).</summary>
     Task<int> CountOpenByServiceProviderIdAsync(Guid serviceProviderId, CancellationToken ct = default);
 }

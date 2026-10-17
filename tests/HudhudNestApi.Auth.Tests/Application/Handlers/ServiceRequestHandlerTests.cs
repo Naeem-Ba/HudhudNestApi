@@ -36,15 +36,27 @@ public sealed class ServiceRequestHandlerTests
         return offering;
     }
 
-    private static ServiceRequest MakeRequest(Guid propertyId, Guid requesterId, Guid providerId, Guid offeringId) =>
-        ServiceRequest.Create(
+    private static ServiceRequest MakeRequest(Guid propertyId, Guid requesterId, Guid providerId, Guid offeringId)
+    {
+        var request = ServiceRequest.Create(
             "SR-2026-000001", propertyId, requesterId, providerId, offeringId,
             ServiceCategory.Verification, null, UtcNow);
+        request.Confirm(UtcNow);
+        return request;
+    }
+
+    private static IServiceRequestMessageRepository EmptyMessages()
+    {
+        var messages = new Mock<IServiceRequestMessageRepository>();
+        messages.Setup(x => x.GetStatsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<ServiceParty>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<Guid, ServiceRequestMessageStats>());
+        return messages.Object;
+    }
 
     // ── CreateServiceRequest ──────────────────────────────────────────
 
-    [Fact(DisplayName = "CreateServiceRequest: happy path creates a request at UnderReview")]
-    public async Task Create_ValidInputs_CreatesRequest()
+    [Fact(DisplayName = "CreateServiceRequest: a call without intent (old app) is confirmed on the spot")]
+    public async Task Create_WithoutIntent_ConfirmsImmediately()
     {
         var propertyId = Guid.NewGuid();
         var requesterId = Guid.NewGuid();
@@ -72,7 +84,7 @@ public sealed class ServiceRequestHandlerTests
         numbers.Setup(x => x.NextAsync(It.IsAny<CancellationToken>())).ReturnsAsync("SR-2026-000001");
 
         var handler = new CreateServiceRequestCommandHandler(
-            properties.Object, offerings.Object, providers.Object, requests.Object, history.Object,
+            properties.Object, offerings.Object, providers.Object, requests.Object, history.Object, EmptyMessages(),
             numbers.Object, Mock.Of<IUnitOfWork>(), Mock.Of<INotificationService>(),
             Mock.Of<ILogger<CreateServiceRequestCommandHandler>>());
 
@@ -82,8 +94,56 @@ public sealed class ServiceRequestHandlerTests
 
         Assert.Equal("SR-2026-000001", result.RequestNumber);
         Assert.Equal(ServiceRequestStatus.UnderReview, result.Status);
+        Assert.NotNull(result.ConfirmedAt);
         requests.Verify(x => x.AddAsync(It.IsAny<ServiceRequest>(), It.IsAny<CancellationToken>()), Times.Once);
+        // Opened as an inquiry, then confirmed: two rows in the audit trail.
+        history.Verify(x => x.AddAsync(It.IsAny<ServiceRequestStatusHistory>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Theory(DisplayName = "CreateServiceRequest: with an intent it stays an inquiry and the note becomes the first message")]
+    [InlineData(ServiceRequestIntent.Inquire)]
+    [InlineData(ServiceRequestIntent.Request)]
+    public async Task Create_WithIntent_StaysInquiry(ServiceRequestIntent intent)
+    {
+        var propertyId = Guid.NewGuid();
+        var requesterId = Guid.NewGuid();
+        var provider = MakeProvider();
+        var offering = MakeOffering(provider.Id);
+
+        var properties = new Mock<IPropertyReadRepository>();
+        properties.Setup(x => x.GetByIdAsync(propertyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PropertySummary(propertyId, "Villa", "Damascus", Guid.NewGuid(), true, null));
+        var offerings = new Mock<IServiceOfferingRepository>();
+        offerings.Setup(x => x.GetByIdAsync(offering.Id, It.IsAny<CancellationToken>())).ReturnsAsync(offering);
+        var providers = new Mock<IServiceProviderRepository>();
+        providers.Setup(x => x.GetByIdAsync(provider.Id, It.IsAny<CancellationToken>())).ReturnsAsync(provider);
+        var requests = new Mock<IServiceRequestRepository>();
+        requests.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ServiceRequest?)null);
+        var history = new Mock<IServiceRequestStatusHistoryRepository>();
+        var messages = new Mock<IServiceRequestMessageRepository>();
+        messages.Setup(x => x.GetStatsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<ServiceParty>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<Guid, ServiceRequestMessageStats>());
+        var numbers = new Mock<IServiceRequestNumberGenerator>();
+        numbers.Setup(x => x.NextAsync(It.IsAny<CancellationToken>())).ReturnsAsync("SR-2026-000009");
+        var notifications = new Mock<INotificationService>();
+
+        var handler = new CreateServiceRequestCommandHandler(
+            properties.Object, offerings.Object, providers.Object, requests.Object, history.Object, messages.Object,
+            numbers.Object, Mock.Of<IUnitOfWork>(), notifications.Object,
+            Mock.Of<ILogger<CreateServiceRequestCommandHandler>>());
+
+        var result = await handler.Handle(
+            new CreateServiceRequestCommand(propertyId, requesterId, offering.Id, "كم السعر وكيف الدفع؟", intent),
+            CancellationToken.None);
+
+        Assert.Equal(ServiceRequestStatus.Inquiry, result.Status);
+        Assert.Null(result.ConfirmedAt);
+        Assert.Equal(intent, result.Intent);
         history.Verify(x => x.AddAsync(It.IsAny<ServiceRequestStatusHistory>(), It.IsAny<CancellationToken>()), Times.Once);
+        messages.Verify(x => x.AddAsync(
+            It.Is<ServiceRequestMessage>(m => m.Body == "كم السعر وكيف الدفع؟" && m.SenderParty == ServiceParty.Requester),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact(DisplayName = "CreateServiceRequest: inactive offering throws ConflictException")]
@@ -102,7 +162,7 @@ public sealed class ServiceRequestHandlerTests
 
         var handler = new CreateServiceRequestCommandHandler(
             properties.Object, offerings.Object, Mock.Of<IServiceProviderRepository>(),
-            Mock.Of<IServiceRequestRepository>(), Mock.Of<IServiceRequestStatusHistoryRepository>(),
+            Mock.Of<IServiceRequestRepository>(), Mock.Of<IServiceRequestStatusHistoryRepository>(), EmptyMessages(),
             Mock.Of<IServiceRequestNumberGenerator>(), Mock.Of<IUnitOfWork>(), Mock.Of<INotificationService>(),
             Mock.Of<ILogger<CreateServiceRequestCommandHandler>>());
 
@@ -135,7 +195,7 @@ public sealed class ServiceRequestHandlerTests
 
         var handler = new CreateServiceRequestCommandHandler(
             properties.Object, offerings.Object, providers.Object, requests.Object,
-            Mock.Of<IServiceRequestStatusHistoryRepository>(), Mock.Of<IServiceRequestNumberGenerator>(),
+            Mock.Of<IServiceRequestStatusHistoryRepository>(), EmptyMessages(), Mock.Of<IServiceRequestNumberGenerator>(),
             Mock.Of<IUnitOfWork>(), Mock.Of<INotificationService>(),
             Mock.Of<ILogger<CreateServiceRequestCommandHandler>>());
 

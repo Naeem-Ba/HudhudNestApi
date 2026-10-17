@@ -1,7 +1,11 @@
 using HudhudNestApi.Application.Services.DTOs;
+using HudhudNestApi.Application.Services.Interfaces;
 using HudhudNestApi.Domain.Services.Entities;
 
 namespace HudhudNestApi.Application.Services.Mapping;
+
+/// <summary>Who is looking at a service request DTO.</summary>
+public enum ServiceRequestAudience { Provider, Requester, Admin }
 
 /// <summary>
 /// Entity → DTO projection for the Services bounded context, in one place so the marketplace
@@ -32,6 +36,9 @@ public static class ServiceMapper
             CoverageGovernorateIds: provider.CoverageGovernorateIds);
 
     public static ServiceOfferingDto ToDto(ServiceOffering offering)
+        => ToDto(offering, rating: null);
+
+    public static ServiceOfferingDto ToDto(ServiceOffering offering, (double? Average, int Count)? rating)
         => new(
             Id: offering.Id,
             ServiceProviderId: offering.ServiceProviderId,
@@ -47,10 +54,24 @@ public static class ServiceMapper
             EstimatedDurationDays: offering.EstimatedDurationDays,
             IsActive: offering.IsActive,
             CreatedAt: offering.CreatedAt,
-            ProviderCoverageGovernorateIds: offering.ServiceProvider?.CoverageGovernorateIds ?? []);
+            ProviderCoverageGovernorateIds: offering.ServiceProvider?.CoverageGovernorateIds ?? [],
+            AverageRating: rating?.Average,
+            ReviewCount: rating?.Count ?? 0);
 
-    public static ServiceRequestDto ToDto(ServiceRequest request)
-        => new(
+    /// <summary>
+    /// The audience decides what is shown. The provider's phone/email are an introduction the
+    /// requester earned once the provider accepted their confirmed request, so only the requester
+    /// (and an admin) get them; the customer's own feedback and reason likewise stay between the customer and the
+    /// admin, never in the provider's inbox.
+    /// </summary>
+    public static ServiceRequestDto ToDto(
+        ServiceRequest request,
+        ServiceRequestAudience audience = ServiceRequestAudience.Provider,
+        ServiceRequestMessageStats? messages = null)
+    {
+        var includeProviderContact = audience != ServiceRequestAudience.Provider;
+        var includeFeedback = audience != ServiceRequestAudience.Provider;
+        return new(
             Id: request.Id,
             RequestNumber: request.RequestNumber,
             PropertyId: request.PropertyId,
@@ -77,7 +98,33 @@ public static class ServiceMapper
             CancellationReason: request.CancellationReason,
             CompletedAt: request.CompletedAt,
             CreatedAt: request.CreatedAt,
-            UpdatedAt: request.UpdatedAt);
+            UpdatedAt: request.UpdatedAt,
+            ProviderContact: includeProviderContact && request.ProviderContactVisible
+                ? ContactOf(request.ServiceProvider)
+                : null,
+            OutcomeReason: request.OutcomeReason,
+            OutcomeNote: request.OutcomeNote,
+            NotCompletedAt: request.NotCompletedAt,
+            RequesterAnswer: includeFeedback ? request.RequesterAnswer : null,
+            RequesterReason: includeFeedback ? request.RequesterReason : null,
+            RequesterFeedbackNote: includeFeedback ? request.RequesterFeedbackNote : null,
+            RequesterFeedbackAt: includeFeedback ? request.RequesterFeedbackAt : null,
+            Intent: request.Intent,
+            ConfirmedAt: request.ConfirmedAt,
+            LastActivityAt: request.LastActivityAt,
+            ExpiredAt: request.ExpiredAt,
+            ExpiredWaitingOn: request.ExpiredWaitingOn,
+            MessageCount: messages?.Total ?? 0,
+            UnreadMessageCount: messages?.Unread ?? 0,
+            LastMessageAt: messages?.LastAt);
+    }
+
+    private static ServiceProviderContactDto? ContactOf(ServiceProvider? provider)
+    {
+        var phone = string.IsNullOrWhiteSpace(provider?.ContactPhone) ? null : provider!.ContactPhone;
+        var email = string.IsNullOrWhiteSpace(provider?.ContactEmail) ? null : provider!.ContactEmail;
+        return phone is null && email is null ? null : new ServiceProviderContactDto(phone, email);
+    }
 
     public static ServiceRequestStatusHistoryDto ToDto(ServiceRequestStatusHistory entry)
         => new(

@@ -26,6 +26,33 @@ public sealed class ServiceReview : BaseEntity
 
     public string? Comment { get; private set; }
 
+    /// <summary>An admin hid this review (abuse, wrong target). A hidden review is excluded from
+    /// every average and count and from the public list; the row is kept for the audit trail.</summary>
+    public bool IsHidden { get; private set; }
+
+    public string? HiddenReason { get; private set; }
+
+    public DateTime? HiddenAt { get; private set; }
+
+    public void Hide(string reason, DateTime utcNow)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("سبب إخفاء التقييم مطلوب.");
+
+        IsHidden = true;
+        HiddenReason = reason.Trim();
+        HiddenAt = utcNow;
+        UpdatedAt = utcNow;
+    }
+
+    public void Unhide(DateTime utcNow)
+    {
+        IsHidden = false;
+        HiddenReason = null;
+        HiddenAt = null;
+        UpdatedAt = utcNow;
+    }
+
     public static ServiceReview Create(
         Guid serviceRequestId,
         Guid serviceProviderId,

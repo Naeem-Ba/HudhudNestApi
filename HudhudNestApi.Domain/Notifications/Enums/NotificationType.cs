@@ -177,4 +177,20 @@ public enum NotificationType
     /// Sent to the visitor; RelatedEntityId is the visit request id.
     /// </summary>
     VisitCancelledByHost = 46,
+
+    /// <summary>The provider closed an accepted ServiceRequest as not delivered. Sent to the requester,
+    /// who is asked why it did not happen from their side.</summary>
+    ServiceRequestNotCompleted = 47,
+
+    /// <summary>A customer opened a conversation about a service. Sent to the provider.</summary>
+    ServiceInquiryReceived = 48,
+
+    /// <summary>A new message in a service request thread. Sent to the other side.</summary>
+    ServiceRequestMessage = 49,
+
+    /// <summary>The customer has not confirmed an inquiry after two days. Sent to the customer.</summary>
+    ServiceRequestConfirmReminder = 50,
+
+    /// <summary>A month without contact: the request was closed by the system. Sent to both sides.</summary>
+    ServiceRequestExpired = 51,
 }

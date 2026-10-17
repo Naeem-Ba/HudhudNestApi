@@ -47,7 +47,9 @@ public sealed class ServiceRequestRepository : IServiceRequestRepository
             r.Status != ServiceRequestStatus.Completed &&
             r.Status != ServiceRequestStatus.Reviewed &&
             r.Status != ServiceRequestStatus.Rejected &&
-            r.Status != ServiceRequestStatus.Cancelled,
+            r.Status != ServiceRequestStatus.Cancelled &&
+            r.Status != ServiceRequestStatus.NotCompleted &&
+            r.Status != ServiceRequestStatus.Expired,
             ct);
 
     public async Task<int> CountOpenByServiceProviderIdAsync(Guid serviceProviderId, CancellationToken ct = default)
@@ -56,6 +58,8 @@ public sealed class ServiceRequestRepository : IServiceRequestRepository
             r.Status != ServiceRequestStatus.Completed &&
             r.Status != ServiceRequestStatus.Reviewed &&
             r.Status != ServiceRequestStatus.Rejected &&
-            r.Status != ServiceRequestStatus.Cancelled,
+            r.Status != ServiceRequestStatus.Cancelled &&
+            r.Status != ServiceRequestStatus.NotCompleted &&
+            r.Status != ServiceRequestStatus.Expired,
             ct);
 }
