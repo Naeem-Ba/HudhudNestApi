@@ -199,9 +199,29 @@ public static class NotificationCatalog
             "Your request ({number}) was scheduled for {at}.",
             "Ihre Anfrage ({number}) wurde für den {at} terminiert."),
         ["service.detail.completed"] = new(
-            "تم إتمام طلبك ({number}). يمكنك الآن تقييم الخدمة.",
-            "Your request ({number}) was completed. You can now review the service.",
-            "Ihre Anfrage ({number}) wurde abgeschlossen. Sie können den Service jetzt bewerten."),
+            "أعلن المزوّد إتمام طلبك ({number}). أكّد لنا إن كانت الخدمة قد تمّت فعلًا، ثم قيّمها.",
+            "The provider marked your request ({number}) as completed. Please confirm it was done, then rate the service.",
+            "Der Anbieter hat Ihre Anfrage ({number}) als erledigt gemeldet. Bitte bestätigen Sie das und bewerten Sie den Service."),
+        ["service.detail.not_completed"] = new(
+            "أعلن المزوّد أن طلبك ({number}) لم يتم. أخبرنا بسببك من جهتك ليساعدنا ذلك على تحسين الخدمات.",
+            "The provider marked your request ({number}) as not completed. Please tell us why from your side; it helps us improve the services.",
+            "Der Anbieter hat Ihre Anfrage ({number}) als nicht erledigt gemeldet. Bitte nennen Sie uns Ihren Grund; das hilft uns, die Services zu verbessern."),
+        ["service.detail.inquiry"] = new(
+            "استفسار جديد ({number}) عن خدمتك على عقار '{title}'. ردّ عليه من صفحة الطلبات.",
+            "New inquiry ({number}) about your service for the property '{title}'. Answer it from the requests page.",
+            "Neue Anfrage ({number}) zu Ihrem Service für die Immobilie '{title}'. Antworten Sie über die Anfragenseite."),
+        ["service.detail.message"] = new(
+            "رسالة جديدة في الطلب ({number}).",
+            "New message in the request ({number}).",
+            "Neue Nachricht in der Anfrage ({number})."),
+        ["service.detail.confirm_reminder"] = new(
+            "لم تؤكد طلبك ({number}) بعد. إن أصبحت جاهزًا افتح المحادثة واضغط «تأكيد الطلب»، وإلا فلا يلزمك شيء.",
+            "You have not confirmed your request ({number}) yet. When you are ready, open the conversation and press \"Confirm request\"; otherwise you do not need to do anything.",
+            "Sie haben Ihre Anfrage ({number}) noch nicht bestätigt. Öffnen Sie die Unterhaltung und tippen Sie auf \"Anfrage bestätigen\", wenn Sie bereit sind; sonst müssen Sie nichts tun."),
+        ["service.detail.expired"] = new(
+            "أُغلق الطلب ({number}) تلقائيًا لعدم وجود أي تواصل منذ شهر. المحادثة محفوظة ويمكنك البدء من جديد.",
+            "The request ({number}) was closed automatically after a month without contact. The conversation is kept and you can start again.",
+            "Die Anfrage ({number}) wurde nach einem Monat ohne Kontakt automatisch geschlossen. Die Unterhaltung bleibt erhalten, Sie können neu beginnen."),
         ["service.detail.cancelled"] = new(
             "تم إلغاء طلب الخدمة ({number}).",
             "The service request ({number}) was cancelled.",

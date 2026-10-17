@@ -16,19 +16,29 @@ public sealed class GetMyServiceRequestsQueryHandler
     : IRequestHandler<GetMyServiceRequestsQuery, IReadOnlyList<ServiceRequestDto>>
 {
     private readonly IServiceRequestRepository _requests;
+    private readonly IServiceRequestMessageRepository _messages;
 
-    public GetMyServiceRequestsQueryHandler(IServiceRequestRepository requests)
-        => _requests = requests;
+    public GetMyServiceRequestsQueryHandler(IServiceRequestRepository requests, IServiceRequestMessageRepository messages)
+    {
+        _requests = requests;
+        _messages = messages;
+    }
 
     public async Task<IReadOnlyList<ServiceRequestDto>> Handle(
         GetMyServiceRequestsQuery request, CancellationToken ct)
     {
         var requests = await _requests.GetByRequesterIdAsync(request.RequesterId, ct);
 
-        return requests
+        var visible = requests
             .Where(r => request.StatusFilter is null || r.Status == request.StatusFilter)
             .OrderByDescending(r => r.CreatedAt)
-            .Select(ServiceMapper.ToDto)
+            .ToList();
+
+        var stats = await _messages.GetStatsAsync(visible.Select(r => r.Id).ToList(), ServiceParty.Requester, ct);
+
+        return visible
+            .Select(r => ServiceMapper.ToDto(
+                r, ServiceRequestAudience.Requester, stats.GetValueOrDefault(r.Id, ServiceRequestMessageStats.Empty)))
             .ToList()
             .AsReadOnly();
     }

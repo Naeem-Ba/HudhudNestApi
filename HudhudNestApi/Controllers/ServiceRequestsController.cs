@@ -8,7 +8,9 @@ using HudhudNestApi.Application.Services.Commands.AddServiceReview;
 using HudhudNestApi.Application.Services.Commands.CancelServiceRequest;
 using HudhudNestApi.Application.Services.Commands.CompleteServiceRequest;
 using HudhudNestApi.Application.Services.Commands.CreateServiceRequest;
+using HudhudNestApi.Application.Services.Commands.ServiceConversation;
 using HudhudNestApi.Application.Services.Commands.RejectServiceRequest;
+using HudhudNestApi.Application.Services.Commands.ServiceOutcome;
 using HudhudNestApi.Application.Services.Commands.ScheduleServiceRequest;
 using HudhudNestApi.Application.Services.Commands.StartServiceRequest;
 using HudhudNestApi.Application.Services.Commands.UploadServiceRequestDocument;
@@ -109,10 +111,57 @@ public sealed class ServiceRequestsController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateServiceRequestRequest dto, CancellationToken ct)
     {
         var result = await _mediator.Send(
-            new CreateServiceRequestCommand(dto.PropertyId, GetUserId(), dto.ServiceOfferingId, dto.RequesterNote),
+            new CreateServiceRequestCommand(dto.PropertyId, GetUserId(), dto.ServiceOfferingId, dto.RequesterNote, dto.Intent),
             ct);
 
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+    }
+
+    /// <summary>The conversation between the customer and the provider (and, read-only, an admin).</summary>
+    [HttpGet("{id:guid}/messages")]
+    [ProducesResponseType(typeof(IReadOnlyList<ServiceRequestMessageDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetMessages(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new GetServiceRequestMessagesQuery(id, GetUserId(), IsAdmin()), ct);
+        return Ok(result);
+    }
+
+    [HttpPost("{id:guid}/messages")]
+    [EnableRateLimiting("service-messages")]
+    [ProducesResponseType(typeof(ServiceRequestMessageDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> SendMessage(Guid id, [FromBody] SendServiceRequestMessageRequest dto, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new SendServiceRequestMessageCommand(id, GetUserId(), dto.Body), ct);
+        return CreatedAtAction(nameof(GetMessages), new { id }, result);
+    }
+
+    /// <summary>Marks the other side's messages as read (called when the thread is opened).</summary>
+    [HttpPut("{id:guid}/messages/read")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> MarkMessagesRead(Guid id, CancellationToken ct)
+    {
+        await _mediator.Send(new MarkServiceRequestMessagesReadCommand(id, GetUserId()), ct);
+        return NoContent();
+    }
+
+    /// <summary>The customer turns the conversation into a request. Only then is it a request.</summary>
+    [HttpPut("{id:guid}/confirm")]
+    [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Confirm(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new ConfirmServiceRequestCommand(id, GetUserId()), ct);
+        return Ok(result);
     }
 
     [HttpPut("{id:guid}/accept")]
@@ -136,7 +185,7 @@ public sealed class ServiceRequestsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Reject(Guid id, [FromBody] RejectServiceRequestRequest dto, CancellationToken ct)
     {
-        var result = await _mediator.Send(new RejectServiceRequestCommand(id, GetUserId(), dto.Reason), ct);
+        var result = await _mediator.Send(new RejectServiceRequestCommand(id, GetUserId(), dto.Reason, dto.ReasonCode), ct);
         return Ok(result);
     }
 
@@ -175,6 +224,34 @@ public sealed class ServiceRequestsController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>The provider closes an accepted request as not delivered, with a reason from the list.</summary>
+    [HttpPut("{id:guid}/not-completed")]
+    [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> NotCompleted(Guid id, [FromBody] NotCompletedServiceRequestRequest dto, CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new MarkServiceRequestNotCompletedCommand(id, GetUserId(), dto.Reason, dto.Note), ct);
+
+        return Ok(result);
+    }
+
+    /// <summary>The requester answers "is the provider's outcome right?" and gives their own reason.</summary>
+    [HttpPut("{id:guid}/feedback")]
+    [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Feedback(Guid id, [FromBody] ServiceRequestFeedbackRequest dto, CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new SubmitServiceRequestFeedbackCommand(id, GetUserId(), dto.Answer, dto.Reason, dto.Note), ct);
+
+        return Ok(result);
+    }
+
     [HttpPut("{id:guid}/cancel")]
     [ProducesResponseType(typeof(ServiceRequestDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -183,7 +260,7 @@ public sealed class ServiceRequestsController : ControllerBase
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelServiceRequestRequest dto, CancellationToken ct)
     {
         var result = await _mediator.Send(
-            new CancelServiceRequestCommand(id, GetUserId(), IsAdmin(), dto.Reason), ct);
+            new CancelServiceRequestCommand(id, GetUserId(), IsAdmin(), dto.Reason, dto.RequesterReason), ct);
 
         return Ok(result);
     }
@@ -218,18 +295,29 @@ public sealed class ServiceRequestsController : ControllerBase
     }
 }
 
+/// <param name="PropertyId">The property the service is for.</param>
+/// <param name="ServiceOfferingId">The offering the customer is asking about.</param>
+/// <param name="RequesterNote">The first message of the conversation (required when <paramref name="Intent"/> is sent).</param>
+/// <param name="Intent">Which button opened it. Absent means an app from before the conversation stage.</param>
 public sealed record CreateServiceRequestRequest(
-    Guid PropertyId, Guid ServiceOfferingId, string? RequesterNote);
+    Guid PropertyId, Guid ServiceOfferingId, string? RequesterNote, ServiceRequestIntent? Intent = null);
+
+public sealed record SendServiceRequestMessageRequest(string Body);
 
 public sealed record AcceptServiceRequestRequest(
     decimal? QuotedPrice, int? QuotedPriceCurrencyId, string? ProviderNote);
 
-public sealed record RejectServiceRequestRequest(string Reason);
+public sealed record RejectServiceRequestRequest(string Reason, ServiceOutcomeReason? ReasonCode = null);
 
 public sealed record ScheduleServiceRequestRequest(DateTime ScheduledAt);
 
 public sealed record CompleteServiceRequestRequest(decimal? FinalPrice, int? FinalPriceCurrencyId);
 
-public sealed record CancelServiceRequestRequest(string? Reason);
+public sealed record CancelServiceRequestRequest(string? Reason, ServiceRequesterReason? RequesterReason = null);
 
 public sealed record AddServiceReviewRequest(int Rating, string? Comment);
+
+public sealed record NotCompletedServiceRequestRequest(ServiceOutcomeReason Reason, string? Note);
+
+public sealed record ServiceRequestFeedbackRequest(
+    ServiceRequesterAnswer Answer, ServiceRequesterReason? Reason, string? Note);

@@ -69,4 +69,9 @@ public static class AuditActions
     public const string ServiceProviderReactivatedByAdmin = "ServiceProviderReactivatedByAdmin";
     public const string ServiceProviderRevokedByAdmin = "ServiceProviderRevokedByAdmin";
     public const string ServiceProviderVerificationChangedByAdmin = "ServiceProviderVerificationChangedByAdmin";
+
+    // -- Admin dashboard: service requests and service reviews -----------
+    public const string ServiceRequestOutcomeSetByAdmin = "ServiceRequestOutcomeSetByAdmin";
+    public const string ServiceReviewHiddenByAdmin = "ServiceReviewHiddenByAdmin";
+    public const string ServiceReviewUnhiddenByAdmin = "ServiceReviewUnhiddenByAdmin";
 }

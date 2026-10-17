@@ -13,6 +13,8 @@ public sealed class ServiceReviewConfiguration : IEntityTypeConfiguration<Servic
 
         builder.Property(r => r.Comment).HasMaxLength(2000);
         builder.Property(r => r.Rating).IsRequired();
+        builder.Property(r => r.IsHidden).IsRequired().HasDefaultValue(false);
+        builder.Property(r => r.HiddenReason).HasMaxLength(300);
 
         builder.HasOne<ServiceRequest>()
             .WithMany()

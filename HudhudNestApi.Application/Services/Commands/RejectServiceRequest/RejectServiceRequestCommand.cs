@@ -16,7 +16,8 @@ namespace HudhudNestApi.Application.Services.Commands.RejectServiceRequest;
 public sealed record RejectServiceRequestCommand(
     Guid ServiceRequestId,
     Guid ActorUserId,
-    string Reason) : IRequest<ServiceRequestDto>;
+    string Reason,
+    HudhudNestApi.Domain.Services.Enums.ServiceOutcomeReason? ReasonCode = null) : IRequest<ServiceRequestDto>;
 
 public sealed class RejectServiceRequestCommandValidator : AbstractValidator<RejectServiceRequestCommand>
 {
@@ -68,7 +69,7 @@ public sealed class RejectServiceRequestCommandHandler
         var fromStatus = serviceRequest.Status;
         var now = DateTime.UtcNow;
 
-        serviceRequest.Reject(request.Reason, now);
+        serviceRequest.Reject(request.Reason, now, request.ReasonCode);
 
         await _history.AddAsync(
             ServiceRequestStatusHistory.Record(
