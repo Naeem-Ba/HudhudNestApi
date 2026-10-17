@@ -22,6 +22,19 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
             .HasMaxLength(500)
             .IsRequired();
 
+        builder.Property(notification => notification.Priority)
+            .HasDefaultValue(HudhudNestApi.Domain.Notifications.Enums.NotificationPriority.Normal)
+            .IsRequired();
+
+        builder.Property(notification => notification.DedupeKey)
+            .HasMaxLength(160);
+
+        // One notification per (recipient, business event). Partial: keyless rows are unrestricted.
+        builder.HasIndex(notification => new { notification.RecipientId, notification.DedupeKey })
+            .IsUnique()
+            .HasFilter("\"DedupeKey\" IS NOT NULL")
+            .HasDatabaseName("UX_Notifications_Recipient_DedupeKey");
+
         builder.Property(notification => notification.IsRead)
             .HasDefaultValue(false)
             .IsRequired();

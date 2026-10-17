@@ -51,6 +51,19 @@ public sealed class FcmPushSenderTests
         Assert.False(data.TryGetProperty("relatedEntityId", out _));
     }
 
+    [Fact]
+    public void TheMessage_CarriesTheTargetKindAndCategory_SoATapOpensTheRightScreen()
+    {
+        var payload = new PushPayload("HudhudNest", "Hallo", NotificationType.VisitConfirmed, Guid.NewGuid(), null, Guid.NewGuid(), "visit", "visits");
+
+        using var doc = JsonDocument.Parse(FcmPushSender.BuildMessage("device-1", payload));
+        var data = doc.RootElement.GetProperty("message").GetProperty("data");
+
+        Assert.Equal("visit", data.GetProperty("targetKind").GetString());
+        Assert.Equal("visits", data.GetProperty("category").GetString());
+        Assert.Equal(payload.RelatedEntityId!.Value.ToString(), data.GetProperty("relatedEntityId").GetString());
+    }
+
     [Theory]
     [InlineData(false, "p", "{}")]
     [InlineData(true, null, "{}")]

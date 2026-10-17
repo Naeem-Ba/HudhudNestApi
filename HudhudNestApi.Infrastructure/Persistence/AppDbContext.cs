@@ -85,6 +85,7 @@ public sealed class AppDbContext
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
+    public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<VisitRequest> VisitRequests => Set<VisitRequest>();
     public DbSet<PropertyReview> PropertyReviews => Set<PropertyReview>();
     public DbSet<UserRating> UserRatings => Set<UserRating>();

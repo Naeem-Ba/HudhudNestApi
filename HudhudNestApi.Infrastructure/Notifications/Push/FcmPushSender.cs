@@ -113,6 +113,17 @@ public sealed class FcmPushSender : IPushSender
             data["relatedEntityId"] = relatedId.ToString();
         }
 
+        // Which screen a tap opens. Ids only; the app re-checks access when it opens the screen.
+        if (!string.IsNullOrWhiteSpace(payload.TargetKind))
+        {
+            data["targetKind"] = payload.TargetKind;
+        }
+
+        if (!string.IsNullOrWhiteSpace(payload.Category))
+        {
+            data["category"] = payload.Category;
+        }
+
         var message = new
         {
             message = new

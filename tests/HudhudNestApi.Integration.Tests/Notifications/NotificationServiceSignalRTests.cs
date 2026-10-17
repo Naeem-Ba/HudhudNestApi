@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging.Abstractions;
 using HudhudNestApi.Application.Notifications.DTOs;
 using HudhudNestApi.Application.Notifications.Interfaces;
@@ -208,8 +208,14 @@ public sealed partial class NotificationServiceSignalRTests
     {
         public List<Notification> Notifications { get; } = new();
 
-        public Task AddAsync(Notification notification, CancellationToken ct = default)
+        public Task<bool> AddAsync(Notification notification, CancellationToken ct = default)
         {
+            if (notification.DedupeKey is not null
+                && Notifications.Any(n => n.RecipientId == notification.RecipientId && n.DedupeKey == notification.DedupeKey))
+            {
+                return Task.FromResult(false);
+            }
+
             // Do not assign notification.Id here.
             // In the production entity model, BaseEntity.Id has a non-public setter.
             // If the entity constructor initializes Id, we keep it. If not, this test still
@@ -224,7 +230,7 @@ public sealed partial class NotificationServiceSignalRTests
 
             Notifications.Add(notification);
 
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
 
         public Task<IReadOnlyList<Notification>> GetUserNotificationsAsync(
@@ -242,6 +248,13 @@ public sealed partial class NotificationServiceSignalRTests
 
             return Task.FromResult<IReadOnlyList<Notification>>(result);
         }
+
+        public Task<IReadOnlyList<Guid>> DeleteExpiredAsync(
+            DateTime readBefore,
+            DateTime softDeletedBefore,
+            int batchSize,
+            CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<Guid>>(Array.Empty<Guid>());
 
         public Task<int> GetUnreadCountAsync(
             Guid userId,

@@ -27,6 +27,32 @@ public static class NotificationCatalog
         ["generic.agency"] = new("مكتب عقاري", "a real-estate agency", "eine Immobilienagentur"),
         ["generic.agency_member"] = new("عضو المكتب", "an agency member", "ein Agenturmitarbeiter"),
 
+        // ---- push text without names (the default preview level); one per name-bearing category ----
+        ["push.generic.messages"] = new(
+            "لديك رسالة جديدة بخصوص عقار تتابعه",
+            "You have a new message about a property you follow",
+            "Sie haben eine neue Nachricht zu einer Immobilie, die Sie verfolgen"),
+        ["push.generic.visits"] = new(
+            "توجد مستجدات بشأن موعد معاينة",
+            "There is an update about a viewing",
+            "Es gibt Neuigkeiten zu einem Besichtigungstermin"),
+        ["push.generic.short-stay"] = new(
+            "توجد مستجدات بشأن حجز الإقامة القصيرة",
+            "There is an update about a short-stay booking",
+            "Es gibt Neuigkeiten zu einer Kurzaufenthalts-Buchung"),
+        ["push.generic.services"] = new(
+            "وصل تحديث بخصوص طلب خدمة",
+            "There is an update about a service request",
+            "Es gibt Neuigkeiten zu einer Serviceanfrage"),
+        ["push.generic.agency"] = new(
+            "لديك إشعار جديد من المكتب العقاري",
+            "You have a new notification about an agency",
+            "Sie haben eine neue Benachrichtigung zu einem Büro"),
+        ["push.generic.social"] = new(
+            "وصلك تقييم جديد",
+            "You received a new rating",
+            "Sie haben eine neue Bewertung erhalten"),
+
         // ---- outer messages ----
         ["msg.new_message"] = new(
             "أرسل لك {sender} رسالة جديدة.",

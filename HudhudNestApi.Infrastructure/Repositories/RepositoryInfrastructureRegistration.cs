@@ -57,6 +57,8 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IActiveListingCounter, ActiveListingCounter>();
 
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<HudhudNestApi.Application.Notifications.Preferences.INotificationPreferenceStore, NotificationPreferenceStore>();
+        services.AddScoped<HudhudNestApi.Application.Notifications.Preferences.NotificationPreferenceService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IRecipientLanguageResolver, RecipientLanguageResolver>();
         services.AddScoped<IDeviceTokenService, DeviceTokenService>();
@@ -90,6 +92,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IAgencyRepository, AgencyRepository>();
         services.AddScoped<IAgencyInvitationRepository, AgencyInvitationRepository>();
         services.AddHostedService<ListingExpiryHostedService>();
+        services.AddHostedService<HudhudNestApi.Infrastructure.Notifications.NotificationRetentionHostedService>();
         services.AddScoped<IPropertyImageRepository, PropertyImageRepository>();
         services.AddScoped<IFavoriteRepository, FavoriteRepository>();
         services.AddScoped<IConsentRecordRepository, ConsentRecordRepository>();

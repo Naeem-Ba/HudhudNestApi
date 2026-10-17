@@ -1,10 +1,14 @@
-﻿using HudhudNestApi.Domain.Notifications.Entities;
+using HudhudNestApi.Domain.Notifications.Entities;
 
 namespace HudhudNestApi.Application.Notifications.Interfaces;
 
 public interface INotificationRepository
 {
-    Task AddAsync(Notification notification, CancellationToken ct = default);
+    /// <summary>
+    /// Stores the notification. Returns false (and stores nothing) when one with the same
+    /// <c>DedupeKey</c> already exists for the recipient, so callers skip the live and push delivery.
+    /// </summary>
+    Task<bool> AddAsync(Notification notification, CancellationToken ct = default);
 
     Task<IReadOnlyList<Notification>> GetUserNotificationsAsync(
         Guid userId,
@@ -30,5 +34,15 @@ public interface INotificationRepository
         Guid notificationId,
         Guid userId,
         CancellationToken ct = default);
-}
 
+    /// <summary>
+    /// Retention: permanently removes (at most <paramref name="batchSize"/>) notifications that were read
+    /// before <paramref name="readBefore"/> or soft-deleted before <paramref name="softDeletedBefore"/>.
+    /// Returns the removed ids.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> DeleteExpiredAsync(
+        DateTime readBefore,
+        DateTime softDeletedBefore,
+        int batchSize,
+        CancellationToken ct = default);
+}

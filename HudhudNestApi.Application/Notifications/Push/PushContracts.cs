@@ -9,7 +9,9 @@ public sealed record PushPayload(
     NotificationType Type,
     Guid NotificationId,
     Guid? PropertyId,
-    Guid? RelatedEntityId);
+    Guid? RelatedEntityId,
+    string? TargetKind = null,
+    string? Category = null);
 
 /// <summary>Fan-out of one notification to every device the recipient has registered.</summary>
 public interface IPushNotificationDispatcher
