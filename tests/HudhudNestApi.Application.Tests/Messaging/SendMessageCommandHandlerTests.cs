@@ -6,6 +6,7 @@ using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Application.Users.Interfaces;
+using HudhudNestApi.Application.Users.Messaging;
 using HudhudNestApi.Application.Users.Messaging.Commands.SendMessage;
 using HudhudNestApi.Application.Users.Messaging.Interfaces;
 using HudhudNestApi.Application.Users.Models;
@@ -197,5 +198,71 @@ public sealed class SendMessageCommandHandlerTests
         var result = await f.Handler(f.Customer).Handle(new SendMessageCommand(f.Property.Id, null, "hi"), CancellationToken.None);
 
         Assert.Equal(f.Member, result.ReceiverId);
+    }
+
+    // ---- P8-D07: per-listing sending limits and notification coalescing -----------------------
+
+    [Fact(DisplayName = "P8-D07: the 11th message to one listing within ten minutes is refused with a 429 rule and nothing is stored")]
+    public async Task Customer_AboveTheBurstLimit_IsRefused()
+    {
+        var f = new Fixture(agencyListing: false);
+        f.Messages
+            .Setup(x => x.CountSentAboutPropertySinceAsync(f.Property.Id, f.Customer, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MessagingLimits.MaxMessagesPerBurstWindow);
+
+        var error = await Assert.ThrowsAsync<TooManyRequestsException>(() => f.Handler(f.Customer).Handle(
+            new SendMessageCommand(f.Property.Id, null, "again"), CancellationToken.None));
+
+        Assert.Equal("MESSAGE_RATE_LIMIT", error.Code);
+        Assert.Null(f.Saved);
+        f.Notifications.Verify(x => x.NotifyNewMessageAsync(
+            It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact(DisplayName = "P8-D07: the 10th message inside the window still goes through")]
+    public async Task Customer_JustUnderTheBurstLimit_IsAccepted()
+    {
+        var f = new Fixture(agencyListing: false);
+        f.Messages
+            .Setup(x => x.CountSentAboutPropertySinceAsync(f.Property.Id, f.Customer, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MessagingLimits.MaxMessagesPerBurstWindow - 1);
+
+        await f.Handler(f.Customer).Handle(new SendMessageCommand(f.Property.Id, null, "ok"), CancellationToken.None);
+
+        Assert.NotNull(f.Saved);
+    }
+
+    [Fact(DisplayName = "P8-D07: a slow drip is stopped by the daily cap")]
+    public async Task Customer_AboveTheDailyLimit_IsRefused()
+    {
+        var f = new Fixture(agencyListing: false);
+        f.Messages
+            .Setup(x => x.CountSentAboutPropertySinceAsync(f.Property.Id, f.Customer, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid _, Guid _, DateTime since, CancellationToken _) =>
+                since > DateTime.UtcNow.AddHours(-1) ? 0 : MessagingLimits.MaxMessagesPerDay);
+
+        var error = await Assert.ThrowsAsync<TooManyRequestsException>(() => f.Handler(f.Customer).Handle(
+            new SendMessageCommand(f.Property.Id, null, "drip"), CancellationToken.None));
+
+        Assert.Equal("MESSAGE_DAILY_LIMIT", error.Code);
+        Assert.Null(f.Saved);
+    }
+
+    [Fact(DisplayName = "P8-D07: while an earlier unread message from the same sender is fresh, no second notification is raised, but the message is stored")]
+    public async Task Customer_FollowUpWhileTheFirstIsUnread_StoresTheMessageWithoutANewNotification()
+    {
+        var f = new Fixture();
+        f.Messages
+            .Setup(x => x.HasRecentUnreadAsync(f.Property.Id, f.Customer, f.Member, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        await f.Handler(f.Customer).Handle(new SendMessageCommand(f.Property.Id, null, "second"), CancellationToken.None);
+
+        Assert.NotNull(f.Saved);
+        f.Notifications.Verify(x => x.NotifyNewMessageAsync(
+            It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        f.Notifications.Verify(x => x.NotifyAgencyMemberInquiryAsync(
+            It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

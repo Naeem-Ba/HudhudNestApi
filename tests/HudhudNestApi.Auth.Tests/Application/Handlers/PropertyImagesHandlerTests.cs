@@ -68,6 +68,42 @@ public sealed class PropertyImagesHandlerTests
         uow.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact(DisplayName = "P8-D06: when the provider goes down mid-upload the owner gets a failed upload, even if cleaning up the first image also fails")]
+    public async Task Upload_WhenTheProviderFailsAndCleanupFailsToo_ReturnsStorageFailedInsteadOfThrowing()
+    {
+        var ownerId = Guid.NewGuid();
+        var property = Property.Create("Title", "Description", ownerId, ListingType.ForRent);
+
+        var repository = new Mock<IPropertyImageRepository>();
+        repository.Setup(x => x.CountImagesAsync(property.Id, It.IsAny<CancellationToken>())).ReturnsAsync(0);
+
+        var ownership = new Mock<IPropertyOwnershipService>();
+        ownership.Setup(x => x.EnsureOwnerAsync(property.Id, ownerId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var storage = new Mock<IMediaStorageService>();
+        storage.SetupSequence(x => x.UploadImageAsync(
+                It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MediaUploadResult.Success("https://cdn.test/1.jpg", "first"))
+            .ReturnsAsync(MediaUploadResult.Failed("خدمة تخزين الصور غير متاحة حالياً."));
+        storage.Setup(x => x.DeleteImageAsync("first", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("provider down"));
+
+        var uow = new Mock<IUnitOfWork>();
+        var handler = new UploadPropertyImagesCommandHandler(
+            repository.Object, ownership.Object, storage.Object, new MediaFolderBuilder(), uow.Object);
+
+        static UploadPropertyImageFileDto Jpeg() =>
+            new(new MemoryStream([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]), "image.jpg", "image/jpeg", 6);
+
+        var result = await handler.Handle(
+            new UploadPropertyImagesCommand(property.Id, ownerId, [Jpeg(), Jpeg()]),
+            CancellationToken.None);
+
+        Assert.Equal(PropertyImageMutationStatus.StorageFailed, result.Status);
+        uow.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     [Fact(DisplayName = "Delete handler refuses non-owner before deleting from storage")]
     public async Task Delete_NonOwner_ReturnsForbidden_Without_DeletingStorage()
     {

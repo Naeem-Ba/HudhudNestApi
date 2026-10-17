@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using FluentValidation;
 using HudhudNestApi.Domain.Lookups.Constants;
 using HudhudNestApi.Application.Common.Interfaces;
+using HudhudNestApi.Application.Common.Validation;
 using HudhudNestApi.Application.Listings.Commands.CreateProperty;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings.Enums;
@@ -34,26 +35,32 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
 
         RuleFor(x => x.Title)
             .NotEmpty()
-            .MaximumLength(200);
+            .MaximumLength(200)
+            .NoNulCharacters();
 
         RuleFor(x => x.Description)
             .NotEmpty()
-            .MaximumLength(5000);
+            .MaximumLength(5000)
+            .NoNulCharacters();
 
         RuleFor(x => x.City)
             .NotEmpty()
-            .MaximumLength(150);
+            .MaximumLength(150)
+            .NoNulCharacters();
 
         RuleFor(x => x.Street)
             .NotEmpty()
-            .MaximumLength(300);
+            .MaximumLength(300)
+            .NoNulCharacters();
 
         RuleFor(x => x.Region)
             .MaximumLength(150)
+            .NoNulCharacters()
             .When(x => x.Region is not null);
 
         RuleFor(x => x.PostalCode)
             .MaximumLength(20)
+            .NoNulCharacters()
             .When(x => x.PostalCode is not null);
 
         // Structured location — mandatory as of this pass (see
@@ -76,20 +83,28 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
 
         RuleFor(x => x.DistrictText)
             .MaximumLength(150)
+            .NoNulCharacters()
             .When(x => x.DistrictText is not null);
 
         RuleFor(x => x.NeighborhoodText)
             .MaximumLength(150)
+            .NoNulCharacters()
             .When(x => x.NeighborhoodText is not null);
 
         RuleFor(x => x)
             .MustAsync((x, ct) => locations.IsConsistentAsync(x.GovernorateId, x.DistrictId, x.NeighborhoodId, ct))
             .WithName("Location")
-            .WithMessage("The district must belong to the governorate and the neighborhood to the district.");
+            .WithMessage("The governorate, district and neighborhood must exist and belong together.");
 
         RuleFor(x => x.PropertyTypeId)
             .NotNull()
             .WithMessage("Property type is required.");
+
+        // An id the catalog does not know used to reach the foreign key and come back as a 500.
+        RuleFor(x => x.PropertyTypeId)
+            .MustAsync(async (id, ct) => id is not { } typeId || await PropertyTypeExistsAsync(typeId, ct))
+            .WithMessage("Unknown property type.")
+            .When(x => x.PropertyTypeId.HasValue);
 
         RuleFor(x => x.CountryCode)
             .NotEmpty()
@@ -114,6 +129,13 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
             .GreaterThan(0)
             .WithMessage("Cold rent must be greater than zero.")
             .When(x => x.ListingType == ListingType.ForRent && x.ColdRent.HasValue);
+
+        // Upper bound on every money field, whatever the listing type: the columns are numeric(18,4).
+        RuleFor(x => x.ColdRent).WithinMoneyRange();
+        RuleFor(x => x.WarmRent).WithinMoneyRange();
+        RuleFor(x => x.PurchasePrice).WithinMoneyRange();
+        RuleFor(x => x.Deposit).WithinMoneyRange();
+        RuleFor(x => x.AdditionalCosts).WithinMoneyRange();
 
         RuleFor(x => x.WarmRent)
             .GreaterThan(0)
@@ -162,6 +184,8 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
         RuleFor(x => x.AdditionalCosts)
             .GreaterThanOrEqualTo(0)
             .When(x => x.AdditionalCosts.HasValue);
+
+        RuleFor(x => x.Area).WithinAreaRange();
 
         RuleFor(x => x.Rooms)
             .InclusiveBetween(1, 50)
@@ -251,6 +275,12 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
             })
             .WithMessage("Area is required for land listings.")
             .WithName("Area");
+    }
+
+    private async Task<bool> PropertyTypeExistsAsync(int propertyTypeId, CancellationToken ct)
+    {
+        var catalog = await _lookups.GetPropertyTypeCatalogAsync(ct);
+        return catalog.Any(pt => pt.Id == propertyTypeId);
     }
 
     private async Task<string?> ResolveCategoryAsync(int propertyTypeId, CancellationToken ct)

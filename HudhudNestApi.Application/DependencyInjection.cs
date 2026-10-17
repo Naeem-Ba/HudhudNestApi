@@ -67,6 +67,8 @@ public static class DependencyInjection
         services.AddScoped<IAdminPaymentRequestService, AdminPaymentRequestService>();
         services.AddScoped<IAdminValuationInquiryService, AdminValuationInquiryService>();
         services.AddScoped<IPropertyOwnershipService, PropertyOwnershipService>();
+        services.AddScoped<IListingQuotaGuard, ListingQuotaGuard>();
+        services.AddScoped<Bookings.Interfaces.IListingVisitCleanup, Bookings.Services.ListingVisitCleanup>();
 
         // Agency eligibility (verified account + paid plan) — a plain policy service asked by
         // three different agency handlers, so it is registered explicitly here rather than

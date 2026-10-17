@@ -27,8 +27,7 @@ public sealed class CreatePropertyCommandHandler
     private readonly IUserIdentityReadService _identity;
     private readonly IUnitOfWork _uow;
     private readonly ILocationSuggestionService _locationSuggestions;
-    private readonly IListingQuotaPolicy _quotaPolicy;
-    private readonly IActiveListingCounter _activeListingCounter;
+    private readonly IListingQuotaGuard _quotaGuard;
     private readonly IPublisher _publisher;
     private readonly ILogger<CreatePropertyCommandHandler> _logger;
 
@@ -38,8 +37,7 @@ public sealed class CreatePropertyCommandHandler
         IUserIdentityReadService identity,
         IUnitOfWork uow,
         ILocationSuggestionService locationSuggestions,
-        IListingQuotaPolicy quotaPolicy,
-        IActiveListingCounter activeListingCounter,
+        IListingQuotaGuard quotaGuard,
         IPublisher publisher,
         ILogger<CreatePropertyCommandHandler> logger)
     {
@@ -48,8 +46,7 @@ public sealed class CreatePropertyCommandHandler
         _identity = identity;
         _uow = uow;
         _locationSuggestions = locationSuggestions;
-        _quotaPolicy = quotaPolicy;
-        _activeListingCounter = activeListingCounter;
+        _quotaGuard = quotaGuard;
         _publisher = publisher;
         _logger = logger;
     }
@@ -91,7 +88,7 @@ public sealed class CreatePropertyCommandHandler
     /// both read the same count and both proceed. An advisory lock keyed by owner/agency
     /// (<see cref="ListingQuotaLock"/>) serializes only requests that share a key; unrelated
     /// owners/agencies are unaffected. The lock is transaction-scoped, so it releases itself
-    /// on commit or rollback — including if EnsureListingQuotaAvailableAsync throws.
+    /// on commit or rollback — including if the quota guard throws.
     /// </summary>
     private async Task<Property> CreateWithQuotaEnforcedAsync(
         CreatePropertyCommand request,
@@ -109,7 +106,7 @@ public sealed class CreatePropertyCommandHandler
 
             await _uow.AcquireAdvisoryLockAsync(lockKey, cancellationToken);
 
-            await EnsureListingQuotaAvailableAsync(ownerAccount, cancellationToken);
+            await _quotaGuard.EnsureCapacityAsync(ownerAccount, cancellationToken);
 
             property = BuildProperty(request, ownerAccount);
 
@@ -261,64 +258,6 @@ public sealed class CreatePropertyCommandHandler
         throw new ForbiddenException(
             "اختر خطة أولاً قبل نشر إعلان — الخطة المجانية متاحة أيضاً.",
             "LISTING_PLAN_REQUIRED");
-    }
-
-    /// <summary>
-    /// Enforces the active-listing limit — plan-driven for both an independent owner and an
-    /// agency-pooled owner (BACKEND-ISSUES.md §B-3): <see cref="IListingQuotaPolicy"/>
-    /// resolves the limit from <c>Plan.ListingLimit</c> via <c>UserAccount.PlanId</c> (the
-    /// agency owner's, when <paramref name="ownerAccount"/> belongs to one — see
-    /// IListingQuotaPolicy's doc comment), never from a constant here.
-    ///
-    /// The count itself comes from <see cref="IActiveListingCounter"/> — a shared total
-    /// across every listing type that draws from this same quota (Property + ShortStayListing
-    /// today), not just this repository's own rows. Without this, a Property and a Short-Stay
-    /// listing would each be checked against a separate, smaller pool instead of the one the
-    /// owner's plan actually promises.
-    ///
-    /// Consequence worth being explicit about: an existing owner (or agency) who already
-    /// holds more than the limit — e.g. after a plan downgrade — keeps every listing they
-    /// have; nothing is retroactively removed. They simply cannot create another until they
-    /// are back under it.
-    /// </summary>
-    private async Task EnsureListingQuotaAvailableAsync(
-        UserAccount ownerAccount,
-        CancellationToken ct)
-    {
-        var limit = await _quotaPolicy.GetActiveListingLimitAsync(ownerAccount, ct);
-
-        if (ownerAccount.AgencyId is { } agencyId)
-        {
-            var agencyActiveListings = await _activeListingCounter.CountActiveListingsByAgencyAsync(agencyId, ct);
-
-            if (agencyActiveListings < limit)
-                return;
-
-            _logger.LogInformation(
-                "Listing creation blocked by agency-pooled quota. AgencyId={AgencyId}, Active={Active}, Limit={Limit}",
-                agencyId,
-                agencyActiveListings,
-                limit);
-
-            throw new ConflictException(
-                $"بلغ مكتبكم الحدّ الأقصى المسموح به من الإعلانات النشطة ({limit} إعلاناً) وفق خطة مكتبكم. " +
-                "احذفوا إعلاناً قائماً أو رقّوا الخطة لإضافة إعلان جديد.");
-        }
-
-        var activeListings = await _activeListingCounter.CountActiveListingsByOwnerAsync(ownerAccount.Id, ct);
-
-        if (activeListings < limit)
-            return;
-
-        _logger.LogInformation(
-            "Listing creation blocked by plan quota. OwnerId={OwnerId}, Active={Active}, Limit={Limit}",
-            ownerAccount.Id,
-            activeListings,
-            limit);
-
-        throw new ConflictException(
-            $"خطتكم الحالية تسمح بـ {limit} إعلاناً نشطاً كحد أقصى. لديكم حالياً {activeListings}. " +
-            "احذفوا إعلاناً قائماً أو رقّوا خطتكم لإضافة إعلان جديد.");
     }
 
     /// <summary>

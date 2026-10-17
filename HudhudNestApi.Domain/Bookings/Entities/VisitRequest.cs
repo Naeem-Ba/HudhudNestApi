@@ -96,6 +96,21 @@ public sealed class VisitRequest : BaseEntity
         Status = VisitStatus.Cancelled;
     }
 
+    /// <summary>
+    /// The listing was deleted (by its owner, or by the expiry sweep) while this visit was still open.
+    /// Closes it so neither side keeps a dead appointment (QA Phase 8, P8-D08). Returns false, changing
+    /// nothing, when the visit was already finished.
+    /// </summary>
+    public bool CancelBecauseListingRemoved()
+    {
+        if (Status is not (VisitStatus.Pending or VisitStatus.Confirmed or VisitStatus.RescheduleProposed))
+            return false;
+
+        Status = VisitStatus.Cancelled;
+        RespondedAt = DateTime.UtcNow;
+        return true;
+    }
+
     public void Complete()
     {
         EnsureStatus(VisitStatus.Confirmed, "إتمام");

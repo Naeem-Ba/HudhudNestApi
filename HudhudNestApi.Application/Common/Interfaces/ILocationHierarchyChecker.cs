@@ -10,8 +10,8 @@ namespace HudhudNestApi.Application.Common.Interfaces;
 public interface ILocationHierarchyChecker
 {
     /// <summary>
-    /// True when every pair that is present is consistent. A missing level (null id, e.g. a typed DistrictText)
-    /// is not checked; unknown ids are reported as inconsistent.
+    /// True when every id that is present exists and agrees with the levels above it. A missing level (null id,
+    /// e.g. a typed DistrictText) is not checked; unknown ids, a governorate included, are reported as inconsistent.
     /// </summary>
     Task<bool> IsConsistentAsync(int? governorateId, int? districtId, int? neighborhoodId, CancellationToken ct = default);
 }

@@ -31,6 +31,7 @@ public sealed class UpdatePropertyCommandHandler
     private readonly INotificationService _notifications;
     private readonly ILocationSuggestionService _locationSuggestions;
     private readonly ILocationHierarchyChecker _locations;
+    private readonly ICommonLookupService _lookups;
     private readonly IPublisher _publisher;
     private readonly ILogger<UpdatePropertyCommandHandler> _logger;
 
@@ -42,6 +43,7 @@ public sealed class UpdatePropertyCommandHandler
         INotificationService notifications,
         ILocationSuggestionService locationSuggestions,
         ILocationHierarchyChecker locations,
+        ICommonLookupService lookups,
         IPublisher publisher,
         ILogger<UpdatePropertyCommandHandler> logger)
     {
@@ -52,6 +54,7 @@ public sealed class UpdatePropertyCommandHandler
         _notifications = notifications;
         _locationSuggestions = locationSuggestions;
         _locations = locations;
+        _lookups = lookups;
         _publisher = publisher;
         _logger = logger;
     }
@@ -90,7 +93,20 @@ public sealed class UpdatePropertyCommandHandler
         if (request.DistrictText is not null) property.DistrictText = request.DistrictText;
         if (request.NeighborhoodId.HasValue) property.NeighborhoodId = request.NeighborhoodId;
         if (request.NeighborhoodText is not null) property.NeighborhoodText = request.NeighborhoodText;
-        if (request.PropertyTypeId.HasValue) property.PropertyTypeId = request.PropertyTypeId;
+        if (request.PropertyTypeId.HasValue)
+        {
+            // An id the catalog does not know used to reach the foreign key and come back as a 500.
+            var catalog = await _lookups.GetPropertyTypeCatalogAsync(cancellationToken);
+            if (catalog.All(type => type.Id != request.PropertyTypeId.Value))
+            {
+                throw new ValidationException(new[]
+                {
+                    new ValidationFailure("PropertyTypeId", "Unknown property type.")
+                });
+            }
+
+            property.PropertyTypeId = request.PropertyTypeId;
+        }
 
         // Checked on the merged values (a null id keeps the stored one, so the request alone cannot tell),
         // and only when the request changes the location: a listing saved before this check existed must
@@ -100,7 +116,7 @@ public sealed class UpdatePropertyCommandHandler
         {
             throw new ValidationException(new[]
             {
-                new ValidationFailure("Location", "The district must belong to the governorate and the neighborhood to the district.")
+                new ValidationFailure("Location", "The governorate, district and neighborhood must exist and belong together.")
             });
         }
 

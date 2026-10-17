@@ -88,6 +88,14 @@ public sealed class PropertyDto
     public DateTime? PublishedAt { get; set; }
     public DateTime? ExpiresAt { get; set; }
 
+    /// <summary>
+    /// True while an administrator's take-down is in force. A taken-down listing is never returned by a
+    /// public endpoint (it is unpublished); only its owner and administrators can read it, which is how the
+    /// owner sees <see cref="TakenDownReason"/> in "My listings" (QA Phase 8, P8-D10).
+    /// </summary>
+    public bool IsTakenDown { get; set; }
+    public string? TakenDownReason { get; set; }
+
     // Paid featured placement. IsFeatured is the EFFECTIVE value at response time, not the
     // raw column: the sweep that clears a lapsed flag runs every six hours, so between sweeps
     // the row can still say true for a window that has already expired. FeaturedUntil is the

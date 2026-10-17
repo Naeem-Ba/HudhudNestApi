@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using HudhudNestApi.Application.Common.Validation;
 using HudhudNestApi.Domain.Lookups.Constants;
 using HudhudNestApi.Application.Listings.Commands.UpdateProperty;
 using HudhudNestApi.Domain.Listings.Enums;
@@ -25,24 +26,29 @@ public sealed class UpdatePropertyCommandValidator
         RuleFor(command => command.Title)
             .NotEmpty()
             .MaximumLength(200)
+            .NoNulCharacters()
             .When(command => command.Title is not null);
 
         RuleFor(command => command.Description)
             .NotEmpty()
             .MaximumLength(5000)
+            .NoNulCharacters()
             .When(command => command.Description is not null);
 
         RuleFor(command => command.Street)
             .MaximumLength(300)
+            .NoNulCharacters()
             .When(command => command.Street is not null);
 
         RuleFor(command => command.City)
             .NotEmpty()
             .MaximumLength(150)
+            .NoNulCharacters()
             .When(command => command.City is not null);
 
         RuleFor(command => command.Region)
             .MaximumLength(150)
+            .NoNulCharacters()
             .When(command => command.Region is not null);
 
         RuleFor(command => command.CountryCode)
@@ -53,14 +59,17 @@ public sealed class UpdatePropertyCommandValidator
 
         RuleFor(command => command.PostalCode)
             .MaximumLength(20)
+            .NoNulCharacters()
             .When(command => command.PostalCode is not null);
 
         RuleFor(command => command.DistrictText)
             .MaximumLength(150)
+            .NoNulCharacters()
             .When(command => command.DistrictText is not null);
 
         RuleFor(command => command.NeighborhoodText)
             .MaximumLength(150)
+            .NoNulCharacters()
             .When(command => command.NeighborhoodText is not null);
 
         RuleFor(command => command.CurrencyCode)
@@ -93,6 +102,13 @@ public sealed class UpdatePropertyCommandValidator
         RuleFor(command => command.PurchasePrice)
             .GreaterThan(0)
             .When(command => command.PurchasePrice.HasValue);
+
+        RuleFor(command => command.ColdRent).WithinMoneyRange();
+        RuleFor(command => command.WarmRent).WithinMoneyRange();
+        RuleFor(command => command.PurchasePrice).WithinMoneyRange();
+        RuleFor(command => command.Deposit).WithinMoneyRange();
+        RuleFor(command => command.AdditionalCosts).WithinMoneyRange();
+        RuleFor(command => command.Area).WithinAreaRange();
 
         RuleFor(command => command)
             .Must(command =>

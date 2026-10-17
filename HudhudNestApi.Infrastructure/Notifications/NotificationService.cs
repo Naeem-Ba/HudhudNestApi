@@ -99,6 +99,9 @@ public sealed class NotificationService : INotificationService
             NotificationType.VisitRescheduleProposed => "msg.visit_reschedule_proposed",
             NotificationType.VisitRescheduleAccepted => "msg.visit_reschedule_accepted",
             NotificationType.VisitRescheduleDeclined => "msg.visit_reschedule_declined",
+            NotificationType.VisitCancelledByHost => "msg.visit_cancelled_by_host",
+            NotificationType.ListingTakenDown => "msg.listing_taken_down",
+            NotificationType.ListingRestored => "msg.listing_restored",
             _ => "msg.property_update_default",
         };
 

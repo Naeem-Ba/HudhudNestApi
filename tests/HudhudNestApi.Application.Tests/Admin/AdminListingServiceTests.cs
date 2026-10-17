@@ -5,10 +5,13 @@ using HudhudNestApi.Application.Admin.Services;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Events;
 using HudhudNestApi.Application.Listings.Interfaces;
+using HudhudNestApi.Application.Notifications.Interfaces;
+using HudhudNestApi.Application.Notifications.Localization;
 using HudhudNestApi.Domain.Audit.Constants;
 using HudhudNestApi.Domain.Common.Exceptions;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings.Entities;
+using HudhudNestApi.Domain.Notifications.Enums;
 
 namespace HudhudNestApi.Application.Tests.Admin;
 
@@ -281,8 +284,142 @@ public sealed class AdminListingServiceTests
     }
 
     private static AdminListingService BuildService(
-        IPropertyRepository properties, IUnitOfWork unitOfWork, IAuditLogService auditLogs, IPublisher? publisher = null)
-        => new(properties, unitOfWork, auditLogs, publisher ?? Mock.Of<IPublisher>(), NullLogger<AdminListingService>.Instance);
+        IPropertyRepository properties,
+        IUnitOfWork unitOfWork,
+        IAuditLogService auditLogs,
+        IPublisher? publisher = null,
+        INotificationService? notifications = null)
+        => new(
+            properties,
+            unitOfWork,
+            auditLogs,
+            publisher ?? Mock.Of<IPublisher>(),
+            notifications ?? Mock.Of<INotificationService>(),
+            NullLogger<AdminListingService>.Instance);
+
+    [Fact(DisplayName = "P8-D02: an admin cannot extend a sold listing back onto the market")]
+    public async Task ExtendListingAsync_OnASoldListing_IsRefused()
+    {
+        var property = Property.Create("شقة", "وصف", Guid.NewGuid(), ListingType.ForSale);
+        property.ChangeStatus(PropertyStatus.Sold);
+        var service = BuildService(FakeProperties(property).Object, Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>());
+
+        await Assert.ThrowsAsync<InvalidStateTransitionException>(() =>
+            service.ExtendListingAsync(property.Id, 30, null, AdminId, null, CancellationToken.None));
+
+        Assert.Equal(PropertyStatus.Sold, property.Status);
+    }
+
+    [Fact(DisplayName = "P8-D10: a take-down hides the listing, is audited, and tells the owner the reason")]
+    public async Task TakeDownListingAsync_UnpublishesAuditsAndNotifiesTheOwner()
+    {
+        var property = Property.Create("شقة", "وصف", Guid.NewGuid(), ListingType.ForRent);
+        var auditLogs = new Mock<IAuditLogService>();
+        var notifications = new Mock<INotificationService>();
+        var service = BuildService(FakeProperties(property).Object, Mock.Of<IUnitOfWork>(), auditLogs.Object, notifications: notifications.Object);
+
+        var result = await service.TakeDownListingAsync(property.Id, "  صور غير لائقة  ", AdminId, "10.0.0.1", CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.True(property.IsTakenDown);
+        Assert.False(property.IsPublished);
+        Assert.Equal("صور غير لائقة", property.TakenDownReason);
+        auditLogs.Verify(x => x.LogAsync(
+            AdminId, AuditActions.ListingTakenDownByAdmin, "10.0.0.1",
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        notifications.Verify(x => x.NotifyPropertyUpdateAsync(
+            property.OwnerId, property.Id, property.Title, NotificationType.ListingTakenDown,
+            It.Is<NotificationText>(t => t.Literal == "صور غير لائقة"), null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task TakeDownListingAsync_WithoutAReason_IsABadRequestAndChangesNothing()
+    {
+        var property = Property.Create("شقة", "وصف", Guid.NewGuid(), ListingType.ForRent);
+        var service = BuildService(FakeProperties(property).Object, Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>());
+
+        var result = await service.TakeDownListingAsync(property.Id, "   ", AdminId, null, CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.False(result.NotFound);
+        Assert.False(result.Conflict);
+        Assert.False(property.IsTakenDown);
+        Assert.True(property.IsPublished);
+    }
+
+    [Fact]
+    public async Task TakeDownListingAsync_Twice_IsAConflict()
+    {
+        var property = Property.Create("شقة", "وصف", Guid.NewGuid(), ListingType.ForRent);
+        var service = BuildService(FakeProperties(property).Object, Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>());
+        await service.TakeDownListingAsync(property.Id, "reason", AdminId, null, CancellationToken.None);
+
+        var second = await service.TakeDownListingAsync(property.Id, "reason", AdminId, null, CancellationToken.None);
+
+        Assert.True(second.Conflict);
+    }
+
+    [Fact]
+    public async Task TakeDownListingAsync_ForAnUnknownListing_IsNotFound()
+    {
+        var properties = new Mock<IPropertyRepository>();
+        var service = BuildService(properties.Object, Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>());
+
+        var result = await service.TakeDownListingAsync(Guid.NewGuid(), "reason", AdminId, null, CancellationToken.None);
+
+        Assert.True(result.NotFound);
+    }
+
+    [Fact(DisplayName = "P8-D10: a notification failure never undoes a committed take-down")]
+    public async Task TakeDownListingAsync_WhenTheNotificationFails_StillSucceeds()
+    {
+        var property = Property.Create("شقة", "وصف", Guid.NewGuid(), ListingType.ForRent);
+        var notifications = new Mock<INotificationService>();
+        notifications
+            .Setup(x => x.NotifyPropertyUpdateAsync(
+                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<NotificationType>(),
+                It.IsAny<NotificationText>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("push down"));
+        var service = BuildService(FakeProperties(property).Object, Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>(), notifications: notifications.Object);
+
+        var result = await service.TakeDownListingAsync(property.Id, "reason", AdminId, null, CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.True(property.IsTakenDown);
+    }
+
+    [Fact(DisplayName = "P8-D10: restoring brings the listing back, is audited, and tells the owner")]
+    public async Task RestoreListingAsync_RepublishesAndNotifies()
+    {
+        var property = Property.Create("شقة", "وصف", Guid.NewGuid(), ListingType.ForRent);
+        property.TakeDown(AdminId, "reason");
+        var auditLogs = new Mock<IAuditLogService>();
+        var notifications = new Mock<INotificationService>();
+        var service = BuildService(FakeProperties(property).Object, Mock.Of<IUnitOfWork>(), auditLogs.Object, notifications: notifications.Object);
+
+        var result = await service.RestoreListingAsync(property.Id, "appeal accepted", AdminId, null, CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.False(property.IsTakenDown);
+        Assert.True(property.IsPublished);
+        auditLogs.Verify(x => x.LogAsync(
+            AdminId, AuditActions.ListingRestoredByAdmin, null,
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        notifications.Verify(x => x.NotifyPropertyUpdateAsync(
+            property.OwnerId, property.Id, property.Title, NotificationType.ListingRestored,
+            It.IsAny<NotificationText>(), null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RestoreListingAsync_OnAListingThatIsNotTakenDown_IsAConflict()
+    {
+        var property = Property.Create("شقة", "وصف", Guid.NewGuid(), ListingType.ForRent);
+        var service = BuildService(FakeProperties(property).Object, Mock.Of<IUnitOfWork>(), Mock.Of<IAuditLogService>());
+
+        var result = await service.RestoreListingAsync(property.Id, null, AdminId, null, CancellationToken.None);
+
+        Assert.True(result.Conflict);
+    }
 
     private static Mock<IPropertyRepository> FakeProperties(Property property)
     {
