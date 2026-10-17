@@ -31,13 +31,15 @@ public sealed class GetServiceRequestByIdQueryHandler
         var serviceRequest = await _requests.GetByIdAsync(request.ServiceRequestId, ct)
             ?? throw new NotFoundException("طلب الخدمة غير موجود.");
 
-        if (!request.IsAdmin && serviceRequest.RequesterId != request.ActorUserId)
+        var isRequester = serviceRequest.RequesterId == request.ActorUserId;
+
+        if (!request.IsAdmin && !isRequester)
         {
             var provider = await _providers.GetByIdAsync(serviceRequest.ServiceProviderId, ct);
             if (provider is null || provider.UserId != request.ActorUserId)
                 throw new ForbiddenException("لا يمكنك عرض طلب خدمة لا يخصّك.");
         }
 
-        return ServiceMapper.ToDto(serviceRequest);
+        return ServiceMapper.ToDto(serviceRequest, request.IsAdmin ? ServiceRequestAudience.Admin : isRequester ? ServiceRequestAudience.Requester : ServiceRequestAudience.Provider);
     }
 }

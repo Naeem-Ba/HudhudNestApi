@@ -185,9 +185,13 @@ public static class NotificationCatalog
             "Your request ({number}) was scheduled for {at}.",
             "Ihre Anfrage ({number}) wurde für den {at} terminiert."),
         ["service.detail.completed"] = new(
-            "تم إتمام طلبك ({number}). يمكنك الآن تقييم الخدمة.",
-            "Your request ({number}) was completed. You can now review the service.",
-            "Ihre Anfrage ({number}) wurde abgeschlossen. Sie können den Service jetzt bewerten."),
+            "أعلن المزوّد إتمام طلبك ({number}). أكّد لنا إن كانت الخدمة قد تمّت فعلًا، ثم قيّمها.",
+            "The provider marked your request ({number}) as completed. Please confirm it was done, then rate the service.",
+            "Der Anbieter hat Ihre Anfrage ({number}) als erledigt gemeldet. Bitte bestätigen Sie das und bewerten Sie den Service."),
+        ["service.detail.not_completed"] = new(
+            "أعلن المزوّد أن طلبك ({number}) لم يتم. أخبرنا بسببك من جهتك ليساعدنا ذلك على تحسين الخدمات.",
+            "The provider marked your request ({number}) as not completed. Please tell us why from your side; it helps us improve the services.",
+            "Der Anbieter hat Ihre Anfrage ({number}) als nicht erledigt gemeldet. Bitte nennen Sie uns Ihren Grund; das hilft uns, die Services zu verbessern."),
         ["service.detail.cancelled"] = new(
             "تم إلغاء طلب الخدمة ({number}).",
             "The service request ({number}) was cancelled.",

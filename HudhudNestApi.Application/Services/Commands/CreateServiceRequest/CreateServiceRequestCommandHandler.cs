@@ -132,6 +132,6 @@ public sealed class CreateServiceRequestCommandHandler
         }
 
         var reloaded = await _requests.GetByIdAsync(serviceRequest.Id, ct) ?? serviceRequest;
-        return ServiceMapper.ToDto(reloaded);
+        return ServiceMapper.ToDto(reloaded, ServiceRequestAudience.Requester);
     }
 }

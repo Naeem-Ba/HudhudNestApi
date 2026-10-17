@@ -37,7 +37,7 @@ public sealed class GetProviderServiceRequestsQueryHandler
         return requests
             .Where(r => request.StatusFilter is null || r.Status == request.StatusFilter)
             .OrderByDescending(r => r.CreatedAt)
-            .Select(ServiceMapper.ToDto)
+            .Select(r => ServiceMapper.ToDto(r))
             .ToList()
             .AsReadOnly();
     }

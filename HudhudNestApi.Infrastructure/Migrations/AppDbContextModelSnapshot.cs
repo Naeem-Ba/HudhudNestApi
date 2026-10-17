@@ -3121,6 +3121,17 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTime?>("NotCompletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("OutcomeNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("OutcomeReason")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
                     b.Property<Guid>("PropertyId")
                         .HasColumnType("uuid");
 
@@ -3143,12 +3154,27 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("RequesterAnswer")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("RequesterFeedbackAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("RequesterFeedbackNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<Guid>("RequesterId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("RequesterNote")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("RequesterReason")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<DateTime?>("ScheduledAt")
                         .HasColumnType("timestamp without time zone");
@@ -3308,8 +3334,20 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<DateTime?>("HiddenAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("HiddenReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<bool>("IsHidden")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<int>("Rating")
                         .HasColumnType("integer");

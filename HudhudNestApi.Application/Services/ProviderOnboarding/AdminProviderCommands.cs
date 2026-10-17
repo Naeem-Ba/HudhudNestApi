@@ -320,7 +320,7 @@ public sealed class ProviderAdminDetailBuilder
         return new AdminServiceProviderDetailDto(
             ServiceMapper.ToDto(provider, average, count),
             openRequests,
-            offerings.Select(ServiceMapper.ToDto).ToList(),
+            offerings.Select(r => ServiceMapper.ToDto(r)).ToList(),
             applications.Select(ProviderOnboardingMapper.ToSummary).ToList(),
             timeline.Select(e => ProviderOnboardingMapper.ToDto(e, forApplicant: false)).ToList());
     }

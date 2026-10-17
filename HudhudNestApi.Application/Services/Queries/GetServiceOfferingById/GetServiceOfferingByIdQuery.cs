@@ -12,15 +12,19 @@ public sealed class GetServiceOfferingByIdQueryHandler
     : IRequestHandler<GetServiceOfferingByIdQuery, ServiceOfferingDto>
 {
     private readonly IServiceOfferingRepository _offerings;
+    private readonly IServiceReviewRepository _reviews;
 
-    public GetServiceOfferingByIdQueryHandler(IServiceOfferingRepository offerings)
-        => _offerings = offerings;
+    public GetServiceOfferingByIdQueryHandler(IServiceOfferingRepository offerings, IServiceReviewRepository reviews)
+    {
+        _offerings = offerings;
+        _reviews = reviews;
+    }
 
     public async Task<ServiceOfferingDto> Handle(GetServiceOfferingByIdQuery request, CancellationToken ct)
     {
         var offering = await _offerings.GetByIdAsync(request.ServiceOfferingId, ct)
             ?? throw new NotFoundException("الخدمة غير موجودة.");
 
-        return ServiceMapper.ToDto(offering);
+        return (await new[] { offering }.ToDtosWithRatingsAsync(_reviews, ct))[0];
     }
 }

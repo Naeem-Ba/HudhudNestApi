@@ -30,6 +30,7 @@ public static class NotificationKeys
     public const string ServiceCompletedDetail = "service.detail.completed";
     public const string ServiceCancelledDetail = "service.detail.cancelled";
     public const string ServiceReviewAddedDetail = "service.detail.review_added";
+    public const string ServiceNotCompletedDetail = "service.detail.not_completed";
 
     // Service provider onboarding and management.
     public const string ProviderApplicationInfoRequested = "msg.provider_application_info_requested";

@@ -19,7 +19,8 @@ public sealed record CancelServiceRequestCommand(
     Guid ServiceRequestId,
     Guid ActorUserId,
     bool IsAdmin,
-    string? Reason) : IRequest<ServiceRequestDto>;
+    string? Reason,
+    HudhudNestApi.Domain.Services.Enums.ServiceRequesterReason? RequesterReason = null) : IRequest<ServiceRequestDto>;
 
 public sealed class CancelServiceRequestCommandValidator : AbstractValidator<CancelServiceRequestCommand>
 {
@@ -77,7 +78,9 @@ public sealed class CancelServiceRequestCommandHandler
         var fromStatus = serviceRequest.Status;
         var now = DateTime.UtcNow;
 
-        serviceRequest.Cancel(request.Reason, now);
+        // The customer's reason code is recorded only when the customer is the one cancelling:
+        // it feeds the "why customers walk away" statistics and must not be set by a provider.
+        serviceRequest.Cancel(request.Reason, now, isRequester ? request.RequesterReason : null);
 
         await _history.AddAsync(
             ServiceRequestStatusHistory.Record(
@@ -105,6 +108,6 @@ public sealed class CancelServiceRequestCommandHandler
         }
 
         var reloaded = await _requests.GetByIdAsync(serviceRequest.Id, ct) ?? serviceRequest;
-        return ServiceMapper.ToDto(reloaded);
+        return ServiceMapper.ToDto(reloaded, request.IsAdmin ? ServiceRequestAudience.Admin : isRequester ? ServiceRequestAudience.Requester : ServiceRequestAudience.Provider);
     }
 }

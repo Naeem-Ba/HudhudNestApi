@@ -28,7 +28,7 @@ public sealed class GetMyServiceRequestsQueryHandler
         return requests
             .Where(r => request.StatusFilter is null || r.Status == request.StatusFilter)
             .OrderByDescending(r => r.CreatedAt)
-            .Select(ServiceMapper.ToDto)
+            .Select(r => ServiceMapper.ToDto(r, ServiceRequestAudience.Requester))
             .ToList()
             .AsReadOnly();
     }

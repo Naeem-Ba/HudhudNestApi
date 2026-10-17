@@ -18,15 +18,19 @@ public sealed class GetActiveOfferingsByCategoryQueryHandler
     : IRequestHandler<GetActiveOfferingsByCategoryQuery, IReadOnlyList<ServiceOfferingDto>>
 {
     private readonly IServiceOfferingRepository _offerings;
+    private readonly IServiceReviewRepository _reviews;
 
-    public GetActiveOfferingsByCategoryQueryHandler(IServiceOfferingRepository offerings)
-        => _offerings = offerings;
+    public GetActiveOfferingsByCategoryQueryHandler(IServiceOfferingRepository offerings, IServiceReviewRepository reviews)
+    {
+        _offerings = offerings;
+        _reviews = reviews;
+    }
 
     public async Task<IReadOnlyList<ServiceOfferingDto>> Handle(
         GetActiveOfferingsByCategoryQuery request, CancellationToken ct)
     {
         var offerings = await _offerings.GetActiveByCategoryAsync(request.Category, request.GovernorateId, ct);
-        return offerings.Select(ServiceMapper.ToDto).ToList().AsReadOnly();
+        return await offerings.ToDtosWithRatingsAsync(_reviews, ct);
     }
 }
 
@@ -60,11 +64,14 @@ public sealed class GetMyServiceOfferingsQueryHandler
 {
     private readonly IServiceProviderRepository _providers;
     private readonly IServiceOfferingRepository _offerings;
+    private readonly IServiceReviewRepository _reviews;
 
-    public GetMyServiceOfferingsQueryHandler(IServiceProviderRepository providers, IServiceOfferingRepository offerings)
+    public GetMyServiceOfferingsQueryHandler(
+        IServiceProviderRepository providers, IServiceOfferingRepository offerings, IServiceReviewRepository reviews)
     {
         _providers = providers;
         _offerings = offerings;
+        _reviews = reviews;
     }
 
     public async Task<IReadOnlyList<ServiceOfferingDto>> Handle(GetMyServiceOfferingsQuery request, CancellationToken ct)
@@ -74,6 +81,6 @@ public sealed class GetMyServiceOfferingsQueryHandler
             return [];
 
         var offerings = await _offerings.GetByProviderIdAsync(provider.Id, ct);
-        return offerings.Select(ServiceMapper.ToDto).ToList();
+        return await offerings.ToDtosWithRatingsAsync(_reviews, ct);
     }
 }

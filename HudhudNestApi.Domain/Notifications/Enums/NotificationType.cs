@@ -162,4 +162,8 @@ public enum NotificationType
 
     /// <summary>The provider was suspended, reactivated or had its approval revoked.</summary>
     ServiceProviderStatusChanged = 43,
+
+    /// <summary>The provider closed an accepted ServiceRequest as not delivered. Sent to the requester,
+    /// who is asked why it did not happen from their side.</summary>
+    ServiceRequestNotCompleted = 44,
 }

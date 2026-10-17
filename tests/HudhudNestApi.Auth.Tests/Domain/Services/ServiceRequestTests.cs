@@ -207,4 +207,204 @@ public sealed class ServiceRequestTests
 
         Assert.Throws<InvalidStateTransitionException>(() => request.Cancel(null, UtcNow));
     }
+
+    private static ServiceRequest CreateAccepted()
+    {
+        var request = CreateUnderReview();
+        request.Accept(null, null, null, UtcNow);
+        return request;
+    }
+
+    [Fact(DisplayName = "Complete: allowed straight from Accepted (Schedule and Start are optional)")]
+    public void Complete_FromAccepted_MovesToCompleted()
+    {
+        var request = CreateAccepted();
+
+        request.Complete(null, null, UtcNow);
+
+        Assert.Equal(ServiceRequestStatus.Completed, request.Status);
+    }
+
+    [Fact(DisplayName = "Complete: from UnderReview throws unless done by an admin")]
+    public void Complete_FromUnderReview_OnlyAdminMay()
+    {
+        var request = CreateUnderReview();
+        Assert.Throws<InvalidStateTransitionException>(() => request.Complete(null, null, UtcNow));
+
+        request.Complete(null, null, UtcNow, byAdmin: true);
+
+        Assert.Equal(ServiceRequestStatus.Completed, request.Status);
+    }
+
+    [Fact(DisplayName = "MarkNotCompleted: stores reason, note and timestamp")]
+    public void MarkNotCompleted_FromAccepted_StoresOutcome()
+    {
+        var request = CreateAccepted();
+
+        request.MarkNotCompleted(ServiceOutcomeReason.PriceNotAgreed, "  السعر مرتفع  ", UtcNow);
+
+        Assert.Equal(ServiceRequestStatus.NotCompleted, request.Status);
+        Assert.Equal(ServiceOutcomeReason.PriceNotAgreed, request.OutcomeReason);
+        Assert.Equal("السعر مرتفع", request.OutcomeNote);
+        Assert.Equal(UtcNow, request.NotCompletedAt);
+    }
+
+    [Fact(DisplayName = "MarkNotCompleted: reason 'Other' without a note throws DomainException")]
+    public void MarkNotCompleted_OtherWithoutNote_Throws()
+    {
+        var request = CreateAccepted();
+
+        Assert.Throws<DomainException>(() => request.MarkNotCompleted(ServiceOutcomeReason.Other, " ", UtcNow));
+    }
+
+    [Fact(DisplayName = "MarkNotCompleted: unknown reason throws DomainException")]
+    public void MarkNotCompleted_UnknownReason_Throws()
+    {
+        var request = CreateAccepted();
+
+        Assert.Throws<DomainException>(() => request.MarkNotCompleted((ServiceOutcomeReason)1234, null, UtcNow));
+    }
+
+    [Fact(DisplayName = "MarkNotCompleted: from UnderReview throws InvalidStateTransitionException")]
+    public void MarkNotCompleted_FromUnderReview_Throws()
+    {
+        var request = CreateUnderReview();
+
+        Assert.Throws<InvalidStateTransitionException>(
+            () => request.MarkNotCompleted(ServiceOutcomeReason.CustomerUnreachable, null, UtcNow));
+    }
+
+    [Fact(DisplayName = "Cancel: after NotCompleted throws InvalidStateTransitionException")]
+    public void Cancel_AfterNotCompleted_Throws()
+    {
+        var request = CreateAccepted();
+        request.MarkNotCompleted(ServiceOutcomeReason.CustomerUnreachable, null, UtcNow);
+
+        Assert.Throws<InvalidStateTransitionException>(() => request.Cancel(null, UtcNow));
+    }
+
+    [Fact(DisplayName = "Cancel: stores the requester's structured reason")]
+    public void Cancel_StoresRequesterReason()
+    {
+        var request = CreateUnderReview();
+
+        request.Cancel(null, UtcNow, ServiceRequesterReason.ChangedMind);
+
+        Assert.Equal(ServiceRequesterReason.ChangedMind, request.RequesterReason);
+    }
+
+    [Fact(DisplayName = "RecordRequesterFeedback: confirming a completed service needs no reason")]
+    public void Feedback_ConfirmCompleted_NoReasonNeeded()
+    {
+        var request = CreateAccepted();
+        request.Complete(null, null, UtcNow);
+
+        request.RecordRequesterFeedback(ServiceRequesterAnswer.Confirmed, null, null, UtcNow);
+
+        Assert.Equal(ServiceRequesterAnswer.Confirmed, request.RequesterAnswer);
+        Assert.Null(request.RequesterReason);
+        Assert.Equal(UtcNow, request.RequesterFeedbackAt);
+    }
+
+    [Fact(DisplayName = "RecordRequesterFeedback: disputing requires a reason")]
+    public void Feedback_DisputeWithoutReason_Throws()
+    {
+        var request = CreateAccepted();
+        request.Complete(null, null, UtcNow);
+
+        Assert.Throws<DomainException>(
+            () => request.RecordRequesterFeedback(ServiceRequesterAnswer.Disputed, null, null, UtcNow));
+    }
+
+    [Fact(DisplayName = "RecordRequesterFeedback: a NotCompleted request requires the customer's reason")]
+    public void Feedback_NotCompletedWithoutReason_Throws()
+    {
+        var request = CreateAccepted();
+        request.MarkNotCompleted(ServiceOutcomeReason.ProviderUnavailable, null, UtcNow);
+
+        Assert.Throws<DomainException>(
+            () => request.RecordRequesterFeedback(ServiceRequesterAnswer.Confirmed, null, null, UtcNow));
+
+        request.RecordRequesterFeedback(
+            ServiceRequesterAnswer.Confirmed, ServiceRequesterReason.ProviderDidNotContact, null, UtcNow);
+
+        Assert.Equal(ServiceRequesterReason.ProviderDidNotContact, request.RequesterReason);
+    }
+
+    [Fact(DisplayName = "RecordRequesterFeedback: reason 'Other' needs a note")]
+    public void Feedback_OtherWithoutNote_Throws()
+    {
+        var request = CreateAccepted();
+        request.MarkNotCompleted(ServiceOutcomeReason.ProviderUnavailable, null, UtcNow);
+
+        Assert.Throws<DomainException>(() => request.RecordRequesterFeedback(
+            ServiceRequesterAnswer.Confirmed, ServiceRequesterReason.Other, null, UtcNow));
+    }
+
+    [Fact(DisplayName = "RecordRequesterFeedback: a second answer throws InvalidStateTransitionException")]
+    public void Feedback_Twice_Throws()
+    {
+        var request = CreateAccepted();
+        request.Complete(null, null, UtcNow);
+        request.RecordRequesterFeedback(ServiceRequesterAnswer.Confirmed, null, null, UtcNow);
+
+        Assert.Throws<InvalidStateTransitionException>(
+            () => request.RecordRequesterFeedback(ServiceRequesterAnswer.Confirmed, null, null, UtcNow));
+    }
+
+    [Fact(DisplayName = "RecordRequesterFeedback: before the provider closed the request throws")]
+    public void Feedback_BeforeClosed_Throws()
+    {
+        var request = CreateAccepted();
+
+        Assert.Throws<InvalidStateTransitionException>(
+            () => request.RecordRequesterFeedback(ServiceRequesterAnswer.Confirmed, null, null, UtcNow));
+    }
+
+    [Fact(DisplayName = "RecordRequesterFeedback: still allowed after the review was written")]
+    public void Feedback_AfterReviewed_Allowed()
+    {
+        var request = CreateAccepted();
+        request.Complete(null, null, UtcNow);
+        request.MarkReviewed(UtcNow);
+
+        request.RecordRequesterFeedback(ServiceRequesterAnswer.Confirmed, null, null, UtcNow);
+
+        Assert.Equal(ServiceRequesterAnswer.Confirmed, request.RequesterAnswer);
+    }
+
+    [Fact(DisplayName = "Reject: stores the structured reason code")]
+    public void Reject_StoresReasonCode()
+    {
+        var request = CreateUnderReview();
+
+        request.Reject("خارج منطقتنا.", UtcNow, ServiceOutcomeReason.OutsideCoverage);
+
+        Assert.Equal(ServiceOutcomeReason.OutsideCoverage, request.OutcomeReason);
+    }
+
+    [Theory(DisplayName = "ProviderContactVisible: only while the request is alive or delivered")]
+    [InlineData("under_review", true)]
+    [InlineData("accepted", true)]
+    [InlineData("completed", true)]
+    [InlineData("rejected", false)]
+    [InlineData("cancelled", false)]
+    [InlineData("not_completed", false)]
+    public void ProviderContactVisible_ByStatus(string state, bool expected)
+    {
+        var request = CreateUnderReview();
+        switch (state)
+        {
+            case "accepted": request.Accept(null, null, null, UtcNow); break;
+            case "completed": request.Accept(null, null, null, UtcNow); request.Complete(null, null, UtcNow); break;
+            case "rejected": request.Reject("لا.", UtcNow); break;
+            case "cancelled": request.Cancel(null, UtcNow); break;
+            case "not_completed":
+                request.Accept(null, null, null, UtcNow);
+                request.MarkNotCompleted(ServiceOutcomeReason.CustomerUnreachable, null, UtcNow);
+                break;
+        }
+
+        Assert.Equal(expected, request.ProviderContactVisible);
+    }
 }

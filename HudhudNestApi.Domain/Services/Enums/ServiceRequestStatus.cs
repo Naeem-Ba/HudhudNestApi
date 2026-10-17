@@ -16,6 +16,10 @@ namespace HudhudNestApi.Domain.Services.Enums;
 /// Scheduled   → InProgress | Cancelled
 /// InProgress  → Completed | Cancelled
 /// Completed   → Reviewed (set by AddServiceReview once, never a manual transition)
+///
+/// The provider can close a request as done from Accepted, Scheduled or InProgress (Schedule and
+/// Start are optional bookkeeping, not gates), or as NotCompleted from the same three states with
+/// a structured reason. NotCompleted is final, like Rejected and Cancelled.
 /// </summary>
 public enum ServiceRequestStatus
 {
@@ -28,4 +32,7 @@ public enum ServiceRequestStatus
     Reviewed = 6,
     Rejected = 7,
     Cancelled = 8,
+
+    /// <summary>The provider closed an accepted request as not delivered (reason on the request).</summary>
+    NotCompleted = 9,
 }

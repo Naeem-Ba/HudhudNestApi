@@ -64,6 +64,26 @@ public sealed class ServiceRequest : AuditableEntity
 
     public DateTime? CompletedAt { get; private set; }
 
+    // ── Outcome, as declared by the provider (NotCompleted) ──────────
+    /// <summary>Structured reason for Rejected or NotCompleted. Null for older rows and other states.</summary>
+    public ServiceOutcomeReason? OutcomeReason { get; private set; }
+
+    public string? OutcomeNote { get; private set; }
+
+    public DateTime? NotCompletedAt { get; private set; }
+
+    // ── The customer's side ──────────────────────────────────────────
+    /// <summary>Null until the customer answers "is the provider's outcome right?".</summary>
+    public ServiceRequesterAnswer? RequesterAnswer { get; private set; }
+
+    /// <summary>The customer's own reason: set when the service did not happen, when they
+    /// dispute the outcome, or when they cancel. Null otherwise.</summary>
+    public ServiceRequesterReason? RequesterReason { get; private set; }
+
+    public string? RequesterFeedbackNote { get; private set; }
+
+    public DateTime? RequesterFeedbackAt { get; private set; }
+
     // ── Navigation (EF) ───────────────────────────────────────────
     public HudhudNestApi.Domain.Listings.Entities.Property? Property { get; private set; }
 
@@ -130,7 +150,7 @@ public sealed class ServiceRequest : AuditableEntity
         UpdatedAt = utcNow;
     }
 
-    public void Reject(string reason, DateTime utcNow)
+    public void Reject(string reason, DateTime utcNow, ServiceOutcomeReason? reasonCode = null)
     {
         EnsureStatus(ServiceRequestStatus.UnderReview, "رفض");
 
@@ -139,6 +159,7 @@ public sealed class ServiceRequest : AuditableEntity
 
         Status = ServiceRequestStatus.Rejected;
         RejectionReason = reason.Trim();
+        OutcomeReason = reasonCode;
         UpdatedAt = utcNow;
     }
 
@@ -162,9 +183,15 @@ public sealed class ServiceRequest : AuditableEntity
         UpdatedAt = utcNow;
     }
 
-    public void Complete(decimal? finalPrice, int? finalPriceCurrencyId, DateTime utcNow)
+    /// <summary>
+    /// Provider says the service was delivered. Allowed from Accepted, Scheduled or InProgress:
+    /// Schedule and Start are optional bookkeeping, and forcing them only made providers skip
+    /// the outcome. <paramref name="byAdmin"/> also allows UnderReview (admin correcting a request
+    /// whose provider never answered).
+    /// </summary>
+    public void Complete(decimal? finalPrice, int? finalPriceCurrencyId, DateTime utcNow, bool byAdmin = false)
     {
-        EnsureStatus(ServiceRequestStatus.InProgress, "إتمام");
+        EnsureCanClose("إتمام", byAdmin);
 
         if (finalPrice is < 0)
             throw new DomainException("السعر النهائي لا يمكن أن يكون سالباً.");
@@ -179,6 +206,77 @@ public sealed class ServiceRequest : AuditableEntity
         UpdatedAt = utcNow;
     }
 
+    /// <summary>
+    /// Provider says the service did not happen. A reason from the closed list is required;
+    /// the note is optional, except for <see cref="ServiceOutcomeReason.Other"/> where it is the
+    /// only explanation there is.
+    /// </summary>
+    public void MarkNotCompleted(ServiceOutcomeReason reason, string? note, DateTime utcNow, bool byAdmin = false)
+    {
+        EnsureCanClose("إغلاق كغير منجز", byAdmin);
+
+        if (!Enum.IsDefined(reason))
+            throw new DomainException("سبب عدم إتمام الخدمة غير معروف.");
+
+        if (reason == ServiceOutcomeReason.Other && string.IsNullOrWhiteSpace(note))
+            throw new DomainException("اكتب ملاحظة توضّح السبب عند اختيار «سبب آخر».");
+
+        Status = ServiceRequestStatus.NotCompleted;
+        OutcomeReason = reason;
+        OutcomeNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        NotCompletedAt = utcNow;
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>
+    /// The customer's reply after the provider closed the request. One reply per request.
+    /// A reason is required whenever the outcome was NotCompleted or the customer disputes it —
+    /// those are the cases the admin analyses.
+    /// </summary>
+    public void RecordRequesterFeedback(
+        ServiceRequesterAnswer answer, ServiceRequesterReason? reason, string? note, DateTime utcNow)
+    {
+        if (Status is not (ServiceRequestStatus.Completed
+            or ServiceRequestStatus.Reviewed
+            or ServiceRequestStatus.NotCompleted))
+        {
+            throw new InvalidStateTransitionException(
+                $"لا يمكن الرد على نتيجة طلب خدمة في الحالة '{Status}'.");
+        }
+
+        if (RequesterAnswer is not null)
+            throw new InvalidStateTransitionException("سبق أن أجبت عن نتيجة هذا الطلب.");
+
+        if (!Enum.IsDefined(answer))
+            throw new DomainException("الإجابة غير معروفة.");
+
+        var needsReason = Status == ServiceRequestStatus.NotCompleted || answer == ServiceRequesterAnswer.Disputed;
+        if (needsReason && reason is null)
+            throw new DomainException("اختر سببًا من القائمة.");
+
+        if (reason is { } r && !Enum.IsDefined(r))
+            throw new DomainException("السبب غير معروف.");
+
+        if (reason == ServiceRequesterReason.Other && string.IsNullOrWhiteSpace(note))
+            throw new DomainException("اكتب ملاحظة توضّح السبب عند اختيار «سبب آخر».");
+
+        RequesterAnswer = answer;
+        RequesterReason = reason;
+        RequesterFeedbackNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        RequesterFeedbackAt = utcNow;
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>
+    /// The provider's contact details are shown to the requester only while the request is
+    /// alive or was delivered. A rejected, cancelled or not-delivered request ends the
+    /// introduction: the provider's number must not outlive a "no".
+    /// </summary>
+    public bool ProviderContactVisible => Status is
+        ServiceRequestStatus.UnderReview or ServiceRequestStatus.Accepted
+        or ServiceRequestStatus.Scheduled or ServiceRequestStatus.InProgress
+        or ServiceRequestStatus.Completed or ServiceRequestStatus.Reviewed;
+
     /// <summary>Called once, by AddServiceReviewCommandHandler right after the review is created.</summary>
     public void MarkReviewed(DateTime utcNow)
     {
@@ -188,12 +286,13 @@ public sealed class ServiceRequest : AuditableEntity
         UpdatedAt = utcNow;
     }
 
-    public void Cancel(string? reason, DateTime utcNow)
+    public void Cancel(string? reason, DateTime utcNow, ServiceRequesterReason? requesterReason = null)
     {
         if (Status is ServiceRequestStatus.Completed
             or ServiceRequestStatus.Reviewed
             or ServiceRequestStatus.Rejected
-            or ServiceRequestStatus.Cancelled)
+            or ServiceRequestStatus.Cancelled
+            or ServiceRequestStatus.NotCompleted)
         {
             throw new InvalidStateTransitionException(
                 $"لا يمكن إلغاء طلب الخدمة بعد أن أصبحت حالته '{Status}'.");
@@ -201,7 +300,24 @@ public sealed class ServiceRequest : AuditableEntity
 
         Status = ServiceRequestStatus.Cancelled;
         CancellationReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        RequesterReason = requesterReason;
         UpdatedAt = utcNow;
+    }
+
+    /// <summary>Where the provider may close a request: after accepting it, whether or not it
+    /// was scheduled or started. An admin may also close one still under review.</summary>
+    private void EnsureCanClose(string action, bool byAdmin)
+    {
+        var ok = Status is ServiceRequestStatus.Accepted
+            or ServiceRequestStatus.Scheduled
+            or ServiceRequestStatus.InProgress
+            || (byAdmin && Status == ServiceRequestStatus.UnderReview);
+
+        if (!ok)
+        {
+            throw new InvalidStateTransitionException(
+                $"لا يمكن {action} طلب خدمة في الحالة '{Status}'.");
+        }
     }
 
     private void EnsureStatus(ServiceRequestStatus expected, string action)
