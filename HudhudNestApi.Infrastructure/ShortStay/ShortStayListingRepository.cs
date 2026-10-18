@@ -69,14 +69,15 @@ public sealed class ShortStayListingRepository : IShortStayListingRepository
 
         if (!string.IsNullOrWhiteSpace(filter.City))
         {
-            var pattern = $"%{filter.City.Trim()}%";
+            // % and _ typed by the caller are literal text, not wildcards (QA Phase 9): "%" used to match every listing.
+            var pattern = $"%{EscapeLike(filter.City.Trim())}%";
             // City is the catalog's Arabic governorate name, so also match the governorate's
             // English name: "Damascus" finds a listing stored as "دمشق".
             query = query.Where(l =>
-                (l.City != null && EF.Functions.ILike(l.City, pattern))
+                (l.City != null && EF.Functions.ILike(l.City, pattern, LikeEscape))
                 || (l.GovernorateId != null && _db.Governorates.Any(g =>
                     g.Id == l.GovernorateId
-                    && (EF.Functions.ILike(g.NameEn, pattern) || EF.Functions.ILike(g.NameAr, pattern)))));
+                    && (EF.Functions.ILike(g.NameEn, pattern, LikeEscape) || EF.Functions.ILike(g.NameAr, pattern, LikeEscape)))));
         }
 
         if (filter.AccommodationTypeId.HasValue)
@@ -127,4 +128,9 @@ public sealed class ShortStayListingRepository : IShortStayListingRepository
             PageSize = pageSize,
         };
     }
+
+    private const string LikeEscape = "\\";
+
+    private static string EscapeLike(string value)
+        => value.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
 }

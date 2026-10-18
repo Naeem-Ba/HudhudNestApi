@@ -294,6 +294,11 @@ public sealed class ShortStayListing : AuditableEntity
         if (!HasLocation)
             throw new DomainException("حدّد موقع الإعلان (المحافظة ونقطة على الخريطة) قبل نشره.");
 
+        // QA Phase 9 (P9-D09): search sorts by PublishedAt, so publishing again must not move a listing
+        // that is already live back to the top of the results.
+        if (IsPublished)
+            return;
+
         IsPublished = true;
         PublishedAt = DateTime.UtcNow;
     }

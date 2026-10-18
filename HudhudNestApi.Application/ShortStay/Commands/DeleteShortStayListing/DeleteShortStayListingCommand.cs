@@ -54,11 +54,34 @@ public sealed class DeleteShortStayListingCommandHandler
             throw new ForbiddenException("Only the listing owner can delete it.");
 
         // Owner decision (2026-09-24): a listing with bookings still in progress cannot be deleted. After a
-        // delete those bookings could no longer be approved, checked in, completed or even cancelled (their
-        // listing is filtered out), so the host has to finish or cancel them first.
-        if (await _bookings.HasActiveBookingsForListingAsync(listing.Id, ct))
-            throw new ConflictException(
-                "This listing has bookings in progress. Complete, reject or cancel them before deleting the listing.");
+        // delete those bookings could no longer be approved, checked in or completed (their listing is
+        // filtered out), so the host has to finish or cancel them first.
+        //
+        // QA Phase 9 (P9-D02): that check alone raced with a booking being created at the same moment (6 of 6
+        // tries left a pending booking on a deleted listing). So the delete takes the same per-unit lock as
+        // CreateBooking, in a stable order, and checks again inside the transaction.
+        var unitIds = listing.RoomTypes.SelectMany(rt => rt.Units).Select(u => u.Id).OrderBy(id => id).ToList();
+
+        await _uow.BeginTransactionAsync(ct);
+        try
+        {
+            foreach (var unitId in unitIds)
+                await _uow.AcquireAdvisoryLockAsync(ShortStayBookingLock.ForUnit(unitId), ct);
+
+            if (await _bookings.HasActiveBookingsForListingAsync(listing.Id, ct))
+                throw new ConflictException(
+                    "This listing has bookings in progress. Complete, reject or cancel them before deleting the listing.");
+
+            listing.MarkAsDeleted(request.RequestingUserId);
+            _listings.Remove(listing);
+            await _uow.SaveChangesAsync(ct);
+            await _uow.CommitTransactionAsync(ct);
+        }
+        catch
+        {
+            await _uow.RollbackTransactionAsync(ct);
+            throw;
+        }
 
         var oldValue = JsonSerializer.Serialize(new
         {
@@ -74,11 +97,6 @@ public sealed class DeleteShortStayListingCommandHandler
             .Where(p => !string.IsNullOrWhiteSpace(p.PublicId))
             .Select(p => p.PublicId)
             .ToList();
-
-        listing.MarkAsDeleted(request.RequestingUserId);
-
-        _listings.Remove(listing);
-        await _uow.SaveChangesAsync(ct);
 
         // Best-effort, deliberately outside the transaction above — one Cloudinary failure
         // must not roll back or block cleanup of the remaining photos.

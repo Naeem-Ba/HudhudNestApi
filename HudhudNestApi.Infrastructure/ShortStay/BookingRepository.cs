@@ -24,6 +24,19 @@ public sealed class BookingRepository : IBookingRepository
                     .ThenInclude(rt => rt.ShortStayListing)
             .FirstOrDefaultAsync(b => b.Id == id, ct);
 
+    public async Task<Booking?> GetByIdWithListingIncludingDeletedAsync(Guid id, CancellationToken ct = default)
+        => await _db.ShortStayBookings
+            .IgnoreQueryFilters()
+            .Include(b => b.Unit)
+                .ThenInclude(u => u!.RoomType)
+                    .ThenInclude(rt => rt.ShortStayListing)
+            .FirstOrDefaultAsync(b => b.Id == id && !b.IsDeleted, ct);
+
+    public async Task<bool> IsUnitBookableAsync(Guid unitId, CancellationToken ct = default)
+        => await _db.AccommodationUnits.AsNoTracking().AnyAsync(u =>
+            u.Id == unitId && u.IsActive && !u.IsDeleted
+            && u.RoomType.ShortStayListing.IsPublished && !u.RoomType.ShortStayListing.IsDeleted, ct);
+
     // Half-open interval overlap: existing.CheckIn < newCheckOut AND newCheckIn < existing.CheckOut.
     // This is the application-level check run inside the advisory-lock-guarded transaction; the
     // DB-level EXCLUDE constraint (AddShortStayAvailability migration) is the unconditional

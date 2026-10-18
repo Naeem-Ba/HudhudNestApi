@@ -27,7 +27,7 @@ public sealed class CancelBookingCommandHandler : IRequestHandler<CancelBookingC
 
     public async Task<BookingDto> Handle(CancelBookingCommand request, CancellationToken ct)
     {
-        var booking = await _bookings.GetByIdWithListingAsync(request.BookingId, ct)
+        var booking = await _bookings.GetByIdWithListingIncludingDeletedAsync(request.BookingId, ct)
             ?? throw new NotFoundException($"Booking {request.BookingId} was not found.");
 
         // A non-guest gets 403 like every other booking command; the state rules (terminal and

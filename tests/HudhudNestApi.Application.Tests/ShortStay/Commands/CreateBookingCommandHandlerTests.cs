@@ -179,6 +179,8 @@ public sealed class CreateBookingCommandHandlerTests
         public Task AddAsync(Booking booking, CancellationToken ct = default) => Task.CompletedTask;
         public Task<Booking?> GetByIdAsync(Guid id, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Booking?> GetByIdWithListingAsync(Guid id, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<Booking?> GetByIdWithListingIncludingDeletedAsync(Guid id, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<bool> IsUnitBookableAsync(Guid unitId, CancellationToken ct = default) => Task.FromResult(true);
         public Task<bool> HasOverlappingReservationAsync(Guid unitId, DateOnly checkIn, DateOnly checkOut, CancellationToken ct = default)
             => Task.FromResult(_hasOverlap);
         public Task AddBookingRangeAsync(UnitBookingRange range, CancellationToken ct = default) => Task.CompletedTask;

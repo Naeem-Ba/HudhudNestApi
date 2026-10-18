@@ -45,7 +45,7 @@ public sealed class AddShortStayReviewCommandHandler : IRequestHandler<AddShortS
 
     public async Task<ShortStayReviewDto> Handle(AddShortStayReviewCommand request, CancellationToken ct)
     {
-        var booking = await _bookings.GetByIdWithListingAsync(request.BookingId, ct)
+        var booking = await _bookings.GetByIdWithListingIncludingDeletedAsync(request.BookingId, ct)
             ?? throw new NotFoundException($"Booking {request.BookingId} was not found.");
 
         if (booking.GuestId != request.ReviewerId)

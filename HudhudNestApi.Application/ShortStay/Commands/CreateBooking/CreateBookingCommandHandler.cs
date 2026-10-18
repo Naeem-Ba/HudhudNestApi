@@ -102,6 +102,12 @@ public sealed class CreateBookingCommandHandler : IRequestHandler<CreateBookingC
         {
             await _uow.AcquireAdvisoryLockAsync(ShortStayBookingLock.ForUnit(unit.Id), ct);
 
+            // QA Phase 9 (P9-D02): the checks above ran before the lock. A delete or unpublish that took the
+            // same lock first has committed by now, so look again; otherwise a booking could be created on a
+            // listing that was deleted a moment earlier and nobody could ever act on it.
+            if (!await _bookings.IsUnitBookableAsync(unit.Id, ct))
+                throw new DomainException("هذا الإعلان لم يعد متاحاً للحجز.");
+
             var overlaps = await _bookings.HasOverlappingReservationAsync(
                 unit.Id, request.CheckIn, request.CheckOut, ct);
 
