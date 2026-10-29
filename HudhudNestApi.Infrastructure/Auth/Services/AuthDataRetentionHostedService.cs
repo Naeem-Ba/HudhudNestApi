@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -15,6 +16,9 @@ namespace HudhudNestApi.Infrastructure.Auth.Services;
 ///   its expiry is never read again.
 /// - RefreshTokens keep the client IP addresses. An expired token is refused whatever its row
 ///   says, so a row 30 days past its expiry only matters as history.
+/// - ContactMessages and Leads keep the sender's IP address. No code reads it back, so it is
+///   cleared after DataRetention:IpAddressDays (default 90, 0 or less keeps it). Only the IP
+///   column changes; the message or lead stays.
 /// Postgres advisory lock (BackgroundJobLockKeys.OtpCleanup): one instance sweeps at a time.
 /// </summary>
 public sealed class AuthDataRetentionHostedService : BackgroundService
@@ -22,18 +26,25 @@ public sealed class AuthDataRetentionHostedService : BackgroundService
     internal static readonly TimeSpan OtpChallengeGrace = TimeSpan.FromDays(1);
     internal static readonly TimeSpan RefreshTokenGrace = TimeSpan.FromDays(30);
 
+    public const string IpAddressDaysKey = "DataRetention:IpAddressDays";
+    internal const int DefaultIpAddressDays = 90;
+
     private static readonly TimeSpan SweepInterval = TimeSpan.FromHours(6);
     private const int BatchSize = 5000;
     private const int MaxBatchesPerSweep = 20;
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AuthDataRetentionHostedService> _logger;
+    private readonly int _ipAddressDays;
 
     public AuthDataRetentionHostedService(
-        IServiceScopeFactory scopeFactory, ILogger<AuthDataRetentionHostedService> logger)
+        IServiceScopeFactory scopeFactory,
+        ILogger<AuthDataRetentionHostedService> logger,
+        IConfiguration? configuration = null)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _ipAddressDays = configuration?.GetValue<int?>(IpAddressDaysKey) ?? DefaultIpAddressDays;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -60,18 +71,20 @@ public sealed class AuthDataRetentionHostedService : BackgroundService
         }
     }
 
-    internal async Task<(int OtpChallenges, int RefreshTokens)> RunOnceAsync(
+    internal async Task<(int OtpChallenges, int RefreshTokens, int IpAddresses)> RunOnceAsync(
         CancellationToken ct, DateTimeOffset? utcNow = null)
     {
         var now = utcNow ?? DateTimeOffset.UtcNow;
         var otpCutoff = now - OtpChallengeGrace;
         var tokenCutoff = (now - RefreshTokenGrace).UtcDateTime;
+        var ipCutoff = now.UtcDateTime.AddDays(-_ipAddressDays);
 
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var otpRemoved = 0;
         var tokensRemoved = 0;
+        var ipsCleared = 0;
         await db.Database.OpenConnectionAsync(ct);
         try
         {
@@ -110,6 +123,11 @@ public sealed class AuthDataRetentionHostedService : BackgroundService
                         if (n < BatchSize)
                             break;
                     }
+
+                    if (_ipAddressDays > 0)
+                    {
+                        ipsCleared += await ClearOldIpAddressesAsync(db, ipCutoff, ct);
+                    }
                 },
                 ct);
         }
@@ -118,11 +136,46 @@ public sealed class AuthDataRetentionHostedService : BackgroundService
             await db.Database.CloseConnectionAsync();
         }
 
-        if (otpRemoved > 0 || tokensRemoved > 0)
+        if (otpRemoved > 0 || tokensRemoved > 0 || ipsCleared > 0)
             _logger.LogInformation(
-                "Auth data retention removed {OtpCount} expired OTP challenges and {TokenCount} expired refresh tokens.",
-                otpRemoved, tokensRemoved);
+                "Auth data retention removed {OtpCount} expired OTP challenges and {TokenCount} expired refresh tokens, and cleared {IpCount} old IP addresses.",
+                otpRemoved, tokensRemoved, ipsCleared);
 
-        return (otpRemoved, tokensRemoved);
+        return (otpRemoved, tokensRemoved, ipsCleared);
+    }
+
+    private static async Task<int> ClearOldIpAddressesAsync(AppDbContext db, DateTime cutoff, CancellationToken ct)
+    {
+        var cleared = 0;
+        for (var i = 0; i < MaxBatchesPerSweep; i++)
+        {
+            // IgnoreQueryFilters: soft-deleted rows lose their IP too.
+            var ids = db.ContactMessages.IgnoreQueryFilters()
+                .Where(m => m.IpAddress != null && m.CreatedAt < cutoff)
+                .Select(m => m.Id)
+                .Take(BatchSize);
+            var n = await db.ContactMessages.IgnoreQueryFilters()
+                .Where(m => ids.Contains(m.Id))
+                .ExecuteUpdateAsync(set => set.SetProperty(m => m.IpAddress, (string?)null), ct);
+            cleared += n;
+            if (n < BatchSize)
+                break;
+        }
+
+        for (var i = 0; i < MaxBatchesPerSweep; i++)
+        {
+            var ids = db.Leads.IgnoreQueryFilters()
+                .Where(l => l.IpAddress != null && l.CreatedAt < cutoff)
+                .Select(l => l.Id)
+                .Take(BatchSize);
+            var n = await db.Leads.IgnoreQueryFilters()
+                .Where(l => ids.Contains(l.Id))
+                .ExecuteUpdateAsync(set => set.SetProperty(l => l.IpAddress, (string?)null), ct);
+            cleared += n;
+            if (n < BatchSize)
+                break;
+        }
+
+        return cleared;
     }
 }
