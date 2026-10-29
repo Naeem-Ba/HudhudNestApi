@@ -1720,6 +1720,110 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.ToTable("PropertyShareEvents", (string)null);
                 });
 
+            modelBuilder.Entity("HudhudNestApi.Domain.Listings.Translations.ListingTranslation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ClaimToken")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ClaimedUntil")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Field")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("PolicyVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PropertyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("RetryAfter")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("SourceCharacters")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourceHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SourceLanguage")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TargetLanguage")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)");
+
+                    b.Property<string>("TranslatedText")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PropertyId", "Field", "TargetLanguage")
+                        .IsUnique();
+
+                    b.ToTable("ListingTranslations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ListingTranslations_CompletedHasText", "(\"Status\" = 2 AND \"TranslatedText\" IS NOT NULL AND char_length(btrim(\"TranslatedText\")) > 0) OR (\"Status\" <> 2 AND \"TranslatedText\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_ListingTranslations_Field", "\"Field\" IN (1, 2)");
+
+                            t.HasCheckConstraint("CK_ListingTranslations_SourceHash", "char_length(\"SourceHash\") = 64");
+
+                            t.HasCheckConstraint("CK_ListingTranslations_Status", "\"Status\" IN (1, 2, 3, 4)");
+
+                            t.HasCheckConstraint("CK_ListingTranslations_TargetLanguage", "\"TargetLanguage\" IN ('ar', 'de', 'en')");
+                        });
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Listings.Translations.TranslationMonthlyUsage", b =>
+                {
+                    b.Property<string>("Month")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<long>("Characters")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Month");
+
+                    b.ToTable("TranslationMonthlyUsages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TranslationMonthlyUsages_Characters", "\"Characters\" >= 0");
+                        });
+                });
+
             modelBuilder.Entity("HudhudNestApi.Domain.Lookups.Entities.Currency", b =>
                 {
                     b.Property<int>("Id")
@@ -6126,6 +6230,17 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasForeignKey("PropertyId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Listings.Translations.ListingTranslation", b =>
+                {
+                    b.HasOne("HudhudNestApi.Domain.Listings.Entities.Property", "Property")
+                        .WithMany()
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Property");
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.Lookups.Entities.District", b =>

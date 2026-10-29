@@ -13,6 +13,7 @@ using HudhudNestApi.Infrastructure.Persistence;
 using HudhudNestApi.Infrastructure.Repositories;
 using HudhudNestApi.Infrastructure.Services;
 using HudhudNestApi.Infrastructure.SocialDistribution;
+using HudhudNestApi.Infrastructure.Translation;
 
 namespace HudhudNestApi.Infrastructure;
 
@@ -34,6 +35,7 @@ public static class DependencyInjection
         services.AddMediaInfrastructure(configuration, environment);
         services.AddCacheInfrastructure(configuration, environment);
         services.AddSocialDistributionInfrastructure(configuration);
+        services.AddListingTranslationInfrastructure(configuration);
         services.AddOperationalHealthChecks();
 
         return services;

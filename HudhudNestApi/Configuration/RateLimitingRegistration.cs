@@ -274,6 +274,17 @@ public static class RateLimitingRegistration
                         QueueLimit = 0
                     }));
 
+            options.AddPolicy("listing-translation", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 30,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
             options.AddPolicy("visits", httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
                     partitionKey: GetClientRateLimitPartitionKey(httpContext),
