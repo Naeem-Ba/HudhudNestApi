@@ -21,6 +21,16 @@ public class UnitBookingRange : BaseEntity
     /// <summary>Null for a host-side manual Blocked range.</summary>
     public Guid? BookingId { get; set; }
 
+    /// <summary>A host-side manual block: the unit is not available on these dates (maintenance, personal use, another channel).</summary>
+    public static UnitBookingRange CreateBlock(Guid unitId, DateOnly from, DateOnly to) => new()
+    {
+        UnitId = unitId,
+        CheckIn = from,
+        CheckOut = to,
+        Status = UnitRangeStatus.Blocked,
+        BookingId = null,
+    };
+
     public AccommodationUnit Unit { get; set; } = null!;
     public Booking? Booking { get; set; }
 }

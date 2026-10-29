@@ -38,6 +38,10 @@ public interface IShortStayListingRepository
     /// </summary>
     Task<int> CountActiveByOwnerIdsAsync(IReadOnlyCollection<Guid> ownerIds, CancellationToken ct = default);
 
+    /// <summary>Admin list (title/city/owner text search, optional taken-down filter), newest first.</summary>
+    Task<PagedResult<ShortStayListing>> SearchForAdminAsync(
+        string? search, bool? takenDown, int page, int pageSize, CancellationToken ct = default);
+
     void Update(ShortStayListing listing);
 
     /// <summary>Soft delete — repository just tracks, UnitOfWork saves. Caller must have

@@ -244,6 +244,7 @@ public sealed class OwnerMessagingAndRatingE2ETests : IClassFixture<MessagingApi
         var owner = await _factory.SeedUserAsync("owner");
         var renterA = await _factory.SeedUserAsync("renter-a");
         var renterB = await _factory.SeedUserAsync("renter-b");
+        await _factory.GivePlanAsync(owner.Id);
         var propertyId = await _factory.SeedPropertyAsync(owner.Id);
 
         var clientA = _factory.AuthedClient(renterA.AccessToken);
@@ -303,6 +304,7 @@ public sealed class OwnerMessagingAndRatingE2ETests : IClassFixture<MessagingApi
     {
         var owner = await _factory.SeedUserAsync("owner");
         var renter = await _factory.SeedUserAsync("renter");
+        await _factory.GivePlanAsync(owner.Id);
         var propertyId = await _factory.SeedPropertyAsync(owner.Id);
         var client = _factory.AuthedClient(renter.AccessToken);
         await Send(client, propertyId, "سؤال");

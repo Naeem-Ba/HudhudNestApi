@@ -6,6 +6,7 @@ using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Application.Reviews.DTOs;
 using HudhudNestApi.Application.Reviews.Interfaces;
+using HudhudNestApi.Application.Reviews.Services;
 using HudhudNestApi.Application.Users.Interfaces;
 using HudhudNestApi.Application.Users.Messaging.Interfaces;
 using HudhudNestApi.Domain.Common.Exceptions;
@@ -20,6 +21,7 @@ public sealed class RateUserCommandHandler
     private readonly IUserAccountRepository _accounts;
     private readonly IVisitRepository _visits;
     private readonly IMessageRepository _messages;
+    private readonly IReviewTargetPolicy _target;
     private readonly IUnitOfWork _uow;
     private readonly INotificationService _notifications;
     private readonly ILogger<RateUserCommandHandler> _logger;
@@ -29,6 +31,7 @@ public sealed class RateUserCommandHandler
         IUserAccountRepository accounts,
         IVisitRepository visits,
         IMessageRepository messages,
+        IReviewTargetPolicy target,
         IUnitOfWork uow,
         INotificationService notifications,
         ILogger<RateUserCommandHandler> logger)
@@ -37,6 +40,7 @@ public sealed class RateUserCommandHandler
         _accounts = accounts;
         _visits = visits;
         _messages = messages;
+        _target = target;
         _uow = uow;
         _notifications = notifications;
         _logger = logger;
@@ -75,6 +79,11 @@ public sealed class RateUserCommandHandler
             request.RatedUserId, request.RaterId, ct);
 
         var isNewRating = existingRating is null;
+
+        // Owner decision 2026-10-18: only an account with a plan in force can receive a NEW rating. Editing a
+        // rating already given stays possible.
+        if (isNewRating)
+            await _target.EnsureReviewableAsync(request.RatedUserId, ct);
         UserRating rating;
 
         if (existingRating is null)

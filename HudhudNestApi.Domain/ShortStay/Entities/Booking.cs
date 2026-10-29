@@ -48,6 +48,36 @@ public sealed class Booking : BaseEntity
 
     public AccommodationUnit? Unit { get; private set; }
 
+    /// <summary>
+    /// When an unconfirmed booking stops being valid: a Pending request 3 days after it was made, an
+    /// Approved/DepositPaid one 3 days after the approval, and never later than 7 days after the booking was
+    /// made. Null once the booking is confirmed or finished (QA Phase 9, P9-D04).
+    /// </summary>
+    public DateTime? ConfirmationDeadline
+    {
+        get
+        {
+            var hardLimit = CreatedAt + ShortStayBookingPolicy.MaxOpenWindow;
+            DateTime stageLimit;
+            switch (Status)
+            {
+                case BookingStatus.Pending:
+                    stageLimit = CreatedAt + ShortStayBookingPolicy.PendingResponseWindow;
+                    break;
+                case BookingStatus.Approved:
+                case BookingStatus.DepositPaid:
+                    stageLimit = (RespondedAt ?? CreatedAt) + ShortStayBookingPolicy.ConfirmationWindow;
+                    break;
+                default:
+                    return null;
+            }
+
+            return stageLimit < hardLimit ? stageLimit : hardLimit;
+        }
+    }
+
+    public bool IsOverdue(DateTime utcNow) => ConfirmationDeadline is { } deadline && utcNow >= deadline;
+
     private Booking() { }
 
     public static Booking Create(
@@ -112,6 +142,7 @@ public sealed class Booking : BaseEntity
     public void Approve(string? hostNote = null)
     {
         EnsureStatus(BookingStatus.Pending, "الموافقة على");
+        EnsureNotOverdue();
         Status = BookingStatus.Approved;
         HostNote = hostNote?.Trim();
         RespondedAt = DateTime.UtcNow;
@@ -130,6 +161,7 @@ public sealed class Booking : BaseEntity
     public void RecordDepositPaid()
     {
         EnsureStatus(BookingStatus.Approved, "تسجيل عربون");
+        EnsureNotOverdue();
         Status = BookingStatus.DepositPaid;
     }
 
@@ -138,12 +170,20 @@ public sealed class Booking : BaseEntity
         if (Status is not (BookingStatus.Approved or BookingStatus.DepositPaid))
             throw new InvalidStateTransitionException($"لا يمكن تأكيد حجز في الحالة '{Status}'.");
 
+        EnsureNotOverdue();
         Status = BookingStatus.Confirmed;
     }
 
-    public void CheckInGuest()
+    /// <summary>
+    /// <paramref name="today"/> is the platform's current date; when given, check-in is refused before the day
+    /// of arrival (one day of grace covers time zones ahead of UTC). QA Phase 9, P9-D13.
+    /// </summary>
+    public void CheckInGuest(DateOnly? today = null)
     {
         EnsureStatus(BookingStatus.Confirmed, "تسجيل وصول");
+        if (today is { } day && day < CheckIn.AddDays(-1))
+            throw new InvalidStateTransitionException("لا يمكن تسجيل الوصول قبل يوم الوصول المحدد.");
+
         Status = BookingStatus.CheckedIn;
     }
 
@@ -176,7 +216,9 @@ public sealed class Booking : BaseEntity
     /// <summary>Called only by the background expiry job — never from a user-facing endpoint.</summary>
     public void MarkExpired()
     {
-        EnsureStatus(BookingStatus.Pending, "انتهاء صلاحية");
+        if (Status is not (BookingStatus.Pending or BookingStatus.Approved or BookingStatus.DepositPaid))
+            throw new InvalidStateTransitionException($"لا يمكن إنهاء مهلة حجز في الحالة '{Status}'.");
+
         Status = BookingStatus.Expired;
     }
 
@@ -185,6 +227,12 @@ public sealed class Booking : BaseEntity
     {
         EnsureStatus(BookingStatus.Confirmed, "تسجيل عدم حضور");
         Status = BookingStatus.NoShow;
+    }
+
+    private void EnsureNotOverdue()
+    {
+        if (IsOverdue(DateTime.UtcNow))
+            throw new InvalidStateTransitionException("انتهت مهلة هذا الحجز دون تأكيد، ولم يعد بالإمكان متابعته.");
     }
 
     private void EnsureStatus(BookingStatus expected, string action)

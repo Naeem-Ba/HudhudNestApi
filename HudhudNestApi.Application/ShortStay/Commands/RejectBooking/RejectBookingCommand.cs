@@ -27,7 +27,7 @@ public sealed class RejectBookingCommandHandler : IRequestHandler<RejectBookingC
 
     public async Task<BookingDto> Handle(RejectBookingCommand request, CancellationToken ct)
     {
-        var booking = await _bookings.GetByIdWithListingAsync(request.BookingId, ct)
+        var booking = await _bookings.GetByIdWithListingIncludingDeletedAsync(request.BookingId, ct)
             ?? throw new NotFoundException($"Booking {request.BookingId} was not found.");
 
         var listing = booking.Unit!.RoomType.ShortStayListing;

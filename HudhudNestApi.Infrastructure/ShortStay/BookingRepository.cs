@@ -24,6 +24,19 @@ public sealed class BookingRepository : IBookingRepository
                     .ThenInclude(rt => rt.ShortStayListing)
             .FirstOrDefaultAsync(b => b.Id == id, ct);
 
+    public async Task<Booking?> GetByIdWithListingIncludingDeletedAsync(Guid id, CancellationToken ct = default)
+        => await _db.ShortStayBookings
+            .IgnoreQueryFilters()
+            .Include(b => b.Unit)
+                .ThenInclude(u => u!.RoomType)
+                    .ThenInclude(rt => rt.ShortStayListing)
+            .FirstOrDefaultAsync(b => b.Id == id && !b.IsDeleted, ct);
+
+    public async Task<bool> IsUnitBookableAsync(Guid unitId, CancellationToken ct = default)
+        => await _db.AccommodationUnits.AsNoTracking().AnyAsync(u =>
+            u.Id == unitId && u.IsActive && !u.IsDeleted
+            && u.RoomType.ShortStayListing.IsPublished && !u.RoomType.ShortStayListing.IsDeleted, ct);
+
     // Half-open interval overlap: existing.CheckIn < newCheckOut AND newCheckIn < existing.CheckOut.
     // This is the application-level check run inside the advisory-lock-guarded transaction; the
     // DB-level EXCLUDE constraint (AddShortStayAvailability migration) is the unconditional
@@ -32,7 +45,8 @@ public sealed class BookingRepository : IBookingRepository
         Guid unitId, DateOnly checkIn, DateOnly checkOut, CancellationToken ct = default)
         => await _db.UnitBookingRanges.AnyAsync(r =>
             r.UnitId == unitId
-            && (r.Status == UnitRangeStatus.Reserved || r.Status == UnitRangeStatus.CheckedIn)
+            && (r.Status == UnitRangeStatus.Reserved || r.Status == UnitRangeStatus.CheckedIn
+                || r.Status == UnitRangeStatus.Blocked)
             && r.CheckIn < checkOut && checkIn < r.CheckOut, ct);
 
     public async Task AddBookingRangeAsync(UnitBookingRange range, CancellationToken ct = default)
@@ -102,6 +116,23 @@ public sealed class BookingRepository : IBookingRepository
             (b.Status == BookingStatus.Pending || b.Status == BookingStatus.Approved ||
              b.Status == BookingStatus.DepositPaid || b.Status == BookingStatus.Confirmed ||
              b.Status == BookingStatus.CheckedIn || b.Status == BookingStatus.CheckedOut), ct);
+
+    public async Task<int> CountActiveInstantBookingsAsync(Guid guestId, CancellationToken ct = default)
+        => await _db.ShortStayBookings.CountAsync(b =>
+            b.GuestId == guestId && b.Mode == BookingMode.Instant &&
+            (b.Status == BookingStatus.Pending || b.Status == BookingStatus.Approved ||
+             b.Status == BookingStatus.DepositPaid || b.Status == BookingStatus.Confirmed), ct);
+
+    public async Task<IReadOnlyList<UnitBookingRange>> GetBlocksForUnitAsync(
+        Guid unitId, DateOnly today, CancellationToken ct = default)
+        => await _db.UnitBookingRanges
+            .Where(r => r.UnitId == unitId && r.Status == UnitRangeStatus.Blocked && r.CheckOut > today)
+            .OrderBy(r => r.CheckIn)
+            .ToListAsync(ct);
+
+    public async Task<UnitBookingRange?> GetBlockAsync(Guid unitId, Guid blockId, CancellationToken ct = default)
+        => await _db.UnitBookingRanges.FirstOrDefaultAsync(
+            r => r.Id == blockId && r.UnitId == unitId && r.Status == UnitRangeStatus.Blocked, ct);
 
     public async Task<bool> HasReviewAsync(Guid bookingId, CancellationToken ct = default)
         => await _db.ShortStayReviews.AnyAsync(r => r.BookingId == bookingId, ct);

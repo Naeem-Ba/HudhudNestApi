@@ -88,6 +88,18 @@ public sealed class MessagingApiTestFactory : WebApplicationFactory<Program>
         await action(scope.ServiceProvider);
     }
 
+    /// <summary>Gives the account a plan in force (reviews of an account need one, owner rule 2026-10-18).</summary>
+    public Task GivePlanAsync(Guid userId) =>
+        InScopeAsync(async services =>
+        {
+            var db = services.GetRequiredService<AppDbContext>();
+            await HudhudNestApi.Infrastructure.Persistence.Seeds.PlansSeed.SeedAsync(db);
+            var plan = await db.Plans.FirstAsync(p => p.Tier != "free");
+            var user = await db.UserAccounts.SingleAsync(u => u.Id == userId);
+            user.ActivatePlanByAdmin(plan.Id, DateTime.UtcNow.AddDays(30), userId, DateTime.UtcNow);
+            await db.SaveChangesAsync();
+        });
+
     public Task<SeededUser> SeedUserAsync(string emailPrefix, params string[] roles) =>
         InScopeAsync(async services =>
         {

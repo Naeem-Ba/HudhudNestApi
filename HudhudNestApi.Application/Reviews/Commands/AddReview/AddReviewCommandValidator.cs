@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using HudhudNestApi.Application.Common.Validation;
 
 namespace HudhudNestApi.Application.Reviews.Commands.AddReview;
 
@@ -13,6 +14,7 @@ public sealed class AddReviewCommandValidator : AbstractValidator<AddReviewComma
             .WithMessage("Ø§Ù„ØªÙ‚ÙŠÙŠÙ… ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø¨ÙŠÙ† 1 Ùˆ5 Ù†Ø¬ÙˆÙ….");
         RuleFor(x => x.Comment)
             .MaximumLength(1000)
+            .NoNulCharacters()
             .When(x => x.Comment is not null);
     }
 }

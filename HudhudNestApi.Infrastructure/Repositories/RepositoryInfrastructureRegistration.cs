@@ -18,6 +18,7 @@ using HudhudNestApi.Application.Notifications.Push;
 using HudhudNestApi.Infrastructure.Notifications.Push;
 using HudhudNestApi.Application.Plans.Interfaces;
 using HudhudNestApi.Application.Reviews.Interfaces;
+using HudhudNestApi.Application.Reviews.Services;
 using HudhudNestApi.Application.Search.Interfaces;
 using HudhudNestApi.Application.Services.Interfaces;
 using HudhudNestApi.Application.Users.Interfaces;
@@ -120,6 +121,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IServiceRequestDocumentRepository, ServiceRequestDocumentRepository>();
         services.AddScoped<IServiceRequestMessageRepository, ServiceRequestMessageRepository>();
         services.AddHostedService<ServiceRequestLifecycleHostedService>();
+        services.AddHostedService<ShortStayBookingLifecycleHostedService>();
         services.AddScoped<IServiceRequestNumberGenerator, ServiceRequestNumberGenerator>();
         services.AddScoped<IServiceProviderApplicationRepository, ServiceProviderApplicationRepository>();
         services.AddScoped<IServiceProviderEventRepository, ServiceProviderEventRepository>();
@@ -136,6 +138,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IBookingRepository, BookingRepository>();
         services.AddScoped<IShortStayReviewRepository, ShortStayReviewRepository>();
         services.AddScoped<IPricingCalculationService, PricingCalculationService>();
+        services.AddScoped<IReviewTargetPolicy, ReviewTargetPolicy>();
 
         // App Update Management (Phase 1)
         services.AddScoped<IAppReleaseRepository, AppReleaseRepository>();

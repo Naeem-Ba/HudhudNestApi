@@ -25,6 +25,13 @@ public sealed class ShortStayListingConfiguration : IEntityTypeConfiguration<Sho
         builder.Property(l => l.CurrencyCode).IsRequired().HasMaxLength(3)
             .HasDefaultValue(ShortStayListing.DefaultCurrencyCode);
         builder.Property(l => l.City).HasMaxLength(100);
+
+        // -- Administrative take-down (QA Phase 9, P9-D11) ----
+        builder.Property(l => l.TakenDownReason).HasMaxLength(ShortStayListing.MaxTakeDownReasonLength);
+        builder.HasIndex(l => l.TakenDownAt)
+            .HasDatabaseName("IX_ShortStayListings_TakenDownAt")
+            .HasFilter("\"TakenDownAt\" IS NOT NULL");
+
         builder.Property(l => l.CustomRulesText).HasMaxLength(2000);
         builder.Property(l => l.CancellationCustomTermsText).HasMaxLength(2000);
 
