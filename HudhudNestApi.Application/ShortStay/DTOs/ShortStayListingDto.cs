@@ -17,7 +17,8 @@ public sealed record ShortStayListingSummaryDto(
     string? MainPhotoUrl,
     double? AverageRating,
     int ReviewCount,
-    bool IsTakenDown = false);
+    bool IsTakenDown = false,
+    long ViewCount = 0);
 
 public sealed record ShortStayListingDto(
     Guid Id,
@@ -72,4 +73,5 @@ public sealed record ShortStayListingDto(
     IReadOnlyList<string> PhotoUrls,
     IReadOnlyList<Guid> AmenityIds,
     bool IsTakenDown = false,
-    string? TakenDownReason = null);
+    string? TakenDownReason = null,
+    long ViewCount = 0);

@@ -81,6 +81,8 @@ public sealed class AppDbContext
     public DbSet<SurveyResponse> SurveyResponses => Set<SurveyResponse>();
     public DbSet<MarketingEvent> MarketingEvents => Set<MarketingEvent>();
     public DbSet<PropertyShareEvent> PropertyShareEvents => Set<PropertyShareEvent>();
+    public DbSet<ListingViewEvent> ListingViewEvents => Set<ListingViewEvent>();
+    public DbSet<ListingViewCounter> ListingViewCounters => Set<ListingViewCounter>();
     public DbSet<PropertyAttributionEvent> PropertyAttributionEvents => Set<PropertyAttributionEvent>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Notification> Notifications => Set<Notification>();

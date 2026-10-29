@@ -78,6 +78,12 @@ public sealed class PublicEndpointPolicyTests
             // independently re-checks the listing is still public before writing anything.
             "PropertiesController.TrackAttributionEvent",
 
+            // Listing view counter: a visitor opening a detail page is usually not signed in.
+            // Bounded by "listing-views" rate limiting; the handler re-checks the listing is
+            // publicly viewable, ignores bots/test traffic/owners, and dedupes per viewer.
+            "ListingViewsController.RecordPropertyView",
+            "ListingViewsController.RecordShortStayView",
+
             // Short-Stay Accommodation: the search/detail pages a guest browses before
             // booking, and a unit's public availability calendar — all anonymous, read-only,
             // and rate-limited under "shortstay-search".

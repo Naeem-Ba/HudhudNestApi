@@ -967,6 +967,69 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.ToTable("Favorites", (string)null);
                 });
 
+            modelBuilder.Entity("HudhudNestApi.Domain.Listings.Entities.ListingViewCounter", b =>
+                {
+                    b.Property<string>("Kind")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("ListingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<long>("ViewCount")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Kind", "ListingId");
+
+                    b.ToTable("ListingViewCounters", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ListingViewCounters_ViewCount_NonNegative", "\"ViewCount\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Listings.Entities.ListingViewEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Bucket")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("ListingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ViewedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("ViewerKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ViewedAt")
+                        .HasDatabaseName("IX_ListingViewEvents_ViewedAt");
+
+                    b.HasIndex("Kind", "ListingId", "ViewedAt")
+                        .HasDatabaseName("IX_ListingViewEvents_Listing_ViewedAt");
+
+                    b.HasIndex("Kind", "ListingId", "ViewerKeyHash", "Bucket")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ListingViewEvents_Dedupe");
+
+                    b.ToTable("ListingViewEvents", (string)null);
+                });
+
             modelBuilder.Entity("HudhudNestApi.Domain.Listings.Entities.Property", b =>
                 {
                     b.Property<Guid>("Id")

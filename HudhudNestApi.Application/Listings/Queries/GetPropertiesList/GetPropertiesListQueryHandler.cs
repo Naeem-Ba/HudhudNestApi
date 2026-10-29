@@ -2,6 +2,7 @@ using MediatR;
 using HudhudNestApi.Application.Listings.DTOs;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Listings.Mappers;
+using HudhudNestApi.Application.Listings.Views;
 using HudhudNestApi.Application.Properties.DTOs;
 
 namespace HudhudNestApi.Application.Listings.Queries.GetPropertiesList;
@@ -14,9 +15,13 @@ public sealed class GetPropertiesListQueryHandler
     : IRequestHandler<GetPropertiesListQuery, PagedResult<PropertyDto>>
 {
     private readonly IPropertyRepository _repo;
+    private readonly IListingViewRepository _views;
 
-    public GetPropertiesListQueryHandler(IPropertyRepository repo)
-        => _repo = repo;
+    public GetPropertiesListQueryHandler(IPropertyRepository repo, IListingViewRepository views)
+    {
+        _repo = repo;
+        _views = views;
+    }
 
     public async Task<PagedResult<PropertyDto>> Handle(
         GetPropertiesListQuery request,
@@ -30,12 +35,14 @@ public sealed class GetPropertiesListQueryHandler
         // "now" must not be judged against two different instants within one response.
         var asOfUtc = DateTime.UtcNow;
 
+        var items = pagedProperties.Items
+            .Select(property => PropertyMapper.ToDto(property, asOfUtc))
+            .ToList();
+        await _views.ApplyViewCountsAsync(items, cancellationToken);
+
         return new PagedResult<PropertyDto>
         {
-            Items = pagedProperties.Items
-                            .Select(property => PropertyMapper.ToDto(property, asOfUtc))
-                            .ToList()
-                            .AsReadOnly(),
+            Items = items.AsReadOnly(),
             TotalCount = pagedProperties.TotalCount,
             Page = pagedProperties.Page,
             PageSize = pagedProperties.PageSize
