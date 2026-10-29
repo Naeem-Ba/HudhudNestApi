@@ -1,4 +1,5 @@
 using FluentValidation;
+using HudhudNestApi.Application.Common.Validation;
 
 namespace HudhudNestApi.Application.Services.Commands.AddServiceReview;
 
@@ -14,7 +15,8 @@ public sealed class AddServiceReviewCommandValidator : AbstractValidator<AddServ
             .WithMessage("التقييم يجب أن يكون بين 1 و5.");
 
         RuleFor(x => x.Comment)
-            .MaximumLength(2000)
+            .MaximumLength(1000)
+            .NoNulCharacters()
             .When(x => x.Comment is not null);
     }
 }

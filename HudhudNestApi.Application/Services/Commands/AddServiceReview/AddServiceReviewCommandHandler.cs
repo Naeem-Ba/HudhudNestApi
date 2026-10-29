@@ -61,6 +61,11 @@ public sealed class AddServiceReviewCommandHandler
                 "يمكن تقييم الخدمة فقط بعد إتمامها. تأكد من اكتمال طلبك أولاً.");
         }
 
+        // Owner decision 2026-10-18: only an account in good standing can receive a new review. A provider holds
+        // no plan, so the equivalent condition is an active (not suspended or revoked) provider.
+        if (serviceRequest.ServiceProvider is { Status: not ServiceProviderStatus.Active })
+            throw new DomainException("لا يمكن تقييم مزوّد خدمة موقوف أو ملغى اعتماده حالياً.");
+
         // DB unique index on ServiceRequestId is the second line of defense.
         var alreadyReviewed = await _reviews.ExistsForRequestAsync(serviceRequest.Id, ct);
         if (alreadyReviewed)

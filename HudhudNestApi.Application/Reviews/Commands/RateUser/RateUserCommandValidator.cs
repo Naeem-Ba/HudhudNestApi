@@ -1,4 +1,5 @@
 using FluentValidation;
+using HudhudNestApi.Application.Common.Validation;
 
 namespace HudhudNestApi.Application.Reviews.Commands.RateUser;
 
@@ -38,6 +39,7 @@ public sealed class RateUserCommandValidator : AbstractValidator<RateUserCommand
 
         RuleFor(x => x.Comment)
             .MaximumLength(1000)
+            .NoNulCharacters()
             .When(x => x.Comment is not null);
     }
 }

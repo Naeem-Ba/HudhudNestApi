@@ -82,6 +82,17 @@ public sealed class ShortStayListing : AuditableEntity
     public bool IsPublished { get; private set; }
     public DateTime? PublishedAt { get; private set; }
 
+    // ── Administrative take-down (QA Phase 9, P9-D11; mirrors Property) ──
+    public const int MaxTakeDownReasonLength = 500;
+
+    public DateTime? TakenDownAt { get; private set; }
+    public Guid? TakenDownByUserId { get; private set; }
+
+    /// <summary>Why an administrator took the listing down; shown to the owner. Set together with <see cref="TakenDownAt"/>.</summary>
+    public string? TakenDownReason { get; private set; }
+
+    public bool IsTakenDown => TakenDownAt is not null;
+
     public AccommodationType AccommodationType { get; private set; } = null!;
     public ICollection<RoomType> RoomTypes { get; private set; } = new List<RoomType>();
     public ICollection<ShortStayListingAmenity> ListingAmenities { get; private set; } = new List<ShortStayListingAmenity>();
@@ -288,6 +299,9 @@ public sealed class ShortStayListing : AuditableEntity
 
     public void Publish()
     {
+        if (IsTakenDown)
+            throw new InvalidStateTransitionException("هذا الإعلان موقوف من الإدارة ولا يمكن نشره حتى تُعيده الإدارة.");
+
         if (RoomTypes.Count == 0)
             throw new DomainException("لا يمكن نشر إعلان بلا أي نوع غرفة/وحدة قابلة للحجز.");
 
@@ -304,6 +318,45 @@ public sealed class ShortStayListing : AuditableEntity
     }
 
     public void Unpublish() => IsPublished = false;
+
+    /// <summary>
+    /// Takes the listing off the site on an administrator's decision: unpublished, so search and detail hide it,
+    /// and the owner cannot publish it again. Bookings already made are untouched. Reversible with
+    /// <see cref="RestoreFromTakeDown"/>.
+    /// </summary>
+    public void TakeDown(Guid administratorId, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("A reason is required to take a listing down.");
+
+        reason = reason.Trim();
+        if (reason.Length > MaxTakeDownReasonLength)
+            throw new DomainException($"The reason must be at most {MaxTakeDownReasonLength} characters.");
+
+        if (IsTakenDown)
+            throw new InvalidStateTransitionException("هذا الإعلان موقوف من الإدارة مسبقاً.");
+
+        var now = DateTime.UtcNow;
+        TakenDownAt = now;
+        TakenDownByUserId = administratorId;
+        TakenDownReason = reason;
+        IsPublished = false;
+        UpdatedAt = now;
+    }
+
+    /// <summary>Lifts a take-down and publishes the listing again.</summary>
+    public void RestoreFromTakeDown()
+    {
+        if (!IsTakenDown)
+            throw new InvalidStateTransitionException("هذا الإعلان غير موقوف من الإدارة.");
+
+        TakenDownAt = null;
+        TakenDownByUserId = null;
+        TakenDownReason = null;
+        IsPublished = true;
+        PublishedAt ??= DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
+    }
 
     /// <summary>Soft delete — mirrors Property.MarkAsDeleted exactly. The repository's
     /// Remove() call afterward is intercepted by AppDbContext.SaveChangesAsync and converted

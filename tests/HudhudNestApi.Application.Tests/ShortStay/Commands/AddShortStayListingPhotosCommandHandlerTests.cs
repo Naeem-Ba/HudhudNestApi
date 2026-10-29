@@ -259,6 +259,7 @@ public sealed class AddShortStayListingPhotosCommandHandlerTests
 
         public Task AddAsync(ShortStayListing listing, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<PagedResult<ShortStayListing>> SearchAsync(ShortStayListingSearchFilter filter, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<PagedResult<ShortStayListing>> SearchForAdminAsync(string? search, bool? takenDown, int page, int pageSize, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ShortStayListing?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default)
             => Task.FromResult(id == _listing.Id ? _listing : null);
         public Task<ShortStayListing?> GetPublishedByIdWithDetailsAsync(Guid id, CancellationToken ct = default) => throw new NotImplementedException();

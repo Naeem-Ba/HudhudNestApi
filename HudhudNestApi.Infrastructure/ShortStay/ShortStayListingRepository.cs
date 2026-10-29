@@ -33,6 +33,28 @@ public sealed class ShortStayListingRepository : IShortStayListingRepository
     public async Task<IReadOnlyList<ShortStayListing>> GetByOwnerAsync(Guid ownerId, CancellationToken ct = default)
         => await WithDetails().Where(l => l.OwnerId == ownerId).OrderByDescending(l => l.CreatedAt).ToListAsync(ct);
 
+    public async Task<PagedResult<ShortStayListing>> SearchForAdminAsync(
+        string? search, bool? takenDown, int page, int pageSize, CancellationToken ct = default)
+    {
+        var query = _db.ShortStayListings.AsNoTracking().Include(l => l.AccommodationType).AsQueryable();
+
+        if (takenDown is true) query = query.Where(l => l.TakenDownAt != null);
+        else if (takenDown is false) query = query.Where(l => l.TakenDownAt == null);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = $"%{EscapeLike(search.Trim())}%";
+            query = query.Where(l => EF.Functions.ILike(l.Title, term, LikeEscape)
+                                     || (l.City != null && EF.Functions.ILike(l.City, term, LikeEscape)));
+        }
+
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderByDescending(l => l.CreatedAt)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+
+        return new PagedResult<ShortStayListing> { Items = items, TotalCount = total, Page = page, PageSize = pageSize };
+    }
+
     public async Task<bool> ExistsAsync(Guid id, CancellationToken ct = default)
         => await _db.ShortStayListings.AnyAsync(l => l.Id == id, ct);
 
@@ -99,7 +121,8 @@ public sealed class ShortStayListingRepository : IShortStayListingRepository
 
             query = query.Where(l => l.RoomTypes.Any(rt => rt.Units.Any(u =>
                 u.IsActive && !u.BookingRanges.Any(r =>
-                    (r.Status == UnitRangeStatus.Reserved || r.Status == UnitRangeStatus.CheckedIn)
+                    (r.Status == UnitRangeStatus.Reserved || r.Status == UnitRangeStatus.CheckedIn
+                        || r.Status == UnitRangeStatus.Blocked)
                     && r.CheckIn < checkOut && checkIn < r.CheckOut))));
         }
 

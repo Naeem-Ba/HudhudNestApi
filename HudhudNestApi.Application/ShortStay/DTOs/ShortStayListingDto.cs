@@ -16,7 +16,8 @@ public sealed record ShortStayListingSummaryDto(
     bool IsPublished,
     string? MainPhotoUrl,
     double? AverageRating,
-    int ReviewCount);
+    int ReviewCount,
+    bool IsTakenDown = false);
 
 public sealed record ShortStayListingDto(
     Guid Id,
@@ -69,4 +70,6 @@ public sealed record ShortStayListingDto(
     DateTime? PublishedAt,
     IReadOnlyList<RoomTypeDto> RoomTypes,
     IReadOnlyList<string> PhotoUrls,
-    IReadOnlyList<Guid> AmenityIds);
+    IReadOnlyList<Guid> AmenityIds,
+    bool IsTakenDown = false,
+    string? TakenDownReason = null);

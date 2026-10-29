@@ -28,7 +28,7 @@ public sealed class GetMyShortStayListingsQueryHandler
                 listing.Capacity, listing.Bedrooms, listing.Bathrooms, cheapestRoomType?.BasePricePerNight,
                 listing.CurrencyCode,
                 listing.City, listing.Latitude, listing.Longitude, listing.IsPublished,
-                listing.Photos.OrderBy(p => p.SortOrder).FirstOrDefault()?.Url, null, 0);
+                listing.Photos.OrderBy(p => p.SortOrder).FirstOrDefault()?.Url, null, 0, listing.IsTakenDown);
         }).ToList();
     }
 }

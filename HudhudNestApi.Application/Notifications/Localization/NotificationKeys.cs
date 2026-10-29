@@ -53,4 +53,7 @@ public static class NotificationKeys
     public const string ShortStayRejectedDetail = "shortstay.detail.rejected";
     public const string ShortStayCancelledByGuestDetail = "shortstay.detail.cancelled_by_guest";
     public const string ShortStayReviewAddedDetail = "shortstay.detail.review_added";
+    public const string ShortStayExpiredGuestDetail = "shortstay.detail.expired_guest";
+    public const string ShortStayExpiredHostDetail = "shortstay.detail.expired_host";
+    public const string ShortStayListingRestoredDetail = "shortstay.detail.listing_restored";
 }

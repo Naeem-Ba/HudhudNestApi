@@ -21,6 +21,7 @@ using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Application.Reviews.DTOs;
 using HudhudNestApi.Application.Reviews.Interfaces;
+using HudhudNestApi.Application.Reviews.Services;
 using HudhudNestApi.Application.Bookings.Interfaces;  // ✅ جديد
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Domain.Common.Exceptions;
@@ -37,6 +38,7 @@ public sealed class AddReviewCommandHandler
     private readonly IUnitOfWork _uow;
     private readonly INotificationService _notifications;
     private readonly IVisitRepository _visits;     // ✅ جديد
+    private readonly IReviewTargetPolicy _target;
     private readonly ILogger<AddReviewCommandHandler> _logger;
 
     public AddReviewCommandHandler(
@@ -45,6 +47,7 @@ public sealed class AddReviewCommandHandler
         IUnitOfWork uow,
         INotificationService notifications,
         IVisitRepository visits,               // ✅ جديد — حقن عبر DI
+        IReviewTargetPolicy target,
         ILogger<AddReviewCommandHandler> logger)
     {
         _reviews = reviews;
@@ -52,6 +55,7 @@ public sealed class AddReviewCommandHandler
         _uow = uow;
         _notifications = notifications;
         _visits = visits;              // ✅ جديد
+        _target = target;
         _logger = logger;
     }
 
@@ -66,6 +70,9 @@ public sealed class AddReviewCommandHandler
         // لا يُعقل أن يُقيِّم المالك عقاره الخاص
         if (property.OwnerId == request.ReviewerId)
             throw new DomainException("لا يمكن للمالك تقييم عقاره.");
+
+        // ── الفحص 2-ب: صاحب العقار لديه خطة فعّالة (قرار المالك 2026-10-18) ──────────
+        await _target.EnsureReviewableAsync(property.OwnerId, ct);
 
         // ── الفحص 3: لم يُقيِّم مسبقاً ──────────────────────────────────────
         // الـ UNIQUE constraint في DB هو خط الدفاع الثاني، لكن نتحقق هنا أولاً

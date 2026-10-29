@@ -84,6 +84,7 @@ public sealed class PublicEndpointPolicyTests
             "ShortStayListingsController.GetAccommodationTypes",
             "ShortStayListingsController.Search",
             "ShortStayListingsController.GetById",
+            "ShortStayListingsController.GetReviews",
             "ShortStayBookingsController.GetAvailability",
             "ShortStayBookingsController.GetPricingPreview",
             "PropertyImagesController.GetAll",

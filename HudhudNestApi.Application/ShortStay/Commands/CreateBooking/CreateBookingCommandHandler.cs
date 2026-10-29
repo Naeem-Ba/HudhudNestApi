@@ -9,6 +9,7 @@ using HudhudNestApi.Application.ShortStay.Interfaces;
 using HudhudNestApi.Application.ShortStay.Mapping;
 using HudhudNestApi.Domain.Common.Exceptions;
 using HudhudNestApi.Domain.Notifications.Enums;
+using HudhudNestApi.Domain.ShortStay;
 using HudhudNestApi.Domain.ShortStay.Entities;
 using HudhudNestApi.Domain.ShortStay.Enums;
 using HudhudNestApi.Domain.ShortStay.ValueObjects;
@@ -54,6 +55,29 @@ public sealed class CreateBookingCommandHandler : IRequestHandler<CreateBookingC
         _logger = logger;
     }
 
+    /// <summary>
+    /// Owner decision 2026-10-18: an instant booking reserves the unit without anyone's approval, so it is
+    /// capped to one month (it must start within 30 days and cover at most 30 nights), and one guest may hold
+    /// only a few of them at a time (QA Phase 9, P9-D03: one plain account held 6 x 366 nights of a unit).
+    /// A request booking still goes through the host and is not capped here.
+    /// </summary>
+    private async Task EnsureInstantLimitsAsync(CreateBookingCommand request, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+
+        if (request.CheckIn > today.AddDays(ShortStayBookingPolicy.InstantMaxAdvanceDays))
+            throw new DomainException(
+                $"الحجز الفوري متاح للإقامات التي تبدأ خلال {ShortStayBookingPolicy.InstantMaxAdvanceDays} يوماً من اليوم فقط.");
+
+        if (request.CheckOut.DayNumber - request.CheckIn.DayNumber > ShortStayBookingPolicy.InstantMaxNights)
+            throw new DomainException(
+                $"الحجز الفوري لا يتجاوز {ShortStayBookingPolicy.InstantMaxNights} ليلة.");
+
+        if (await _bookings.CountActiveInstantBookingsAsync(request.GuestId, ct) >= ShortStayBookingPolicy.MaxActiveInstantBookingsPerGuest)
+            throw new ConflictException(
+                $"لديك بالفعل {ShortStayBookingPolicy.MaxActiveInstantBookingsPerGuest} حجوزات فورية قائمة. أكمل أحدها أو ألغِه قبل حجز آخر.");
+    }
+
     public async Task<BookingDto> Handle(CreateBookingCommand request, CancellationToken ct)
     {
         var unit = await _units.GetByIdWithListingAsync(request.UnitId, ct)
@@ -75,6 +99,9 @@ public sealed class CreateBookingCommandHandler : IRequestHandler<CreateBookingC
             throw new DomainException("هذا الإعلان لا يدعم أي وضع حجز حالياً.");
 
         var mode = listing.InstantBookingEnabled ? BookingMode.Instant : BookingMode.Request;
+
+        if (mode == BookingMode.Instant)
+            await EnsureInstantLimitsAsync(request, ct);
 
         var guests = GuestComposition.Create(request.Adults, request.Children, request.Infants);
         var capacity = roomType.Capacity ?? listing.Capacity;

@@ -29,7 +29,7 @@ public sealed class CheckInBookingCommandHandler : IRequestHandler<CheckInBookin
         if (listing.OwnerId != request.HostId)
             throw new ForbiddenException("Only the listing owner can check in this booking.");
 
-        booking.CheckInGuest();
+        booking.CheckInGuest(DateOnly.FromDateTime(DateTime.UtcNow));
         await _bookings.MarkRangeCheckedInAsync(booking.Id, ct);
         await _uow.SaveChangesAsync(ct);
 

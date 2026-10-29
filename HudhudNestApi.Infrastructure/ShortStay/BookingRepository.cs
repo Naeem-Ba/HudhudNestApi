@@ -45,7 +45,8 @@ public sealed class BookingRepository : IBookingRepository
         Guid unitId, DateOnly checkIn, DateOnly checkOut, CancellationToken ct = default)
         => await _db.UnitBookingRanges.AnyAsync(r =>
             r.UnitId == unitId
-            && (r.Status == UnitRangeStatus.Reserved || r.Status == UnitRangeStatus.CheckedIn)
+            && (r.Status == UnitRangeStatus.Reserved || r.Status == UnitRangeStatus.CheckedIn
+                || r.Status == UnitRangeStatus.Blocked)
             && r.CheckIn < checkOut && checkIn < r.CheckOut, ct);
 
     public async Task AddBookingRangeAsync(UnitBookingRange range, CancellationToken ct = default)
@@ -115,6 +116,23 @@ public sealed class BookingRepository : IBookingRepository
             (b.Status == BookingStatus.Pending || b.Status == BookingStatus.Approved ||
              b.Status == BookingStatus.DepositPaid || b.Status == BookingStatus.Confirmed ||
              b.Status == BookingStatus.CheckedIn || b.Status == BookingStatus.CheckedOut), ct);
+
+    public async Task<int> CountActiveInstantBookingsAsync(Guid guestId, CancellationToken ct = default)
+        => await _db.ShortStayBookings.CountAsync(b =>
+            b.GuestId == guestId && b.Mode == BookingMode.Instant &&
+            (b.Status == BookingStatus.Pending || b.Status == BookingStatus.Approved ||
+             b.Status == BookingStatus.DepositPaid || b.Status == BookingStatus.Confirmed), ct);
+
+    public async Task<IReadOnlyList<UnitBookingRange>> GetBlocksForUnitAsync(
+        Guid unitId, DateOnly today, CancellationToken ct = default)
+        => await _db.UnitBookingRanges
+            .Where(r => r.UnitId == unitId && r.Status == UnitRangeStatus.Blocked && r.CheckOut > today)
+            .OrderBy(r => r.CheckIn)
+            .ToListAsync(ct);
+
+    public async Task<UnitBookingRange?> GetBlockAsync(Guid unitId, Guid blockId, CancellationToken ct = default)
+        => await _db.UnitBookingRanges.FirstOrDefaultAsync(
+            r => r.Id == blockId && r.UnitId == unitId && r.Status == UnitRangeStatus.Blocked, ct);
 
     public async Task<bool> HasReviewAsync(Guid bookingId, CancellationToken ct = default)
         => await _db.ShortStayReviews.AnyAsync(r => r.BookingId == bookingId, ct);
