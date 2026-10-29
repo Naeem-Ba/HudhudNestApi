@@ -8,6 +8,7 @@ namespace HudhudNestApi.Application.Tests.Listings.Views;
 
 public sealed class ListingViewHandlerTests
 {
+    private const string ValidVisitorToken = "abcabcabcabcabcabcab";
     private static readonly Guid ListingId = Guid.NewGuid();
     private static readonly Guid OwnerId = Guid.NewGuid();
     private static readonly Guid AgencyId = Guid.NewGuid();
@@ -32,7 +33,7 @@ public sealed class ListingViewHandlerTests
             .ReturnsAsync(new ListingViewTarget(OwnerId, agency, "title", visible));
 
     private Task<ListingViewResultDto> Record(
-        Guid? userId = null, bool admin = false, string? token = "0123456789abcdef0123",
+        Guid? userId = null, bool admin = false, string? token = ValidVisitorToken,
         bool bot = false, bool test = false)
         => new RecordListingViewCommandHandler(_repo.Object, _policy.Object).Handle(
             new RecordListingViewCommand(ListingKind.Property, ListingId, userId, admin, token, "fp", bot, test), default);
@@ -47,7 +48,7 @@ public sealed class ListingViewHandlerTests
         Assert.True(result.Counted);
         Assert.Equal(8, result.ViewCount);
         Assert.Null(result.Reason);
-        _repo.Verify(r => r.TryRecordAsync(ListingKind.Property, ListingId, "h:v:0123456789abcdef0123", 42, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Once);
+        _repo.Verify(r => r.TryRecordAsync(ListingKind.Property, ListingId, $"h:v:{ValidVisitorToken}", 42, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -65,7 +66,7 @@ public sealed class ListingViewHandlerTests
     public async Task SignedInUser_IsIdentifiedByAccount_NotByTheVisitorToken()
     {
         var user = Guid.NewGuid();
-        await Record(userId: user, token: "0123456789abcdef0123");
+        await Record(userId: user, token: ValidVisitorToken);
         _repo.Verify(r => r.TryRecordAsync(ListingKind.Property, ListingId, $"h:u:{user:N}", 42, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 

@@ -15,4 +15,8 @@ regexes = [
   # Deliberately forged alg=none JWT (header {alg:none}, payload {sub:1}, no signature) used as a
   # negative auth test in staging-qa/tests.mjs.
   '''^eyJhbGciOiJub25lIn0\.eyJzdWIiOiIxIn0\.$''',
+  # Fixed test inputs for the listing view counter: base64 of bytes 0x00..0x1f (HMAC key in
+  # ListingViewPolicyTests.cs) and a 20-character dummy visitor token (ListingViewHandlerTests.cs).
+  '''^AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=$''',
+  '''^0123456789abcdef0123$''',
 ]
