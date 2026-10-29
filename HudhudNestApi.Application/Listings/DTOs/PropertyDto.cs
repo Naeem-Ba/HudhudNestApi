@@ -88,6 +88,9 @@ public sealed class PropertyDto
     public DateTime? PublishedAt { get; set; }
     public DateTime? ExpiresAt { get; set; }
 
+    /// <summary>Counted detail-page views (cooldown-deduplicated). Read-only: only POST /views can raise it.</summary>
+    public long ViewCount { get; set; }
+
     /// <summary>
     /// True while an administrator's take-down is in force. A taken-down listing is never returned by a
     /// public endpoint (it is unpublished); only its owner and administrators can read it, which is how the

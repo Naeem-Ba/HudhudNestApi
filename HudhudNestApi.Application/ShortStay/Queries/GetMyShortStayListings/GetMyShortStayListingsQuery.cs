@@ -1,4 +1,5 @@
 using MediatR;
+using HudhudNestApi.Application.Listings.Views;
 using HudhudNestApi.Application.ShortStay.DTOs;
 using HudhudNestApi.Application.ShortStay.Interfaces;
 
@@ -10,15 +11,20 @@ public sealed class GetMyShortStayListingsQueryHandler
     : IRequestHandler<GetMyShortStayListingsQuery, IReadOnlyList<ShortStayListingSummaryDto>>
 {
     private readonly IShortStayListingRepository _listings;
+    private readonly IListingViewRepository _views;
 
-    public GetMyShortStayListingsQueryHandler(IShortStayListingRepository listings) => _listings = listings;
+    public GetMyShortStayListingsQueryHandler(IShortStayListingRepository listings, IListingViewRepository views)
+    {
+        _listings = listings;
+        _views = views;
+    }
 
     public async Task<IReadOnlyList<ShortStayListingSummaryDto>> Handle(
         GetMyShortStayListingsQuery request, CancellationToken ct)
     {
         var listings = await _listings.GetByOwnerAsync(request.OwnerId, ct);
 
-        return listings.Select(listing =>
+        var summaries = listings.Select(listing =>
         {
             var cheapestRoomType = listing.RoomTypes.Where(rt => rt.IsActive)
                 .OrderBy(rt => rt.BasePricePerNight).FirstOrDefault();
@@ -30,5 +36,7 @@ public sealed class GetMyShortStayListingsQueryHandler
                 listing.City, listing.Latitude, listing.Longitude, listing.IsPublished,
                 listing.Photos.OrderBy(p => p.SortOrder).FirstOrDefault()?.Url, null, 0, listing.IsTakenDown);
         }).ToList();
+
+        return await _views.WithViewCountsAsync(summaries, ct);
     }
 }

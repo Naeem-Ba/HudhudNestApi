@@ -94,6 +94,9 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IAgencyInvitationRepository, AgencyInvitationRepository>();
         services.AddHostedService<ListingExpiryHostedService>();
         services.AddHostedService<HudhudNestApi.Infrastructure.Notifications.NotificationRetentionHostedService>();
+        services.AddSingleton<HudhudNestApi.Application.Listings.Views.IListingViewPolicy, HudhudNestApi.Infrastructure.Listings.ListingViewPolicy>();
+        services.AddScoped<HudhudNestApi.Application.Listings.Views.IListingViewRepository, HudhudNestApi.Infrastructure.Listings.ListingViewRepository>();
+        services.AddHostedService<HudhudNestApi.Infrastructure.Listings.ListingViewRetentionHostedService>();
         services.AddScoped<IPropertyImageRepository, PropertyImageRepository>();
         services.AddScoped<IFavoriteRepository, FavoriteRepository>();
         services.AddScoped<IConsentRecordRepository, ConsentRecordRepository>();

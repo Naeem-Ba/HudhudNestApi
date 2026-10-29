@@ -2,6 +2,7 @@ using MediatR;
 using HudhudNestApi.Application.Listings.DTOs;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Listings.Mappers;
+using HudhudNestApi.Application.Listings.Views;
 
 namespace HudhudNestApi.Application.Listings.Queries.GetMyProperties;
 
@@ -9,9 +10,13 @@ public sealed class GetMyPropertiesQueryHandler
     : IRequestHandler<GetMyPropertiesQuery, IReadOnlyList<PropertyDto>>
 {
     private readonly IPropertyRepository _repository;
+    private readonly IListingViewRepository _views;
 
-    public GetMyPropertiesQueryHandler(IPropertyRepository repository)
-        => _repository = repository;
+    public GetMyPropertiesQueryHandler(IPropertyRepository repository, IListingViewRepository views)
+    {
+        _repository = repository;
+        _views = views;
+    }
 
     public async Task<IReadOnlyList<PropertyDto>> Handle(
         GetMyPropertiesQuery request,
@@ -25,6 +30,8 @@ public sealed class GetMyPropertiesQueryHandler
         // straddle "now" are not judged against two different instants in one response.
         var asOfUtc = DateTime.UtcNow;
 
-        return properties.Select(property => PropertyMapper.ToDto(property, asOfUtc)).ToList();
+        var dtos = properties.Select(property => PropertyMapper.ToDto(property, asOfUtc)).ToList();
+        await _views.ApplyViewCountsAsync(dtos, cancellationToken);
+        return dtos;
     }
 }

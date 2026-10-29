@@ -28,6 +28,14 @@ public sealed class PropertyPublicationWorkflowTests
         Assert.NotNull(property.PublishedAt);
     }
 
+    private static HudhudNestApi.Application.Listings.Views.IListingViewRepository NoViews()
+    {
+        var views = new Mock<HudhudNestApi.Application.Listings.Views.IListingViewRepository>();
+        views.Setup(v => v.GetCountsAsync(It.IsAny<HudhudNestApi.Domain.Listings.Enums.ListingKind>(), It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<Guid, long>());
+        return views.Object;
+    }
+
     [Fact]
     public async Task MyProperties_ReturnsDraftsOwnedByCurrentUser()
     {
@@ -36,7 +44,7 @@ public sealed class PropertyPublicationWorkflowTests
         repository
             .Setup(x => x.GetByOwnerAsync(property.OwnerId, It.IsAny<CancellationToken>()))
             .ReturnsAsync([property]);
-        var handler = new GetMyPropertiesQueryHandler(repository.Object);
+        var handler = new GetMyPropertiesQueryHandler(repository.Object, NoViews());
 
         var result = await handler.Handle(
             new GetMyPropertiesQuery(property.OwnerId),
@@ -52,7 +60,7 @@ public sealed class PropertyPublicationWorkflowTests
     {
         var property = CreateProperty();
         var repository = RepositoryReturning(property);
-        var handler = new GetPropertyForManagementQueryHandler(repository.Object);
+        var handler = new GetPropertyForManagementQueryHandler(repository.Object, NoViews());
 
         var result = await handler.Handle(
             new GetPropertyForManagementQuery(property.Id, property.OwnerId, IsAdmin: false),
@@ -67,7 +75,7 @@ public sealed class PropertyPublicationWorkflowTests
     {
         var property = CreateProperty();
         var repository = RepositoryReturning(property);
-        var handler = new GetPropertyForManagementQueryHandler(repository.Object);
+        var handler = new GetPropertyForManagementQueryHandler(repository.Object, NoViews());
 
         await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(
             new GetPropertyForManagementQuery(property.Id, Guid.NewGuid(), IsAdmin: false),

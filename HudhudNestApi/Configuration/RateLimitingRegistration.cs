@@ -188,6 +188,20 @@ public static class RateLimitingRegistration
                         QueueLimit = 0
                     }));
 
+            // Listing view counter - POST /properties|short-stay/listings/{id}/views. Anonymous and
+            // fired once per detail-page open, so a person browsing quickly stays well under this;
+            // it exists to bound scripted inflation (the per-viewer cooldown handles repeats).
+            options.AddPolicy("listing-views", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 30,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
             // UTM / Attribution (Phase 2) — POST /properties/{id}/attribution-events. Anonymous,
             // and fires more often per visitor than a share event (one per page view, plus one
             // per contact/lead action), so it gets a higher cadence than "property-share-events"

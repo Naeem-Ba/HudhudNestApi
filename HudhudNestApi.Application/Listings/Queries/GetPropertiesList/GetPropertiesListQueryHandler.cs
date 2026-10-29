@@ -22,7 +22,7 @@ public sealed class GetPropertiesListQueryHandler
         GetPropertiesListQuery request,
         CancellationToken cancellationToken)
     {
-        var pagedProperties = await _repo.GetPagedAsync(
+        var (pagedProperties, viewCounts) = await _repo.GetPagedWithViewCountsAsync(
             request.Filter,
             cancellationToken);
 
@@ -30,12 +30,15 @@ public sealed class GetPropertiesListQueryHandler
         // "now" must not be judged against two different instants within one response.
         var asOfUtc = DateTime.UtcNow;
 
+        var items = pagedProperties.Items
+            .Select(property => PropertyMapper.ToDto(property, asOfUtc))
+            .ToList();
+        foreach (var item in items)
+            item.ViewCount = viewCounts.TryGetValue(item.Id, out var views) ? views : 0;
+
         return new PagedResult<PropertyDto>
         {
-            Items = pagedProperties.Items
-                            .Select(property => PropertyMapper.ToDto(property, asOfUtc))
-                            .ToList()
-                            .AsReadOnly(),
+            Items = items.AsReadOnly(),
             TotalCount = pagedProperties.TotalCount,
             Page = pagedProperties.Page,
             PageSize = pagedProperties.PageSize

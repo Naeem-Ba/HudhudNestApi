@@ -2,6 +2,7 @@ using MediatR;
 using HudhudNestApi.Application.Listings.DTOs;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Listings.Mappers;
+using HudhudNestApi.Application.Listings.Views;
 
 namespace HudhudNestApi.Application.Listings.Queries.GetPropertyById;
 
@@ -18,15 +19,24 @@ public sealed class GetPropertyByIdQueryHandler
     : IRequestHandler<GetPropertyByIdQuery, PropertyDto?>
 {
     private readonly IPropertyRepository _repo;
+    private readonly IListingViewRepository _views;
 
-    public GetPropertyByIdQueryHandler(IPropertyRepository repo)
-        => _repo = repo;
+    public GetPropertyByIdQueryHandler(IPropertyRepository repo, IListingViewRepository views)
+    {
+        _repo = repo;
+        _views = views;
+    }
 
     public async Task<PropertyDto?> Handle(
         GetPropertyByIdQuery request,
         CancellationToken cancellationToken)
     {
         var property = await _repo.GetPublishedByIdWithDetailsAsync(request.Id, cancellationToken);
-        return property is null ? null : PropertyMapper.ToDto(property);
+        if (property is null)
+            return null;
+
+        var dto = PropertyMapper.ToDto(property);
+        await _views.ApplyViewCountsAsync(new[] { dto }, cancellationToken);
+        return dto;
     }
 }

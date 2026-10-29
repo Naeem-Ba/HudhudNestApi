@@ -1,5 +1,6 @@
 using MediatR;
 using HudhudNestApi.Application.Common.Exceptions;
+using HudhudNestApi.Application.Listings.Views;
 using HudhudNestApi.Application.ShortStay.DTOs;
 using HudhudNestApi.Application.ShortStay.Interfaces;
 using HudhudNestApi.Application.ShortStay.Mapping;
@@ -16,12 +17,14 @@ public sealed class GetShortStayListingByIdQueryHandler
 {
     private readonly IShortStayListingRepository _listings;
     private readonly IAccommodationTypeRepository _accommodationTypes;
+    private readonly IListingViewRepository _views;
 
     public GetShortStayListingByIdQueryHandler(
-        IShortStayListingRepository listings, IAccommodationTypeRepository accommodationTypes)
+        IShortStayListingRepository listings, IAccommodationTypeRepository accommodationTypes, IListingViewRepository views)
     {
         _listings = listings;
         _accommodationTypes = accommodationTypes;
+        _views = views;
     }
 
     public async Task<ShortStayListingDto> Handle(GetShortStayListingByIdQuery request, CancellationToken ct)
@@ -37,6 +40,7 @@ public sealed class GetShortStayListingByIdQueryHandler
         var accommodationType = await _accommodationTypes.GetByIdAsync(listing.AccommodationTypeId, ct)
             ?? throw new NotFoundException("AccommodationType was not found.");
 
-        return isOwner ? listing.ToDto(accommodationType) : listing.ToPublicDto(accommodationType);
+        var dto = isOwner ? listing.ToDto(accommodationType) : listing.ToPublicDto(accommodationType);
+        return await _views.WithViewCountAsync(dto, ct);
     }
 }

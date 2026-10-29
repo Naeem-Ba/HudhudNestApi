@@ -70,6 +70,7 @@ internal static class RedisRateLimitingDefaults
             // ("Rate limit policy is not configured") whenever Redis rate limiting was on.
             ["property-share-events"] = Policy(20, TimeSpan.FromMinutes(1)),
             ["property-attribution-events"] = Policy(40, TimeSpan.FromMinutes(1)),
+            ["listing-views"] = Policy(30, TimeSpan.FromMinutes(1)),
             ["social-distribution-write"] = Policy(30, TimeSpan.FromMinutes(1))
         };
 

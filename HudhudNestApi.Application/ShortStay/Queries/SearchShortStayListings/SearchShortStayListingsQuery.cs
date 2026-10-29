@@ -1,4 +1,5 @@
 using MediatR;
+using HudhudNestApi.Application.Listings.Views;
 using HudhudNestApi.Application.Properties.DTOs;
 using HudhudNestApi.Application.ShortStay.DTOs;
 using HudhudNestApi.Application.ShortStay.Interfaces;
@@ -12,8 +13,13 @@ public sealed class SearchShortStayListingsQueryHandler
     : IRequestHandler<SearchShortStayListingsQuery, PagedResult<ShortStayListingSummaryDto>>
 {
     private readonly IShortStayListingRepository _listings;
+    private readonly IListingViewRepository _views;
 
-    public SearchShortStayListingsQueryHandler(IShortStayListingRepository listings) => _listings = listings;
+    public SearchShortStayListingsQueryHandler(IShortStayListingRepository listings, IListingViewRepository views)
+    {
+        _listings = listings;
+        _views = views;
+    }
 
     public async Task<PagedResult<ShortStayListingSummaryDto>> Handle(
         SearchShortStayListingsQuery request, CancellationToken ct)
@@ -52,7 +58,7 @@ public sealed class SearchShortStayListingsQueryHandler
 
         return new PagedResult<ShortStayListingSummaryDto>
         {
-            Items = items,
+            Items = (await _views.WithViewCountsAsync(items, ct)).ToList(),
             TotalCount = page.TotalCount,
             Page = page.Page,
             PageSize = page.PageSize,
