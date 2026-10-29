@@ -39,6 +39,8 @@ internal static class RedisRateLimitingDefaults
             ["service-request-documents"] = Policy(20, TimeSpan.FromHours(1)),
             // Messages inside a service request: a negotiation, not a chat room.
             ["service-messages"] = Policy(120, TimeSpan.FromHours(1)),
+            // Listing reports — see RateLimitingRegistration's in-memory fallback policy.
+            ["listing-reports"] = Policy(10, TimeSpan.FromHours(1)),
             // Joining the marketplace as a provider — same cadence as "contact", which it replaces.
             ["provider-applications"] = Policy(10, TimeSpan.FromHours(1)),
             // Short-Stay Accommodation — same cadence as visits/public-search respectively.

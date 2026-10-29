@@ -137,6 +137,19 @@ public interface INotificationService
         Guid relatedEntityId,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Listing reports: a new report for admins, and an info request or the closing result for the
+    /// reporter. <paramref name="dedupeKey"/> makes a retry of the same event a no-op.
+    /// </summary>
+    Task NotifyListingReportAsync(
+        Guid recipientId,
+        NotificationType type,
+        NotificationText message,
+        Guid reportId,
+        Guid? propertyId,
+        string dedupeKey,
+        CancellationToken ct = default);
+
     Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(
         Guid userId,
         int page,

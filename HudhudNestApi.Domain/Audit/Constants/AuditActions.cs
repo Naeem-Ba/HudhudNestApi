@@ -74,4 +74,15 @@ public static class AuditActions
     public const string ServiceRequestOutcomeSetByAdmin = "ServiceRequestOutcomeSetByAdmin";
     public const string ServiceReviewHiddenByAdmin = "ServiceReviewHiddenByAdmin";
     public const string ServiceReviewUnhiddenByAdmin = "ServiceReviewUnhiddenByAdmin";
+
+    // -- Admin dashboard: listing reports (moderation) --------------------
+    // One row per admin decision on a report. Listing take-down/restore from a report also writes
+    // the existing ListingTakenDownByAdmin / ListingRestoredByAdmin rows through IAdminListingService.
+    public const string ListingReportReviewStartedByAdmin = "ListingReportReviewStartedByAdmin";
+    public const string ListingReportAssignedByAdmin = "ListingReportAssignedByAdmin";
+    public const string ListingReportPriorityChangedByAdmin = "ListingReportPriorityChangedByAdmin";
+    public const string ListingReportInfoRequestedByAdmin = "ListingReportInfoRequestedByAdmin";
+    public const string ListingReportActionRequiredByAdmin = "ListingReportActionRequiredByAdmin";
+    public const string ListingReportClosedByAdmin = "ListingReportClosedByAdmin";
+    public const string ListingReportReopenedByAdmin = "ListingReportReopenedByAdmin";
 }

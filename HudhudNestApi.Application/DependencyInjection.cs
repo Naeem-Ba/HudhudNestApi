@@ -52,6 +52,11 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(assembly);
         services.AddScoped<RefreshTokenReuseHandler>();
         services.AddScoped<Services.ProviderOnboarding.ProviderAdminDetailBuilder>();
+        // Listing reports (moderation): the notifier and the admin detail view are shared by several handlers.
+        services.AddScoped<Moderation.ListingReportNotifier>();
+        services.AddScoped<Moderation.ListingReportAdminDetailBuilder>();
+        // Bound to the "ListingReports" section in AddRepositoryInfrastructure; the defaults apply without it.
+        services.AddOptions<Moderation.ListingReportOptions>();
         services.AddScoped<IAuthenticationSessionIssuer, AuthenticationSessionIssuer>();
         services.AddScoped<SocialIdentityValidator>();
         services.AddScoped<SocialAccountResolver>();

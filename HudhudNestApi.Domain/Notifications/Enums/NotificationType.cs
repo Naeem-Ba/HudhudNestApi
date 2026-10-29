@@ -193,4 +193,15 @@ public enum NotificationType
 
     /// <summary>A month without contact: the request was closed by the system. Sent to both sides.</summary>
     ServiceRequestExpired = 51,
+
+    // ── Listing reports (moderation). RelatedEntityId is the ListingReport id.
+
+    /// <summary>A listing was reported. Sent to admins (never names the reporter).</summary>
+    ListingReportSubmitted = 52,
+
+    /// <summary>An admin asked the reporter for more information about their report.</summary>
+    ListingReportInfoRequested = 53,
+
+    /// <summary>The reporter's report was closed; the message says only whether action was taken.</summary>
+    ListingReportClosed = 54,
 }

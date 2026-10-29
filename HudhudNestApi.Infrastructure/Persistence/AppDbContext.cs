@@ -111,6 +111,8 @@ public sealed class AppDbContext
     public DbSet<ServiceReview> ServiceReviews => Set<ServiceReview>();
     public DbSet<ServiceProviderApplication> ServiceProviderApplications => Set<ServiceProviderApplication>();
     public DbSet<ServiceProviderEvent> ServiceProviderEvents => Set<ServiceProviderEvent>();
+    public DbSet<HudhudNestApi.Domain.Moderation.Entities.ListingReport> ListingReports => Set<HudhudNestApi.Domain.Moderation.Entities.ListingReport>();
+    public DbSet<HudhudNestApi.Domain.Moderation.Entities.ListingReportEvent> ListingReportEvents => Set<HudhudNestApi.Domain.Moderation.Entities.ListingReportEvent>();
 
     // Social Distribution Domain (Phase 3)
     public DbSet<SocialChannel> SocialChannels => Set<SocialChannel>();
@@ -169,6 +171,8 @@ public sealed class AppDbContext
 
         // SPA-000001… reference numbers for provider applications (see ServiceProviderApplication.Number).
         builder.HasSequence<long>(Configurations.ServiceProviderApplicationConfiguration.NumberSequence);
+        // RPT-000001… reference numbers for listing reports (see ListingReport.Number).
+        builder.HasSequence<long>(Configurations.ListingReportConfiguration.NumberSequence);
 
         // -- Rename Identity tables to clean English names -------
         builder.Entity<ApplicationUser>().ToTable("Users");

@@ -45,6 +45,16 @@ public static class NotificationKeys
     public const string ProviderReactivated = "msg.provider_reactivated";
     public const string ProviderRevoked = "msg.provider_revoked";
 
+    // Listing reports (moderation).
+    public const string ListingReportSubmitted = "msg.listing_report_submitted";
+    public const string ListingReportSubmittedUrgent = "msg.listing_report_submitted_urgent";
+    public const string ListingReportInfoRequested = "msg.listing_report_info_requested";
+    public const string ListingReportClosedActionTaken = "msg.listing_report_closed_action";
+    public const string ListingReportClosedNoViolation = "msg.listing_report_closed_no_violation";
+
+    /// <summary>The reason's name in the recipient's language, e.g. "report.reason.Fraud".</summary>
+    public static string ListingReportReason(Domain.Moderation.Enums.ListingReportReason reason) => $"report.reason.{reason}";
+
     // Short-stay details.
     public const string ShortStayRequestedDetail = "shortstay.detail.requested";
     public const string ShortStayApprovedDetail = "shortstay.detail.approved";

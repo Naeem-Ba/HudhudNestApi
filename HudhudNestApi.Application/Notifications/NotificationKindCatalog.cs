@@ -93,6 +93,10 @@ public static class NotificationKindCatalog
         [NotificationType.ValuationInquiryReminderSoon] = new(Valuation, NotificationPriority.Normal, "valuation", false),
 
         [NotificationType.PhoneVerification] = new(Account, NotificationPriority.High, "phone-verify", true),
+        // Listing reports: no new preference category; mandatory so "account" stays un-mutable (a reporter must see an info request).
+        [NotificationType.ListingReportSubmitted] = new(Account, NotificationPriority.Normal, "admin-listing-report", true),
+        [NotificationType.ListingReportInfoRequested] = new(Account, NotificationPriority.High, "my-listing-report", true),
+        [NotificationType.ListingReportClosed] = new(Account, NotificationPriority.Normal, "my-listing-report", true),
         [NotificationType.UserRated] = new(Social, NotificationPriority.Low, "profile", false),
     };
 

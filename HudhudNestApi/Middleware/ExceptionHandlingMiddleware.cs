@@ -121,7 +121,8 @@ public sealed class ExceptionHandlingMiddleware
             {
                 title = "Conflict",
                 status = StatusCodes.Status409Conflict,
-                message = ex.Message
+                message = ex.Message,
+                code = ex.Code
             });
         }
         catch (DbUpdateConcurrencyException ex)
