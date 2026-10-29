@@ -37,8 +37,12 @@ Types `ListingReportSubmitted` (to admins), `ListingReportInfoRequested` and `Li
 ## Attachments / evidence — deferred
 Not built. Safe evidence upload needs private, non-public storage with signed short-lived URLs, content-type sniffing, size and count limits, malware scanning, and EXIF stripping; the project has no such private store today (listing photos are public). Until it exists, the report accepts text only. To add later: a private bucket, an upload endpoint bound to a report id and its reporter, and admin-only read URLs.
 
+## Concurrency and hostile input (verified by tests)
+- Submit takes a per-reporter advisory lock inside its transaction, so parallel submits from one account on one listing produce exactly one report and clean 409s.
+- Admin search escapes LIKE wildcards, caps the term at 100 chars and clamps `pageSize` to 1..100; bad enums, dates and NUL characters answer 4xx, never 500. Anonymous calls get 401 on every route.
+
 ## Tests
-`tests/HudhudNestApi.Integration.Tests/Moderation/ListingReportTests.cs` (submit, duplicate, own listing, IDOR, rate limit, admin workflow, take-down separation, reporter DTO privacy, replay) and `tests/HudhudNestApi.Application.Tests/Moderation/ListingReportDomainTests.cs` (state machine). App side: specs next to the pages and the report button.
+`tests/HudhudNestApi.Integration.Tests/Moderation/ListingReportTests.cs` (12 tests: lifecycle, validation, duplicates and replay, daily limit, authorization/IDOR, transitions, escalation, deleted listing, queue filters, notification failure, concurrent submit, hostile input) and `tests/HudhudNestApi.Application.Tests/Moderation/ListingReportDomainTests.cs` (state machine). App side: specs next to the pages and the report button.
 
 ## Rollout (manual, in this order)
 1. Merge API PR, run the Migrator (`AddListingReports`).

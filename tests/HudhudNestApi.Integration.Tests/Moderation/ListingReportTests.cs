@@ -452,6 +452,49 @@ public sealed class ListingReportTests : IAsyncLifetime
         Assert.True(stats.GetProperty("averageResolutionHours").ValueKind == JsonValueKind.Null);
     }
 
+    [Fact(DisplayName = "Two simultaneous reports from one account on one listing give one report and one clean 409")]
+    public async Task ConcurrentSubmit_OneReport()
+    {
+        var (_, reporter, _, propertyId) = await SeedAsync();
+        var client = _factory.AuthedClient(reporter.AccessToken);
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Report(client, propertyId, clientRequestId: Guid.NewGuid())));
+
+        Assert.Equal(1, responses.Count(r => r.StatusCode == HttpStatusCode.Created));
+        Assert.Equal(3, responses.Count(r => r.StatusCode == HttpStatusCode.Conflict));
+        await _factory.InScopeAsync(async services =>
+            Assert.Equal(1, await services.GetRequiredService<AppDbContext>().ListingReports.CountAsync()));
+    }
+
+    [Fact(DisplayName = "Hostile or odd input never causes a 500: wildcards, NUL, huge page size, bad enums, anonymous")]
+    public async Task HostileInput()
+    {
+        var (_, reporter, admin, propertyId) = await SeedAsync();
+        var user = _factory.AuthedClient(reporter.AccessToken);
+        var adminClient = _factory.AuthedClient(admin.AccessToken);
+
+        foreach (var term in new[] { "%", "_", "\\", "%00", "' OR 1=1 --", new string('x', 500) })
+        {
+            var res = await adminClient.GetAsync($"/api/admin/listing-reports?search={Uri.EscapeDataString(term)}");
+            Assert.True((int)res.StatusCode < 500, $"search '{term}' gave {(int)res.StatusCode}");
+        }
+
+        var big = await ReadJson(await adminClient.GetAsync("/api/admin/listing-reports?pageSize=100000&page=1"), HttpStatusCode.OK);
+        Assert.True(big.GetProperty("pageSize").GetInt32() <= 100);
+        Assert.True((int)(await adminClient.GetAsync("/api/admin/listing-reports?page=-5&pageSize=0")).StatusCode < 500);
+        Assert.True((int)(await adminClient.GetAsync("/api/admin/listing-reports?status=Nope&priority=Nope&sort=Nope")).StatusCode < 500);
+        Assert.True((int)(await adminClient.GetAsync("/api/admin/listing-reports?from=not-a-date")).StatusCode < 500);
+
+        Assert.True((int)(await Report(user, propertyId, "NotAReason")).StatusCode is >= 400 and < 500);
+        Assert.True((int)(await Report(user, propertyId, "Other", details: "bad\u0000text and more text")).StatusCode < 500);
+        Assert.True((int)(await Report(user, Guid.Empty)).StatusCode is >= 400 and < 500);
+
+        var anonymous = _factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/listing-reports/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Report(anonymous, propertyId)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/admin/listing-reports")).StatusCode);
+    }
+
     [Fact(DisplayName = "A failing notification never loses a report")]
     public async Task NotificationFailure_StillSaves()
     {
