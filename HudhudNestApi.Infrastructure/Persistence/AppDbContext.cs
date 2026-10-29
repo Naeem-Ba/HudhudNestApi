@@ -349,7 +349,7 @@ public sealed class AppDbContext
     {
         builder.Entity<PhoneOtpChallenge>()
             .Property(c => c.NormalizedPhoneNumber)
-            .HasConversion(new DataProtectionStringConverter(
+            .HasConversion((Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter)new DataProtectionStringConverter(
                 _dataProtectionProvider,
                 SensitiveDataProtectionPurposes.PhoneOtpChallengeNumber));
     }
