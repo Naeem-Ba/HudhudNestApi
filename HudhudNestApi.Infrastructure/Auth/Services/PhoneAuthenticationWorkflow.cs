@@ -13,6 +13,7 @@ using HudhudNestApi.Domain.Auth.Entities;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Users.Constants;
 using HudhudNestApi.Domain.Users.Entities;
+using HudhudNestApi.Infrastructure.Identity;
 using HudhudNestApi.Infrastructure.Identity.Entities;
 using HudhudNestApi.Infrastructure.Identity.Services;
 using HudhudNestApi.Infrastructure.Persistence;
@@ -76,7 +77,8 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         // comes from configuration and the public calling code alone, so it says nothing about any account.
         if (!_channels.IsAvailable(channel, phone)) return Fail("OTP_CHANNEL_UNAVAILABLE");
 
-        var user = await _users.Users.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == phone, ct);
+        var phoneHash = _lookupHasher.Compute(phone);
+        var user = await _users.Users.SingleOrDefaultAsync(PhoneIdentity.Holds(phoneHash, phone), ct);
         var eligible = purpose switch
         {
             // Proof beats a claim: a number held only by an unconfirmed account (typed into a profile, never
@@ -112,7 +114,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
 
         var cutoff = _clock.GetUtcNow().AddHours(-1);
         var recent = await _db.PhoneOtpChallenges
-            .Where(x => x.NormalizedPhoneNumber == phone && x.Purpose == purpose && x.CreatedAtUtc >= cutoff)
+            .Where(x => x.PhoneNumberLookupHash == phoneHash && x.Purpose == purpose && x.CreatedAtUtc >= cutoff)
             .OrderByDescending(x => x.CreatedAtUtc)
             .Select(x => x.Id)
             .Take(3)
@@ -126,7 +128,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
 
         if (!eligible)
         {
-            var decoy = PhoneOtpChallenge.Create(phone, UnsatisfiableHash(), purpose, _clock.GetUtcNow(), userId, channel);
+            var decoy = PhoneOtpChallenge.Create(phone, UnsatisfiableHash(), purpose, _clock.GetUtcNow(), userId, channel, phoneHash);
             _db.PhoneOtpChallenges.Add(decoy);
             await _db.SaveChangesAsync(ct);
             if (limitTx is not null) await limitTx.CommitAsync(ct);
@@ -134,7 +136,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         }
 
         var (code, hash) = _otp.Generate();
-        var challenge = PhoneOtpChallenge.Create(phone, hash, purpose, _clock.GetUtcNow(), userId, channel);
+        var challenge = PhoneOtpChallenge.Create(phone, hash, purpose, _clock.GetUtcNow(), userId, channel, phoneHash);
         _db.PhoneOtpChallenges.Add(challenge);
         await _db.SaveChangesAsync(ct);
         if (limitTx is not null) await limitTx.CommitAsync(ct);
@@ -184,7 +186,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         try
         {
             var now = _clock.GetUtcNow();
-            var holders = await _users.Users.Where(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber).ToListAsync(ct);
+            var holders = await _users.Users.Where(HoldsChallengeNumber(challenge)).ToListAsync(ct);
             if (holders.Any(x => x.PhoneNumberConfirmed))
             {
                 await transaction.RollbackAsync(ct);
@@ -236,7 +238,8 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     {
         var normalized = _normalizer.Normalize(phoneNumber);
         var user = normalized.Succeeded
-            ? await _users.Users.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == normalized.Value, ct)
+            ? await _users.Users.SingleOrDefaultAsync(
+                PhoneIdentity.Holds(_lookupHasher.Compute(normalized.Value!), normalized.Value!), ct)
             : null;
         if (user is null)
         {
@@ -283,7 +286,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     {
         var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhonePasswordReset, null, channel, ct);
         if (outcome.Challenge is not { } challenge) return Fail(PasswordResetErrorCode(outcome.FailureReason));
-        var user = await _users.Users.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber, ct);
+        var user = await _users.Users.SingleOrDefaultAsync(HoldsChallengeNumber(challenge), ct);
         if (user is not { PhoneNumberConfirmed: true }) return Fail("PASSWORD_RESET_INVALID");
         await ConsumeAsync(challenge.Id, ct);
         return new(true, ConfirmationToken: await _users.GeneratePasswordResetTokenAsync(user));
@@ -294,7 +297,8 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     {
         var normalized = _normalizer.Normalize(phoneNumber);
         if (!normalized.Succeeded) return Fail("PASSWORD_RESET_INVALID");
-        var user = await _users.Users.SingleOrDefaultAsync(x => x.NormalizedPhoneNumber == normalized.Value, ct);
+        var user = await _users.Users.SingleOrDefaultAsync(
+            PhoneIdentity.Holds(_lookupHasher.Compute(normalized.Value!), normalized.Value!), ct);
         if (user is not { PhoneNumberConfirmed: true }) return Fail("PASSWORD_RESET_INVALID");
         var reset = await _users.ResetPasswordAsync(user, confirmationToken, newPassword);
         if (!reset.Succeeded) return IdentityFail(reset, "PASSWORD_RESET_INVALID");
@@ -327,7 +331,8 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         var outcome = await ValidateAndReserveAsync(challengeId, code, OtpPurpose.PhoneReverification, userId, channel, ct);
         if (outcome.Challenge is not { } challenge) return Fail(OtpErrorCode(outcome.FailureReason, "OTP_INVALID"));
         var user = await _users.FindByIdAsync(userId.ToString());
-        if (user is null || user.NormalizedPhoneNumber != challenge.NormalizedPhoneNumber) return Fail("OTP_INVALID");
+        if (user is null || !PhoneIdentity.HoldsNumber(user, ChallengeHash(challenge), challenge.NormalizedPhoneNumber))
+            return Fail("OTP_INVALID");
         SetVerified(user, _clock.GetUtcNow());
         await ConsumeAsync(challenge.Id, ct);
         await _users.UpdateAsync(user);
@@ -351,10 +356,11 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         // A confirmed holder keeps the number, even this account: confirming it a second time changes nothing.
         // An unconfirmed holder is only a claim; the code just proved control, so the claim is released below
         // (when the claimant is this very account, confirming its own number is exactly what is asked for).
+        var challengeHash = ChallengeHash(challenge);
         var claimants = await _users.Users
-            .Where(x => x.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber && x.Id != user.Id).ToListAsync(ct);
+            .Where(HoldsChallengeNumber(challenge)).Where(x => x.Id != user.Id).ToListAsync(ct);
         if (claimants.Any(x => x.PhoneNumberConfirmed) ||
-            (user.NormalizedPhoneNumber == challenge.NormalizedPhoneNumber && user.PhoneNumberConfirmed))
+            (PhoneIdentity.HoldsNumber(user, challengeHash, challenge.NormalizedPhoneNumber) && user.PhoneNumberConfirmed))
             return Fail("PHONE_NUMBER_ALREADY_IN_USE");
         // The check above is only a friendly early answer: another request can take the number between it
         // and the write, and the unique index is what actually decides. Registration handles that with a
@@ -364,15 +370,14 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         {
             var now = _clock.GetUtcNow();
             foreach (var claimant in claimants) await ReleaseUnconfirmedClaimAsync(claimant, now, ipAddress, ct);
-            // A phone-registered account uses its number as the user name (NewVerifiedUser). Leave the
-            // old number behind as the user name and it stays reserved for good: nobody, including
-            // its next owner, can register it, and login by that number fails anyway. Accounts whose
-            // user name is something else (an email) are left alone.
-            if (string.Equals(user.UserName, user.NormalizedPhoneNumber, StringComparison.Ordinal))
-                user.UserName = challenge.NormalizedPhoneNumber;
+            // A phone-registered account's user name is derived from its number (NewVerifiedUser). Leave
+            // the old one behind and it stays reserved for good: nobody, including the number's next
+            // owner, can register it. Accounts whose user name is something else (an email) are left alone.
+            if (PhoneIdentity.HasPhoneUserName(user))
+                user.UserName = PhoneIdentity.UserNameFor(challengeHash);
             user.PhoneNumber = challenge.NormalizedPhoneNumber;
-            user.NormalizedPhoneNumber = challenge.NormalizedPhoneNumber;
-            user.PhoneNumberLookupHash = _lookupHasher.Compute(challenge.NormalizedPhoneNumber);
+            user.NormalizedPhoneNumber = null;
+            user.PhoneNumberLookupHash = challengeHash;
             user.PhoneNumberConfirmed = true;
             SetVerified(user, _clock.GetUtcNow());
             await ConsumeAsync(challenge.Id, ct);
@@ -537,9 +542,10 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         var user = new ApplicationUser
         {
             Id = id,
-            UserName = phone,
+            // Neither the user name nor any searchable column holds the number itself (S01).
+            UserName = PhoneIdentity.UserNameFor(_lookupHasher.Compute(phone)),
             PhoneNumber = phone,
-            NormalizedPhoneNumber = phone,
+            NormalizedPhoneNumber = null,
             PhoneNumberLookupHash = _lookupHasher.Compute(phone),
             PhoneNumberConfirmed = true,
             CreatedAt = now.UtcDateTime,
@@ -548,6 +554,13 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         SetVerified(user, now);
         return user;
     }
+
+    /// <summary>The challenge's number as a lookup hash; computed for a challenge created before the hash column.</summary>
+    private string ChallengeHash(PhoneOtpChallenge challenge) =>
+        challenge.PhoneNumberLookupHash ?? _lookupHasher.Compute(challenge.NormalizedPhoneNumber);
+
+    private System.Linq.Expressions.Expression<Func<ApplicationUser, bool>> HoldsChallengeNumber(PhoneOtpChallenge challenge) =>
+        PhoneIdentity.Holds(ChallengeHash(challenge), challenge.NormalizedPhoneNumber);
 
     private static void SetVerified(ApplicationUser user, DateTimeOffset now)
     {

@@ -37,9 +37,13 @@ public sealed class TokenService : ITokenService
                 ClaimTypes.Email,
                 subject.Email ?? string.Empty),
 
+            // A phone account's user name is "ph-" + a lookup hash (PhoneIdentity): meaningless to a
+            // person, so the name claim falls back to the email (or nothing) as for an account without one.
             new(
                 ClaimTypes.Name,
-                subject.UserName
+                (subject.UserName is { } userName && !userName.StartsWith(PhoneIdentity.UserNamePrefix, StringComparison.Ordinal)
+                    ? userName
+                    : null)
                 ?? subject.Email
                 ?? string.Empty),
 

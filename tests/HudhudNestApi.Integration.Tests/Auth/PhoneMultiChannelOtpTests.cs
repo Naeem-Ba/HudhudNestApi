@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using HudhudNestApi.Application.Auth.Phone;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Integration.Tests.TestInfrastructure;
 
 namespace HudhudNestApi.Integration.Tests.Auth;
 
@@ -64,7 +65,8 @@ public sealed class PhoneMultiChannelOtpTests : IDisposable
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        return await db.PhoneOtpChallenges.CountAsync(x => x.NormalizedPhoneNumber == phone);
+        var phoneHash = TestPhoneLookup.Hash(scope.ServiceProvider, phone);
+        return await db.PhoneOtpChallenges.CountAsync(x => x.PhoneNumberLookupHash == phoneHash);
     }
 
     private static object Register(Guid challengeId, string? code, string? channel = null) => channel is null

@@ -50,10 +50,7 @@ public sealed class IdentityAccountReader
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(phone);
         var hash = _phoneLookupHasher.Compute(phone);
-        var user = await _users.Users.SingleOrDefaultAsync(
-            candidate => candidate.NormalizedPhoneNumber == phone ||
-                         candidate.PhoneNumberLookupHash == hash,
-            ct);
+        var user = await _users.Users.SingleOrDefaultAsync(PhoneIdentity.Holds(hash, phone), ct);
         return user is null ? null : IdentityAdapterMapping.Snapshot(user);
     }
 }

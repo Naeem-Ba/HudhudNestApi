@@ -355,8 +355,12 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.Property<string>("NormalizedPhoneNumber")
                         .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("PhoneNumberLookupHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("ProviderRequestId")
                         .HasMaxLength(128)
@@ -380,7 +384,7 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("NormalizedPhoneNumber", "Purpose", "CreatedAtUtc");
+                    b.HasIndex("PhoneNumberLookupHash", "Purpose", "CreatedAtUtc");
 
                     b.ToTable("PhoneOtpChallenges", (string)null);
                 });

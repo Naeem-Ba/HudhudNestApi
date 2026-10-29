@@ -89,7 +89,8 @@ public sealed class AdminDisableUserSecurityTests : IClassFixture<PhoneAuthWebAp
         {
             using var scope = _factory.Services.CreateScope();
             var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-            var user = await users.Users.SingleAsync(x => x.NormalizedPhoneNumber == phone);
+            var phoneHash = TestPhoneLookup.Hash(scope.ServiceProvider, phone);
+            var user = await users.Users.SingleAsync(x => x.PhoneNumberLookupHash == phoneHash);
             Assert.True((await users.AddToRoleAsync(user, RoleNames.Admin)).Succeeded);
         }
 

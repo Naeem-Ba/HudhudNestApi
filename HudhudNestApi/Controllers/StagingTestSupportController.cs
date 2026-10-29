@@ -93,7 +93,7 @@ public sealed class StagingTestSupportController : ControllerBase
         var phones = await _db.Users
             .IgnoreQueryFilters()
             .Where(x => userIds.Contains(x.Id))
-            .Select(x => x.NormalizedPhoneNumber)
+            .Select(x => x.PhoneNumberLookupHash)
             .Where(x => x != null)
             .Cast<string>()
             .ToListAsync(ct);
@@ -164,7 +164,7 @@ public sealed class StagingTestSupportController : ControllerBase
             .ExecuteDeleteAsync(ct);
         await _db.PhoneOtpChallenges
             .Where(x => (x.UserId.HasValue && userIds.Contains(x.UserId.Value)) ||
-                phones.Contains(x.NormalizedPhoneNumber))
+                (x.PhoneNumberLookupHash != null && phones.Contains(x.PhoneNumberLookupHash)))
             .ExecuteDeleteAsync(ct);
         await _db.AuditLogs.Where(x => x.UserId.HasValue && userIds.Contains(x.UserId.Value))
             .ExecuteDeleteAsync(ct);

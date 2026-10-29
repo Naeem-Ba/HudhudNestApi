@@ -191,16 +191,19 @@ public sealed class IdentityCredentialService
             normalized = normalization.Value;
         }
 
-        if (string.Equals(user.NormalizedPhoneNumber, normalized, StringComparison.Ordinal))
+        // Compared by lookup hash: the number itself is no longer kept in a searchable column (S01).
+        // A legacy row without a hash is compared through the old column it still has.
+        var lookupHash = normalized is null ? null : _phoneLookupHasher.Compute(normalized);
+        var currentHash = user.PhoneNumberLookupHash
+            ?? (user.NormalizedPhoneNumber is null ? null : _phoneLookupHasher.Compute(user.NormalizedPhoneNumber));
+        if (string.Equals(currentHash, lookupHash, StringComparison.Ordinal))
             return IdentityOperationResult.Success();
 
-        if (user.PhoneNumberConfirmed && !string.IsNullOrEmpty(user.NormalizedPhoneNumber))
+        if (user.PhoneNumberConfirmed && currentHash is not null)
             return IdentityOperationResult.Failed("PHONE_NUMBER_CHANGE_REQUIRES_VERIFICATION");
 
-        string? lookupHash = null;
         if (normalized is not null)
         {
-            lookupHash = _phoneLookupHasher.Compute(normalized);
 
             // Explicit pre-check so a collision is a 409 with a stable code rather than
             // a unique-index violation escaping as a 500. The index still backs this up
@@ -221,7 +224,7 @@ public sealed class IdentityCredentialService
         }
 
         user.PhoneNumber = normalized;
-        user.NormalizedPhoneNumber = normalized;
+        user.NormalizedPhoneNumber = null;
         user.PhoneNumberLookupHash = lookupHash;
         user.PhoneNumberConfirmed = false;
         user.UpdatedAt = changedAtUtc;
