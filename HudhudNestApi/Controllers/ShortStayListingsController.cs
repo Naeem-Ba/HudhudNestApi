@@ -9,6 +9,7 @@ using HudhudNestApi.Application.ShortStay.Commands.AddShortStayListingPhotos;
 using HudhudNestApi.Application.Listings.DTOs;
 using HudhudNestApi.Application.ShortStay.Commands.CreateShortStayListing;
 using HudhudNestApi.Application.ShortStay.Commands.DeleteShortStayListing;
+using HudhudNestApi.Application.ShortStay.Commands.ManageUnitAvailability;
 using HudhudNestApi.Application.ShortStay.Commands.PublishShortStayListing;
 using HudhudNestApi.Application.ShortStay.Commands.SetMinimumStayRules;
 using HudhudNestApi.Application.ShortStay.Commands.SetPricingRules;
@@ -18,6 +19,7 @@ using HudhudNestApi.Application.ShortStay.DTOs;
 using HudhudNestApi.Application.ShortStay.Queries.GetActiveAccommodationTypes;
 using HudhudNestApi.Application.ShortStay.Queries.GetMyShortStayListings;
 using HudhudNestApi.Application.ShortStay.Queries.GetShortStayListingById;
+using HudhudNestApi.Application.ShortStay.Queries.GetShortStayListingReviews;
 using HudhudNestApi.Application.ShortStay.Queries.SearchShortStayListings;
 
 namespace HudhudNestApi.Controllers;
@@ -83,6 +85,15 @@ public sealed class ShortStayListingsController : ControllerBase
         var result = await _mediator.Send(new GetShortStayListingByIdQuery(id, userId), ct);
         return Ok(result);
     }
+
+    /// <summary>The reviews of a published listing with their average (public).</summary>
+    [HttpGet("{id:guid}/reviews")]
+    [AllowAnonymous]
+    [EnableRateLimiting("shortstay-search")]
+    [ProducesResponseType(typeof(ShortStayReviewSummaryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetReviews(Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken ct = default)
+        => Ok(await _mediator.Send(new GetShortStayListingReviewsQuery(id, page, pageSize), ct));
 
     [HttpGet("mine")]
     [Authorize]
@@ -210,6 +221,42 @@ public sealed class ShortStayListingsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = roomTypeId }, result);
     }
 
+    // ── Availability the host controls (owner decision 2026-10-18) ─────────
+
+    /// <summary>The host's manual blocks of a unit (periods marked as booked or unavailable), from today on.</summary>
+    [HttpGet("units/{unitId:guid}/blocks")]
+    [Authorize]
+    [ProducesResponseType(typeof(IReadOnlyList<UnitBlockDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetUnitBlocks(Guid unitId, CancellationToken ct)
+        => Ok(await _mediator.Send(new GetUnitBlocksQuery(unitId, GetUserId()), ct));
+
+    /// <summary>Marks [from, to) as not available. To is exclusive (the morning the unit is free again). 409 over a booking or another block.</summary>
+    [HttpPost("units/{unitId:guid}/blocks")]
+    [Authorize]
+    [ProducesResponseType(typeof(UnitBlockDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AddUnitBlock(Guid unitId, [FromBody] AddUnitBlockRequest dto, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new AddUnitBlockCommand(unitId, GetUserId(), dto.From, dto.To), ct);
+        return CreatedAtAction(nameof(GetUnitBlocks), new { unitId }, result);
+    }
+
+    [HttpDelete("units/{unitId:guid}/blocks/{blockId:guid}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> RemoveUnitBlock(Guid unitId, Guid blockId, CancellationToken ct)
+    {
+        await _mediator.Send(new RemoveUnitBlockCommand(unitId, blockId, GetUserId()), ct);
+        return NoContent();
+    }
+
+    /// <summary>"Not available for now": switches a unit off or on. Bookings it already has are untouched.</summary>
+    [HttpPut("units/{unitId:guid}/availability")]
+    [Authorize]
+    [ProducesResponseType(typeof(AccommodationUnitDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SetUnitAvailability(Guid unitId, [FromBody] SetUnitAvailabilityRequest dto, CancellationToken ct)
+        => Ok(await _mediator.Send(new SetUnitActiveCommand(unitId, GetUserId(), dto.IsActive), ct));
+
     [HttpPut("room-types/{roomTypeId:guid}/pricing-rules")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -261,3 +308,5 @@ public sealed record UpdateShortStayListingRequest(
 
 public sealed record AddRoomTypeRequest(string Name, decimal BasePricePerNight, int? Capacity);
 public sealed record AddAccommodationUnitRequest(string Label);
+public sealed record AddUnitBlockRequest(DateOnly From, DateOnly To);
+public sealed record SetUnitAvailabilityRequest(bool IsActive);

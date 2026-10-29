@@ -42,6 +42,8 @@ public static class AuditActions
     public const string ListingExtendedByAdmin = "ListingExtendedByAdmin";
     public const string ListingTakenDownByAdmin = "ListingTakenDownByAdmin";
     public const string ListingRestoredByAdmin = "ListingRestoredByAdmin";
+    public const string ShortStayListingTakenDownByAdmin = "ShortStayListingTakenDownByAdmin";
+    public const string ShortStayListingRestoredByAdmin = "ShortStayListingRestoredByAdmin";
 
     // -- Admin dashboard: valuation module (Stage 8) -----------------------
     public const string ValuationOfficeFlaggedForReviewByAdmin = "ValuationOfficeFlaggedForReviewByAdmin";

@@ -37,7 +37,7 @@ public sealed class CancelBookingCommandHandlerTests
             houseRulesAccepted: true);
 
         var bookings = new Mock<IBookingRepository>();
-        bookings.Setup(x => x.GetByIdWithListingAsync(booking.Id, It.IsAny<CancellationToken>())).ReturnsAsync(booking);
+        bookings.Setup(x => x.GetByIdWithListingIncludingDeletedAsync(booking.Id, It.IsAny<CancellationToken>())).ReturnsAsync(booking);
         var uow = new Mock<IUnitOfWork>();
 
         var handler = new CancelBookingCommandHandler(bookings.Object, uow.Object, Mock.Of<INotificationService>());

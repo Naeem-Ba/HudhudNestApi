@@ -232,7 +232,12 @@
 | /F-SHS-05/ | بحث عام وتفاصيل وأنواع الإقامة | ز | `GET /api/short-stay/listings[/{id}|/accommodation-types]` | S | ✅ | |
 | /F-SHS-06/ | التوفر ومعاينة السعر | ز | `GET /bookings/units/{unitId}/availability`, `/pricing-preview` | S | ✅ | |
 | /F-SHS-07/ | الحجز ودورته: موافقة ← عربون ← تأكيد ← وصول ← مغادرة ← اكتمال؛ رفض/إلغاء/انتهاء/عدم حضور | م | `POST /api/short-stay/bookings`, `PUT /{id}/approve|reject|record-deposit-paid|confirm|check-in|check-out|complete`, `DELETE` | S | ✅ | `BookingStatus` (11 حالة) |
-| /F-SHS-08/ | تقييم الإقامة | م | `POST /api/short-stay/reviews` | K | ✅ | |
+| /F-SHS-08/ | تقييم الإقامة: بعد اكتمال الحجز وانقضاء يوم المغادرة فقط، وبشرط أن يكون للمضيف المُقيَّم خطة فعّالة؛ تعليق ≤1000 حرف؛ قراءة تقييمات الإعلان | م/ز | `POST /api/short-stay/reviews`, `GET /api/short-stay/listings/{id}/reviews` | K | ✅ | QA Phase 9 (D05/D06/D08) |
+| /F-SHS-10/ | الحجز الفوري: يبدأ خلال 30 يومًا وبحد أقصى 30 ليلة، ولا يزيد عن 3 حجوزات فورية قائمة للضيف الواحد | ض | `POST /api/short-stay/bookings` | S | ✅ | QA Phase 9 (D03) |
+| /F-SHS-11/ | تحكّم المضيف بالتوفر: فترات محجوبة يدويًا (إضافة/عرض/حذف) وتعطيل وحدة «غير متاحة حاليًا»؛ تحترمها الحجوزات والبحث | م | `GET/POST /api/short-stay/listings/units/{id}/blocks`, `DELETE …/blocks/{blockId}`, `PUT …/units/{id}/availability` | S | ✅ | QA Phase 9 (D03) |
+| /F-SHS-12/ | مهلة تأكيد الطلب: 3 أيام من الحجز (أو من الموافقة) وبحد أقصى 7 أيام، بعدها ينتهي الحجز تلقائيًا ويُحرَّر التاريخ ويُشعَر الطرفان | ن | خدمة خلفية كل 15 دقيقة | S | ✅ | QA Phase 9 (D04) |
+| /F-SHS-13/ | إيقاف إداري لإعلان إقامة قصيرة بسبب مكتوب وإعادته؛ لا يستطيع المالك إعادة نشره | إ | `GET /api/admin/short-stay`, `POST …/{id}/take-down|restore` | S | ✅ | QA Phase 9 (D11) |
+| /F-SHS-14/ | تسجيل الوصول لا يسبق يوم الوصول (يُسمح بيوم سماح واحد للتوقيت) | م | `PUT /bookings/{id}/check-in` | S | ✅ | QA Phase 9 (D13) |
 | /F-SHS-09/ | حصة مشتركة مع العقارات وقفل استشاري | م | ضمني | M | ✅ | |
 
 ### 4.8 سوق الخدمات (SRV)

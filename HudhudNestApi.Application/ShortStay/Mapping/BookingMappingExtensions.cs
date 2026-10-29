@@ -27,5 +27,6 @@ public static class BookingMappingExtensions
         CancellationReason: booking.CancellationReason,
         CreatedAt: booking.CreatedAt,
         RespondedAt: booking.RespondedAt,
-        CancelledAt: booking.CancelledAt);
+        CancelledAt: booking.CancelledAt,
+        ConfirmationDeadline: booking.ConfirmationDeadline);
 }

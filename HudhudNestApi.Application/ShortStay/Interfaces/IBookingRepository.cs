@@ -11,6 +11,10 @@ public interface IBookingRepository
     /// This is a defense-in-depth check done inside the advisory-lock-protected transaction —
     /// the DB-level EXCLUDE constraint (see AddShortStayAvailability migration) is the real
     /// guarantee and will still reject a race that slips past this check.</summary>
+    /// <summary>
+    /// True when the dates collide with a Reserved/CheckedIn booking or a host Blocked range. The unit lock
+    /// makes the check-then-write safe; the DB EXCLUDE constraint only covers the booking ranges.
+    /// </summary>
     Task<bool> HasOverlappingReservationAsync(
         Guid unitId,
         DateOnly checkIn,
@@ -32,6 +36,19 @@ public interface IBookingRepository
     /// <summary>Loads a booking together with its Unit -&gt; RoomType -&gt; ShortStayListing chain,
     /// needed to resolve host ownership and listing title without extra round-trips.</summary>
     Task<Booking?> GetByIdWithListingAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>
+    /// Same as <see cref="GetByIdWithListingAsync"/> but also finds a booking whose listing was deleted.
+    /// Only for the actions that must stay possible after a delete: the guest cancelling, the host
+    /// rejecting, and the guest reviewing a finished stay (QA Phase 9, P9-D02 and P9-D08).
+    /// </summary>
+    Task<Booking?> GetByIdWithListingIncludingDeletedAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>
+    /// True while the unit can still take a booking: unit active, listing published and not deleted.
+    /// Read again under the unit lock so a delete or unpublish that won the race is seen.
+    /// </summary>
+    Task<bool> IsUnitBookableAsync(Guid unitId, CancellationToken ct = default);
 
     /// <summary>Rejects every other Pending booking for the same unit whose dates overlap the
     /// just-approved booking (spec Scenario D: approving one request auto-clears the rest).</summary>
@@ -57,6 +74,15 @@ public interface IBookingRepository
     Task<bool> HasReviewAsync(Guid bookingId, CancellationToken ct = default);
 
     /// <summary>Every held/blocked range for a unit that overlaps [from, to) — the calendar view.</summary>
+    /// <summary>Unfinished instant bookings of one guest (Pending .. Confirmed), for the per-guest cap.</summary>
+    Task<int> CountActiveInstantBookingsAsync(Guid guestId, CancellationToken ct = default);
+
+    /// <summary>Host blocks of a unit that have not ended yet, oldest first.</summary>
+    Task<IReadOnlyList<UnitBookingRange>> GetBlocksForUnitAsync(Guid unitId, DateOnly today, CancellationToken ct = default);
+
+    /// <summary>A host block by id (tracked), or null when the id is not a block of that unit.</summary>
+    Task<UnitBookingRange?> GetBlockAsync(Guid unitId, Guid blockId, CancellationToken ct = default);
+
     Task<IReadOnlyList<UnitBookingRange>> GetRangesForUnitAsync(
         Guid unitId, DateOnly from, DateOnly to, CancellationToken ct = default);
 }

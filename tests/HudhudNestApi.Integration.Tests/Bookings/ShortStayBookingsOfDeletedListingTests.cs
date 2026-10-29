@@ -88,7 +88,7 @@ public sealed class ShortStayBookingsOfDeletedListingTests : IAsyncLifetime
         await using var readScope = _factory.Services.CreateAsyncScope();
         var repository = new BookingRepository(readScope.ServiceProvider.GetRequiredService<AppDbContext>());
 
-        var guestBookings = await new GetMyShortStayBookingsQueryHandler(repository)
+        var guestBookings = await new GetMyShortStayBookingsQueryHandler(repository, new ShortStayReviewRepository(readScope.ServiceProvider.GetRequiredService<AppDbContext>()))
             .Handle(new GetMyShortStayBookingsQuery(guest.UserAccountId), CancellationToken.None);
         var hostBookings = await new GetHostBookingRequestsQueryHandler(repository)
             .Handle(new GetHostBookingRequestsQuery(host.UserAccountId), CancellationToken.None);

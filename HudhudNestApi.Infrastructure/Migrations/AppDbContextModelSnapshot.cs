@@ -4177,6 +4177,16 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Property<bool>("SelfCheckInEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTime?>("TakenDownAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("TakenDownByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TakenDownReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(150)
@@ -4203,6 +4213,10 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("IsPublished");
 
                     b.HasIndex("OwnerId");
+
+                    b.HasIndex("TakenDownAt")
+                        .HasDatabaseName("IX_ShortStayListings_TakenDownAt")
+                        .HasFilter("\"TakenDownAt\" IS NOT NULL");
 
                     b.ToTable("ShortStayListings", (string)null);
                 });

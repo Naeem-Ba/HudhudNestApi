@@ -22,6 +22,10 @@ public sealed record BookingDto(
     string? CancellationReason,
     DateTime CreatedAt,
     DateTime? RespondedAt,
-    DateTime? CancelledAt);
+    DateTime? CancelledAt,
+    // When an unconfirmed booking lapses (null once confirmed or finished); the app shows the countdown.
+    DateTime? ConfirmationDeadline = null,
+    // Set only where the caller is the guest: true once a Completed stay has been reviewed.
+    bool? Reviewed = null);
 
 public sealed record UnitAvailabilityRangeDto(DateOnly CheckIn, DateOnly CheckOut, string Status);

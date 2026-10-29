@@ -345,6 +345,18 @@ public static class NotificationCatalog
             "ألغى الضيف حجزه لـ '{title}'.",
             "The guest cancelled their booking for '{title}'.",
             "Der Gast hat seine Buchung für '{title}' storniert."),
+        ["shortstay.detail.expired_guest"] = new(
+            "انتهت مهلة طلب حجزك لـ '{title}' دون تأكيد، وأُلغي الحجز تلقائياً.",
+            "Your booking request for '{title}' was not confirmed in time and has expired.",
+            "Ihre Buchungsanfrage für '{title}' wurde nicht rechtzeitig bestätigt und ist abgelaufen."),
+        ["shortstay.detail.expired_host"] = new(
+            "انتهت مهلة طلب حجز لإعلانك '{title}' دون تأكيد، وأُلغي الحجز تلقائياً.",
+            "A booking request for your listing '{title}' was not confirmed in time and has expired.",
+            "Eine Buchungsanfrage für Ihre Anzeige '{title}' wurde nicht rechtzeitig bestätigt und ist abgelaufen."),
+        ["shortstay.detail.listing_restored"] = new(
+            "أعادت الإدارة نشر إعلانك '{title}'.",
+            "Your listing '{title}' was restored by the administrators.",
+            "Ihre Anzeige '{title}' wurde von der Verwaltung wiederhergestellt."),
         ["shortstay.detail.review_added"] = new(
             "حصل إعلانك '{title}' على تقييم جديد.",
             "Your listing '{title}' received a new review.",

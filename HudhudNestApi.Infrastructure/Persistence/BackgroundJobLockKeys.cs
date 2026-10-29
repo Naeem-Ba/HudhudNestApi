@@ -40,4 +40,6 @@ public static class BackgroundJobLockKeys
     public const long ServiceRequestLifecycle = 20261017_1009;
 
     public const long NotificationRetention = 20261017_1010;
+
+    public const long ShortStayBookingLifecycle = 20261018_1011;
 }

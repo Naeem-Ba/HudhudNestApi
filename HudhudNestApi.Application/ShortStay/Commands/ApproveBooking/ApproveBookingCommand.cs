@@ -57,7 +57,7 @@ public sealed class ApproveBookingCommandHandler : IRequestHandler<ApproveBookin
                 booking.UnitId, booking.CheckIn, booking.CheckOut, ct);
 
             if (!stillFree)
-                throw new ConflictException("لم يعد بالإمكان الموافقة على هذا الحجز — تعارضت التواريخ مع حجز آخر تم تأكيده.");
+                throw new ConflictException("لم يعد بالإمكان الموافقة على هذا الحجز — تعارضت التواريخ مع حجز آخر تم تأكيده أو فترة حجبها المضيف.");
 
             booking.Approve(request.HostNote);
             await _bookings.MarkRangeReservedAsync(booking.Id, ct);

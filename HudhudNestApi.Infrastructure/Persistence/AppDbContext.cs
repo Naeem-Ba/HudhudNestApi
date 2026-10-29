@@ -223,6 +223,12 @@ public sealed class AppDbContext
         builder.Entity<ShortStayListingPhoto>().HasQueryFilter(p => !p.ShortStayListing.IsDeleted);
         builder.Entity<ShortStayListingAmenity>().HasQueryFilter(a => !a.ShortStayListing.IsDeleted && !a.Amenity.IsDeleted);
 
+        // QA Phase 9 (P9-D01): pricing and minimum-stay rules are replaced as a set (RemoveRange then AddRange),
+        // and SaveChanges turns that Remove into a soft delete. Without a filter the replaced rows kept
+        // pricing every booking, and a host could never remove a seasonal price or a minimum stay.
+        builder.Entity<PricingRule>().HasQueryFilter(r => !r.IsDeleted);
+        builder.Entity<MinimumStayRule>().HasQueryFilter(r => !r.IsDeleted);
+
         builder.Entity<Favorite>().HasQueryFilter(favorite => !favorite.Property.IsDeleted);
 
         builder.Entity<PropertyAmenity>().HasQueryFilter(propertyAmenity => !propertyAmenity.Property.IsDeleted && !propertyAmenity.Amenity.IsDeleted);

@@ -98,3 +98,22 @@ Belt and braces on Render: the environment variable `Logging__LogLevel__Microsof
 **Deploy order.** Merge, run the Migrator (`AddListingTakeDown`: three nullable columns and a filtered index, additive, no table rewrite), then deploy the API, then the app. The app tolerates an API without the new fields.
 
 **Not done on purpose.** P8-D09 (odd but harmless values such as year 1900 or price 0.001) and P8-D06a (no public listing without a photo): see the QA report; the latter changes what the public sees and affects social-distribution timing, so it needs its own decision.
+
+## 7. Short-stay rules (QA Phase 9)
+
+| Rule | Where |
+|---|---|
+| **Rules really removed (P9-D01).** `PricingRule` and `MinimumStayRule` carry a global query filter on `IsDeleted`; replacing a rule list or clearing it takes effect at once. | `AppDbContext` |
+| **Delete vs. booking race (P9-D02).** Deleting a listing takes `ShortStayBookingLock.ForUnit` for every unit and re-checks active bookings inside the transaction; `CreateBooking` re-checks `IsUnitBookableAsync` under the same lock. Cancel/reject/review load the booking even when its listing is already deleted. | `DeleteShortStayListingCommand`, `CreateBookingCommandHandler` |
+| **Instant booking cap (P9-D03, owner 2026-10-18).** Check-in within 30 days, at most 30 nights, at most 3 unfinished instant bookings per guest (409 beyond). Request-mode bookings keep the 366-night limit. | `ShortStayBookingPolicy`, `CreateBookingCommandHandler` |
+| **Host availability (P9-D03).** `UnitBookingRange.Blocked` is now real: `GET/POST/DELETE /api/short-stay/listings/units/{id}/blocks` (To exclusive, taken under the unit lock, 409 over a booking or another block, ≤100 per unit) and `PUT …/units/{id}/availability {isActive}`. Bookings, approvals and the search honour blocks. | `ManageUnitAvailabilityCommands` |
+| **Expiry (P9-D04).** `ShortStayBookingLifecycleHostedService` (15 min, advisory lock) expires Pending requests after 3 days, Approved/DepositPaid after 3 days from the response, and anything unconfirmed after 7 days from creation. Approve/deposit/confirm refuse an overdue booking before the sweep runs. Both sides are notified with the existing `ShortStayBookingCancelled` type. | `Booking.ConfirmationDeadline`, `BookingDto.confirmationDeadline` |
+| **Reviews (P9-D05/D06/D08).** One rule set for property reviews, user ratings, short-stay and service reviews: comment ≤1000 and no NUL; the reviewed party needs an active plan (`IReviewTargetPolicy`; providers: status Active); short-stay additionally needs Completed and a passed check-out day, and works after the host deleted the listing. `GET /api/short-stay/listings/{id}/reviews` is public; `bookings/mine` carries `reviewed`. | `ReviewTargetPolicy` |
+| **Search input (P9-D07/D10).** City text rejects control characters and `%`/`_` are literal; dates must be both or neither, check-out after check-in, not in the past, ≤366 nights (422). | `SearchShortStayListingsQueryValidator` |
+| **Administrative take-down (P9-D11).** `GET /api/admin/short-stay`, `POST /api/admin/short-stay/{id}/take-down {reason}` and `/restore`; same semantics as P8-D10 (unpublished, owner cannot publish, bookings untouched, audited, owner notified). | `AdminShortStayController` |
+| **Check-in date (P9-D13).** Check-in is refused more than one day before the arrival date. | `Booking.CheckInGuest` |
+
+**Deploy order.** Merge, run the Migrator (`AddShortStayListingTakeDown`: three nullable columns and a filtered index on `ShortStayListings`, additive), then deploy the API; the app afterwards. The expiry job runs on the first sweep after deploy and will expire any booking that already waited longer than its window.
+
+**Not done on purpose.** D12 (weak bounds, dead extra-guest/bed fees), D14 (UTC "today"), D15 (publish without photo, raw HTML comments): package 3, waiting for the owner's word. A completed booking is not gated on the check-out date (an early departure is legitimate); the review rule covers it.
+
