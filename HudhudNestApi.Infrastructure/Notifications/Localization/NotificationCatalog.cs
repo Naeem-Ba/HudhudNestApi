@@ -283,6 +283,43 @@ public static class NotificationCatalog
             "The approval of '{name}' as a HudhudNest service provider was revoked. Reason: {reason}",
             "Die Zulassung von '{name}' als HudhudNest-Dienstleister wurde widerrufen. Grund: {reason}"),
 
+        // ---- listing reports (moderation) ----
+        // Admin messages never name the reporter; reporter messages never name the reviewer or the action details.
+        ["msg.listing_report_submitted"] = new(
+            "بلاغ جديد ({ref}) عن الإعلان '{title}'. السبب: {reason}.",
+            "New report ({ref}) about the listing '{title}'. Reason: {reason}.",
+            "Neue Meldung ({ref}) zum Inserat '{title}'. Grund: {reason}."),
+        ["msg.listing_report_submitted_urgent"] = new(
+            "بلاغ بأولوية عالية ({ref}) عن الإعلان '{title}'. السبب: {reason}. يُرجى مراجعته قريبًا.",
+            "High-priority report ({ref}) about the listing '{title}'. Reason: {reason}. Please review it soon.",
+            "Meldung mit hoher Priorität ({ref}) zum Inserat '{title}'. Grund: {reason}. Bitte zeitnah prüfen."),
+        ["msg.listing_report_info_requested"] = new(
+            "تحتاج الإدارة إلى معلومات إضافية حول بلاغك ({ref}) عن الإعلان '{title}': {message}",
+            "The HudhudNest team needs more information about your report ({ref}) on the listing '{title}': {message}",
+            "Das HudhudNest-Team benötigt weitere Angaben zu Ihrer Meldung ({ref}) zum Inserat '{title}': {message}"),
+        ["msg.listing_report_closed_action"] = new(
+            "شكرًا لك. راجعنا بلاغك ({ref}) عن الإعلان '{title}' واتخذنا الإجراء المناسب.",
+            "Thank you. We reviewed your report ({ref}) on the listing '{title}' and took appropriate action.",
+            "Vielen Dank. Wir haben Ihre Meldung ({ref}) zum Inserat '{title}' geprüft und angemessene Maßnahmen ergriffen."),
+        ["msg.listing_report_closed_no_violation"] = new(
+            "شكرًا لك. راجعنا بلاغك ({ref}) عن الإعلان '{title}' ولم نجد مخالفة لسياسات المنصة بناءً على المعلومات المتاحة.",
+            "Thank you. We reviewed your report ({ref}) on the listing '{title}' and found no violation of our policies based on the information available.",
+            "Vielen Dank. Wir haben Ihre Meldung ({ref}) zum Inserat '{title}' geprüft und auf Grundlage der verfügbaren Informationen keinen Verstoß gegen unsere Richtlinien festgestellt."),
+        ["report.reason.Fraud"] = new("احتيال أو محاولة نصب", "Fraud or scam attempt", "Betrug oder Betrugsversuch"),
+        ["report.reason.IncorrectDetails"] = new("معلومات عقارية غير صحيحة", "Incorrect property details", "Falsche Angaben zur Immobilie"),
+        ["report.reason.FakeListing"] = new("عقار غير موجود أو إعلان وهمي", "Property does not exist / fake listing", "Immobilie existiert nicht / Fake-Inserat"),
+        ["report.reason.MisleadingPrice"] = new("سعر مضلل أو معلومات مالية غير صحيحة", "Misleading price or financial details", "Irreführender Preis oder falsche Finanzangaben"),
+        ["report.reason.FakePhotos"] = new("صور مزيفة أو لا تخص العقار", "Fake photos or photos of another property", "Gefälschte Fotos oder Fotos einer anderen Immobilie"),
+        ["report.reason.CopyrightViolation"] = new("استخدام صور أو محتوى دون حق", "Photos or content used without permission", "Fotos oder Inhalte ohne Berechtigung verwendet"),
+        ["report.reason.Duplicate"] = new("إعلان مكرر", "Duplicate listing", "Doppeltes Inserat"),
+        ["report.reason.NoLongerAvailable"] = new("العقار مباع أو مؤجر أو لم يعد متاحًا", "Already sold, rented or no longer available", "Bereits verkauft, vermietet oder nicht mehr verfügbar"),
+        ["report.reason.MisleadingContact"] = new("بيانات اتصال مضللة أو غير صحيحة", "Misleading or wrong contact details", "Irreführende oder falsche Kontaktdaten"),
+        ["report.reason.Impersonation"] = new("انتحال شخصية مالك أو مكتب عقاري", "Impersonating an owner or agency", "Identitätsmissbrauch eines Eigentümers oder Maklerbüros"),
+        ["report.reason.IllegalContent"] = new("محتوى مخالف للقوانين أو سياسات المنصة", "Illegal content or against platform policies", "Rechtswidriger Inhalt oder Verstoß gegen Plattformrichtlinien"),
+        ["report.reason.OffensiveContent"] = new("تمييز أو إساءة أو محتوى غير لائق", "Discrimination, abuse or inappropriate content", "Diskriminierung, Beleidigung oder unangemessener Inhalt"),
+        ["report.reason.OffPlatformPayment"] = new("محاولة تحويل التعامل إلى نشاط احتيالي خارج المنصة", "Pushing the deal off the platform for fraud", "Versuch, das Geschäft betrügerisch außerhalb der Plattform abzuwickeln"),
+        ["report.reason.Other"] = new("مشكلة أخرى", "Another problem", "Anderes Problem"),
+
         // ---- details: short stay ----
         ["shortstay.detail.requested"] = new(
             "طلب حجز جديد لـ '{title}' من {from} إلى {to}.",

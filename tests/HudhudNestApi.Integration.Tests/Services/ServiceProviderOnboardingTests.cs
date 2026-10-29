@@ -495,6 +495,7 @@ public sealed class ServiceProviderOnboardingTests : IAsyncLifetime
         private static Task Boom() => throw new InvalidOperationException("notification store down");
 
         public Task NotifyNewMessageAsync(Guid recipientId, Guid senderId, string senderName, Guid messageId, Guid propertyId, CancellationToken ct = default) => Boom();
+        public Task NotifyListingReportAsync(Guid recipientId, NotificationType type, NotificationText message, Guid reportId, Guid? propertyId, string dedupeKey, CancellationToken ct = default) => Boom();
         public Task NotifyPropertyUpdateAsync(Guid recipientId, Guid propertyId, string propertyTitle, NotificationType type, NotificationText detail, Guid? relatedEntityId = null, CancellationToken ct = default) => Boom();
         public Task NotifySavedSearchMatchAsync(Guid recipientId, Guid propertyId, string propertyTitle, string savedSearchName, CancellationToken ct = default) => Boom();
         public Task NotifyUserRatedAsync(Guid recipientId, Guid raterId, string raterName, double overallScore, CancellationToken ct = default) => Boom();

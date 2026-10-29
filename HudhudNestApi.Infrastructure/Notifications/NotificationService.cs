@@ -244,6 +244,35 @@ public sealed class NotificationService : INotificationService
             relatedEntityId);
     }
 
+    public async Task NotifyListingReportAsync(
+        Guid recipientId,
+        NotificationType type,
+        NotificationText message,
+        Guid reportId,
+        Guid? propertyId,
+        string dedupeKey,
+        CancellationToken ct = default)
+    {
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(reportId, "Report id is required.", nameof(reportId));
+
+        var lang = await LanguageOfAsync(recipientId, ct);
+
+        await PersistAndPushAsync(
+            New(recipientId, type,
+                NotificationCatalog.Render(message ?? NotificationText.Empty, lang),
+                propertyId: propertyId,
+                relatedEntityId: reportId,
+                dedupeKey: dedupeKey),
+            ct);
+
+        _logger.LogInformation(
+            "Listing report notification created. RecipientId={RecipientId}, Type={Type}, ReportId={ReportId}",
+            recipientId,
+            type,
+            reportId);
+    }
+
     public async Task NotifyAgencyInvitationReceivedAsync(
         Guid recipientId,
         Guid invitationId,

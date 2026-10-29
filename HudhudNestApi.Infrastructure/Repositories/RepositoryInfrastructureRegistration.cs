@@ -125,6 +125,9 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IServiceRequestNumberGenerator, ServiceRequestNumberGenerator>();
         services.AddScoped<IServiceProviderApplicationRepository, ServiceProviderApplicationRepository>();
         services.AddScoped<IServiceProviderEventRepository, ServiceProviderEventRepository>();
+        services.AddScoped<HudhudNestApi.Application.Moderation.IListingReportRepository, HudhudNestApi.Infrastructure.Moderation.ListingReportRepository>();
+        services.AddOptions<HudhudNestApi.Application.Moderation.ListingReportOptions>()
+            .Bind(configuration.GetSection(HudhudNestApi.Application.Moderation.ListingReportOptions.SectionName));
         services.AddScoped<IGovernorateLookup, GovernorateLookup>();
 
         // Short-Stay Accommodation subsystem

@@ -23,6 +23,8 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.HasSequence("ListingReportNumberSeq");
+
             modelBuilder.HasSequence("ServiceProviderApplicationNumberSeq");
 
             modelBuilder.Entity("HudhudNestApi.Domain.Agencies.Entities.Agency", b =>
@@ -2451,6 +2453,184 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("SenderId", "ReceiverId", "PropertyId");
 
                     b.ToTable("Messages", (string)null);
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Moderation.Entities.ListingReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AssignedAdminId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ClientRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("FirstReviewedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("InfoRequest")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("ListingOwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ListingTitleSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<long>("Number")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValueSql("nextval('\"ListingReportNumberSeq\"')");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<short>("Priority")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("PropertyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<int>("ReopenCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ReporterUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("ResolvedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ListingOwnerId");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
+
+                    b.HasIndex("AssignedAdminId", "Status");
+
+                    b.HasIndex("Priority", "CreatedAt");
+
+                    b.HasIndex("PropertyId", "CreatedAt");
+
+                    b.HasIndex("ReporterUserId", "ClientRequestId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ListingReports_ClientRequest")
+                        .HasFilter("\"ClientRequestId\" IS NOT NULL");
+
+                    b.HasIndex("ReporterUserId", "CreatedAt");
+
+                    b.HasIndex("ReporterUserId", "PropertyId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ListingReports_OpenPerReporterAndListing")
+                        .HasFilter("\"IsDeleted\" = false AND \"Status\" IN ('New', 'UnderReview', 'WaitingForInformation', 'ActionRequired')");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("ListingReports", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ListingReports_ClosedHasOutcome", "(\"Status\" IN ('Resolved', 'Dismissed')) = (\"Outcome\" IS NOT NULL AND \"ResolvedAt\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_ListingReports_NotOwnListing", "\"ReporterUserId\" <> \"ListingOwnerId\"");
+
+                            t.HasCheckConstraint("CK_ListingReports_Priority", "\"Priority\" BETWEEN 1 AND 4");
+                        });
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Moderation.Entities.ListingReportEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("FromValue")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsInternal")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("ReportId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ToValue")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReportId", "CreatedAt");
+
+                    b.ToTable("ListingReportEvents", (string)null);
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.Notifications.Entities.DeviceToken", b =>
@@ -6268,6 +6448,35 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Navigation("Property");
 
                     b.Navigation("Sender");
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Moderation.Entities.ListingReport", b =>
+                {
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedAdminId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HudhudNestApi.Domain.Listings.Entities.Property", null)
+                        .WithMany()
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ReporterUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Moderation.Entities.ListingReportEvent", b =>
+                {
+                    b.HasOne("HudhudNestApi.Domain.Moderation.Entities.ListingReport", null)
+                        .WithMany()
+                        .HasForeignKey("ReportId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.Notifications.Entities.DeviceToken", b =>

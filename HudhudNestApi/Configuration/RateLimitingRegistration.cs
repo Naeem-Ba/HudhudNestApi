@@ -343,6 +343,20 @@ public static class RateLimitingRegistration
                         QueueLimit = 0
                     }));
 
+            // Listing reports (and answers to an admin's question about one). Per signed-in user. Real use
+            // is a report now and then; the stored daily limit per account (ListingReportOptions) sits
+            // behind this, so this bucket only stops scripted bursts.
+            options.AddPolicy("listing-reports", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 10,
+                        Window = TimeSpan.FromHours(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
             // Messages inside a service request: a negotiation, not a chat room.
             options.AddPolicy("service-messages", httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
