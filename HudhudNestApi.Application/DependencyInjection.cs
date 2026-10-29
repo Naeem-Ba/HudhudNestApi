@@ -67,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<IAdminPaymentRequestService, AdminPaymentRequestService>();
         services.AddScoped<IAdminValuationInquiryService, AdminValuationInquiryService>();
         services.AddScoped<IPropertyOwnershipService, PropertyOwnershipService>();
+        services.AddScoped<Listings.Translations.IListingTranslationService, Listings.Translations.ListingTranslationService>();
         services.AddScoped<IListingQuotaGuard, ListingQuotaGuard>();
         services.AddScoped<Bookings.Interfaces.IListingVisitCleanup, Bookings.Services.ListingVisitCleanup>();
 

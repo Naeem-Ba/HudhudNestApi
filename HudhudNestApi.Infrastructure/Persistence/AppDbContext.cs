@@ -9,6 +9,7 @@ using HudhudNestApi.Application.Common.Caching;
 using HudhudNestApi.Domain.Agencies.Entities;
 using HudhudNestApi.Domain.Audit.Entities;
 using HudhudNestApi.Domain.Listings.Entities;
+using HudhudNestApi.Domain.Listings.Translations;
 using HudhudNestApi.Domain.Messaging.Entities;
 using HudhudNestApi.Domain.Plans.Entities;
 using HudhudNestApi.Domain.Users.Entities;
@@ -72,6 +73,8 @@ public sealed class AppDbContext
     public DbSet<PropertyImage> PropertyImages => Set<PropertyImage>();
     public DbSet<Amenity> Amenities => Set<Amenity>();
     public DbSet<PropertyAmenity> PropertyAmenities => Set<PropertyAmenity>();
+    public DbSet<ListingTranslation> ListingTranslations => Set<ListingTranslation>();
+    public DbSet<TranslationMonthlyUsage> TranslationMonthlyUsages => Set<TranslationMonthlyUsage>();
     public DbSet<Favorite> Favorites => Set<Favorite>();
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<PhoneOtpChallenge> PhoneOtpChallenges => Set<PhoneOtpChallenge>();
@@ -226,6 +229,9 @@ public sealed class AppDbContext
         builder.Entity<MinimumStayRule>().HasQueryFilter(r => !r.IsDeleted);
 
         builder.Entity<Favorite>().HasQueryFilter(favorite => !favorite.Property.IsDeleted);
+
+        // Translations follow their listing: a soft-deleted listing's translations are unreachable through EF too.
+        builder.Entity<ListingTranslation>().HasQueryFilter(t => !t.Property!.IsDeleted);
 
         builder.Entity<PropertyAmenity>().HasQueryFilter(propertyAmenity => !propertyAmenity.Property.IsDeleted && !propertyAmenity.Amenity.IsDeleted);
 
