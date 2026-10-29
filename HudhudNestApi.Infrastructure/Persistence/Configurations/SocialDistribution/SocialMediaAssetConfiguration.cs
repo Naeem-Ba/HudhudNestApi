@@ -27,7 +27,6 @@ public sealed class SocialMediaAssetConfiguration : IEntityTypeConfiguration<Soc
         builder.HasOne<Property>().WithMany().HasForeignKey(a => a.PropertyId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<SocialPublication>().WithMany().HasForeignKey(a => a.PublicationId).OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(a => a.PropertyId);
         builder.HasIndex(a => a.PublicationId);
         builder.HasIndex(a => a.Checksum);
         builder.HasIndex(a => a.TemplateId);

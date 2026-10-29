@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using HudhudNestApi.Domain.Listings.Entities;
+using HudhudNestApi.Domain.Lookups.Entities;
 using HudhudNestApi.Domain.ShortStay.Entities;
+using HudhudNestApi.Domain.Users.Entities;
 
 namespace HudhudNestApi.Infrastructure.Persistence.Configurations.ShortStay;
 
@@ -58,10 +61,34 @@ public sealed class ShortStayListingConfiguration : IEntityTypeConfiguration<Sho
             .HasForeignKey(l => l.AccommodationTypeId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // PropertyId is a deliberately loose, optional link (no navigation, no FK constraint
-        // enforced here beyond the column) — a short-stay listing is its own aggregate and
-        // most hosts will never have a Property row at all.
+        // PropertyId is a loose, optional link: no navigation, because a short-stay listing is
+        // its own aggregate and most hosts will never have a Property row at all. The database
+        // still guarantees the id points at a real listing (DB audit 2026-10-29); SetNull keeps
+        // the short-stay listing if that Property row is ever hard-deleted.
         builder.Property(l => l.PropertyId);
+        builder.HasOne<Property>()
+            .WithMany()
+            .HasForeignKey(l => l.PropertyId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Owner and location ids had no foreign key (DB audit 2026-10-29). Users and lookups are
+        // never hard-deleted (accounts are anonymised), so Restrict only blocks a mistake.
+        builder.HasOne<UserAccount>()
+            .WithMany()
+            .HasForeignKey(l => l.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Governorate>()
+            .WithMany()
+            .HasForeignKey(l => l.GovernorateId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<District>()
+            .WithMany()
+            .HasForeignKey(l => l.DistrictId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Neighborhood>()
+            .WithMany()
+            .HasForeignKey(l => l.NeighborhoodId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(l => l.RoomTypes)
             .WithOne(rt => rt.ShortStayListing)

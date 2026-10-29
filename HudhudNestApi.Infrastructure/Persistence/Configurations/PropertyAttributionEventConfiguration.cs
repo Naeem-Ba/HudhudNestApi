@@ -23,7 +23,6 @@ public sealed class PropertyAttributionEventConfiguration : IEntityTypeConfigura
         builder.HasOne<Property>().WithMany().HasForeignKey(e => e.PropertyId).OnDelete(DeleteBehavior.Restrict);
 
         // UserId intentionally has no FK — nullable (anonymous visitors), purely informational.
-        builder.HasIndex(e => e.PropertyId);
         builder.HasIndex(e => e.CreatedAt);
         builder.HasIndex(e => e.EventType);
         builder.HasIndex(e => new { e.PropertyId, e.EventType });

@@ -29,7 +29,8 @@ public sealed class PropertyReviewConfiguration : IEntityTypeConfiguration<Prope
         builder.HasIndex(r => new { r.PropertyId, r.ReviewerId })
             .IsUnique();
 
-        builder.HasIndex(r => r.PropertyId);
+        // The domain already refuses ratings outside 1..5; the database now does too (DB audit 2026-10-29).
+        builder.ToTable(t => t.HasCheckConstraint("CK_PropertyReviews_Rating", "\"Rating\" BETWEEN 1 AND 5"));
 
         // Soft-delete filter
         builder.HasQueryFilter(r => !r.IsDeleted);

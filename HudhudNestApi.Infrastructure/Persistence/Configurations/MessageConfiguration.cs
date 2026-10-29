@@ -49,7 +49,6 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(m => m.PropertyId);
-        builder.HasIndex(m => m.SenderId);
         builder.HasIndex(m => m.ReceiverId);
         builder.HasIndex(m => m.IsRead);
         builder.HasIndex(m => new { m.SenderId, m.ReceiverId, m.PropertyId });

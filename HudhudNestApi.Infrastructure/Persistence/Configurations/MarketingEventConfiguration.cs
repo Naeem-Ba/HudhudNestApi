@@ -23,7 +23,6 @@ public sealed class MarketingEventConfiguration : IEntityTypeConfiguration<Marke
         builder.HasOne<Offer>().WithMany().HasForeignKey(e => e.OfferId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => e.CreatedAt);
-        builder.HasIndex(e => e.EventType);
         builder.HasIndex(e => new { e.EventType, e.CreatedAt });
         builder.HasIndex(e => e.SessionId);
     }

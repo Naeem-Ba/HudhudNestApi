@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using HudhudNestApi.Domain.ShortStay.Entities;
+using HudhudNestApi.Domain.Users.Entities;
 
 namespace HudhudNestApi.Infrastructure.Persistence.Configurations.ShortStay;
 
@@ -8,7 +9,15 @@ public sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
 {
     public void Configure(EntityTypeBuilder<Booking> builder)
     {
-        builder.ToTable("ShortStayBookings");
+        // Booking.Create already enforces these; the database now refuses a bad row from any other
+        // path too (DB audit 2026-10-29). RemainingAmount is derivable (Total - Deposit) and kept
+        // as a frozen money snapshot; the check stops it drifting from the other two.
+        builder.ToTable("ShortStayBookings", t =>
+        {
+            t.HasCheckConstraint("CK_ShortStayBookings_Dates", "\"CheckOut\" > \"CheckIn\"");
+            t.HasCheckConstraint("CK_ShortStayBookings_Amounts",
+                "\"DepositAmount\" >= 0 AND \"DepositAmount\" <= \"TotalAmount\" AND \"RemainingAmount\" = \"TotalAmount\" - \"DepositAmount\"");
+        });
         builder.HasKey(b => b.Id);
 
         // Optimistic concurrency — same rationale as ShortStayListingConfiguration: two hosts
@@ -43,6 +52,12 @@ public sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.HasOne(b => b.Unit)
             .WithMany()
             .HasForeignKey(b => b.UnitId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // The guest had no foreign key (DB audit 2026-10-29); accounts are never hard-deleted.
+        builder.HasOne<UserAccount>()
+            .WithMany()
+            .HasForeignKey(b => b.GuestId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(b => b.UnitId);

@@ -22,7 +22,6 @@ public sealed class InvestmentWatchlistItemConfiguration : IEntityTypeConfigurat
             .HasForeignKey(w => w.InvestmentProjectId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(w => w.UserId);
 
         // A user can watch a given project only once — DB-enforced, not just application-checked
         // (Phase 1 spec §11/§36).

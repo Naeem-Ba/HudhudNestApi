@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using HudhudNestApi.Domain.Lookups.Entities;
 using HudhudNestApi.Domain.Search.Entities;
 
 namespace HudhudNestApi.Infrastructure.Persistence.Configurations;
@@ -28,6 +29,13 @@ public sealed class SavedSearchConfiguration : IEntityTypeConfiguration<SavedSea
             .WithMany()
             .HasForeignKey(s => s.UserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // The location and type filters had no foreign key (DB audit 2026-10-29). Restrict, like
+        // Properties: lookups are seed rows and nothing in the code deletes them.
+        builder.HasOne<Governorate>().WithMany().HasForeignKey(s => s.GovernorateId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<District>().WithMany().HasForeignKey(s => s.DistrictId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Neighborhood>().WithMany().HasForeignKey(s => s.NeighborhoodId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<PropertyType>().WithMany().HasForeignKey(s => s.PropertyTypeId).OnDelete(DeleteBehavior.Restrict);
 
         // Primary access patterns: "my saved searches" and the matcher's periodic full scan.
         builder.HasIndex(s => s.UserId);

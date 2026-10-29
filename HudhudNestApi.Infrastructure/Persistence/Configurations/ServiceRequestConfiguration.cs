@@ -82,8 +82,6 @@ public sealed class ServiceRequestConfiguration : IEntityTypeConfiguration<Servi
 
         builder.HasIndex(r => r.RequesterId);
         builder.HasIndex(r => r.ServiceProviderId);
-        builder.HasIndex(r => r.PropertyId);
-        builder.HasIndex(r => r.Status);
         builder.HasIndex(r => r.CreatedAt);
         builder.HasIndex(r => r.ServiceOfferingId);
 

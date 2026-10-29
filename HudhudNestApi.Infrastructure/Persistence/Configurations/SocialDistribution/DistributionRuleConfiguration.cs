@@ -34,7 +34,6 @@ public sealed class DistributionRuleConfiguration : IEntityTypeConfiguration<Dis
         builder.HasIndex(r => r.PropertyTypeId);
         builder.HasIndex(r => r.TransactionType);
         builder.HasIndex(r => r.SocialAccountId);
-        builder.HasIndex(r => r.IsActive);
         builder.HasIndex(r => r.Priority);
         builder.HasIndex(r => new { r.IsActive, r.IsArchived });
     }

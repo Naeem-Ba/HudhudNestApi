@@ -23,7 +23,6 @@ public sealed class InvestmentDocumentConfiguration : IEntityTypeConfiguration<I
             .HasForeignKey(d => d.InvestmentProjectId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(d => d.InvestmentProjectId);
         builder.HasIndex(d => new { d.InvestmentProjectId, d.IsPublic });
 
         builder.HasQueryFilter(d => !d.IsDeleted);

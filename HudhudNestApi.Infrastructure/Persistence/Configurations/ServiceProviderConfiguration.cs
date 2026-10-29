@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using HudhudNestApi.Domain.Services.Entities;
+using HudhudNestApi.Domain.Agencies.Entities;
 using HudhudNestApi.Domain.Users.Entities;
 
 namespace HudhudNestApi.Infrastructure.Persistence.Configurations;
@@ -65,6 +66,13 @@ public sealed class ServiceProviderConfiguration : IEntityTypeConfiguration<Serv
             .HasFilter("\"IsDeleted\" = false");
 
         builder.HasIndex(p => p.AgencyId);
+
+        // Optional agency link had no foreign key (DB audit 2026-10-29). SetNull, as for
+        // Properties.AgencyId: losing the agency must not delete the provider profile.
+        builder.HasOne<Agency>()
+            .WithMany()
+            .HasForeignKey(p => p.AgencyId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasQueryFilter(p => !p.IsDeleted);
     }
