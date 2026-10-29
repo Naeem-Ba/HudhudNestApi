@@ -33,6 +33,9 @@ internal static class RedisRateLimitingDefaults
             // read-only/reference endpoints that had no rate limit at all. Same cadence as
             // public-search/agencies-public.
             ["public-read"] = Policy(120, TimeSpan.FromMinutes(1)),
+            // Automatic listing translation: one call per opened listing, and a miss can spend provider
+            // quota, so tighter than a read. A stored translation costs one query, a miss one provider call.
+            ["listing-translation"] = Policy(30, TimeSpan.FromMinutes(1)),
             ["visits"] = Policy(10, TimeSpan.FromHours(1)),
             ["reviews"] = Policy(5, TimeSpan.FromHours(24)),
             ["service-requests"] = Policy(10, TimeSpan.FromHours(1)),

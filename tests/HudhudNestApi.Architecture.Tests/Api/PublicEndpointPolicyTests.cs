@@ -71,6 +71,9 @@ public sealed class PublicEndpointPolicyTests
             // the handler independently re-checks the listing is still public before writing
             // anything (see TrackPropertyShareEventCommandHandler).
             "PropertiesController.TrackShareEvent",
+            // Automatic listing translation: opened-listing visitors are mostly anonymous; the handler re-checks the
+            // listing is publicly viewable, and abuse is bounded by "listing-translation" plus the monthly character cap.
+            "ListingTranslationsController.Ensure",
 
             // UTM / Attribution (Phase 2): recording a property view or a contact/lead action
             // that followed a (possibly attributed) link — same rationale as TrackShareEvent
