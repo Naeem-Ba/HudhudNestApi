@@ -53,7 +53,7 @@ public static class ListingLanguageDetector
         if (letters < 3) return null;
 
         var arabicShare = (double)arabic / letters;
-        if (arabicShare >= 0.6) return "ar";
+        if (arabicShare >= 0.5) return "ar";
         if (arabicShare > 0.2) return null; // genuinely mixed
         return DetectLatin(text);
     }
