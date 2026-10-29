@@ -61,6 +61,10 @@ public sealed class InvestmentProject : AuditableEntity
     public DateTime? PublishedAt { get; private set; }
     public DateTime? ClosedAt { get; private set; }
 
+    /// <summary>Longest project term (fifty years) and highest annual return the product will publish.</summary>
+    public const int MaxTermMonths = 600;
+    public const decimal MaxExpectedReturnPercent = 100m;
+
     private InvestmentProject() { }
 
     public static InvestmentProject Create(
@@ -130,16 +134,20 @@ public sealed class InvestmentProject : AuditableEntity
             throw new DomainException("المبلغ المستهدف يجب أن يكون أكبر من صفر.");
         if (minimumInvestment <= 0)
             throw new DomainException("الحد الأدنى للاستثمار يجب أن يكون أكبر من صفر.");
+        if (minimumInvestment > targetAmount)
+            throw new DomainException("الحد الأدنى للاستثمار لا يمكن أن يتجاوز المبلغ المستهدف.");
         if (maximumInvestment is { } max && max < minimumInvestment)
             throw new DomainException("الحد الأقصى للاستثمار يجب أن يكون أكبر من أو يساوي الحد الأدنى.");
         if (string.IsNullOrWhiteSpace(currency))
             throw new DomainException("عملة المشروع مطلوبة.");
-        if (investmentTermMonths <= 0)
-            throw new DomainException("مدة المشروع بالأشهر يجب أن تكون أكبر من صفر.");
+        if (investmentTermMonths <= 0 || investmentTermMonths > MaxTermMonths)
+            throw new DomainException($"مدة المشروع بالأشهر يجب أن تكون بين 1 و{MaxTermMonths}.");
         if (expectedReturnMin < 0)
             throw new DomainException("العائد المتوقع (الأدنى) لا يمكن أن يكون سالبًا.");
         if (expectedReturnMax < expectedReturnMin)
             throw new DomainException("العائد المتوقع (الأعلى) يجب أن يكون أكبر من أو يساوي العائد الأدنى.");
+        if (expectedReturnMax > MaxExpectedReturnPercent)
+            throw new DomainException("العائد المتوقع السنوي لا يمكن أن يتجاوز 100%.");
 
         TargetAmount = targetAmount;
         MinimumInvestment = minimumInvestment;
@@ -224,6 +232,13 @@ public sealed class InvestmentProject : AuditableEntity
     public void Publish()
     {
         EnsureStatus([InvestmentProjectStatus.Scheduled], "نشر المشروع");
+
+        // QA Phase 10, P10-D03: a project scheduled for a date goes live on that date (the scheduler publishes it
+        // when due); publishing it by hand earlier would make the schedule meaningless. With no date, publishing
+        // stays a manual step.
+        if (ScheduledPublishAt is { } at && at > DateTime.UtcNow)
+            throw new DomainException("هذا المشروع مجدول للنشر في موعد لاحق؛ سيُنشر تلقائيًا عند حلول موعده.");
+
         Status = InvestmentProjectStatus.Published;
         PublishedAt = DateTime.UtcNow;
     }
@@ -232,6 +247,26 @@ public sealed class InvestmentProject : AuditableEntity
     {
         EnsureStatus([InvestmentProjectStatus.Published], "تعليق المشروع");
         Status = InvestmentProjectStatus.Suspended;
+    }
+
+    /// <summary>QA Phase 10, P10-D04: a suspended project could never come back (Suspended led only to Closed).
+    /// Resuming keeps the original PublishedAt; the readiness data cannot have been lost meanwhile because
+    /// the required documents are protected once a project is scheduled.</summary>
+    public void Resume()
+    {
+        EnsureStatus([InvestmentProjectStatus.Suspended], "استئناف المشروع");
+        Status = InvestmentProjectStatus.Published;
+    }
+
+    /// <summary>QA Phase 10, P10-D12: the staff-entered progress figure can be corrected once the project is
+    /// beyond editing (the full edit path is closed after Draft/Rejected, so the figure used to freeze).
+    /// Same informational-only guardrail as <see cref="UpdateRaisedAmount"/>.</summary>
+    public void UpdateProgress(decimal raisedAmount)
+    {
+        EnsureStatus(
+            [InvestmentProjectStatus.Approved, InvestmentProjectStatus.Scheduled, InvestmentProjectStatus.Published, InvestmentProjectStatus.Suspended],
+            "تحديث المبلغ المجمّع");
+        UpdateRaisedAmount(raisedAmount);
     }
 
     public void Close()

@@ -283,6 +283,13 @@ public static class NotificationCatalog
             "The approval of '{name}' as a HudhudNest service provider was revoked. Reason: {reason}",
             "Die Zulassung von '{name}' als HudhudNest-Dienstleister wurde widerrufen. Grund: {reason}"),
 
+        // ---- investment discovery ----
+        // The admin notice never names the person; the project's interest list does.
+        ["msg.investment_interest_received"] = new(
+            "اهتمام جديد بمشروع الاستثمار '{title}'. عدد المهتمين النشطين الآن: {count}.",
+            "New interest in the investment project '{title}'. Active interested people now: {count}.",
+            "Neues Interesse am Investitionsprojekt '{title}'. Aktuell interessierte Personen: {count}."),
+
         // ---- listing reports (moderation) ----
         // Admin messages never name the reporter; reporter messages never name the reviewer or the action details.
         ["msg.listing_report_submitted"] = new(

@@ -47,6 +47,13 @@ public sealed class UnitOfWork : IUnitOfWork
             // ServiceProviderConfiguration: one live provider profile per account.
             ["IX_ServiceProviders_UserId"] =
                 "لهذا المستخدم ملف مزوّد خدمة بالفعل.",
+
+            // QA Phase 10, P10-D08: two taps of "add to watchlist" / "express interest" racing past the
+            // handler's own exists-check hit the (user, project) unique index and answered 500.
+            ["IX_InvestmentWatchlistItems_UserId_InvestmentProjectId"] =
+                "المشروع موجود في قائمة مراقبتك بالفعل.",
+            ["IX_InvestmentInterests_UserId_InvestmentProjectId"] =
+                "تم تسجيل اهتمامك بهذا المشروع بالفعل.",
         };
 
     private readonly AppDbContext _db;

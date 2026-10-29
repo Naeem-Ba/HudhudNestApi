@@ -123,6 +123,7 @@ is hard-wired to `Property`, composite PK, no room for an Investment target) —
   scanning is assembly-wide, so new Commands/Queries/Validators are picked up automatically).
 - `NotificationType` enum gains new members for interest-related notifications (kept
   best-effort/non-blocking, matching `RequestVisitCommandHandler`'s try/catch pattern).
+  *(Status 2026-10-29: this was never built until QA Phase 10, D01 added `InvestmentInterestReceived` for admins.)*
 - Swagger: already wired generically (`AddEndpointsApiExplorer`/`AddSwaggerGen` in `Program.cs`);
   new controllers are picked up automatically, only XML doc comments are added per endpoint.
 

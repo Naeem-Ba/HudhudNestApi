@@ -204,4 +204,9 @@ public enum NotificationType
 
     /// <summary>The reporter's report was closed; the message says only whether action was taken.</summary>
     ListingReportClosed = 54,
+
+    // ── Investment discovery. RelatedEntityId is the InvestmentProject id.
+
+    /// <summary>Someone expressed interest in an investment project. Sent to admins (never names the person).</summary>
+    InvestmentInterestReceived = 55,
 }

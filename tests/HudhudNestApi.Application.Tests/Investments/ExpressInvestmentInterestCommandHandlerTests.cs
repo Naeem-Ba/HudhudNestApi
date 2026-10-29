@@ -1,8 +1,11 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Investments.Commands.ExpressInvestmentInterest;
 using HudhudNestApi.Application.Investments.DTOs;
 using HudhudNestApi.Application.Investments.Interfaces;
+using HudhudNestApi.Application.Investments.Services;
+using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Domain.Investments.Entities;
 using HudhudNestApi.Domain.Investments.Enums;
 
@@ -14,6 +17,9 @@ namespace HudhudNestApi.Application.Tests.Investments;
 /// </summary>
 public sealed class ExpressInvestmentInterestCommandHandlerTests
 {
+    private static InvestmentInterestNotifier NotifierFor(IInvestmentInterestRepository interests) =>
+        new(Mock.Of<INotificationService>(), interests, NullLogger<InvestmentInterestNotifier>.Instance);
+
     [Fact]
     public async Task ExpressInterest_ReturnsNotFound_WhenProjectNotPublished()
     {
@@ -21,7 +27,7 @@ public sealed class ExpressInvestmentInterestCommandHandlerTests
         interests.Setup(x => x.ProjectExistsAndPublishedAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
 
         var handler = new ExpressInvestmentInterestCommandHandler(
-            interests.Object, Mock.Of<IInvestmentProjectRepository>(), Mock.Of<IUnitOfWork>());
+            interests.Object, Mock.Of<IInvestmentProjectRepository>(), Mock.Of<IUnitOfWork>(), NotifierFor(interests.Object));
 
         var result = await handler.Handle(new ExpressInvestmentInterestCommand(Guid.NewGuid(), Guid.NewGuid()), default);
 
@@ -39,7 +45,7 @@ public sealed class ExpressInvestmentInterestCommandHandlerTests
         interests.Setup(x => x.GetAsync(userId, projectId, It.IsAny<CancellationToken>())).ReturnsAsync((InvestmentInterest?)null);
 
         var handler = new ExpressInvestmentInterestCommandHandler(
-            interests.Object, Mock.Of<IInvestmentProjectRepository>(), Mock.Of<IUnitOfWork>());
+            interests.Object, Mock.Of<IInvestmentProjectRepository>(), Mock.Of<IUnitOfWork>(), NotifierFor(interests.Object));
 
         var result = await handler.Handle(new ExpressInvestmentInterestCommand(userId, projectId), default);
 
@@ -60,7 +66,7 @@ public sealed class ExpressInvestmentInterestCommandHandlerTests
         interests.Setup(x => x.GetAsync(userId, projectId, It.IsAny<CancellationToken>())).ReturnsAsync(existing);
 
         var handler = new ExpressInvestmentInterestCommandHandler(
-            interests.Object, Mock.Of<IInvestmentProjectRepository>(), Mock.Of<IUnitOfWork>());
+            interests.Object, Mock.Of<IInvestmentProjectRepository>(), Mock.Of<IUnitOfWork>(), NotifierFor(interests.Object));
 
         var result = await handler.Handle(new ExpressInvestmentInterestCommand(userId, projectId), default);
 
@@ -81,7 +87,7 @@ public sealed class ExpressInvestmentInterestCommandHandlerTests
         interests.Setup(x => x.GetAsync(userId, projectId, It.IsAny<CancellationToken>())).ReturnsAsync(existing);
 
         var handler = new ExpressInvestmentInterestCommandHandler(
-            interests.Object, Mock.Of<IInvestmentProjectRepository>(), Mock.Of<IUnitOfWork>());
+            interests.Object, Mock.Of<IInvestmentProjectRepository>(), Mock.Of<IUnitOfWork>(), NotifierFor(interests.Object));
 
         var result = await handler.Handle(new ExpressInvestmentInterestCommand(userId, projectId), default);
 

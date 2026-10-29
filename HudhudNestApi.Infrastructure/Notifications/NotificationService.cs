@@ -273,6 +273,31 @@ public sealed class NotificationService : INotificationService
             reportId);
     }
 
+    public async Task NotifyInvestmentInterestAsync(
+        Guid recipientId,
+        NotificationText message,
+        Guid investmentProjectId,
+        string dedupeKey,
+        CancellationToken ct = default)
+    {
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(investmentProjectId, "Investment project id is required.", nameof(investmentProjectId));
+
+        var lang = await LanguageOfAsync(recipientId, ct);
+
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.InvestmentInterestReceived,
+                NotificationCatalog.Render(message ?? NotificationText.Empty, lang),
+                relatedEntityId: investmentProjectId,
+                dedupeKey: dedupeKey),
+            ct);
+
+        _logger.LogInformation(
+            "Investment interest notification created. RecipientId={RecipientId}, ProjectId={ProjectId}",
+            recipientId,
+            investmentProjectId);
+    }
+
     public async Task NotifyAgencyInvitationReceivedAsync(
         Guid recipientId,
         Guid invitationId,

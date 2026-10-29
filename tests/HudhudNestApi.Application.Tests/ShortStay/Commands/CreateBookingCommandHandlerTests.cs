@@ -242,6 +242,7 @@ public sealed class CreateBookingCommandHandlerTests
         public Task NotifyShortStayBookingUpdateAsync(Guid recipientId, Guid bookingId, string listingTitle, NotificationType type, NotificationText detail, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifyServiceProviderUpdateAsync(Guid recipientId, NotificationType type, NotificationText message, Guid relatedEntityId, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifyListingReportAsync(Guid recipientId, NotificationType type, NotificationText message, Guid reportId, Guid? propertyId, string dedupeKey, CancellationToken ct = default) => Task.CompletedTask;
+        public Task NotifyInvestmentInterestAsync(Guid recipientId, NotificationText message, Guid investmentProjectId, string dedupeKey, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifyValuationInquiryExpiredAsync(Guid recipientId, Guid inquiryId, bool hadPreliminaryEstimate, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifyValuationOfficeInvitationExpiredAsync(Guid recipientId, Guid invitationId, Guid inquiryId, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifyValuationResultReadyAsync(Guid recipientId, Guid inquiryId, CancellationToken ct = default) => Task.CompletedTask;

@@ -44,4 +44,6 @@ public static class BackgroundJobLockKeys
     public const long ShortStayBookingLifecycle = 20261018_1011;
 
     public const long ListingViewRetention = 20261029_1012;
+
+    public const long InvestmentScheduledPublish = 20261029_1013;
 }
