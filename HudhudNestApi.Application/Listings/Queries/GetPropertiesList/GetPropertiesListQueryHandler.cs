@@ -2,7 +2,6 @@ using MediatR;
 using HudhudNestApi.Application.Listings.DTOs;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Listings.Mappers;
-using HudhudNestApi.Application.Listings.Views;
 using HudhudNestApi.Application.Properties.DTOs;
 
 namespace HudhudNestApi.Application.Listings.Queries.GetPropertiesList;
@@ -15,19 +14,15 @@ public sealed class GetPropertiesListQueryHandler
     : IRequestHandler<GetPropertiesListQuery, PagedResult<PropertyDto>>
 {
     private readonly IPropertyRepository _repo;
-    private readonly IListingViewRepository _views;
 
-    public GetPropertiesListQueryHandler(IPropertyRepository repo, IListingViewRepository views)
-    {
-        _repo = repo;
-        _views = views;
-    }
+    public GetPropertiesListQueryHandler(IPropertyRepository repo)
+        => _repo = repo;
 
     public async Task<PagedResult<PropertyDto>> Handle(
         GetPropertiesListQuery request,
         CancellationToken cancellationToken)
     {
-        var pagedProperties = await _repo.GetPagedAsync(
+        var (pagedProperties, viewCounts) = await _repo.GetPagedWithViewCountsAsync(
             request.Filter,
             cancellationToken);
 
@@ -38,7 +33,8 @@ public sealed class GetPropertiesListQueryHandler
         var items = pagedProperties.Items
             .Select(property => PropertyMapper.ToDto(property, asOfUtc))
             .ToList();
-        await _views.ApplyViewCountsAsync(items, cancellationToken);
+        foreach (var item in items)
+            item.ViewCount = viewCounts.TryGetValue(item.Id, out var views) ? views : 0;
 
         return new PagedResult<PropertyDto>
         {

@@ -7,6 +7,7 @@ using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Listings.Currencies;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings;
+using HudhudNestApi.Domain.Listings.Enums;
 
 namespace HudhudNestApi.Infrastructure.Repositories;
 
@@ -67,6 +68,11 @@ public sealed class PropertyRepository : IPropertyRepository
     public async Task<PagedResult<Property>> GetPagedAsync(
         PropertyFilterDto filter,
         CancellationToken ct = default)
+        => (await GetPagedWithViewCountsAsync(filter, ct)).Page;
+
+    public async Task<(PagedResult<Property> Page, IReadOnlyDictionary<Guid, long> ViewCounts)> GetPagedWithViewCountsAsync(
+        PropertyFilterDto filter,
+        CancellationToken ct = default)
     {
         var query = _db.Properties
             .AsNoTracking()
@@ -90,12 +96,23 @@ public sealed class PropertyRepository : IPropertyRepository
         // (offset 10,000). Sorting by Id last keeps pages stable when sort keys tie.
         var page = Math.Max(filter.Page, 1);
         var pageSize = Math.Clamp(filter.PageSize, 1, 100);
-        var pageIds = await ApplySort(query, filter, DateTime.UtcNow, rates)
+        // The view totals ride on this same statement (a correlated lookup on the page window only)
+        // rather than a fourth command: the list endpoint's query-count budget is 3.
+        var pageRows = await ApplySort(query, filter, DateTime.UtcNow, rates)
             .ThenBy(p => p.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(p => p.Id)
+            .Select(p => new
+            {
+                p.Id,
+                Views = _db.ListingViewCounters
+                    .Where(c => c.Kind == ListingKind.Property && c.ListingId == p.Id)
+                    .Select(c => (long?)c.ViewCount)
+                    .FirstOrDefault()
+            })
             .ToListAsync(ct);
+        var pageIds = pageRows.Select(r => r.Id).ToList();
+        var viewCounts = pageRows.ToDictionary(r => r.Id, r => r.Views ?? 0L);
 
         var items = new List<Property>(pageIds.Count);
         if (pageIds.Count > 0)
@@ -115,13 +132,13 @@ public sealed class PropertyRepository : IPropertyRepository
             items = loaded;
         }
 
-        return new PagedResult<Property>
+        return (new PagedResult<Property>
         {
             Items = items,
             TotalCount = totalCount,
             Page = page,
             PageSize = pageSize
-        };
+        }, viewCounts);
     }
 
     public async Task<IReadOnlyList<Property>> GetByOwnerAsync(

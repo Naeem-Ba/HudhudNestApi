@@ -123,6 +123,32 @@ public sealed class ListingViewCounterTests : IClassFixture<MessagingApiTestFact
         Assert.Equal(2, await StoredCountAsync(ListingKind.Property, id));
     }
 
+    [Fact(DisplayName = "views: the public list carries each total without a fourth SQL command (query-count budget is 3)")]
+    public async Task PublicList_ReportsViewCounts_WithinTheListQueryBudget()
+    {
+        // The perf gate fails a list response that runs more than 3 commands (performance-budgets.json).
+        Environment.SetEnvironmentVariable("Performance__ExposeDatabaseDiagnostics", "true");
+        try
+        {
+            var owner = await _factory.SeedUserAsync("v-list-owner");
+            var id = await _factory.SeedPropertyAsync(owner.Id);
+            var client = _factory.WithWebHostBuilder(_ => { }).CreateClient();
+            Assert.True((await client.SendAsync(ViewRequest($"/api/Properties/{id}/views", "aaaaaaaaaaaaaaaa-visitor-1"))).IsSuccessStatusCode);
+
+            var response = await client.GetAsync("/api/Properties?page=1&pageSize=20");
+            var list = await Json(response);
+            Assert.Equal(1, list.GetProperty("items").EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == id)
+                .GetProperty("viewCount").GetInt64());
+
+            Assert.True(response.Headers.TryGetValues("X-Database-Command-Count", out var count));
+            Assert.InRange(int.Parse(count!.Single()), 0, 3);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("Performance__ExposeDatabaseDiagnostics", null);
+        }
+    }
+
     [Fact(DisplayName = "views: a viewer is counted again once the cooldown window has passed (new bucket)")]
     public async Task SameViewer_IsCountedAgain_InTheNextWindow()
     {

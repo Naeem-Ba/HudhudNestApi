@@ -41,6 +41,7 @@ The migration `AddListingViewCounter` only creates the two tables; nothing exist
 ## Reading
 
 * `viewCount` is added to the property DTOs (list, detail, mine, manage) and the short-stay DTOs (search, detail, mine). The public property detail response is output-cached, so it can lag by the cache TTL; the page raises the number from the answer to its own `POST .../views`.
+* Query budget: the performance gate (`performance/performance-budgets.json`) allows at most 3 SQL commands for the public list and 5 for the detail. The detail and the other lists read the totals with one batched query (`ListingViewCountEnrichment`); the public list (`GetPagedWithViewCountsAsync`) reads them inside the statement that picks the page, because a fourth command made the Production Gate fail (measured: 4 before, 3 after). `ListingViewCounterTests` pins this with the `X-Database-Command-Count` header.
 * `GET /api/listing-views/stats?scope=mine|agency` (authorized): `mine` = the caller's own listings of both kinds; `agency` = listings published under the caller's agency, agency owners only (`403` otherwise). Agency scope covers sale/rent listings only (short-stay listings have no agency link).
 * `GET /api/listing-views/{property|shortstay}/{id}/trend?days=` (authorized): daily counts, zero-filled, max 90 days / the retention window. Allowed for the owner, an administrator, or the owner of the listing's agency; `403` for anyone else, `404` for an unknown id.
 

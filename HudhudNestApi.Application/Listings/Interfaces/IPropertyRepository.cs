@@ -19,6 +19,14 @@ public interface IPropertyRepository
     Task<Property?> GetByIdWithDetailsAsync(Guid id, CancellationToken ct = default);
     Task<Property?> GetPublishedByIdWithDetailsAsync(Guid id, CancellationToken ct = default);
     Task<PagedResult<Property>> GetPagedAsync(PropertyFilterDto filter, CancellationToken ct = default);
+
+    /// <summary>
+    /// Same page as <see cref="GetPagedAsync"/>, plus the view totals of the listings on it, read in the
+    /// same statement that picks the page (no extra command: the list endpoint's query-count budget is 3).
+    /// </summary>
+    async Task<(PagedResult<Property> Page, IReadOnlyDictionary<Guid, long> ViewCounts)> GetPagedWithViewCountsAsync(
+        PropertyFilterDto filter, CancellationToken ct = default)
+        => (await GetPagedAsync(filter, ct), new Dictionary<Guid, long>());
     Task<IReadOnlyList<Property>> GetByOwnerAsync(Guid ownerId, CancellationToken ct = default);
     Task<bool> ExistsAsync(Guid id, CancellationToken ct = default);
 
