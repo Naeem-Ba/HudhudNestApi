@@ -13,6 +13,7 @@ using HudhudNestApi.Application.Listings.Translations;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings.Entities;
 using HudhudNestApi.Domain.Listings.Translations;
+using HudhudNestApi.Domain.ShortStay.Entities;
 using HudhudNestApi.Infrastructure.Persistence;
 using HudhudNestApi.Integration.Tests.Auth;
 using Xunit;
@@ -80,14 +81,31 @@ public sealed class ListingTranslationPostgresTests : IAsyncLifetime
     }
 
     private Task<ListingTranslationDto?> EnsureAsync(WebApplicationFactory<Program> factory, Guid id, string lang) =>
-        EnsureCoreAsync(factory, id, lang);
+        EnsureCoreAsync(factory, ListingRef.ForProperty(id), lang);
 
-    private static async Task<ListingTranslationDto?> EnsureCoreAsync(WebApplicationFactory<Program> factory, Guid id, string lang)
+    private static async Task<ListingTranslationDto?> EnsureCoreAsync(WebApplicationFactory<Program> factory, ListingRef id, string lang)
     {
         // A fresh scope per call is exactly "another user, another device": nothing is shared but the database.
         await using var scope = factory.Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IListingTranslationService>()
             .EnsureAsync(id, lang, CancellationToken.None);
+    }
+
+    private Task<ListingTranslationDto?> EnsureShortStayAsync(Guid id, string lang) =>
+        EnsureCoreAsync(_factory, ListingRef.ForShortStay(id), lang);
+
+    private async Task<Guid> SeedShortStayAsync(
+        string title = ArabicTitle, string description = ArabicDescription, bool published = true)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var listing = ShortStayListing.Create(
+            _ownerId, 1, title, description, 4, 2, 1, new TimeOnly(14, 0), new TimeOnly(11, 0), 35.5m, 35.8m);
+        db.ShortStayListings.Add(listing);
+        await db.SaveChangesAsync();
+        if (published)
+            await db.Database.ExecuteSqlRawAsync("UPDATE \"ShortStayListings\" SET \"IsPublished\" = true WHERE \"Id\" = {0}", listing.Id);
+        return listing.Id;
     }
 
     private Task<ListingTranslationDto?> EnsureAsync(Guid id, string lang) => EnsureAsync(_factory, id, lang);
@@ -433,6 +451,120 @@ public sealed class ListingTranslationPostgresTests : IAsyncLifetime
         Assert.Equal("ready", (await EnsureAsync(survivor, "en"))!.Status);
     }
 
+    // ── Short-stay listings ──────────────────────────────────────────────────────
+
+    [Fact(DisplayName = "Short-stay: translated once, stored in its own foreign key, reused, and kept apart from sale/rent listings")]
+    public async Task ShortStay_TranslatesStoresAndReuses()
+    {
+        var id = await SeedShortStayAsync();
+
+        var dto = await EnsureShortStayAsync(id, "en");
+        Assert.Equal("ready", dto!.Status);
+        Assert.Equal($"[en] {ArabicTitle}", dto.Title.Text);
+        Assert.Equal(1, _provider.Calls);
+
+        var again = await EnsureShortStayAsync(id, "en");
+        Assert.Equal("ready", again!.Status);
+        Assert.Equal(1, _provider.Calls);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var rows = await db.ListingTranslations.IgnoreQueryFilters().Where(t => t.ShortStayListingId == id).ToListAsync();
+        Assert.Equal(2, rows.Count);
+        Assert.All(rows, r => Assert.Null(r.PropertyId));
+
+        // The same GUID asked as a sale/rent listing is a different, unknown listing.
+        Assert.Null(await EnsureAsync(id, "en"));
+    }
+
+    [Fact(DisplayName = "Short-stay: an edit invalidates only the edited field")]
+    public async Task ShortStay_EditInvalidatesOnlyTheEditedField()
+    {
+        var id = await SeedShortStayAsync();
+        await EnsureShortStayAsync(id, "en");
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var listing = await db.ShortStayListings.SingleAsync(l => l.Id == id);
+            listing.UpdateBasicInfo("شاليه جديد على البحر", ArabicDescription, 4, 2, 1, new TimeOnly(14, 0), new TimeOnly(11, 0), false);
+            await db.SaveChangesAsync();
+        }
+
+        var dto = await EnsureShortStayAsync(id, "en");
+        Assert.Equal("[en] شاليه جديد على البحر", dto!.Title.Text);
+        Assert.Equal(2, _provider.Calls);
+        Assert.Single(_provider.Log.Last().Texts); // only the title was sent again
+    }
+
+    [Fact(DisplayName = "Short-stay: unpublished, soft-deleted and unknown listings yield nothing; a permanent delete cascades")]
+    public async Task ShortStay_UnavailableAndDeleted()
+    {
+        var unpublished = await SeedShortStayAsync(published: false);
+        Assert.Null(await EnsureShortStayAsync(unpublished, "en"));
+        Assert.Null(await EnsureShortStayAsync(Guid.NewGuid(), "en"));
+        Assert.Equal(0, _provider.Calls);
+
+        var doomed = await SeedShortStayAsync();
+        var survivor = await SeedShortStayAsync("شاليه آخر في اللاذقية", "وصف آخر لشاليه آخر قرب الشاطئ في اللاذقية.");
+        await EnsureShortStayAsync(doomed, "en");
+        await EnsureShortStayAsync(survivor, "en");
+
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var listing = await db.ShortStayListings.SingleAsync(l => l.Id == doomed);
+            listing.MarkAsDeleted(_ownerId);
+            await db.SaveChangesAsync();
+        }
+        Assert.Null(await EnsureShortStayAsync(doomed, "en"));
+
+        await ExecAsync("DELETE FROM \"ShortStayListings\" WHERE \"Id\" = {0}", doomed);
+        await using var check = _factory.Services.CreateAsyncScope();
+        var context = check.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Empty(await context.ListingTranslations.IgnoreQueryFilters().Where(t => t.ShortStayListingId == doomed).ToListAsync());
+        Assert.Equal(2, await context.ListingTranslations.IgnoreQueryFilters().CountAsync(t => t.ShortStayListingId == survivor));
+    }
+
+    [Fact(DisplayName = "Short-stay: concurrent opens call the provider once")]
+    public async Task ShortStay_ConcurrentOpens_CallTheProviderOnce()
+    {
+        var id = await SeedShortStayAsync();
+        await Task.WhenAll(Enumerable.Range(0, 15).Select(_ => EnsureShortStayAsync(id, "de")));
+        Assert.Equal(1, _provider.Calls);
+        Assert.Equal("ready", (await EnsureShortStayAsync(id, "de"))!.Status);
+    }
+
+    [Fact(DisplayName = "The database refuses a row that belongs to both or neither listing kind")]
+    public async Task Database_RequiresExactlyOneListing()
+    {
+        var property = await SeedAsync();
+        var shortStay = await SeedShortStayAsync();
+        const string columns = "INSERT INTO \"ListingTranslations\" (\"Id\",\"PropertyId\",\"ShortStayListingId\",\"Field\",\"TargetLanguage\",\"SourceHash\",\"PolicyVersion\",\"Provider\",\"Status\",\"SourceCharacters\",\"AttemptCount\",\"CreatedAt\",\"UpdatedAt\") ";
+        const string tail = ",1,'en',repeat('a',64),1,'fake',3,0,0,now(),now())";
+        var both = await Assert.ThrowsAnyAsync<Exception>(() => ExecAsync(columns + "VALUES ({0},{1},{2}" + tail, Guid.NewGuid(), property, shortStay));
+        Assert.Contains("CK_ListingTranslations_ExactlyOneListing", both.ToString());
+        var neither = await Assert.ThrowsAnyAsync<Exception>(() => ExecAsync(columns + "VALUES ({0},NULL,NULL" + tail, Guid.NewGuid()));
+        Assert.Contains("CK_ListingTranslations_ExactlyOneListing", neither.ToString());
+    }
+
+    [Fact(DisplayName = "POST /api/short-stay/listings/{id}/translation: validates, hides unavailable listings and is not cacheable")]
+    public async Task ShortStay_Http_Contract()
+    {
+        var id = await SeedShortStayAsync();
+        var hidden = await SeedShortStayAsync(published: false);
+        using var client = _factory.CreateClient();
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync($"/api/short-stay/listings/{id}/translation?lang=fr", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync($"/api/short-stay/listings/{hidden}/translation?lang=en", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync($"/api/short-stay/listings/{Guid.NewGuid()}/translation?lang=en", null)).StatusCode);
+
+        var response = await client.PostAsync($"/api/short-stay/listings/{id}/translation?lang=en", null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("no-store", response.Headers.CacheControl?.ToString());
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("ready", json.RootElement.GetProperty("status").GetString());
+    }
+
     [Fact(DisplayName = "The database refuses a translation row for a missing listing, a blank success, or an unknown language")]
     public async Task Database_RefusesInvalidRows()
     {
@@ -654,6 +786,55 @@ public sealed class ListingTranslationPostgresTests : IAsyncLifetime
         var detail = await client.GetAsync($"/api/properties/{id}");
         Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
         Assert.Contains(ArabicTitle, await detail.Content.ReadAsStringAsync());
+    }
+
+    [Fact(DisplayName = "A failing translation store degrades to 'unavailable' - the listing is never affected and nothing is thrown")]
+    public async Task StoreFailures_DegradeToUnavailable()
+    {
+        var id = await SeedAsync();
+        foreach (var failing in new[] { FaultyStore.Mode.Read, FaultyStore.Mode.Claim })
+        {
+            using var factory = _baseFactory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<ITranslationProvider>();
+                services.AddSingleton<ITranslationProvider>(_provider);
+                services.AddScoped<IListingTranslationStore>(sp =>
+                    new FaultyStore(ActivatorUtilities.CreateInstance<HudhudNestApi.Infrastructure.Translation.ListingTranslationStore>(sp), failing));
+            }));
+
+            var dto = await EnsureAsync(factory, id, "en");
+
+            Assert.NotNull(dto);
+            Assert.Equal("unavailable", dto!.Status);
+            Assert.Equal(0, _provider.Calls);
+        }
+    }
+
+    private sealed class FaultyStore(IListingTranslationStore inner, FaultyStore.Mode mode) : IListingTranslationStore
+    {
+        public enum Mode { Read, Claim }
+
+        public Task<ListingTextSource?> GetPubliclyViewableTextAsync(ListingRef listing, DateTime nowUtc, CancellationToken ct) =>
+            inner.GetPubliclyViewableTextAsync(listing, nowUtc, ct);
+
+        public Task<IReadOnlyList<StoredListingTranslation>> GetAsync(ListingRef listing, string targetLanguage, CancellationToken ct) =>
+            mode == Mode.Read ? throw new InvalidOperationException("store down") : inner.GetAsync(listing, targetLanguage, ct);
+
+        public Task<IReadOnlyList<TranslationClaim?>> TryClaimAsync(
+            ListingRef listing, string targetLanguage, IReadOnlyList<TranslationClaimRequest> requests,
+            int policyVersion, string provider, TimeSpan lease, DateTime nowUtc, CancellationToken ct) =>
+            throw new InvalidOperationException("store down");
+
+        public Task<bool> CompleteAsync(
+            ListingRef listing, TranslationClaim claim, ListingTranslationField field, ListingTranslationStatus status,
+            string? translatedText, string? sourceLanguage, DateTime nowUtc, CancellationToken ct) =>
+            inner.CompleteAsync(listing, claim, field, status, translatedText, sourceLanguage, nowUtc, ct);
+
+        public Task FailAsync(TranslationClaim claim, string errorCode, bool countAttempt, DateTime retryAfterUtc, DateTime nowUtc, CancellationToken ct) =>
+            inner.FailAsync(claim, errorCode, countAttempt, retryAfterUtc, nowUtc, ct);
+
+        public Task<bool> TryReserveBudgetAsync(string month, long characters, long limit, DateTime nowUtc, CancellationToken ct) =>
+            inner.TryReserveBudgetAsync(month, characters, limit, nowUtc, ct);
     }
 
     private sealed class FakeProvider : ITranslationProvider

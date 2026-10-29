@@ -13,6 +13,9 @@ public sealed class ListingTranslationConfiguration : IEntityTypeConfiguration<L
             t.HasCheckConstraint("CK_ListingTranslations_Field", "\"Field\" IN (1, 2)");
             t.HasCheckConstraint("CK_ListingTranslations_Status", "\"Status\" IN (1, 2, 3, 4)");
             t.HasCheckConstraint("CK_ListingTranslations_TargetLanguage", "\"TargetLanguage\" IN ('ar', 'de', 'en')");
+            t.HasCheckConstraint(
+                "CK_ListingTranslations_ExactlyOneListing",
+                "(\"PropertyId\" IS NOT NULL AND \"ShortStayListingId\" IS NULL) OR (\"PropertyId\" IS NULL AND \"ShortStayListingId\" IS NOT NULL)");
             t.HasCheckConstraint("CK_ListingTranslations_SourceHash", "char_length(\"SourceHash\") = 64");
             // A successful translation is never empty; nothing else may carry text.
             t.HasCheckConstraint(
@@ -32,13 +35,22 @@ public sealed class ListingTranslationConfiguration : IEntityTypeConfiguration<L
         builder.Property(t => t.TranslatedText);
 
         // One row per (listing, field, language): concurrent requests contend on this key, which is what
-        // makes claiming atomic across instances (INSERT ... ON CONFLICT).
-        builder.HasIndex(t => new { t.PropertyId, t.Field, t.TargetLanguage }).IsUnique();
+        // makes claiming atomic across instances (INSERT ... ON CONFLICT). One partial index per listing kind.
+        builder.HasIndex(t => new { t.PropertyId, t.Field, t.TargetLanguage })
+            .IsUnique()
+            .HasFilter("\"PropertyId\" IS NOT NULL");
+        builder.HasIndex(t => new { t.ShortStayListingId, t.Field, t.TargetLanguage })
+            .IsUnique()
+            .HasFilter("\"ShortStayListingId\" IS NOT NULL");
 
         // Translations are derived data: a permanent delete of the listing removes them in the same statement.
         builder.HasOne(t => t.Property)
             .WithMany()
             .HasForeignKey(t => t.PropertyId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(t => t.ShortStayListing)
+            .WithMany()
+            .HasForeignKey(t => t.ShortStayListingId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
