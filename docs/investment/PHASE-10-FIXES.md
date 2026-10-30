@@ -16,9 +16,9 @@ interest count is computed). Rollout: merge, Render deploy; then the app.
 | D04 (P2) | A suspended project could never come back | `InvestmentProject.Resume()`, `POST .../resume` (Suspended to Published), a Resume button | domain, `ResumeInvestmentProject` |
 | D05 (P3) | A suspended project stayed in the user's watchlist/interests | Both lists show only publicly visible projects (Published, property alive); the rows are kept, so the project returns when re-published | `InvestmentWatchlistRepository`, `InvestmentInterestRepository` |
 | D06 (P2) | NUL in search/city gave 500; `%` and `_` acted as wildcards | NUL rejected with 422 (public and admin); LIKE terms escaped | validators, `InvestmentProjectRepository.EscapeLike` |
-| D07 (P2) | Anonymous calculator: 500 on huge amounts, no caps | amount at most 1e12, term at most 600 months (422); the app mirrors the caps | `CalculateInvestmentReturnQueryValidator` |
+| D07 (P2) | Anonymous calculator: 500 on huge amounts, no caps | amount at most 1e12, term at most 600 months (422). Follow-up: the amount must also lie inside the project's own minimum/maximum (422 with the limits in the message); the app checks before sending | `CalculateInvestmentReturnQueryValidator` |
 | D08 (P3) | Parallel watchlist/interest add gave 500 | The two unique indexes map to 409 | `UnitOfWork.UniqueViolationConflictMessages` |
-| D09 (P3) | Weak admin validation | Title/short description/description/risk summary/reasons: no NUL, guaranteed-return wording refused (also in the title); currency must be supported; minimum <= target; term 1..600; return <= 100%; money <= 1e12. The same limits are in the domain | validators, `InvestmentProject.UpdateInvestmentParameters` |
+| D09 (P3) | Weak admin validation | Title/short description/description/risk summary/reasons: no NUL, guaranteed-return wording refused (also in the title); currency must be supported; minimum <= target; term 1..600; return <= 100%; money <= 1e12. Follow-up: start date within 5 years back and 10 years ahead, end date at most 60 years ahead (a project already under way may still be offered, so a past start is allowed, a century-old one is not); the admin date input carries the same window. The same limits are in the domain | validators, `InvestmentProject.UpdateInvestmentParameters` |
 | D10 (P3) | The last required public document could be removed after publish | `RequiredDocumentGuard`: blocks deleting/hiding the last public ProjectPlan/FinancialStatement of a Scheduled/Published/Suspended project (upload a replacement first). A closed project accepts no new updates | handlers |
 | D11 (P3) | Documents/updates/risk stayed public after the property was deleted | The three public queries join the property like the details/list queries do | repositories |
 | D12 (P3) | The raised amount froze after publish | `PUT .../progress {raisedAmount}` for Approved/Scheduled/Published/Suspended (0 to target). Still informational, never from a payment | `UpdateInvestmentProgress` |
@@ -35,6 +35,7 @@ These are defaults; each is one small change to reverse.
 - **D04**: resume goes straight to Published. It does not re-run the readiness check, because D10 now keeps the
   required documents in place and the financials/risk cannot be deleted.
 - **D05**: withdrawn/closed projects also leave the lists. A user who watched a project that later closed no longer sees it.
+- **D07/D09 follow-up (Phase 10b)**: the 5/10-year window is my choice, not a legal rule; it lives in `UpdateInvestmentProjectCommandValidator.MaxStartDateYearsInPast/Ahead`. The domain does not enforce it (stored older data must stay editable), only the validator.
 - **D09**: the bare word "guaranteed" is not banned (honest disclaimers use it); only claims such as "sure profit",
   "capital is safe", "ربح مؤكد" are.
 

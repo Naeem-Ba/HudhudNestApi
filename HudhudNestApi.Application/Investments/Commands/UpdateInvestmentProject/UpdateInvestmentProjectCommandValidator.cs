@@ -8,6 +8,13 @@ namespace HudhudNestApi.Application.Investments.Commands.UpdateInvestmentProject
 
 public sealed class UpdateInvestmentProjectCommandValidator : AbstractValidator<UpdateInvestmentProjectCommand>
 {
+    /// <summary>A project that already started may still be raising money, so the start date may lie in the past,
+    /// but not by more than this many years.</summary>
+    public const int MaxStartDateYearsInPast = 5;
+    public const int MaxStartDateYearsAhead = 10;
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
+
     public UpdateInvestmentProjectCommandValidator()
     {
         RuleFor(x => x.Id).NotEmpty();
@@ -35,6 +42,17 @@ public sealed class UpdateInvestmentProjectCommandValidator : AbstractValidator<
             .WithMessage("العائد المتوقع (الأعلى) يجب أن يكون أكبر من أو يساوي العائد الأدنى.")
             .LessThanOrEqualTo(InvestmentProject.MaxExpectedReturnPercent)
             .WithMessage("العائد المتوقع السنوي لا يمكن أن يتجاوز 100%.");
+        // QA Phase 10, P10-D09 (rest): a year-1900 start date was accepted. Plausible window instead of a hard
+        // "not in the past", because a project already under way can still be offered to investors.
+        RuleFor(x => x.StartDate!.Value)
+            .GreaterThanOrEqualTo(_ => Today.AddYears(-MaxStartDateYearsInPast))
+            .LessThanOrEqualTo(_ => Today.AddYears(MaxStartDateYearsAhead))
+            .When(x => x.StartDate.HasValue)
+            .WithMessage($"تاريخ البدء يجب أن يكون ضمن نطاق معقول (حتى {MaxStartDateYearsInPast} سنوات للخلف و{MaxStartDateYearsAhead} للأمام).");
+        RuleFor(x => x.EndDate!.Value)
+            .LessThanOrEqualTo(_ => Today.AddMonths(InvestmentProject.MaxTermMonths + 12 * MaxStartDateYearsAhead))
+            .When(x => x.EndDate.HasValue)
+            .WithMessage("تاريخ الانتهاء بعيد جدًا.");
         RuleFor(x => x.EndDate)
             .GreaterThan(x => x.StartDate!.Value)
             .When(x => x.StartDate.HasValue && x.EndDate.HasValue)
