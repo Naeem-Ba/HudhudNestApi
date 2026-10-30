@@ -2,6 +2,7 @@ using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using HudhudNestApi.Application.Search.Commands.CreateSavedSearch;
 using HudhudNestApi.Application.Search.Commands.DeleteSavedSearch;
 using HudhudNestApi.Application.Search.Queries.GetMySavedSearches;
@@ -33,8 +34,10 @@ public sealed class SavedSearchController : ControllerBase
     }
 
     [HttpPost]
+    [EnableRateLimiting("user-write")]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create(
         [FromBody] CreateSavedSearchCommand command,
         CancellationToken ct)

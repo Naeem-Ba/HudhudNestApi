@@ -1,3 +1,6 @@
+using Moq;
+using HudhudNestApi.Application.Common.DTOs;
+using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Search.Commands.CreateSavedSearch;
 using HudhudNestApi.Domain.Enums;
 
@@ -12,7 +15,22 @@ public sealed class CreateSavedSearchCommandValidatorTests
         new(Guid.NewGuid(), name, null, city, null, governorateId, null, null, null, listingType,
             null, maxPrice, currency, null, null, null, null);
 
-    private static readonly CreateSavedSearchCommandValidator Validator = new();
+    private static readonly CreateSavedSearchCommandValidator Validator = CreateValidator();
+
+    private static CreateSavedSearchCommandValidator CreateValidator(bool locationsConsistent = true, params int[] propertyTypeIds)
+    {
+        var locations = new Mock<ILocationHierarchyChecker>();
+        locations
+            .Setup(x => x.IsConsistentAsync(It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(locationsConsistent);
+
+        var lookups = new Mock<ICommonLookupService>();
+        lookups
+            .Setup(x => x.GetPropertyTypeCatalogAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(propertyTypeIds.Select(id => new PropertyTypeLookupDto(id, "t", "ن", "t", "Residential", null)).ToList());
+
+        return new CreateSavedSearchCommandValidator(locations.Object, lookups.Object);
+    }
 
     [Fact]
     public void NoCriteria_IsRejected()
@@ -50,11 +68,11 @@ public sealed class CreateSavedSearchCommandValidatorTests
     }
 
     [Fact]
-    public void AnySingleCriterion_IsAccepted()
+    public async Task AnySingleCriterion_IsAccepted()
     {
-        Assert.True(Validator.Validate(Command(city: "دمشق")).IsValid);
-        Assert.True(Validator.Validate(Command(governorateId: 3)).IsValid);
-        Assert.True(Validator.Validate(Command(listingType: ListingType.ForRent)).IsValid);
-        Assert.True(Validator.Validate(Command(maxPrice: 500m)).IsValid);
+        Assert.True((await Validator.ValidateAsync(Command(city: "دمشق"))).IsValid);
+        Assert.True((await Validator.ValidateAsync(Command(governorateId: 3))).IsValid);
+        Assert.True((await Validator.ValidateAsync(Command(listingType: ListingType.ForRent))).IsValid);
+        Assert.True((await Validator.ValidateAsync(Command(maxPrice: 500m))).IsValid);
     }
 }

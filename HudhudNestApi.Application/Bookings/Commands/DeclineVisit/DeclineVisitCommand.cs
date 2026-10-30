@@ -1,9 +1,11 @@
 using HudhudNestApi.Application.Notifications.Localization;
+using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Bookings.Interfaces;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
+using HudhudNestApi.Application.Common.Validation;
 using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Domain.Notifications.Enums;
 
@@ -13,6 +15,19 @@ public sealed record DeclineVisitCommand(
     Guid VisitId,
     Guid OwnerId,
     string? Reason = null) : IRequest<bool>;
+
+public sealed class DeclineVisitCommandValidator : AbstractValidator<DeclineVisitCommand>
+{
+    public DeclineVisitCommandValidator()
+    {
+        // The column is varchar(500); a longer note used to reach PostgreSQL and came back as a 500.
+        RuleFor(x => x.Reason)
+            .MaximumLength(500)
+            .WithMessage("سبب الرفض يجب ألا يتجاوز 500 حرف.")
+            .NoNulCharacters()
+            .When(x => x.Reason is not null);
+    }
+}
 
 public sealed class DeclineVisitCommandHandler : IRequestHandler<DeclineVisitCommand, bool>
 {

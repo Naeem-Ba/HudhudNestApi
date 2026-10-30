@@ -20,6 +20,8 @@ public sealed class FavoriteRepository : IFavoriteRepository
         return await _db.Favorites
             .AsNoTracking()
             .Where(favorite => favorite.UserId == userId)
+            // A listing unpublished after it was saved must not keep showing its title, price and photo.
+            .Where(favorite => favorite.Property!.IsPublished || favorite.Property.OwnerId == userId)
             .Include(favorite => favorite.Property)
                 .ThenInclude(property => property!.Images.Where(image => image.IsMain))
             .Select(favorite => new FavoriteDto(
@@ -46,9 +48,10 @@ public sealed class FavoriteRepository : IFavoriteRepository
             .AnyAsync(favorite => favorite.UserId == userId && favorite.PropertyId == propertyId, ct);
     }
 
-    public Task<bool> PropertyExistsAsync(Guid propertyId, CancellationToken ct = default)
+    public Task<bool> PropertyVisibleToAsync(Guid propertyId, Guid userId, CancellationToken ct = default)
     {
-        return _db.Properties.AnyAsync(property => property.Id == propertyId, ct);
+        return _db.Properties.AnyAsync(
+            property => property.Id == propertyId && (property.IsPublished || property.OwnerId == userId), ct);
     }
 
     public Task<Favorite?> GetAsync(Guid userId, Guid propertyId, CancellationToken ct = default)

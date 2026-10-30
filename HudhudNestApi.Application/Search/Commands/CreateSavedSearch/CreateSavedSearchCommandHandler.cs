@@ -1,4 +1,5 @@
 using MediatR;
+using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Search.Interfaces;
 using HudhudNestApi.Domain.Search.Entities;
@@ -8,6 +9,12 @@ namespace HudhudNestApi.Application.Search.Commands.CreateSavedSearch;
 public sealed class CreateSavedSearchCommandHandler
     : IRequestHandler<CreateSavedSearchCommand, Guid>
 {
+    /// <summary>
+    /// Every saved search is scanned by the background matcher on each run and can raise notifications,
+    /// so one user must not hold an unbounded number (QA Phase 12, P12-D02).
+    /// </summary>
+    public const int MaxSavedSearchesPerUser = 20;
+
     private readonly ISavedSearchRepository _repo;
     private readonly IUnitOfWork _uow;
 
@@ -19,6 +26,10 @@ public sealed class CreateSavedSearchCommandHandler
 
     public async Task<Guid> Handle(CreateSavedSearchCommand request, CancellationToken cancellationToken)
     {
+        var existing = await _repo.GetByUserIdAsync(request.UserId, cancellationToken);
+        if (existing.Count >= MaxSavedSearchesPerUser)
+            throw new ConflictException($"وصلتَ إلى الحد الأقصى للبحوث المحفوظة ({MaxSavedSearchesPerUser}). احذف بحثًا قديمًا لإضافة بحث جديد.");
+
         var savedSearch = SavedSearch.Create(
             userId: request.UserId,
             name: request.Name,
