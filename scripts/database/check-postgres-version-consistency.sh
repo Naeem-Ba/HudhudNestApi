@@ -56,14 +56,20 @@ while IFS= read -r -d '' file; do
     while IFS=: read -r line_number line_content; do
         checked=$((checked + 1))
 
-        found_image=$(echo "${line_content}" | grep -oE 'postgis/postgis:[A-Za-z0-9.\-]+')
+        found_image=$(echo "${line_content}" | grep -oE 'postgis/postgis:[A-Za-z0-9.\-]+' || true)
+
+        # Prose that names the image without a tag (comments) is not a reference.
+        if [[ -z "${found_image}" ]]; then
+            checked=$((checked - 1))
+            continue
+        fi
 
         if [[ "${found_image}" != "${POSTGRES_IMAGE}" ]]; then
             echo "[postgres-version] MISMATCH: ${file}:${line_number} references '${found_image}', expected '${POSTGRES_IMAGE}'" >&2
             mismatches=$((mismatches + 1))
         fi
     done < <(grep -n 'postgis/postgis:' "${file}" || true)
-done < <(find "${SEARCH_PATHS[@]}" -type f \( -name "*.yml" -o -name "*.yaml" \) -print0 2>/dev/null)
+done < <(find "${SEARCH_PATHS[@]}" -type f \( -name "*.yml" -o -name "*.yaml" -o -name "Dockerfile*" \) -print0 2>/dev/null)
 
 if [[ "${checked}" -eq 0 ]]; then
     echo "[postgres-version] ERROR: found zero postgis/postgis references under ${SEARCH_PATHS[*]} -- the search itself is broken, or every reference was removed without updating this script." >&2

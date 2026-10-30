@@ -1,4 +1,10 @@
-FROM postgis/postgis:17-3.6
+FROM postgis/postgis:17-3.5
+
+# Keep this tag equal to POSTGRES_IMAGE in ci/postgres-version.env.
+# Dependabot #352 moved it to 17-3.6, which is built on Debian trixie: the
+# awscli package below no longer exists there, so the image build failed and
+# with it the daily Database Backup, the restore drill and the Production
+# Gate recovery job (launch audit A8-001, 2026-10-30).
 
 # BUG (found via Database Backup run #583 investigation, 2026-09-12): this
 # image's base OS is Debian 11 "bullseye", which is now "oldoldstable" --
