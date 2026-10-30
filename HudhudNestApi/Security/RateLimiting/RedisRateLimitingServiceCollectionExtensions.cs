@@ -41,6 +41,9 @@ public static class RedisRateLimitingServiceCollectionExtensions
                     }
                     else
                     {
+                        // A partial override (for example only InProcess) keeps the default limit.
+                        if (configured.PermitLimit == 0) configured.PermitLimit = policy.Value.PermitLimit;
+                        if (configured.WindowSeconds == 0) configured.WindowSeconds = policy.Value.WindowSeconds;
                         configured.InProcess ??= policy.Value.InProcess;
                     }
                 }

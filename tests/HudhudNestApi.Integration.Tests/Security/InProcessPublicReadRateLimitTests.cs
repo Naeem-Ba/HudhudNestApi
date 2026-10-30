@@ -41,8 +41,7 @@ public sealed class InProcessPublicReadRateLimitTests
                 ["RateLimiting:Redis:Policies:public-search:WindowSeconds"] = "5",
                 ["RateLimiting:Redis:Policies:auth-login:PermitLimit"] = "50",
                 ["RateLimiting:Redis:Policies:auth-login:WindowSeconds"] = "60",
-                ["RateLimiting:Redis:Policies:public-read:PermitLimit"] = "120",
-                ["RateLimiting:Redis:Policies:public-read:WindowSeconds"] = "60",
+                // Only the flag, as the two-replica performance gate sets it: the limit stays the default.
                 ["RateLimiting:Redis:Policies:public-read:InProcess"] = "false"
             })
             .Build();
@@ -56,8 +55,10 @@ public sealed class InProcessPublicReadRateLimitTests
         Assert.Equal(500, options.Policies["public-search"].PermitLimit);
         Assert.True(options.Policies["public-search"].InProcess);
         Assert.NotEqual(true, options.Policies["auth-login"].InProcess);
-        // An explicit setting wins over the default.
+        // An explicit setting wins over the default, and a flag-only override keeps the limit.
         Assert.False(options.Policies["public-read"].InProcess);
+        Assert.Equal(120, options.Policies["public-read"].PermitLimit);
+        Assert.Equal(60, options.Policies["public-read"].WindowSeconds);
     }
 
     [Fact(DisplayName = "An in-process policy allows the limit without Redis and then answers 429, not 503")]
