@@ -26,8 +26,12 @@ public sealed class PropertyReviewConfiguration : IEntityTypeConfiguration<Prope
             .OnDelete(DeleteBehavior.Restrict);
 
         // Enforce: one review per user per property
+        // Live rows only: a review the user deleted (soft delete) must not block a new one.
+        // Counting deleted rows made "delete, then review again" fail with a 500, because the
+        // duplicate check honours the soft-delete filter and the index did not (launch audit A3-002).
         builder.HasIndex(r => new { r.PropertyId, r.ReviewerId })
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("NOT \"IsDeleted\"");
 
         // The domain already refuses ratings outside 1..5; the database now does too (DB audit 2026-10-29).
         builder.ToTable(t => t.HasCheckConstraint("CK_PropertyReviews_Rating", "\"Rating\" BETWEEN 1 AND 5"));

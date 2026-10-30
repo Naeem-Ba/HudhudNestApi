@@ -18,5 +18,6 @@ Configure values in protected GitHub environments; never commit values.
 | `RENDER_API_KEY` | Render token permitted to read deploys and trigger rollback for one service |
 | `RENDER_SERVICE_ID` | Production `srv-...` identifier |
 | `PRODUCTION_BASE_URL` | HTTPS API base used for post-rollback checks |
+| `EdgeProxy__SharedSecret` (Render) / `EDGE_PROXY_SECRET` (Netlify) | Not a recovery secret, but a restore of the service must set it again: the same random value (>= 32 chars) in both, so per-visitor auth rate limits work behind the Netlify auth proxy (launch audit A4-001) |
 
 Protect `production-recovery`, `production-release`, and `production-rollback` with required reviewers and restrict branch deployment to `main`/`master`. Configure the bucket with TLS-only policy, public-access block, versioning, access logs, encryption, credential rotation, and object lock/immutability where available. Configure Render to deploy only after `Production Deployment Gate` succeeds; Render considers skipped/neutral checks acceptable, so this repository's final check explicitly fails when recovery is not `success`.

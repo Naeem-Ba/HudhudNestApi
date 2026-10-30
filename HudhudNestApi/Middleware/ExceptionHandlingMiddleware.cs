@@ -250,17 +250,38 @@ public sealed class ExceptionHandlingMiddleware
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException
         {
-            SqlState: PostgresErrorCodes.NumericValueOutOfRange or PostgresErrorCodes.CharacterNotInRepertoire
+            SqlState: PostgresErrorCodes.UniqueViolation
         })
         {
-            // Safety net (QA Phase 8, P8-D01). Validators are the first line, but a value the database
-            // cannot store - a number past a column's precision, a NUL character in text - is always the
-            // caller's input, never a server fault. A 500 here told the owner nothing and paged us for it.
+            // Launch audit A2-003: two requests raced past a handler's "does it exist?" check and the
+            // unique index stopped the second one (double-click on favorite, agency create, ...). The
+            // data is intact; the loser gets the same 409 the handler would have returned.
+            _logger.LogInformation(
+                "Unique constraint {Constraint} rejected a concurrent duplicate for {Method} {Path}",
+                ((PostgresException)ex.InnerException!).ConstraintName,
+                context.Request.Method,
+                context.Request.Path);
+
+            await WriteJson(context, StatusCodes.Status409Conflict, new
+            {
+                title = "Conflict",
+                status = StatusCodes.Status409Conflict,
+                message = "هذا العنصر موجود مسبقاً.",
+                code = "DUPLICATE"
+            });
+        }
+        catch (Exception ex) when (IsRejectedInputValue(ex, out var sqlState))
+        {
+            // Safety net (QA Phase 8, P8-D01; widened by launch audit A2-006). Validators are the first
+            // line, but a value the database cannot store or compare - a number past a column's
+            // precision, a NUL character in text, a string longer than its column - is always the
+            // caller's input, never a server fault. It arrives wrapped in DbUpdateException on save
+            // and as a bare PostgresException on a query (e.g. ?countryCode=a%00b on a public lookup).
             _logger.LogWarning(
                 "Database rejected a value for {Method} {Path}: {SqlState}",
                 context.Request.Method,
                 context.Request.Path,
-                ((PostgresException)ex.InnerException!).SqlState);
+                sqlState);
 
             await WriteJson(context, StatusCodes.Status422UnprocessableEntity, new
             {
@@ -302,6 +323,15 @@ public sealed class ExceptionHandlingMiddleware
 
             await WriteJson(context, StatusCodes.Status500InternalServerError, body);
         }
+    }
+
+    private static bool IsRejectedInputValue(Exception ex, out string? sqlState)
+    {
+        var postgres = ex as PostgresException ?? ex.InnerException as PostgresException;
+        sqlState = postgres?.SqlState;
+        return sqlState is PostgresErrorCodes.NumericValueOutOfRange
+            or PostgresErrorCodes.CharacterNotInRepertoire
+            or PostgresErrorCodes.StringDataRightTruncation;
     }
 
     private static Task WriteJson(HttpContext ctx, int statusCode, object body)

@@ -6,6 +6,8 @@ x-api-environment: &api-environment
   ASPNETCORE_URLS: http://+:8080
   ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=hudhudnest_performance;Username=postgres;Password=${PERF_POSTGRES_PASSWORD:?required};Pooling=true;Maximum Pool Size=40;Timeout=15;Command Timeout=60
   ConnectionStrings__Redis: redis:6379,abortConnect=false
+  # Two replicas share one cache, so a write on one evicts the other (production runs one instance and keeps the default in-memory store).
+  OutputCache__Store: Redis
   Redis__ConnectionString: redis:6379,abortConnect=false
   RateLimiting__Redis__Enabled: "true"
   RateLimiting__Redis__InstanceName: "HudhudNestApiPerformance:"
@@ -19,6 +21,13 @@ x-api-environment: &api-environment
   RateLimiting__Redis__Policies__verify-otp__WindowSeconds: "5"
   RateLimiting__Redis__Policies__auth-refresh__PermitLimit: ${PERF_LIMIT_AUTH_REFRESH:-10000}
   RateLimiting__Redis__Policies__auth-refresh__WindowSeconds: "5"
+  # Two replicas: the public read policies use the shared Redis count (the documented
+  # multi-instance setting), so the distributed rate-limit race below still proves one budget.
+  RateLimiting__Redis__Policies__public-search__InProcess: "false"
+  RateLimiting__Redis__Policies__geo-search__InProcess: "false"
+  RateLimiting__Redis__Policies__agencies-public__InProcess: "false"
+  RateLimiting__Redis__Policies__public-read__InProcess: "false"
+  RateLimiting__Redis__Policies__shortstay-search__InProcess: "false"
   RateLimiting__Redis__Policies__public-search__PermitLimit: ${PERF_LIMIT_PUBLIC_SEARCH:-10000}
   RateLimiting__Redis__Policies__public-search__WindowSeconds: "5"
   RateLimiting__Redis__Policies__geo-search__PermitLimit: ${PERF_LIMIT_GEO_SEARCH:-10000}

@@ -1,3 +1,4 @@
+﻿using HudhudNestApi.Application.Agencies.Interfaces;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MediatR;
@@ -51,7 +52,9 @@ public sealed class UpdatePropertyCommandHandlerSecurityTests
             Mock.Of<ILocationHierarchyChecker>(),
             Mock.Of<ICommonLookupService>(),
             Mock.Of<IPublisher>(),
-            NullLogger<UpdatePropertyCommandHandler>.Instance);
+            NullLogger<UpdatePropertyCommandHandler>.Instance,
+            Mock.Of<IListingQuotaGuard>(),
+            Mock.Of<IAgencyRepository>());
 
         // Exactly what a malicious client sends: one field the UI never offers.
         var body = JsonSerializer.Deserialize<UpdatePropertyCommand>(

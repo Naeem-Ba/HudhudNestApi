@@ -49,6 +49,16 @@ Production's `production`/`production-release`/`production-recovery` GitHub Envi
 protection rules** (confirmed live), and Production's real Redis (Upstash Free tier, per this repo's
 own `docs/REDIS-HA.md`) **has no HA/failover capability at all**.
 
+> **Update 2026-10-30 (launch audit A6-002):** public GETs no longer touch Redis. The anonymous read
+> rate-limit policies (`public-search`, `geo-search`, `agencies-public`, `public-read`,
+> `shortstay-search`) are counted in process memory (`InProcess` in `RedisRateLimitingDefaults`), and
+> the output cache uses the in-memory store unless `OutputCache:Store=Redis`. Before, every public GET
+> spent Redis commands, so the Upstash free quota (500K commands/month) would run out at a few
+> thousand visits a day and every rate-limited public endpoint would answer 503. Login, OTP, password
+> reset, writes, the security-stamp cache and the SignalR backplane stay on Redis. This is exact while
+> the API runs as **one** instance. Before scaling out, set `OutputCache__Store=Redis` and set
+> `RateLimiting__Redis__Policies__<name>__InProcess=false` for the public policies.
+
 None of this required guessing. Every BLOCKER below is backed by a command, an API response, or a
 file citation in this report.
 

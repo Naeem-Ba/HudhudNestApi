@@ -14,6 +14,7 @@ public static class RedisRateLimitingServiceCollectionExtensions
         var redisConnectionString = ResolveRedisConnectionString(configuration);
 
         services.TryAddSingleton<RedisRateLimitingRegistration>();
+        services.TryAddSingleton<InProcessFixedWindowCounter>();
 
         services.AddOptions<RedisRateLimitingOptions>()
             .Bind(configuration.GetSection(RedisRateLimitingOptions.SectionName))
@@ -34,9 +35,16 @@ public static class RedisRateLimitingServiceCollectionExtensions
 
                 foreach (var policy in RedisRateLimitingDefaults.Policies)
                 {
-                    if (!options.Policies.ContainsKey(policy.Key))
+                    if (!options.Policies.TryGetValue(policy.Key, out var configured))
                     {
                         options.Policies[policy.Key] = policy.Value;
+                    }
+                    else
+                    {
+                        // A partial override (for example only InProcess) keeps the default limit.
+                        if (configured.PermitLimit == 0) configured.PermitLimit = policy.Value.PermitLimit;
+                        if (configured.WindowSeconds == 0) configured.WindowSeconds = policy.Value.WindowSeconds;
+                        configured.InProcess ??= policy.Value.InProcess;
                     }
                 }
             })

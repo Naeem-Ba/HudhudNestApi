@@ -33,6 +33,15 @@ public sealed class VisitRequestConfiguration : IEntityTypeConfiguration<VisitRe
         builder.HasIndex(v => v.RequesterId);
         builder.HasIndex(v => new { v.PropertyId, v.RequesterId, v.Status });
 
+        // At most one open request (Pending = 0 or RescheduleProposed = 5) per requester and
+        // property: the same rule RequestVisitCommandHandler checks first. Without it, parallel
+        // POST /api/Visits (double-click) created duplicate Pending rows (launch audit A2-002);
+        // the losing insert now hits this index and the middleware answers 409.
+        builder.HasIndex(v => new { v.PropertyId, v.RequesterId })
+            .IsUnique()
+            .HasDatabaseName("IX_VisitRequests_PropertyId_RequesterId_Open")
+            .HasFilter("\"Status\" IN (0, 5) AND NOT \"IsDeleted\"");
+
         // Soft-delete filter
         builder.HasQueryFilter(v => !v.IsDeleted);
     }

@@ -444,6 +444,11 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasIndex("RequesterId");
 
+                    b.HasIndex("PropertyId", "RequesterId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_VisitRequests_PropertyId_RequesterId_Open")
+                        .HasFilter("\"Status\" IN (0, 5) AND NOT \"IsDeleted\"");
+
                     b.HasIndex("PropertyId", "RequesterId", "Status");
 
                     b.ToTable("VisitRequests", (string)null);
@@ -2975,7 +2980,8 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("ReviewerId");
 
                     b.HasIndex("PropertyId", "ReviewerId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("NOT \"IsDeleted\"");
 
                     b.ToTable("PropertyReviews", null, t =>
                         {

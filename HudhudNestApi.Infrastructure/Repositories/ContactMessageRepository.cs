@@ -3,6 +3,7 @@ using HudhudNestApi.Application.Contact.DTOs;
 using HudhudNestApi.Application.Contact.Interfaces;
 using HudhudNestApi.Domain.Messaging.Entities;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.Repositories;
 
@@ -30,7 +31,7 @@ public sealed class ContactMessageRepository : IContactMessageRepository
         var total = await query.CountAsync(ct);
 
         var data = await query
-            .Skip((page - 1) * pageSize)
+            .SkipPage(page, pageSize)
             .Take(pageSize)
             .Select(message => new ContactMessageDto(
                 message.Id,

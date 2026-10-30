@@ -50,4 +50,27 @@ public sealed class ExceptionHandlingDatabaseValueTests
 
         Assert.Equal(StatusCodes.Status500InternalServerError, status);
     }
+
+    [Fact]
+    public async Task UniqueViolation_FromARace_Is409()
+    {
+        // Launch audit A2-003: a double-click passed the "exists?" check twice and the unique
+        // index stopped the second insert.
+        var (status, body) = await RunAsync(Db("23505"));
+
+        Assert.Equal(StatusCodes.Status409Conflict, status);
+        Assert.DoesNotContain("save failed", body);
+    }
+
+    [Theory]
+    [InlineData("22021")] // NUL in a query parameter (e.g. ?countryCode=a%00b on a public lookup)
+    [InlineData("22003")]
+    [InlineData("22001")] // value too long for its column
+    public async Task BadValuesInAQuery_Are422_NotOnlyOnSave(string sqlState)
+    {
+        // Launch audit A2-006: on a query PostgreSQL's error is not wrapped in DbUpdateException.
+        var (status, _) = await RunAsync(new PostgresException("message", "ERROR", "ERROR", sqlState));
+
+        Assert.Equal(StatusCodes.Status422UnprocessableEntity, status);
+    }
 }

@@ -101,6 +101,22 @@ return current
         var partitionKey = RedisRateLimitPartitionKeyResolver.Resolve(context);
         var redisKey = BuildRedisKey(options.InstanceName, policyName, partitionKey, bucket);
 
+        if (policy.InProcess == true)
+        {
+            var nowMs = now.ToUnixTimeMilliseconds();
+            var localCount = _serviceProvider.GetRequiredService<InProcessFixedWindowCounter>()
+                .Increment(redisKey.ToString(), bucket, (bucket + 1) * windowMs, nowMs);
+
+            if (localCount <= policy.PermitLimit)
+            {
+                await _next(context);
+                return;
+            }
+
+            await RejectAsync(context, policyName, partitionKey, localCount, policy.PermitLimit, retryAfter);
+            return;
+        }
+
         IConnectionMultiplexer redis;
 
         try
@@ -171,12 +187,23 @@ return current
             return;
         }
 
+        await RejectAsync(context, policyName, partitionKey, count, policy.PermitLimit, retryAfter);
+    }
+
+    private async Task RejectAsync(
+        HttpContext context,
+        string policyName,
+        string partitionKey,
+        long count,
+        int permitLimit,
+        TimeSpan retryAfter)
+    {
         _logger.LogWarning(
             "Redis rate limit rejected request. Policy={PolicyName}, Partition={PartitionKey}, Count={Count}, Limit={Limit}",
             policyName,
             PiiMasking.MaskIpsInText(partitionKey),
             count,
-            policy.PermitLimit);
+            permitLimit);
 
         context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
         context.Response.ContentType = "application/problem+json";

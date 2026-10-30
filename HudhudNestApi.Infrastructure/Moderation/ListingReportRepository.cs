@@ -7,6 +7,7 @@ using HudhudNestApi.Domain.Moderation.Entities;
 using HudhudNestApi.Domain.Moderation.Enums;
 using HudhudNestApi.Domain.Users.Constants;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.Moderation;
 
@@ -67,7 +68,7 @@ public sealed class ListingReportRepository : IListingReportRepository
         var query = _db.ListingReports.AsNoTracking().Where(r => r.ReporterUserId == reporterUserId);
         var total = await query.CountAsync(ct);
         var items = await query.OrderByDescending(r => r.CreatedAt)
-            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+            .SkipPage(page, pageSize).Take(pageSize).ToListAsync(ct);
         return (items, total);
     }
 
@@ -87,7 +88,7 @@ public sealed class ListingReportRepository : IListingReportRepository
         };
 
         var rows = await query
-            .Skip((filter.Page - 1) * filter.PageSize)
+            .SkipPage(filter.Page, filter.PageSize)
             .Take(filter.PageSize)
             .ToListAsync(ct);
 

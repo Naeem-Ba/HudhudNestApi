@@ -9,6 +9,8 @@ using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Domain.Listings.Entities;
 using HudhudNestApi.Domain.Notifications.Enums;
+using HudhudNestApi.Application.Agencies.Interfaces;
+using HudhudNestApi.Domain.Enums;
 
 // Phase-0, Task 2: price-history snapshots are written in this handler, in the
 // SAME SaveChangesAsync as the property update. Do not move this into the
@@ -34,6 +36,8 @@ public sealed class UpdatePropertyCommandHandler
     private readonly ICommonLookupService _lookups;
     private readonly IPublisher _publisher;
     private readonly ILogger<UpdatePropertyCommandHandler> _logger;
+    private readonly IListingQuotaGuard _quotaGuard;
+    private readonly IAgencyRepository _agencies;
 
     public UpdatePropertyCommandHandler(
         IPropertyRepository repo,
@@ -45,8 +49,12 @@ public sealed class UpdatePropertyCommandHandler
         ILocationHierarchyChecker locations,
         ICommonLookupService lookups,
         IPublisher publisher,
-        ILogger<UpdatePropertyCommandHandler> logger)
+        ILogger<UpdatePropertyCommandHandler> logger,
+        IListingQuotaGuard quotaGuard,
+        IAgencyRepository agencies)
     {
+        _quotaGuard = quotaGuard;
+        _agencies = agencies;
         _repo = repo;
         _ownership = ownership;
         _priceHistory = priceHistory;
@@ -186,7 +194,41 @@ public sealed class UpdatePropertyCommandHandler
             cancellationToken);
 
         _repo.Update(property);
-        await _uow.SaveChangesAsync(cancellationToken);
+
+        if (ReleasesQuotaSeat(oldStatus) && !ReleasesQuotaSeat(property.Status))
+        {
+            // Launch audit A5-001: Sold/Rented/Expired do not count against the plan quota, so
+            // moving a listing back to an active status takes a seat again. Without this check a
+            // free-plan owner could loop "mark Sold, create new, set the old one Available" and
+            // publish without limit. Same advisory lock and guard as creation, so a concurrent
+            // create cannot take the last seat between the check and the save.
+            var owner = await _agencies.GetUserAccountAsync(property.OwnerId, cancellationToken)
+                ?? throw new ConflictException("تعذّر العثور على صاحب الإعلان.");
+
+            await _uow.BeginTransactionAsync(cancellationToken);
+
+            try
+            {
+                await _uow.AcquireAdvisoryLockAsync(
+                    owner.AgencyId is { } agencyId
+                        ? ListingQuotaLock.ForAgency(agencyId)
+                        : ListingQuotaLock.ForOwner(owner.Id),
+                    cancellationToken);
+
+                await _quotaGuard.EnsureCapacityAsync(owner, cancellationToken);
+                await _uow.SaveChangesAsync(cancellationToken);
+                await _uow.CommitTransactionAsync(cancellationToken);
+            }
+            catch
+            {
+                await _uow.RollbackTransactionAsync(cancellationToken);
+                throw;
+            }
+        }
+        else
+        {
+            await _uow.SaveChangesAsync(cancellationToken);
+        }
 
         // Phase 11: tell SocialDistribution a status transition actually happened, so it can
         // decide whether any live publication needs updating/archiving. Published AFTER the
@@ -386,4 +428,8 @@ public sealed class UpdatePropertyCommandHandler
             ? value.Value.ToString("0.##")
             : $"{value.Value:0.##} {currencyCode}";
     }
+
+    // Mirrors the "active listing" definition in IActiveListingCounter: these statuses free a seat.
+    private static bool ReleasesQuotaSeat(PropertyStatus status)
+        => status is PropertyStatus.Sold or PropertyStatus.Rented or PropertyStatus.Expired;
 }

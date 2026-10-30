@@ -19,4 +19,6 @@ regexes = [
   # ListingViewPolicyTests.cs) and a 20-character dummy visitor token (ListingViewHandlerTests.cs).
   '''^AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=$''',
   '''^0123456789abcdef0123$''',
+  # Fixed dummy edge-proxy shared secret in EdgeClientIpMiddlewareTests.cs (launch audit A4-001).
+  '''^0123456789abcdef0123456789abcdef-launch$''',
 ]

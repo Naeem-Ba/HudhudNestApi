@@ -6,6 +6,7 @@ using HudhudNestApi.Domain.Investments.Entities;
 using HudhudNestApi.Domain.Investments.Enums;
 using HudhudNestApi.Domain.Listings.Entities;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.Investments;
 
@@ -31,7 +32,7 @@ public sealed class InvestmentProjectRepository : IInvestmentProjectRepository
 
         var items = await query
             .OrderByDescending(x => x.Project.PublishedAt)
-            .Skip((filter.Page - 1) * filter.PageSize)
+            .SkipPage(filter.Page, filter.PageSize)
             .Take(filter.PageSize)
             .Select(ToListDtoExpression())
             .ToListAsync(ct);
@@ -76,7 +77,7 @@ public sealed class InvestmentProjectRepository : IInvestmentProjectRepository
 
         var items = await query
             .OrderByDescending(p => p.CreatedAt)
-            .Skip((filter.Page - 1) * filter.PageSize)
+            .SkipPage(filter.Page, filter.PageSize)
             .Take(filter.PageSize)
             .Select(p => new AdminInvestmentProjectListDto(
                 p.Id, p.Title, p.Status, p.ProjectType, p.OwnerUserId,

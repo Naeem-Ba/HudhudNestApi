@@ -5,6 +5,7 @@ using HudhudNestApi.Application.ShortStay.Interfaces;
 using HudhudNestApi.Domain.ShortStay.Entities;
 using HudhudNestApi.Domain.ShortStay.Enums;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.ShortStay;
 
@@ -16,7 +17,12 @@ public sealed class ShortStayListingRepository : IShortStayListingRepository
     public async Task AddAsync(ShortStayListing listing, CancellationToken ct = default)
         => await _db.ShortStayListings.AddAsync(listing, ct);
 
+    // Split query (launch audit A6-001): one joined statement over room types x units x pricing
+    // rules x minimum-stay rules x photos x amenities returned ~3,840 rows for a 20-card page
+    // (EF warning 20504) and was the first thing to fall over under load. One statement per
+    // collection keeps each result linear in the rows actually returned.
     private IQueryable<ShortStayListing> WithDetails() => _db.ShortStayListings
+        .AsSplitQuery()
         .Include(l => l.AccommodationType)
         .Include(l => l.RoomTypes).ThenInclude(rt => rt.Units)
         .Include(l => l.RoomTypes).ThenInclude(rt => rt.PricingRules)
@@ -31,7 +37,7 @@ public sealed class ShortStayListingRepository : IShortStayListingRepository
         => await WithDetails().FirstOrDefaultAsync(l => l.Id == id && l.IsPublished, ct);
 
     public async Task<IReadOnlyList<ShortStayListing>> GetByOwnerAsync(Guid ownerId, CancellationToken ct = default)
-        => await WithDetails().Where(l => l.OwnerId == ownerId).OrderByDescending(l => l.CreatedAt).ToListAsync(ct);
+        => await WithDetails().Where(l => l.OwnerId == ownerId).OrderByDescending(l => l.CreatedAt).ThenBy(l => l.Id).ToListAsync(ct);
 
     public async Task<PagedResult<ShortStayListing>> SearchForAdminAsync(
         string? search, bool? takenDown, int page, int pageSize, CancellationToken ct = default)
@@ -50,7 +56,7 @@ public sealed class ShortStayListingRepository : IShortStayListingRepository
 
         var total = await query.CountAsync(ct);
         var items = await query.OrderByDescending(l => l.CreatedAt)
-            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+            .SkipPage(page, pageSize).Take(pageSize).ToListAsync(ct);
 
         return new PagedResult<ShortStayListing> { Items = items, TotalCount = total, Page = page, PageSize = pageSize };
     }
@@ -137,9 +143,13 @@ public sealed class ShortStayListingRepository : IShortStayListingRepository
         // belt-and-suspenders pattern AdminListingService/AdminService use).
         var pageSize = Math.Clamp(filter.PageSize, 1, 100);
 
+        // Read-only public search: no change tracking. Id breaks PublishedAt ties so the page
+        // window is stable across the split query's statements.
         var items = await query
+            .AsNoTracking()
             .OrderByDescending(l => l.PublishedAt)
-            .Skip((page - 1) * pageSize)
+            .ThenBy(l => l.Id)
+            .SkipPage(page, pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
 

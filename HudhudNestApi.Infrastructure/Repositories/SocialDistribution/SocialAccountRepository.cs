@@ -5,6 +5,7 @@ using HudhudNestApi.Application.SocialDistribution.Interfaces;
 using HudhudNestApi.Domain.SocialDistribution.Entities;
 using HudhudNestApi.Domain.SocialDistribution.Enums;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.Repositories.SocialDistribution;
 
@@ -43,7 +44,7 @@ public sealed class SocialAccountRepository : ISocialAccountRepository
 
         var items = await query
             .OrderByDescending(a => a.CreatedAt)
-            .Skip((page - 1) * pageSize)
+            .SkipPage(page, pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
 

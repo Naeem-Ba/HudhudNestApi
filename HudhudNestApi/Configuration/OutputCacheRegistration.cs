@@ -107,33 +107,37 @@ public static class OutputCacheRegistration
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        var redisConnection =
-            configuration.GetConnectionString("Redis") ??
-            configuration["Redis:ConnectionString"];
+        // Launch audit A6-002: the public list/details/geo responses are cached in the API
+        // process's memory by default. On Redis every public GET cost Redis commands (a read, and
+        // a write plus a tag on a miss), which exhausts the Upstash free command quota. With one
+        // API instance (Render free) the memory store is exact: property writes evict it in the
+        // same process. With several instances, set OutputCache:Store=Redis so a write on one
+        // instance also evicts the others (otherwise they serve the old response until the
+        // 30-60 s TTL ends).
+        var store = configuration["OutputCache:Store"];
+        var useRedis = string.Equals(store, "Redis", StringComparison.OrdinalIgnoreCase);
 
-        var isTestingOrCi =
-            environment.EnvironmentName.Equals(
-                "Testing",
-                StringComparison.OrdinalIgnoreCase) ||
-            environment.EnvironmentName.Equals(
-                "CI",
-                StringComparison.OrdinalIgnoreCase);
-
-        var requiresRedis =
-            environment.IsProduction() ||
-            environment.IsStaging();
-
-        if (string.IsNullOrWhiteSpace(redisConnection))
+        if (!useRedis)
         {
-            if (requiresRedis)
+            if (!string.IsNullOrWhiteSpace(store) &&
+                !string.Equals(store, "Memory", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
-                    "Redis is required for Output Cache in " +
-                    "Staging and Production.");
+                    $"OutputCache:Store must be 'Memory' or 'Redis', not '{store}'.");
             }
 
             services.AddOutputCache(ConfigurePolicies);
             return services;
+        }
+
+        var redisConnection =
+            configuration.GetConnectionString("Redis") ??
+            configuration["Redis:ConnectionString"];
+
+        if (string.IsNullOrWhiteSpace(redisConnection))
+        {
+            throw new InvalidOperationException(
+                "OutputCache:Store=Redis needs a Redis connection string.");
         }
 
         services.AddStackExchangeRedisOutputCache(options =>

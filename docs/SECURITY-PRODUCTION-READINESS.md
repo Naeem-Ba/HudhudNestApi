@@ -367,6 +367,18 @@ property-image/avatar/short-stay-photo uploads, profile update and `POST /api/us
 Both are defined in `RateLimitingRegistration` (in-memory) and `RedisRateLimitingDefaults` (Redis) and must
 be changed together. `change-password` also counts wrong current passwords towards Identity lockout.
 
+**Client IP behind the Netlify auth proxy (launch audit 2026-10-30, A4-001; earlier F-04).** The web app
+sends every `/api/auth/*` and `/api/security/csrf-token` call through a Netlify Edge Function, so the
+connecting address the limiter keys on is Netlify's, not the visitor's. Without a fix every web visitor
+shares one bucket per edge node (login 10/min, register 5/10 min, OTP 3/15 min, refresh 20/5 min).
+The edge function now sends `X-HN-Client-IP` (from `context.ip`) with `X-HN-Edge-Secret`;
+[EdgeClientIpMiddleware](../HudhudNestApi/Security/EdgeClientIpMiddleware.cs) runs right after
+`UseForwardedHeaders()` and sets `Connection.RemoteIpAddress` only when the secret matches
+`EdgeProxy:SharedSecret` (at least 32 characters, constant-time compare). It removes both headers on
+every request, so a client cannot spoof them. Required configuration, same value in both places:
+Render `EdgeProxy__SharedSecret`, Netlify `EDGE_PROXY_SECRET` (production context). Until both are set,
+the behaviour is unchanged (and still shared per edge node).
+
 ## 16. Security Headers
 
 [SecurityHeadersMiddleware.cs](../HudhudNestApi/Security/Headers/SecurityHeadersMiddleware.cs)

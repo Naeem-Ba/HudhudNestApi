@@ -1,3 +1,4 @@
+﻿using HudhudNestApi.Application.Agencies.Interfaces;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ValidationException = HudhudNestApi.Application.Common.Exceptions.ValidationException;
@@ -58,7 +59,9 @@ public sealed class UpdatePropertyAmenitiesTests
             Mock.Of<ILocationHierarchyChecker>(),
             lookups.Object,
             Mock.Of<IPublisher>(),
-            NullLogger<UpdatePropertyCommandHandler>.Instance);
+            NullLogger<UpdatePropertyCommandHandler>.Instance,
+            Mock.Of<IListingQuotaGuard>(),
+            Mock.Of<IAgencyRepository>());
 
         return (sut, property, ownerId, repo);
     }

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using HudhudNestApi.Application.Reviews.Interfaces;
 using HudhudNestApi.Domain.Reviews.Entities;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.Reviews;
 
@@ -100,7 +101,7 @@ public sealed class UserRatingRepository : IUserRatingRepository
         var ratings = await query
             .Include(r => r.Rater)
             .OrderByDescending(r => r.CreatedAt)
-            .Skip((page - 1) * pageSize)
+            .SkipPage(page, pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
 

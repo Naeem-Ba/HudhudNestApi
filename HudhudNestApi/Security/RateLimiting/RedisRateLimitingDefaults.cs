@@ -23,16 +23,16 @@ internal static class RedisRateLimitingDefaults
             ["auth-register"] = Policy(5, TimeSpan.FromMinutes(10)),
             ["auth-refresh"] = Policy(20, TimeSpan.FromMinutes(5)),
             ["auth-logout"] = Policy(20, TimeSpan.FromMinutes(5)),
-            ["public-search"] = Policy(120, TimeSpan.FromMinutes(1)),
-            ["geo-search"] = Policy(60, TimeSpan.FromMinutes(1)),
+            ["public-search"] = PublicReadPolicy(120, TimeSpan.FromMinutes(1)),
+            ["geo-search"] = PublicReadPolicy(60, TimeSpan.FromMinutes(1)),
             // RELEASE-BLOCKERS-AR.md B-7: GET /api/agencies/{slug} was anonymous with no
             // limit at all. Same cadence as public-search — it is the same kind of
             // anonymous, browsable public page.
-            ["agencies-public"] = Policy(120, TimeSpan.FromMinutes(1)),
+            ["agencies-public"] = PublicReadPolicy(120, TimeSpan.FromMinutes(1)),
             // RELEASE-BLOCKERS-AR.md B-7: shared policy for the remaining anonymous
             // read-only/reference endpoints that had no rate limit at all. Same cadence as
             // public-search/agencies-public.
-            ["public-read"] = Policy(120, TimeSpan.FromMinutes(1)),
+            ["public-read"] = PublicReadPolicy(120, TimeSpan.FromMinutes(1)),
             // Automatic listing translation: one call per opened listing, and a miss can spend provider
             // quota, so tighter than a read. A stored translation costs one query, a miss one provider call.
             ["listing-translation"] = Policy(30, TimeSpan.FromMinutes(1)),
@@ -48,7 +48,7 @@ internal static class RedisRateLimitingDefaults
             ["provider-applications"] = Policy(10, TimeSpan.FromHours(1)),
             // Short-Stay Accommodation — same cadence as visits/public-search respectively.
             ["shortstay-booking"] = Policy(10, TimeSpan.FromHours(1)),
-            ["shortstay-search"] = Policy(120, TimeSpan.FromMinutes(1)),
+            ["shortstay-search"] = PublicReadPolicy(120, TimeSpan.FromMinutes(1)),
             // Phase 5 (Account Deletion): same cadence as auth-password-reset — see
             // RateLimitingRegistration's in-memory fallback policy for the full rationale.
             ["account-delete"] = Policy(3, TimeSpan.FromHours(1)),
@@ -73,6 +73,19 @@ internal static class RedisRateLimitingDefaults
             ["listing-views"] = Policy(30, TimeSpan.FromMinutes(1)),
             ["social-distribution-write"] = Policy(30, TimeSpan.FromMinutes(1))
         };
+
+    /// <summary>
+    /// Anonymous public read policies are counted in process memory (launch audit A6-002): on
+    /// Redis every public GET cost at least one command, which exhausts the Upstash free quota
+    /// and turns every public page into a 503 ("Rate limiter backend is unavailable").
+    /// Login, OTP, reset and every write policy stay on Redis.
+    /// </summary>
+    private static RedisFixedWindowRateLimitPolicyOptions PublicReadPolicy(int permitLimit, TimeSpan window)
+    {
+        var policy = Policy(permitLimit, window);
+        policy.InProcess = true;
+        return policy;
+    }
 
     private static RedisFixedWindowRateLimitPolicyOptions Policy(
         int permitLimit,

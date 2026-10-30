@@ -4,6 +4,7 @@ using HudhudNestApi.Application.Valuation.Interfaces;
 using HudhudNestApi.Domain.Valuation.Entities;
 using HudhudNestApi.Domain.Valuation.Enums;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.Valuation;
 
@@ -89,7 +90,7 @@ public sealed class ValuationInquiryRepository : IValuationInquiryRepository
 
         var items = await query
             .OrderByDescending(i => i.CreatedAt)
-            .Skip((page - 1) * pageSize)
+            .SkipPage(page, pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
 

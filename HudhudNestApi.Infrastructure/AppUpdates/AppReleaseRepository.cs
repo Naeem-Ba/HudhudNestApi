@@ -6,6 +6,7 @@ using HudhudNestApi.Domain.AppUpdates.Entities;
 using HudhudNestApi.Domain.AppUpdates.Enums;
 using HudhudNestApi.Domain.AppUpdates.ValueObjects;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.AppUpdates;
 
@@ -41,7 +42,7 @@ public sealed class AppReleaseRepository : IAppReleaseRepository
 
         var items = await query
             .OrderByDescending(r => r.CreatedAt)
-            .Skip((filter.Page - 1) * filter.PageSize)
+            .SkipPage(filter.Page, filter.PageSize)
             .Take(filter.PageSize)
             .Select(r => new AppReleaseAdminDto(
                 r.Id, r.Platform, r.Version, r.MinimumSupportedVersion, r.StoreUrl,
