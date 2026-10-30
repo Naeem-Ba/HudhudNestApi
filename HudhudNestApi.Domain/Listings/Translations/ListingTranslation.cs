@@ -1,4 +1,5 @@
 using HudhudNestApi.Domain.Listings.Entities;
+using HudhudNestApi.Domain.ShortStay.Entities;
 
 namespace HudhudNestApi.Domain.Listings.Translations;
 
@@ -7,6 +8,20 @@ public enum ListingTranslationField
 {
     Title = 1,
     Description = 2
+}
+
+/// <summary>Which kind of listing a translation belongs to; each kind has its own foreign key so rows cascade with their listing.</summary>
+public enum ListingTranslationSubject
+{
+    Property = 1,
+    ShortStay = 2
+}
+
+/// <summary>A listing of either kind, by id.</summary>
+public readonly record struct ListingRef(ListingTranslationSubject Kind, Guid Id)
+{
+    public static ListingRef ForProperty(Guid id) => new(ListingTranslationSubject.Property, id);
+    public static ListingRef ForShortStay(Guid id) => new(ListingTranslationSubject.ShortStay, id);
 }
 
 public enum ListingTranslationStatus
@@ -40,8 +55,13 @@ public enum ListingTranslationStatus
 public sealed class ListingTranslation
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid PropertyId { get; set; }
+    /// <summary>Set for a sale/rent listing; exactly one of <see cref="PropertyId"/> and <see cref="ShortStayListingId"/> is set (check constraint).</summary>
+    public Guid? PropertyId { get; set; }
     public Property? Property { get; set; }
+
+    /// <summary>Set for a short-stay listing.</summary>
+    public Guid? ShortStayListingId { get; set; }
+    public ShortStayListing? ShortStayListing { get; set; }
     public ListingTranslationField Field { get; set; }
 
     /// <summary>"ar", "de" or "en".</summary>

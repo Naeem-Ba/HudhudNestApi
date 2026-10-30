@@ -22,6 +22,8 @@ public sealed class InvestmentRiskAssessmentRepository : IInvestmentRiskAssessme
     public Task<InvestmentRiskDto?> GetDtoAsync(Guid investmentProjectId, CancellationToken ct = default) =>
         (from risk in _db.InvestmentRiskAssessments.AsNoTracking()
          join project in _db.InvestmentProjects.AsNoTracking() on risk.InvestmentProjectId equals project.Id
+         // P10-D11: hidden together with the project once its property is deleted.
+         join property in _db.Properties.AsNoTracking() on project.PropertyId equals property.Id
          where risk.InvestmentProjectId == investmentProjectId && project.Status == InvestmentProjectStatus.Published
          select new InvestmentRiskDto(
              risk.InvestmentProjectId,

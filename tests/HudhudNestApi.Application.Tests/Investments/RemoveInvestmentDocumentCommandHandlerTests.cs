@@ -47,7 +47,7 @@ public sealed class RemoveInvestmentDocumentCommandHandlerTests
         var logger = new Mock<ILogger<RemoveInvestmentDocumentCommandHandler>>();
 
         var handler = new RemoveInvestmentDocumentCommandHandler(
-            documents.Object, storage.Object, uow.Object, logger.Object);
+            new Mock<IInvestmentProjectRepository>().Object, documents.Object, storage.Object, uow.Object, logger.Object);
 
         // Must not throw — the metadata row is already removed and is the source of truth.
         await handler.Handle(
@@ -84,7 +84,7 @@ public sealed class RemoveInvestmentDocumentCommandHandlerTests
         var logger = new Mock<ILogger<RemoveInvestmentDocumentCommandHandler>>();
 
         var handler = new RemoveInvestmentDocumentCommandHandler(
-            documents.Object, storage.Object, uow.Object, logger.Object);
+            new Mock<IInvestmentProjectRepository>().Object, documents.Object, storage.Object, uow.Object, logger.Object);
 
         await handler.Handle(
             new RemoveInvestmentDocumentCommand(projectId, document.Id, Guid.NewGuid()), CancellationToken.None);

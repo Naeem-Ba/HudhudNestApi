@@ -238,7 +238,9 @@ public sealed class AppDbContext
         builder.Entity<Favorite>().HasQueryFilter(favorite => !favorite.Property.IsDeleted);
 
         // Translations follow their listing: a soft-deleted listing's translations are unreachable through EF too.
-        builder.Entity<ListingTranslation>().HasQueryFilter(t => !t.Property!.IsDeleted);
+        builder.Entity<ListingTranslation>().HasQueryFilter(t =>
+            (t.PropertyId == null || (t.Property != null && !t.Property.IsDeleted)) &&
+            (t.ShortStayListingId == null || (t.ShortStayListing != null && !t.ShortStayListing.IsDeleted)));
 
         builder.Entity<PropertyAmenity>().HasQueryFilter(propertyAmenity => !propertyAmenity.Property.IsDeleted && !propertyAmenity.Amenity.IsDeleted);
 

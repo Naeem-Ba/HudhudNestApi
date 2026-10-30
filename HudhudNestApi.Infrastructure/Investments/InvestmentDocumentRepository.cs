@@ -25,6 +25,8 @@ public sealed class InvestmentDocumentRepository : IInvestmentDocumentRepository
         var query =
             from document in _db.InvestmentDocuments.AsNoTracking()
             join project in _db.InvestmentProjects.AsNoTracking() on document.InvestmentProjectId equals project.Id
+            // P10-D11: a project whose property was deleted is no longer public (details/list already 404).
+            join property in _db.Properties.AsNoTracking() on project.PropertyId equals property.Id
             where document.InvestmentProjectId == investmentProjectId &&
                   document.IsPublic &&
                   project.Status == InvestmentProjectStatus.Published

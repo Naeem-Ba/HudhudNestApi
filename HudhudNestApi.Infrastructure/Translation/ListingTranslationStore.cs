@@ -22,21 +22,34 @@ public sealed class ListingTranslationStore : IListingTranslationStore
 
     public ListingTranslationStore(AppDbContext db) => _db = db;
 
-    public async Task<ListingTextSource?> GetPubliclyViewableTextAsync(Guid propertyId, DateTime nowUtc, CancellationToken ct)
+    public async Task<ListingTextSource?> GetPubliclyViewableTextAsync(ListingRef listing, DateTime nowUtc, CancellationToken ct)
     {
-        return await _db.Properties
-            .AsNoTracking()
-            .Where(p => p.Id == propertyId)
-            .Where(Property.PubliclyViewable(nowUtc))
-            .Select(p => new ListingTextSource(p.Title, p.Description))
-            .FirstOrDefaultAsync(ct);
+        // Same visibility rule as each kind's public detail page (soft-deleted rows are removed by the global filters).
+        return listing.Kind switch
+        {
+            ListingTranslationSubject.Property => await _db.Properties
+                .AsNoTracking()
+                .Where(p => p.Id == listing.Id)
+                .Where(Property.PubliclyViewable(nowUtc))
+                .Select(p => new ListingTextSource(p.Title, p.Description))
+                .FirstOrDefaultAsync(ct),
+            ListingTranslationSubject.ShortStay => await _db.ShortStayListings
+                .AsNoTracking()
+                .Where(l => l.Id == listing.Id && l.IsPublished)
+                .Select(l => new ListingTextSource(l.Title, l.Description))
+                .FirstOrDefaultAsync(ct),
+            _ => throw new ArgumentOutOfRangeException(nameof(listing))
+        };
     }
 
-    public async Task<IReadOnlyList<StoredListingTranslation>> GetAsync(Guid propertyId, string targetLanguage, CancellationToken ct)
+    public async Task<IReadOnlyList<StoredListingTranslation>> GetAsync(ListingRef listing, string targetLanguage, CancellationToken ct)
     {
-        return await _db.ListingTranslations
-            .AsNoTracking()
-            .Where(t => t.PropertyId == propertyId && t.TargetLanguage == targetLanguage)
+        var query = _db.ListingTranslations.AsNoTracking().Where(t => t.TargetLanguage == targetLanguage);
+        query = listing.Kind == ListingTranslationSubject.Property
+            ? query.Where(t => t.PropertyId == listing.Id)
+            : query.Where(t => t.ShortStayListingId == listing.Id);
+
+        return await query
             .Select(t => new StoredListingTranslation(
                 t.Id, t.Field, t.Status, t.SourceHash, t.PolicyVersion, t.SourceLanguage, t.TranslatedText,
                 t.AttemptCount, t.ClaimedUntil, t.RetryAfter, t.LastError))
@@ -51,8 +64,23 @@ public sealed class ListingTranslationStore : IListingTranslationStore
         _ => throw new ArgumentOutOfRangeException(nameof(field))
     };
 
+    // Table and foreign-key column of each kind: closed switches, never taken from input.
+    private static string Table(ListingRef listing) => listing.Kind switch
+    {
+        ListingTranslationSubject.Property => "Properties",
+        ListingTranslationSubject.ShortStay => "ShortStayListings",
+        _ => throw new ArgumentOutOfRangeException(nameof(listing))
+    };
+
+    private static string ForeignKey(ListingRef listing) => listing.Kind switch
+    {
+        ListingTranslationSubject.Property => "PropertyId",
+        ListingTranslationSubject.ShortStay => "ShortStayListingId",
+        _ => throw new ArgumentOutOfRangeException(nameof(listing))
+    };
+
     public async Task<IReadOnlyList<TranslationClaim?>> TryClaimAsync(
-        Guid propertyId, string targetLanguage, IReadOnlyList<TranslationClaimRequest> requests,
+        ListingRef listing, string targetLanguage, IReadOnlyList<TranslationClaimRequest> requests,
         int policyVersion, string provider, TimeSpan lease, DateTime nowUtc, CancellationToken ct)
     {
         var claims = new TranslationClaim?[requests.Count];
@@ -62,17 +90,17 @@ public sealed class ListingTranslationStore : IListingTranslationStore
         await using var transaction = await _db.Database.BeginTransactionAsync(ct);
         await ExecuteAsync(
             "SELECT pg_advisory_xact_lock(hashtextextended(@key, 0))", ct,
-            P("key", $"listing-translation:{propertyId:N}:{targetLanguage}"));
+            P("key", $"listing-translation:{listing.Kind}:{listing.Id:N}:{targetLanguage}"));
 
         for (var i = 0; i < requests.Count; i++)
-            claims[i] = await TryClaimOneAsync(propertyId, targetLanguage, requests[i], policyVersion, provider, lease, nowUtc, ct);
+            claims[i] = await TryClaimOneAsync(listing, targetLanguage, requests[i], policyVersion, provider, lease, nowUtc, ct);
 
         await transaction.CommitAsync(ct);
         return claims;
     }
 
     private async Task<TranslationClaim?> TryClaimOneAsync(
-        Guid propertyId, string targetLanguage, TranslationClaimRequest request,
+        ListingRef listing, string targetLanguage, TranslationClaimRequest request,
         int policyVersion, string provider, TimeSpan lease, DateTime nowUtc, CancellationToken ct)
     {
         var field = request.Field;
@@ -80,6 +108,8 @@ public sealed class ListingTranslationStore : IListingTranslationStore
         var sourceHash = request.SourceHash;
         var sourceCharacters = request.SourceCharacters;
         var column = Column(field);
+        var table = Table(listing);
+        var fk = ForeignKey(listing);
         var rowId = Guid.NewGuid();
         var token = Guid.NewGuid();
 
@@ -87,14 +117,14 @@ public sealed class ListingTranslationStore : IListingTranslationStore
         // claim, or a failure whose cooldown has passed. A valid or actively-owned row yields no row => null.
         var sql = $"""
             INSERT INTO "ListingTranslations"
-                ("Id","PropertyId","Field","TargetLanguage","SourceLanguage","SourceHash","PolicyVersion","Provider","Status",
+                ("Id","{fk}","Field","TargetLanguage","SourceLanguage","SourceHash","PolicyVersion","Provider","Status",
                  "TranslatedText","SourceCharacters","AttemptCount","ClaimToken","ClaimedUntil","RetryAfter","LastError","CreatedAt","UpdatedAt")
             SELECT @id, p."Id", @field, @target, @srclang, @hash, @policy, @provider, 1,
                    NULL, @chars, 0, @token, @until, NULL, NULL, @now, @now
-            FROM "Properties" p
+            FROM "{table}" p
             WHERE p."Id" = @pid AND NOT p."IsDeleted"
               AND encode(sha256(convert_to(p."{column}", 'UTF8')), 'hex') = @hash
-            ON CONFLICT ("PropertyId","Field","TargetLanguage") DO UPDATE SET
+            ON CONFLICT ("{fk}","Field","TargetLanguage") WHERE "{fk}" IS NOT NULL DO UPDATE SET
                 "SourceLanguage" = EXCLUDED."SourceLanguage",
                 "SourceHash" = EXCLUDED."SourceHash",
                 "PolicyVersion" = EXCLUDED."PolicyVersion",
@@ -118,7 +148,7 @@ public sealed class ListingTranslationStore : IListingTranslationStore
             """;
 
         var attempts = await ScalarAsync(sql, ct,
-            P("id", rowId), P("pid", propertyId), P("field", (int)field), P("target", targetLanguage),
+            P("id", rowId), P("pid", listing.Id), P("field", (int)field), P("target", targetLanguage),
             P("srclang", sourceLanguage), P("hash", sourceHash), P("policy", policyVersion), P("provider", provider),
             P("chars", sourceCharacters), P("token", token), P("until", nowUtc.Add(lease)), P("now", nowUtc));
 
@@ -126,14 +156,14 @@ public sealed class ListingTranslationStore : IListingTranslationStore
 
         // On conflict the surviving row keeps its original Id, so look it up by the unique key.
         var id = await ScalarAsync(
-            """SELECT "Id" FROM "ListingTranslations" WHERE "PropertyId" = @pid AND "Field" = @field AND "TargetLanguage" = @target AND "ClaimToken" = @token""",
-            ct, P("pid", propertyId), P("field", (int)field), P("target", targetLanguage), P("token", token));
+            $"""SELECT "Id" FROM "ListingTranslations" WHERE "{fk}" = @pid AND "Field" = @field AND "TargetLanguage" = @target AND "ClaimToken" = @token""",
+            ct, P("pid", listing.Id), P("field", (int)field), P("target", targetLanguage), P("token", token));
 
         return id is Guid guid ? new TranslationClaim(guid, token, Convert.ToInt32(attempts)) : null;
     }
 
     public async Task<bool> CompleteAsync(
-        TranslationClaim claim, ListingTranslationField field, ListingTranslationStatus status,
+        ListingRef listing, TranslationClaim claim, ListingTranslationField field, ListingTranslationStatus status,
         string? translatedText, string? sourceLanguage, DateTime nowUtc, CancellationToken ct)
     {
         if (status == ListingTranslationStatus.Completed && string.IsNullOrWhiteSpace(translatedText))
@@ -145,8 +175,8 @@ public sealed class ListingTranslationStore : IListingTranslationStore
                 "Status" = @status, "TranslatedText" = @text, "SourceLanguage" = COALESCE(@srclang, t."SourceLanguage"),
                 "ClaimToken" = NULL, "ClaimedUntil" = NULL, "RetryAfter" = NULL, "LastError" = NULL, "UpdatedAt" = @now
             WHERE t."Id" = @id AND t."ClaimToken" = @token AND t."Status" = 1
-              AND EXISTS (SELECT 1 FROM "Properties" p
-                          WHERE p."Id" = t."PropertyId" AND NOT p."IsDeleted"
+              AND EXISTS (SELECT 1 FROM "{Table(listing)}" p
+                          WHERE p."Id" = t."{ForeignKey(listing)}" AND NOT p."IsDeleted"
                             AND encode(sha256(convert_to(p."{column}", 'UTF8')), 'hex') = t."SourceHash")
             """;
 

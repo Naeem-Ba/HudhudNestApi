@@ -30,12 +30,12 @@ public sealed class BackgroundJobLockExclusionTests
         Assert.Contains("SecurityAlertBackgroundService", source);
         Assert.Contains("Deliberately excluded", source);
 
-        // Exactly twelve keys exist today (see the Theory test below for the locked services;
+        // Exactly thirteen keys exist today (see the Theory test below for the locked services;
         // OtpCleanup's key is not a BackgroundService of its own). If another recurring
         // hosted service is added, it must either get a key here (and a corresponding case in
         // AdvisoryLockConcurrencyTests) or be added to the excluded list with its own
         // reasoning -- not silently fall through either check.
-        Assert.Equal(12, System.Text.RegularExpressions.Regex.Matches(source, @"public const long \w+ =").Count);
+        Assert.Equal(13, System.Text.RegularExpressions.Regex.Matches(source, @"public const long \w+ =").Count);
     }
 
     [Fact(DisplayName = "SecurityAlertBackgroundService does not take a BackgroundJobLock")]
@@ -63,6 +63,7 @@ public sealed class BackgroundJobLockExclusionTests
     [InlineData("ShortStay", "ShortStayBookingLifecycleHostedService.cs")]
     [InlineData("Listings", "ListingViewRetentionHostedService.cs")]
     [InlineData("Auth\\Services", "AuthDataRetentionHostedService.cs")]
+    [InlineData("Investments", "InvestmentScheduledPublishHostedService.cs")]
     public void HostedService_Should_Reference_BackgroundJobLock(string relativeDir, string fileName)
     {
         var source = ReadSource(

@@ -22,6 +22,8 @@ public sealed class InvestmentUpdateRepository : IInvestmentUpdateRepository
         var query =
             from update in _db.InvestmentUpdates.AsNoTracking()
             join project in _db.InvestmentProjects.AsNoTracking() on update.InvestmentProjectId equals project.Id
+            // P10-D11: hidden together with the project once its property is deleted.
+            join property in _db.Properties.AsNoTracking() on project.PropertyId equals property.Id
             where update.InvestmentProjectId == investmentProjectId && project.Status == InvestmentProjectStatus.Published
             orderby update.PublishedAt descending
             select new InvestmentUpdateDto(update.Id, update.Title, update.Content, update.UpdateType, update.PublishedAt);

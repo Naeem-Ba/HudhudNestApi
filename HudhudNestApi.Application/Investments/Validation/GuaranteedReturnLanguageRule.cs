@@ -16,6 +16,11 @@ public static class GuaranteedReturnLanguageRule
         "no risk", "100% safe", "capital protected", "guaranteed income",
         "عائد مضمون", "ربح مضمون", "استثمار مضمون", "بدون مخاطر", "خالي من المخاطر",
         "بدون أي مخاطر", "مضمون 100", "استثمار آمن تماما", "بلا مخاطر",
+        // QA Phase 10, P10-D09: other ways to promise the same thing.
+        // (Not the bare word "guaranteed" or "ضمان رأس المال": "returns are not guaranteed" and
+        // "بدون ضمان رأس المال" are exactly the honest wording we want.)
+        "sure profit", "certain profit", "capital is safe",
+        "ربح مؤكد", "عائد مؤكد", "أرباح مؤكدة", "رأس مالك مضمون", "رأس المال مضمون",
     };
 
     public static IRuleBuilderOptions<T, string?> MustNotImplyGuaranteedReturn<T>(

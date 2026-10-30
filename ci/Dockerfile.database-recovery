@@ -1,4 +1,4 @@
-FROM postgis/postgis:17-3.5
+FROM postgis/postgis:17-3.6
 
 # BUG (found via Database Backup run #583 investigation, 2026-09-12): this
 # image's base OS is Debian 11 "bullseye", which is now "oldoldstable" --

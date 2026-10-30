@@ -272,7 +272,10 @@
 | /F-INV-03/ | قائمة مراقبة | م | `GET/POST/DELETE …/watchlist` | K | ✅ | |
 | /F-INV-04/ | **تعبير عن اهتمام** بلا مبلغ ولا التزام، ويُسحب | م | `GET/POST/DELETE …/interest` | K | ✅ | `InvestmentInterest` |
 | /F-INV-05/ | دورة الإدارة: مسودة ← مراجعة ← موافقة/رفض ← جدولة ← نشر ← تعليق/إغلاق + ماليات ومخاطر ومستندات وتحديثات | Admin | `/api/admin/investments/projects/*` | K | ✅ | `InvestmentProjectStatus` (8 حالات) |
-| /F-INV-06/ | عرض إخلاء المسؤولية (المخاطر ليست ضمانًا) | ز | واجهة | M | ✅ | `INVESTMENTS.RISK.DISCLAIMER` |
+| /F-INV-06/ | عرض إخلاء المسؤولية (المخاطر ليست ضمانًا) + إخلاء عام في القائمة وأعلى صفحة المشروع | ز | واجهة | M | ✅ | `INVESTMENTS.RISK.DISCLAIMER`، `INVESTMENTS.GENERAL_DISCLAIMER` |
+| /F-INV-07/ | قائمة المهتمين لكل مشروع + عدّاد في القائمة + إشعار للمدراء (QA م10 D01) | Admin | `GET /api/admin/investments/projects/{id}/interests` | K | ✅ | `InvestmentInterestReceived` |
+| /F-INV-08/ | استئناف مشروع معلّق + تحديث المبلغ المجمّع بعد النشر (D04، D12) | Admin | `POST …/resume`، `PUT …/progress` | K | ✅ | `InvestmentProject.Resume/UpdateProgress` |
+| /F-INV-09/ | النشر المجدول التلقائي (D03) | نظام | مهمة خلفية كل 5 دقائق | K | ✅ | `InvestmentScheduledPublishHostedService` |
 
 ### 4.11 النشر الآلي على وسائل التواصل (SOC) — Admin فقط
 

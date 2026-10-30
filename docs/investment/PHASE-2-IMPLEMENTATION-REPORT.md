@@ -280,8 +280,8 @@ Total                            911/911 passed, 0 failures
 
 - No admin-wide property search/autocomplete endpoint exists; the create-project property picker
   is a manual-id-plus-lookup field against the existing public property-detail endpoint.
-- No "Resume" (Suspended → Published) workflow action — not supported by the backend state
-  machine; would require a new Command if wanted.
+- ~~No "Resume" (Suspended → Published) workflow action.~~ Added by the QA Phase 10 fixes
+  (`POST .../resume`, see `PHASE-10-FIXES.md`).
 - Concurrency/race-condition testing (§26) is not applicable — Phase 1/2 deliberately implement
   no real financial commitment pipeline for `RaisedAmount` (staff-entered, informational only).
 

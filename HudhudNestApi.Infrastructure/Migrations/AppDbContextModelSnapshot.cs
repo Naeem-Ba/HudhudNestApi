@@ -1732,7 +1732,7 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Property<int>("PolicyVersion")
                         .HasColumnType("integer");
 
-                    b.Property<Guid>("PropertyId")
+                    b.Property<Guid?>("PropertyId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Provider")
@@ -1742,6 +1742,9 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.Property<DateTime?>("RetryAfter")
                         .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("ShortStayListingId")
+                        .HasColumnType("uuid");
 
                     b.Property<int>("SourceCharacters")
                         .HasColumnType("integer");
@@ -1772,11 +1775,18 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("PropertyId", "Field", "TargetLanguage")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"PropertyId\" IS NOT NULL");
+
+                    b.HasIndex("ShortStayListingId", "Field", "TargetLanguage")
+                        .IsUnique()
+                        .HasFilter("\"ShortStayListingId\" IS NOT NULL");
 
                     b.ToTable("ListingTranslations", null, t =>
                         {
                             t.HasCheckConstraint("CK_ListingTranslations_CompletedHasText", "(\"Status\" = 2 AND \"TranslatedText\" IS NOT NULL AND char_length(btrim(\"TranslatedText\")) > 0) OR (\"Status\" <> 2 AND \"TranslatedText\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_ListingTranslations_ExactlyOneListing", "(\"PropertyId\" IS NOT NULL AND \"ShortStayListingId\" IS NULL) OR (\"PropertyId\" IS NULL AND \"ShortStayListingId\" IS NOT NULL)");
 
                             t.HasCheckConstraint("CK_ListingTranslations_Field", "\"Field\" IN (1, 2)");
 
@@ -6422,10 +6432,16 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasOne("HudhudNestApi.Domain.Listings.Entities.Property", "Property")
                         .WithMany()
                         .HasForeignKey("PropertyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("HudhudNestApi.Domain.ShortStay.Entities.ShortStayListing", "ShortStayListing")
+                        .WithMany()
+                        .HasForeignKey("ShortStayListingId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Property");
+
+                    b.Navigation("ShortStayListing");
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.Lookups.Entities.District", b =>

@@ -1,5 +1,6 @@
 using MediatR;
 using HudhudNestApi.Application.Listings.Translations;
+using HudhudNestApi.Domain.Listings.Translations;
 
 namespace HudhudNestApi.Application.Listings.Queries.GetListingTranslation;
 
@@ -7,7 +8,7 @@ namespace HudhudNestApi.Application.Listings.Queries.GetListingTranslation;
 /// Ensures (reads, or creates and stores) a listing's title/description in <paramref name="Language"/>.
 /// Returns null when the listing does not exist or is not publicly viewable, which the controller maps to 404.
 /// </summary>
-public sealed record GetListingTranslationQuery(Guid PropertyId, string Language) : IRequest<ListingTranslationDto?>;
+public sealed record GetListingTranslationQuery(ListingRef Listing, string Language) : IRequest<ListingTranslationDto?>;
 
 public sealed class GetListingTranslationQueryHandler : IRequestHandler<GetListingTranslationQuery, ListingTranslationDto?>
 {
@@ -16,5 +17,5 @@ public sealed class GetListingTranslationQueryHandler : IRequestHandler<GetListi
     public GetListingTranslationQueryHandler(IListingTranslationService translations) => _translations = translations;
 
     public Task<ListingTranslationDto?> Handle(GetListingTranslationQuery request, CancellationToken cancellationToken)
-        => _translations.EnsureAsync(request.PropertyId, request.Language, cancellationToken);
+        => _translations.EnsureAsync(request.Listing, request.Language, cancellationToken);
 }
