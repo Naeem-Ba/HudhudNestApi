@@ -210,6 +210,10 @@ await app.SeedReferenceDataAsync();
 // -- 11. Middleware order --------------------------------------
 app.UseForwardedHeaders();
 
+// After ForwardedHeaders and before anything that reads the client IP (rate limiting, logging):
+// trusts the visitor IP the Netlify auth proxy adds, only with the shared secret (audit A4-001).
+app.UseMiddleware<HudhudNestApi.Security.EdgeClientIpMiddleware>();
+
 if (app.Environment.IsProduction() || app.Environment.IsStaging())
 {
     // Production incident (2026-09-18): Request.IsHttps is still false on every request here

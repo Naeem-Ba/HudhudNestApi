@@ -4,6 +4,7 @@ using HudhudNestApi.Application.Users.Messaging.DTOs;
 using HudhudNestApi.Application.Users.Messaging.Interfaces;
 using HudhudNestApi.Domain.Messaging.Entities;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.Repositories;
 
@@ -63,7 +64,7 @@ public sealed class MessageRepository : IMessageRepository
 
         var items = await query
             .OrderByDescending(message => message.CreatedAt)
-            .Skip((safePage - 1) * safePageSize)
+            .SkipPage(safePage, safePageSize)
             .Take(safePageSize)
             .ToListAsync(ct);
 
@@ -103,7 +104,7 @@ public sealed class MessageRepository : IMessageRepository
 
         var items = await query
             .OrderByDescending(message => message.CreatedAt)
-            .Skip((safePage - 1) * safePageSize)
+            .SkipPage(safePage, safePageSize)
             .Take(safePageSize)
             .ToListAsync(ct);
 
@@ -188,7 +189,7 @@ public sealed class MessageRepository : IMessageRepository
 
         var pageRows = await groups
             .OrderByDescending(group => group.LastMessageAt)
-            .Skip((safePage - 1) * safePageSize)
+            .SkipPage(safePage, safePageSize)
             .Take(safePageSize)
             .ToListAsync(ct);
 

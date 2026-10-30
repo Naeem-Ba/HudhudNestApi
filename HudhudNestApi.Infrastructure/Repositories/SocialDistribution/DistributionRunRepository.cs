@@ -4,6 +4,7 @@ using HudhudNestApi.Application.SocialDistribution.Interfaces;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.SocialDistribution.Entities;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.Repositories.SocialDistribution;
 
@@ -29,7 +30,7 @@ public sealed class DistributionRunRepository : IDistributionRunRepository
 
         var items = await query
             .OrderByDescending(r => r.CreatedAt)
-            .Skip((safePage - 1) * safePageSize)
+            .SkipPage(safePage, safePageSize)
             .Take(safePageSize)
             .ToListAsync(ct);
 

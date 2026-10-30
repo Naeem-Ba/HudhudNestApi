@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using HudhudNestApi.Application.Services.Interfaces;
 using HudhudNestApi.Domain.Services.Entities;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.Services;
 
@@ -21,7 +22,7 @@ public sealed class ServiceReviewRepository : IServiceReviewRepository
         => await _db.ServiceReviews
             .Where(r => r.ServiceProviderId == serviceProviderId && !r.IsHidden)
             .OrderByDescending(r => r.CreatedAt)
-            .Skip((page - 1) * pageSize)
+            .SkipPage(page, pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
 

@@ -3,6 +3,7 @@ using Npgsql;
 using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Domain.Notifications.Entities;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.Notifications;
 
@@ -67,7 +68,7 @@ public sealed class NotificationRepository : INotificationRepository
             .AsNoTracking()
             .Where(notification => notification.RecipientId == userId)
             .OrderByDescending(notification => notification.CreatedAt)
-            .Skip((page - 1) * pageSize)
+            .SkipPage(page, pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
     }

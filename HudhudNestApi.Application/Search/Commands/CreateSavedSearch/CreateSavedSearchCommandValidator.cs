@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using HudhudNestApi.Application.Listings.Currencies;
 
 namespace HudhudNestApi.Application.Search.Commands.CreateSavedSearch;
@@ -20,6 +20,13 @@ public sealed class CreateSavedSearchCommandValidator : AbstractValidator<Create
             .Must(SearchCurrencies.IsSupported)
             .WithMessage(SearchCurrencies.UnsupportedMessage)
             .When(x => !string.IsNullOrWhiteSpace(x.CurrencyCode));
+
+        // The column is char(2); a longer value reached PostgreSQL and came back as a 500
+        // (launch audit A2-003).
+        RuleFor(x => x.CountryCode)
+            .Length(2)
+            .WithMessage("رمز الدولة يجب أن يتكون من حرفين.")
+            .When(x => !string.IsNullOrWhiteSpace(x.CountryCode));
     }
 
     private static bool HasAtLeastOneCriterion(CreateSavedSearchCommand c) =>

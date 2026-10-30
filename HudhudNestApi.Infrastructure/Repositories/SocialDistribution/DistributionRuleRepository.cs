@@ -5,6 +5,7 @@ using HudhudNestApi.Application.SocialDistribution.Interfaces;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.SocialDistribution.Entities;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.Repositories.SocialDistribution;
 
@@ -53,7 +54,7 @@ public sealed class DistributionRuleRepository : IDistributionRuleRepository
         var items = await query
             .OrderByDescending(r => r.Priority)
             .ThenByDescending(r => r.CreatedAt)
-            .Skip((page - 1) * pageSize)
+            .SkipPage(page, pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
 

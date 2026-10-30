@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using HudhudNestApi.Application.ShortStay.Interfaces;
 using HudhudNestApi.Domain.ShortStay.Entities;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.ShortStay;
 
@@ -33,7 +34,7 @@ public sealed class ShortStayReviewRepository : IShortStayReviewRepository
                     review.Rating,
                     review.Comment,
                     review.CreatedAt))
-            .Skip((page - 1) * pageSize)
+            .SkipPage(page, pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
 

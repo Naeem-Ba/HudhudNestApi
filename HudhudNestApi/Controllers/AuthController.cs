@@ -167,6 +167,20 @@ public sealed class AuthController : ControllerBase
                 StatusCodes.Status401Unauthorized,
                 LoginResponseDto.CreateInvalidCredentials());
         }
+        catch (Exception ex) when (ex is HudhudNestApi.Application.Common.Exceptions.ValidationException
+                                       or FluentValidation.ValidationException)
+        {
+            // Launch audit A2-004: a malformed email (e.g. a phone number typed into the email
+            // field) failed LoginCommand validation and fell into the catch-all below as a 500
+            // "contact support". It is a bad request, answered like the ModelState branch above.
+            return BadRequest(new LoginResponseDto
+            {
+                Success = false,
+                StatusCode = 400,
+                Message = "Invalid request parameters",
+                ErrorCode = LoginErrorCodes.InvalidRequest
+            });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during login.");

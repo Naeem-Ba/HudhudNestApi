@@ -3,6 +3,7 @@ using HudhudNestApi.Application.Services.Admin;
 using HudhudNestApi.Application.Services.Interfaces;
 using HudhudNestApi.Domain.Services.Enums;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.Services;
 
@@ -53,7 +54,7 @@ public sealed class ServiceRequestAdminRepository : IServiceRequestAdminReposito
 
         var rows = await query
             .OrderByDescending(r => r.CreatedAt)
-            .Skip((filter.Page - 1) * filter.PageSize)
+            .SkipPage(filter.Page, filter.PageSize)
             .Take(filter.PageSize)
             .Select(r => new
             {

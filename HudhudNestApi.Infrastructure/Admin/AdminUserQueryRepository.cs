@@ -4,6 +4,7 @@ using HudhudNestApi.Application.Admin.Interfaces;
 using HudhudNestApi.Application.Properties.DTOs;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.Admin;
 
@@ -101,8 +102,7 @@ public sealed class AdminUserQueryRepository
 
         var users =
             await query
-                .Skip(
-                    (page - 1) * pageSize)
+                .SkipPage(page, pageSize)
                 .Take(pageSize)
                 .ToListAsync(ct);
 

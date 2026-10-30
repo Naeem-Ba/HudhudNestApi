@@ -1,4 +1,4 @@
-using Moq;
+﻿using Moq;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Marketing.Commands.TrackMarketingEvent;
 using HudhudNestApi.Application.Marketing.Interfaces;
@@ -17,7 +17,7 @@ public sealed class TrackMarketingEventCommandHandlerTests
         events.Setup(x => x.Add(It.IsAny<MarketingEvent>())).Callback<MarketingEvent>(e => added = e);
 
         var uow = new Mock<IUnitOfWork>();
-        var handler = new TrackMarketingEventCommandHandler(events.Object, uow.Object);
+        var handler = new TrackMarketingEventCommandHandler(events.Object, uow.Object, Mock.Of<ILeadRepository>(), Mock.Of<IOfferRepository>());
 
         var result = await handler.Handle(
             new TrackMarketingEventCommand(
@@ -35,5 +35,26 @@ public sealed class TrackMarketingEventCommandHandlerTests
         Assert.Equal(MarketingEventType.CtaClick, added.EventType);
         events.Verify(x => x.Add(It.IsAny<MarketingEvent>()), Times.Once);
         uow.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_StaleOfferAndLeadIds_AreDroppedNotAFailure()
+    {
+        // Launch audit A2-003: an old campaign link to a deleted offer reached the foreign key as a 500.
+        var events = new Mock<IMarketingEventRepository>();
+        MarketingEvent? added = null;
+        events.Setup(x => x.Add(It.IsAny<MarketingEvent>())).Callback<MarketingEvent>(e => added = e);
+        var handler = new TrackMarketingEventCommandHandler(
+            events.Object, Mock.Of<IUnitOfWork>(), Mock.Of<ILeadRepository>(), Mock.Of<IOfferRepository>());
+
+        await handler.Handle(
+            new TrackMarketingEventCommand(
+                MarketingEventType.CtaClick, "landing-page", null, "sess-2", "/landing",
+                LeadId: Guid.NewGuid(), OfferId: Guid.NewGuid()),
+            CancellationToken.None);
+
+        Assert.NotNull(added);
+        Assert.Null(added!.LeadId);
+        Assert.Null(added.OfferId);
     }
 }

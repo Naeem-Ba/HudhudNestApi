@@ -14,6 +14,7 @@ using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings;
 using HudhudNestApi.Domain.Listings.Entities;
 using HudhudNestApi.Domain.Notifications.Enums;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Application.Admin.Services;
 
@@ -73,7 +74,7 @@ public sealed class AdminListingService : IAdminListingService
         var ordered = filtered.OrderByDescending(p => p.CreatedAt).ToList();
 
         var items = ordered
-            .Skip((page - 1) * pageSize)
+            .SkipPage(page, pageSize)
             .Take(pageSize)
             .Select(ToSummary)
             .ToArray();

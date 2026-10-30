@@ -8,6 +8,7 @@ using HudhudNestApi.Application.Listings.Currencies;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings;
 using HudhudNestApi.Domain.Listings.Enums;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.Repositories;
 
@@ -100,7 +101,7 @@ public sealed class PropertyRepository : IPropertyRepository
         // rather than a fourth command: the list endpoint's query-count budget is 3.
         var pageRows = await ApplySort(query, filter, DateTime.UtcNow, rates)
             .ThenBy(p => p.Id)
-            .Skip((page - 1) * pageSize)
+            .SkipPage(page, pageSize)
             .Take(pageSize)
             .Select(p => new
             {

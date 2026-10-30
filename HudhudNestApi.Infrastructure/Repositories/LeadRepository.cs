@@ -3,6 +3,7 @@ using HudhudNestApi.Application.Marketing.DTOs;
 using HudhudNestApi.Application.Marketing.Interfaces;
 using HudhudNestApi.Domain.Marketing.Entities;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Application.Common.Paging;
 
 namespace HudhudNestApi.Infrastructure.Repositories;
 
@@ -43,7 +44,7 @@ public sealed class LeadRepository : ILeadRepository
         var total = await query.CountAsync(ct);
 
         var data = await query
-            .Skip((page - 1) * pageSize)
+            .SkipPage(page, pageSize)
             .Take(pageSize)
             .Select(l => new LeadDto(
                 l.Id,
