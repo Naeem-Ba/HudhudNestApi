@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Domain.Lookups.Entities;
 using HudhudNestApi.Infrastructure.Persistence;
 using HudhudNestApi.Integration.Tests.Investments;
@@ -27,6 +28,7 @@ public sealed class InteractionPhase12FixTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _factory.PrepareDatabaseAsync();
+        await ClearLookupCacheAsync();
         _damascus = await _factory.InScopeAsync(async services =>
         {
             var db = services.GetRequiredService<AppDbContext>();
@@ -39,11 +41,19 @@ public sealed class InteractionPhase12FixTests : IAsyncLifetime
         _visitor = await _factory.SeedUserAsync("visitor");
     }
 
-    public Task DisposeAsync()
+    public async Task DisposeAsync()
     {
+        await ClearLookupCacheAsync();
         _factory.Dispose();
-        return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// PrepareDatabaseAsync empties the lookup tables, and the saved-search validator reads the property type
+    /// catalog. Left cached, that empty catalog made the next test class (which creates a property with a seeded
+    /// property type) fail with "Unknown property type", depending on the order the classes run in.
+    /// </summary>
+    private Task ClearLookupCacheAsync() => _factory.InScopeAsync(
+        services => services.GetRequiredService<ICommonLookupService>().RefreshAllAsync());
 
     private Task<Guid> NewPropertyAsync(Guid ownerId, bool published) => _factory.InScopeAsync(async services =>
     {
