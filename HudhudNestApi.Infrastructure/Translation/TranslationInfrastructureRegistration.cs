@@ -1,6 +1,7 @@
 using HudhudNestApi.Application.Listings.Translations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace HudhudNestApi.Infrastructure.Translation;
 
@@ -23,7 +24,13 @@ public static class TranslationInfrastructureRegistration
             services.AddHttpClient(DeepLTranslationProvider.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30))
                 .RemoveAllLoggers();
             services.AddSingleton<ITranslationProvider>(sp =>
-                new DeepLTranslationProvider(sp.GetRequiredService<IHttpClientFactory>(), deepL));
+            {
+                var provider = new DeepLTranslationProvider(sp.GetRequiredService<IHttpClientFactory>(), deepL);
+                if (!provider.IsAvailable)
+                    sp.GetRequiredService<ILoggerFactory>().CreateLogger("ListingTranslation")
+                        .LogWarning("ListingTranslation:Provider is DeepL but ListingTranslation:DeepL:ApiKey is empty; no listing will be translated until the key is set.");
+                return provider;
+            });
         }
         else
         {

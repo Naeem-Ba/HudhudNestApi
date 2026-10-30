@@ -30,10 +30,10 @@ public sealed record TranslationClaim(Guid RowId, Guid Token, int AttemptsBefore
 /// </summary>
 public interface IListingTranslationStore
 {
-    /// <summary>The listing's current title/description if it is publicly viewable now; null if missing, deleted, unpublished, expired or taken down.</summary>
-    Task<ListingTextSource?> GetPubliclyViewableTextAsync(Guid propertyId, DateTime nowUtc, CancellationToken ct);
+    /// <summary>The listing's current title/description if it is publicly viewable now (the same rule as its public detail page); null if missing, deleted, unpublished, expired or taken down.</summary>
+    Task<ListingTextSource?> GetPubliclyViewableTextAsync(ListingRef listing, DateTime nowUtc, CancellationToken ct);
 
-    Task<IReadOnlyList<StoredListingTranslation>> GetAsync(Guid propertyId, string targetLanguage, CancellationToken ct);
+    Task<IReadOnlyList<StoredListingTranslation>> GetAsync(ListingRef listing, string targetLanguage, CancellationToken ct);
 
     /// <summary>
     /// Takes ownership of the rows for (listing, field, language) that are absent, stale (other hash or
@@ -43,12 +43,12 @@ public interface IListingTranslationStore
     /// cooling down, or the listing is gone/changed.
     /// </summary>
     Task<IReadOnlyList<TranslationClaim?>> TryClaimAsync(
-        Guid propertyId, string targetLanguage, IReadOnlyList<TranslationClaimRequest> requests,
+        ListingRef listing, string targetLanguage, IReadOnlyList<TranslationClaimRequest> requests,
         int policyVersion, string provider, TimeSpan lease, DateTime nowUtc, CancellationToken ct);
 
     /// <summary>Stores the result. False when the claim was lost or the listing was deleted or edited meanwhile; nothing is stored then.</summary>
     Task<bool> CompleteAsync(
-        TranslationClaim claim, ListingTranslationField field, ListingTranslationStatus status,
+        ListingRef listing, TranslationClaim claim, ListingTranslationField field, ListingTranslationStatus status,
         string? translatedText, string? sourceLanguage, DateTime nowUtc, CancellationToken ct);
 
     Task FailAsync(

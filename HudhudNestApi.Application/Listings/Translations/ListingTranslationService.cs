@@ -11,9 +11,9 @@ public interface IListingTranslationService
     /// <summary>
     /// Returns the listing's title/description in <paramref name="targetLanguage"/> ("ar", "de", "en"), creating
     /// the translation if it is missing. Null when the listing does not exist or is not publicly viewable.
-    /// Never throws for provider or database trouble in the translation path: the client falls back to the original.
+    /// Never throws for provider or translation-store trouble: the client falls back to the original.
     /// </summary>
-    Task<ListingTranslationDto?> EnsureAsync(Guid propertyId, string targetLanguage, CancellationToken ct);
+    Task<ListingTranslationDto?> EnsureAsync(ListingRef listing, string targetLanguage, CancellationToken ct);
 }
 
 public sealed class ListingTranslationService : IListingTranslationService
@@ -48,7 +48,7 @@ public sealed class ListingTranslationService : IListingTranslationService
         public TranslationClaim? Claim;
     }
 
-    public async Task<ListingTranslationDto?> EnsureAsync(Guid propertyId, string targetLanguage, CancellationToken ct)
+    public async Task<ListingTranslationDto?> EnsureAsync(ListingRef listing, string targetLanguage, CancellationToken ct)
     {
         var options = _options.CurrentValue;
         var target = SupportedPreferences.NormalizeLanguage(targetLanguage)
@@ -64,10 +64,24 @@ public sealed class ListingTranslationService : IListingTranslationService
         }
 
         var now = _time.GetUtcNow().UtcDateTime;
-        var source = await _store.GetPubliclyViewableTextAsync(propertyId, now, ct);
+        var source = await _store.GetPubliclyViewableTextAsync(listing, now, ct);
         if (source is null) return null;
 
-        var stored = await _store.GetAsync(propertyId, target, ct);
+        IReadOnlyList<StoredListingTranslation> stored;
+        try
+        {
+            stored = await _store.GetAsync(listing, target, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The listing itself is fine; only the translation store is not. Report "unavailable" so the page keeps the original.
+            _logger.LogError("Reading stored listing translations failed ({ExceptionType}). Listing {ListingId} ({Kind}).", ex.GetType().Name, listing.Id, listing.Kind);
+            ListingTranslationTelemetry.Outcome("store_error", target);
+            dto.Status = "unavailable";
+            dto.Reason = "store_error";
+            return dto;
+        }
+
         var pendingWork = new List<Work>();
 
         Resolve(ListingTranslationField.Title, source.Title, dto.Title);
@@ -81,7 +95,17 @@ public sealed class ListingTranslationService : IListingTranslationService
             }
             else
             {
-                await TranslateAsync(propertyId, target, pendingWork, options, ct);
+                try
+                {
+                    await TranslateAsync(listing, target, pendingWork, options, ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // A claim that was won but not finished expires on its own lease and is retried by a later request.
+                    _logger.LogError("Listing translation failed unexpectedly ({ExceptionType}). Listing {ListingId} ({Kind}).", ex.GetType().Name, listing.Id, listing.Kind);
+                    foreach (var w in pendingWork.Where(w => w.Result.State is "empty" or "pending"))
+                        Unavailable(w.Result, "store_error", target);
+                }
             }
         }
 
@@ -142,7 +166,7 @@ public sealed class ListingTranslationService : IListingTranslationService
     }
 
     private async Task TranslateAsync(
-        Guid propertyId, string target, List<Work> work, ListingTranslationOptions options, CancellationToken ct)
+        ListingRef listing, string target, List<Work> work, ListingTranslationOptions options, CancellationToken ct)
     {
         var lease = TimeSpan.FromSeconds(options.ClaimLeaseSeconds);
 
@@ -152,7 +176,7 @@ public sealed class ListingTranslationService : IListingTranslationService
             var now = _time.GetUtcNow().UtcDateTime;
             var members = group.ToList();
             var claims = await _store.TryClaimAsync(
-                propertyId, target,
+                listing, target,
                 members.Select(w => new TranslationClaimRequest(w.Field, w.SourceHint, w.Hash, w.Text.Length)).ToList(),
                 options.PolicyVersion, _provider.Name, lease, now, ct);
 
@@ -166,7 +190,7 @@ public sealed class ListingTranslationService : IListingTranslationService
             // Not claimed: another request owns it, it just finished, it is cooling down, or the listing changed/vanished.
             if (claimed.Count < members.Count)
             {
-                var latest = await _store.GetAsync(propertyId, target, ct);
+                var latest = await _store.GetAsync(listing, target, ct);
                 foreach (var w in members.Where(g => g.Claim is null))
                     ApplyLatest(w, latest.FirstOrDefault(r => r.Field == w.Field), target, options);
             }
@@ -196,7 +220,7 @@ public sealed class ListingTranslationService : IListingTranslationService
                 if (batch.Items is not null && TryValidate(w, batch.Items[index], target, out var text, out var sourceLanguage, out var sameLanguage))
                 {
                     var stored = await _store.CompleteAsync(
-                        w.Claim!, w.Field,
+                        listing, w.Claim!, w.Field,
                         sameLanguage ? ListingTranslationStatus.SameLanguage : ListingTranslationStatus.Completed,
                         sameLanguage ? null : text, sourceLanguage, finishedAt, CancellationToken.None);
 
@@ -206,8 +230,8 @@ public sealed class ListingTranslationService : IListingTranslationService
                         w.Result.State = "pending";
                         ListingTranslationTelemetry.Outcome("source_changed", target);
                         _logger.LogInformation(
-                            "Listing translation discarded: source changed or listing removed while translating. Listing {PropertyId}, field {Field}, target {Target}.",
-                            propertyId, w.Field, target);
+                            "Listing translation discarded: source changed or listing removed while translating. Listing {ListingId} ({Kind}), field {Field}, target {Target}.",
+                            listing.Id, listing.Kind, w.Field, target);
                     }
                     else if (sameLanguage)
                     {
@@ -244,8 +268,8 @@ public sealed class ListingTranslationService : IListingTranslationService
             }
 
             _logger.LogInformation(
-                "Listing translation batch finished. Listing {PropertyId}, target {Target}, fields {Fields}, characters {Characters}, outcome {Outcome}.",
-                propertyId, target, claimed.Count, characters, outcome);
+                "Listing translation batch finished. Listing {ListingId} ({Kind}), target {Target}, fields {Fields}, characters {Characters}, outcome {Outcome}.",
+                listing.Id, listing.Kind, target, claimed.Count, characters, outcome);
         }
     }
 
