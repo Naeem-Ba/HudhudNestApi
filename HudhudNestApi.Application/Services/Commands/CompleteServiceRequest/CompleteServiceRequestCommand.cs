@@ -4,6 +4,8 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
+using HudhudNestApi.Application.Common.Validation;
+using HudhudNestApi.Application.Currencies.Interfaces;
 using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Application.Services.DTOs;
 using HudhudNestApi.Application.Services.Interfaces;
@@ -21,11 +23,15 @@ public sealed record CompleteServiceRequestCommand(
 
 public sealed class CompleteServiceRequestCommandValidator : AbstractValidator<CompleteServiceRequestCommand>
 {
-    public CompleteServiceRequestCommandValidator()
+    public CompleteServiceRequestCommandValidator(ICurrencyRepository currencies)
     {
         RuleFor(x => x.FinalPrice)
             .GreaterThanOrEqualTo(0).WithMessage("السعر النهائي لا يمكن أن يكون سالباً.")
             .When(x => x.FinalPrice is not null);
+
+        RuleFor(x => x.FinalPrice).WithinMoneyRange();
+
+        RuleFor(x => x.FinalPriceCurrencyId).MustBeActiveCurrency(currencies);
 
         RuleFor(x => x.FinalPriceCurrencyId)
             .NotNull().WithMessage("عملة السعر النهائي مطلوبة عند تحديد سعر.")

@@ -25,6 +25,11 @@ public sealed class GetServiceOfferingByIdQueryHandler
         var offering = await _offerings.GetByIdAsync(request.ServiceOfferingId, ct)
             ?? throw new NotFoundException("الخدمة غير موجودة.");
 
+        // The catalog lists only active offerings of Active providers; the same offering must not
+        // stay readable by id once it is switched off or its provider is suspended (P11-D08).
+        if (!offering.IsActive || offering.ServiceProvider is not { IsActive: true })
+            throw new NotFoundException("الخدمة غير موجودة.");
+
         return (await new[] { offering }.ToDtosWithRatingsAsync(_reviews, ct))[0];
     }
 }

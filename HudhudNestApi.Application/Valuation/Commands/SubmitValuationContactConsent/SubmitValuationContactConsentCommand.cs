@@ -43,6 +43,18 @@ public sealed class SubmitValuationContactConsentCommandValidator
         RuleFor(x => x)
             .Must(x => !string.IsNullOrWhiteSpace(x.ContactPhone) || !string.IsNullOrWhiteSpace(x.ContactEmail))
             .WithMessage("يجب تقديم رقم هاتف أو بريد إلكتروني واحد على الأقل للمشاركة.");
+
+        // The office receives these values as the customer's contact, so a malformed one defeats
+        // the consent; an overlong email failed at the column as a 500 (QA Phase 11, P11-D01).
+        // Same phone shape the provider profile accepts; the column holds 50 and 320 characters.
+        RuleFor(x => x.ContactPhone)
+            .Matches(@"^\+?[0-9\s\-]{7,20}$").WithMessage("صيغة رقم الهاتف غير صحيحة.")
+            .When(x => !string.IsNullOrWhiteSpace(x.ContactPhone));
+
+        RuleFor(x => x.ContactEmail)
+            .EmailAddress().WithMessage("صيغة البريد الإلكتروني غير صحيحة.")
+            .MaximumLength(320)
+            .When(x => !string.IsNullOrWhiteSpace(x.ContactEmail));
     }
 }
 

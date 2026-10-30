@@ -4,6 +4,7 @@ using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Services.DTOs;
 using HudhudNestApi.Application.Services.Interfaces;
 using HudhudNestApi.Application.Services.Mapping;
+using HudhudNestApi.Application.Users.Interfaces;
 using HudhudNestApi.Domain.Services.Entities;
 
 namespace HudhudNestApi.Application.Services.Commands.CreateServiceProvider;
@@ -12,16 +13,23 @@ public sealed class CreateServiceProviderCommandHandler
     : IRequestHandler<CreateServiceProviderCommand, ServiceProviderDto>
 {
     private readonly IServiceProviderRepository _providers;
+    private readonly IUserAccountRepository _users;
     private readonly IUnitOfWork _uow;
 
-    public CreateServiceProviderCommandHandler(IServiceProviderRepository providers, IUnitOfWork uow)
+    public CreateServiceProviderCommandHandler(
+        IServiceProviderRepository providers, IUserAccountRepository users, IUnitOfWork uow)
     {
         _providers = providers;
+        _users = users;
         _uow = uow;
     }
 
     public async Task<ServiceProviderDto> Handle(CreateServiceProviderCommand request, CancellationToken ct)
     {
+        // An unknown user id used to fail at the ServiceProviders.UserId foreign key as a 500.
+        _ = await _users.GetByIdAsync(request.UserId, ct)
+            ?? throw new NotFoundException("المستخدم غير موجود.");
+
         var existing = await _providers.GetByUserIdAsync(request.UserId, ct);
         if (existing is not null)
             throw new ConflictException("لهذا المستخدم ملف مزوّد خدمة بالفعل.");

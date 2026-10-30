@@ -240,6 +240,38 @@ public sealed class AdminValuationInquiryServiceTests
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task FlagOfficeForReviewAsync_ReasonLongerThanTheColumn_ReturnsBadRequest_WithoutTouchingAgency()
+    {
+        var agencies = new Mock<IAgencyRepository>();
+        var service = BuildService(agencies: agencies.Object);
+
+        var result = await service.FlagOfficeForReviewAsync(
+            Guid.NewGuid(), new string('x', 2001), AdminId, null, CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        agencies.Verify(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ClearOfficeReviewFlagAsync_NotFlagged_ChangesNothing_AndWritesNoAuditRow()
+    {
+        var agency = Agency.Create("مكتب", "office", Guid.NewGuid(), "SY", DateTime.UtcNow);
+
+        var agencies = new Mock<IAgencyRepository>();
+        agencies.Setup(x => x.GetByIdAsync(agency.Id, It.IsAny<CancellationToken>())).ReturnsAsync(agency);
+
+        var auditLogs = new Mock<IAuditLogService>();
+        var service = BuildService(agencies: agencies.Object, auditLogs: auditLogs.Object);
+
+        var result = await service.ClearOfficeReviewFlagAsync(agency.Id, AdminId, null, CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        auditLogs.Verify(x => x.LogAsync(
+            It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string?>(),
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     // ── test scaffolding ────────────────────────────────────────────
 
     private static AdminValuationInquiryService BuildService(

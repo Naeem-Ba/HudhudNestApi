@@ -1,8 +1,11 @@
 using HudhudNestApi.Application.Notifications.Localization;
+using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
+using HudhudNestApi.Application.Common.Validation;
+using HudhudNestApi.Application.Currencies.Interfaces;
 using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Application.Services.DTOs;
 using HudhudNestApi.Application.Services.Interfaces;
@@ -20,6 +23,24 @@ public sealed record AcceptServiceRequestCommand(
     decimal? QuotedPrice,
     int? QuotedPriceCurrencyId,
     string? ProviderNote) : IRequest<ServiceRequestDto>;
+
+public sealed class AcceptServiceRequestCommandValidator : AbstractValidator<AcceptServiceRequestCommand>
+{
+    public AcceptServiceRequestCommandValidator(ICurrencyRepository currencies)
+    {
+        RuleFor(x => x.QuotedPrice)
+            .GreaterThanOrEqualTo(0).WithMessage("السعر المعروض لا يمكن أن يكون سالباً.")
+            .When(x => x.QuotedPrice is not null);
+
+        RuleFor(x => x.QuotedPrice).WithinMoneyRange();
+
+        RuleFor(x => x.QuotedPriceCurrencyId).MustBeActiveCurrency(currencies);
+
+        RuleFor(x => x.ProviderNote)
+            .MaximumLength(ServiceValidationLimits.MaxProviderNoteLength)
+            .NoNulCharacters();
+    }
+}
 
 public sealed class AcceptServiceRequestCommandHandler
     : IRequestHandler<AcceptServiceRequestCommand, ServiceRequestDto>

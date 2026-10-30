@@ -1,4 +1,5 @@
 using FluentValidation;
+using HudhudNestApi.Application.Common.Validation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Valuation.DTOs;
@@ -38,7 +39,8 @@ public sealed record CreateValuationInquiryCommand(
 
 public sealed class CreateValuationInquiryCommandValidator : AbstractValidator<CreateValuationInquiryCommand>
 {
-    public CreateValuationInquiryCommandValidator()
+    public CreateValuationInquiryCommandValidator(
+        ILocationHierarchyChecker locations, ICommonLookupService lookups)
     {
         // Field-presence/shape checks belong here; the finer domain invariants (child-requires-
         // parent for District/Neighborhood, positive Area/Rooms, etc.) are already enforced by
@@ -48,6 +50,26 @@ public sealed class CreateValuationInquiryCommandValidator : AbstractValidator<C
 
         RuleFor(x => x.RequestType)
             .IsInEnum().WithMessage("نوع الطلب غير معروف.");
+
+        // The ids come from an anonymous caller. Unknown ones passed this validator and failed at
+        // the foreign key as a 500, and area/rooms had no upper bound (QA Phase 11, P11-D02).
+        // The check also rejects a district or neighborhood that belongs to another governorate.
+        RuleFor(x => x)
+            .MustAsync((x, ct) => locations.IsConsistentAsync(x.GovernorateId, x.DistrictId, x.NeighborhoodId, ct))
+            .When(x => x.GovernorateId > 0)
+            .WithName("Location")
+            .WithMessage("الموقع المحدد غير صحيح.");
+
+        RuleFor(x => x.PropertyTypeId)
+            .MustAsync(async (id, ct) => (await lookups.GetPropertyTypeCatalogAsync(ct)).Any(t => t.Id == id))
+            .When(x => x.PropertyTypeId is > 0)
+            .WithMessage("نوع العقار غير معروف.");
+
+        RuleFor(x => x.Area).WithinAreaRange();
+
+        RuleFor(x => x.Rooms)
+            .InclusiveBetween(1, 50)
+            .When(x => x.Rooms.HasValue);
     }
 }
 
