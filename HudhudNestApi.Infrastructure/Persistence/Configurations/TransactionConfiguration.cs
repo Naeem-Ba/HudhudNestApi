@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using HudhudNestApi.Domain.Bookings.Entities;
 using HudhudNestApi.Domain.Listings.Entities;
+using HudhudNestApi.Domain.Lookups.Entities;
 using HudhudNestApi.Domain.Transactions.Entities;
 using HudhudNestApi.Domain.Users.Entities;
 
@@ -75,6 +76,12 @@ public sealed class TransactionConfiguration : IEntityTypeConfiguration<Transact
             .WithMany()
             .HasForeignKey(t => t.BookingId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        // CurrencyId had no foreign key (DB audit 2026-10-29); currencies are seed rows, never deleted.
+        builder.HasOne<Currency>()
+            .WithMany()
+            .HasForeignKey(t => t.CurrencyId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // Most frequently used indexes
         builder.HasIndex(t => t.PropertyId);

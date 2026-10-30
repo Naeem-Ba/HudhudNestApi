@@ -40,7 +40,6 @@ public sealed class OfferConfiguration : IEntityTypeConfiguration<Offer>
             "CK_Offers_RedeemedCount_WithinMax",
             "\"MaxRedemptions\" IS NULL OR \"RedeemedCount\" <= \"MaxRedemptions\""));
 
-        builder.HasIndex(o => o.Status);
         builder.HasIndex(o => new { o.Status, o.StartsAtUtc, o.EndsAtUtc });
     }
 }

@@ -71,6 +71,12 @@ public sealed class ValuationInquiryConfiguration : IEntityTypeConfiguration<Val
             .HasForeignKey(i => i.NeighborhoodId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // PropertyTypeId had no foreign key (DB audit 2026-10-29); same seed-table reasoning as above.
+        builder.HasOne<PropertyType>()
+            .WithMany()
+            .HasForeignKey(i => i.PropertyTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasIndex(i => i.RequesterId);
 
         // The one index Stage 5's expiry sweep actually needs: "non-terminal rows past their

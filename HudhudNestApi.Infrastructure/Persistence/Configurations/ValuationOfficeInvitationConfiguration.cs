@@ -70,7 +70,6 @@ public sealed class ValuationOfficeInvitationConfiguration : IEntityTypeConfigur
         // GetByInquiryIdAsync/GetStaleSentInvitationsAsync join) and "this agency's
         // invitations" both filter on these.
         builder.HasIndex(i => i.InquiryId);
-        builder.HasIndex(i => i.AgencyId);
         builder.HasIndex(i => i.Status);
 
         builder.HasQueryFilter(i => !i.IsDeleted);

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using HudhudNestApi.Domain.Services.Entities;
+using HudhudNestApi.Domain.Users.Entities;
 
 namespace HudhudNestApi.Infrastructure.Persistence.Configurations;
 
@@ -33,6 +34,15 @@ public sealed class ServiceReviewConfiguration : IEntityTypeConfiguration<Servic
             .HasFilter("\"IsDeleted\" = false");
 
         builder.HasIndex(r => r.ServiceProviderId);
+
+        // The reviewer had no foreign key (DB audit 2026-10-29). ServiceProviderId repeats the
+        // request's provider on purpose: provider rating aggregates read it without a join.
+        builder.HasOne<UserAccount>()
+            .WithMany()
+            .HasForeignKey(r => r.ReviewerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.ToTable(t => t.HasCheckConstraint("CK_ServiceReviews_Rating", "\"Rating\" BETWEEN 1 AND 5"));
 
         builder.HasQueryFilter(r => !r.IsDeleted);
     }

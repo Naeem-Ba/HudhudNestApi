@@ -30,17 +30,21 @@ public sealed class IdentityAccountCreator
         var verifiedAt = request.PhoneConfirmed
             ? new DateTimeOffset(now, TimeSpan.Zero)
             : (DateTimeOffset?)null;
+        var phoneHash = string.IsNullOrWhiteSpace(request.PhoneNumber)
+            ? null
+            : _phoneLookupHasher.Compute(request.PhoneNumber);
         var user = new ApplicationUser
         {
             Id = request.UserAccountId,
-            UserName = request.Email ?? request.PhoneNumber ?? request.UserAccountId.ToString("N"),
+            // Never the phone number itself (S01): it would sit in clear text in the user name and token.
+            UserName = request.Email
+                ?? (phoneHash is null ? null : PhoneIdentity.UserNameFor(phoneHash))
+                ?? request.UserAccountId.ToString("N"),
             Email = request.Email,
             EmailConfirmed = request.EmailConfirmed,
             PhoneNumber = request.PhoneNumber,
-            PhoneNumberLookupHash = string.IsNullOrWhiteSpace(request.PhoneNumber)
-                ? null
-                : _phoneLookupHasher.Compute(request.PhoneNumber),
-            NormalizedPhoneNumber = request.PhoneNumber,
+            PhoneNumberLookupHash = phoneHash,
+            NormalizedPhoneNumber = null,
             PhoneNumberConfirmed = request.PhoneConfirmed,
             PhoneLastVerifiedAtUtc = verifiedAt,
             PhoneVerificationDueAtUtc = verifiedAt?.AddDays(180),

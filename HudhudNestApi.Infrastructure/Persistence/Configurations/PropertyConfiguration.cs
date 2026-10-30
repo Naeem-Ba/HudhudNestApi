@@ -193,11 +193,8 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
 
         // -- Indexes ------------------------------------------
         // Most common search patterns:
-        builder.HasIndex(p => p.CountryCode);
         builder.HasIndex(p => p.City);
-        builder.HasIndex(p => new { p.CountryCode, p.City });
         builder.HasIndex(p => p.OwnerId);
-        builder.HasIndex(p => p.Status);
         builder.HasIndex(p => p.ListingType);
         builder.HasIndex(p => p.IsPublished);
         builder.HasIndex(p => p.IsDeleted);
@@ -257,7 +254,6 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
             .HasForeignKey(p => p.AgentId)
             .OnDelete(DeleteBehavior.SetNull);
         // ── الفهارس الجديدة ────────────────────────────────────────────
-        builder.HasIndex(p => p.GovernorateId);
         builder.HasIndex(p => p.PropertyTypeId);
         builder.HasIndex(p => p.LegalStatus);
         builder.HasIndex(p => p.FurnishingStatus);

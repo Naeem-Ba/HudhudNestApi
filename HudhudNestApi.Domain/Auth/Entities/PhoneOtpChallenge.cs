@@ -7,7 +7,14 @@ public sealed class PhoneOtpChallenge
     private PhoneOtpChallenge() { }
     public Guid Id { get; private set; }
     public Guid? UserId { get; private set; }
+    /// <summary>The E.164 number the code was sent to. Stored encrypted (see AppDbContext); never queried.</summary>
     public string NormalizedPhoneNumber { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// HMAC of the number, the only form that is searched (send rate limit, matching an account).
+    /// Null only on challenges created before 2026-10-29, which still carry the number itself.
+    /// </summary>
+    public string? PhoneNumberLookupHash { get; private set; }
     public string CodeHash { get; private set; } = string.Empty;
     public OtpPurpose Purpose { get; private set; }
     public DateTimeOffset ExpiresAtUtc { get; private set; }
@@ -24,11 +31,12 @@ public sealed class PhoneOtpChallenge
     public string? ProviderRequestId { get; private set; }
 
     public static PhoneOtpChallenge Create(string phone, string hash, OtpPurpose purpose,
-        DateTimeOffset now, Guid? userId = null, OtpChannel channel = OtpChannel.Sms) => new()
+        DateTimeOffset now, Guid? userId = null, OtpChannel channel = OtpChannel.Sms, string? phoneLookupHash = null) => new()
         {
             Id = Guid.NewGuid(),
             UserId = userId,
             NormalizedPhoneNumber = phone,
+            PhoneNumberLookupHash = phoneLookupHash,
             CodeHash = hash,
             Purpose = purpose,
             Channel = channel,

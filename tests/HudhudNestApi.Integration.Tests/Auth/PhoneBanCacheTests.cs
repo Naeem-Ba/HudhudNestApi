@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Integration.Tests.TestInfrastructure;
 
 namespace HudhudNestApi.Integration.Tests.Auth;
 
@@ -40,7 +41,8 @@ public sealed class PhoneBanCacheTests : IClassFixture<PhoneLoginAuditFactory>, 
         var access = (await verify.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("accessToken").GetString()!;
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var id = await db.Users.Where(u => u.NormalizedPhoneNumber == phone).Select(u => u.Id).SingleAsync();
+        var phoneHash = TestPhoneLookup.Hash(scope.ServiceProvider, phone);
+        var id = await db.Users.Where(u => u.PhoneNumberLookupHash == phoneHash).Select(u => u.Id).SingleAsync();
         return (phone, id, access);
     }
 

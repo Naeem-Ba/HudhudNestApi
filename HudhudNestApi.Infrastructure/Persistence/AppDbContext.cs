@@ -191,6 +191,7 @@ public sealed class AppDbContext
         ConfigureEncryptedUserFields(builder);
         ConfigureEncryptedUserAccountFields(builder);
         ConfigureEncryptedSocialAccountFields(builder);
+        ConfigureEncryptedPhoneOtpChallengeFields(builder);
 
         // -- Global soft-delete filter ---------------------------
         // Automatically excludes IsDeleted=true from ALL queries.
@@ -338,6 +339,21 @@ public sealed class AppDbContext
             .HasConversion(new DataProtectionStringConverter(
                 _dataProtectionProvider,
                 SensitiveDataProtectionPurposes.SocialAccountCredentialReference));
+    }
+
+    /// <summary>
+    /// The number an OTP was sent to is kept only to complete the flow (registration and number
+    /// change write it to the account), so it is encrypted like Users.PhoneNumber; searches use
+    /// PhoneNumberLookupHash. Rows written before this still hold the number itself and stay
+    /// readable (the converter falls back to plaintext) until the retention job deletes them.
+    /// </summary>
+    private void ConfigureEncryptedPhoneOtpChallengeFields(ModelBuilder builder)
+    {
+        builder.Entity<PhoneOtpChallenge>()
+            .Property(c => c.NormalizedPhoneNumber)
+            .HasConversion((Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter)new DataProtectionStringConverter(
+                _dataProtectionProvider,
+                SensitiveDataProtectionPurposes.PhoneOtpChallengeNumber));
     }
 
     // -- Auto-stamp UpdatedAt on every save ----------------------

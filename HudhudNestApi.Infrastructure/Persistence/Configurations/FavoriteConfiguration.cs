@@ -28,7 +28,6 @@ public sealed class FavoriteConfiguration : IEntityTypeConfiguration<Favorite>
             .HasForeignKey(f => f.PropertyId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(f => f.UserId);
         builder.HasIndex(f => f.PropertyId);
     }
 }

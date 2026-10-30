@@ -101,6 +101,7 @@ internal static class AuthInfrastructureRegistration
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<IPhoneAuthenticationWorkflow, PhoneAuthenticationWorkflow>();
         services.AddHostedService<PhoneVerificationHostedService>();
+        services.AddHostedService<AuthDataRetentionHostedService>();
 
         services.AddScoped<IdentityAccountReader>();
         services.AddScoped<IdentityAccountCreator>();

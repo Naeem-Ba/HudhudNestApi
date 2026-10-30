@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
+using HudhudNestApi.Infrastructure.Security.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -71,7 +72,8 @@ public static class DependencyInjection
             ?? Environment.GetEnvironmentVariable("DATA_PROTECTION_KEYS_PATH");
 
         var builder = services.AddDataProtection()
-            .SetApplicationName("HudhudNestApi");
+            .SetApplicationName("HudhudNestApi")
+            .ProtectKeysWhenConfigured(configuration);
 
         if (ShouldPersistDataProtectionKeysToDatabase(configuration, environment))
         {

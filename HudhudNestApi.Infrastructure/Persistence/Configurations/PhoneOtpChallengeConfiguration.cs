@@ -12,13 +12,15 @@ public sealed class PhoneOtpChallengeConfiguration : IEntityTypeConfiguration<Ph
     {
         builder.ToTable("PhoneOtpChallenges");
         builder.HasKey(x => x.Id);
-        builder.Property(x => x.NormalizedPhoneNumber).HasMaxLength(16).IsRequired();
+        // Encrypted at rest (AppDbContext.ConfigureEncryptedPhoneOtpChallengeFields), hence the length.
+        builder.Property(x => x.NormalizedPhoneNumber).HasMaxLength(1024).IsRequired();
+        builder.Property(x => x.PhoneNumberLookupHash).HasMaxLength(64);
         builder.Property(x => x.CodeHash).HasMaxLength(128).IsRequired();
         // Text, like the other enums in this codebase. Rows created before multi-channel OTP get "Sms" from the
         // column default, which is exactly how their code was delivered.
         builder.Property(x => x.Channel).HasConversion<string>().HasMaxLength(20).HasDefaultValue(OtpChannel.Sms).IsRequired();
         builder.Property(x => x.ProviderRequestId).HasMaxLength(128);
-        builder.HasIndex(x => new { x.NormalizedPhoneNumber, x.Purpose, x.CreatedAtUtc });
+        builder.HasIndex(x => new { x.PhoneNumberLookupHash, x.Purpose, x.CreatedAtUtc });
         builder.HasIndex(x => x.ExpiresAtUtc);
 
         // Nullable: a challenge can exist before any identity does (first-time phone

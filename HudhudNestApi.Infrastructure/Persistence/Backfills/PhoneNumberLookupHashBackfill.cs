@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Auth.Interfaces;
+using HudhudNestApi.Infrastructure.Identity;
 
 namespace HudhudNestApi.Infrastructure.Persistence.Backfills;
 
@@ -17,15 +19,25 @@ public sealed class PhoneNumberLookupHashBackfill
     private readonly AppDbContext _db;
     private readonly IPhoneNumberLookupHasher _phoneLookupHasher;
     private readonly ILogger<PhoneNumberLookupHashBackfill> _logger;
+    private readonly bool _restorePlaintext;
+
+    /// <summary>
+    /// Configuration key that turns the plaintext step around: <c>PhonePlaintext:Mode=Restore</c>
+    /// writes the clear-text copies back from the encrypted number, which an API version older than
+    /// 2026-10-29 needs for phone login. Only for rolling the API back; the default clears them.
+    /// </summary>
+    public const string ModeKey = "PhonePlaintext:Mode";
 
     public PhoneNumberLookupHashBackfill(
         AppDbContext db,
         IPhoneNumberLookupHasher phoneLookupHasher,
-        ILogger<PhoneNumberLookupHashBackfill> logger)
+        ILogger<PhoneNumberLookupHashBackfill> logger,
+        IConfiguration? configuration = null)
     {
         _db = db;
         _phoneLookupHasher = phoneLookupHasher;
         _logger = logger;
+        _restorePlaintext = string.Equals(configuration?[ModeKey], "Restore", StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<PhoneNumberLookupHashBackfillResult> RunAsync(
@@ -70,6 +82,8 @@ public sealed class PhoneNumberLookupHashBackfill
         {
             _logger.LogInformation(
                 "No users require PhoneNumberLookupHash backfill.");
+
+            await ApplyPlaintextModeAsync(ct);
 
             return new PhoneNumberLookupHashBackfillResult(
                 UsersWithPhone: totalUsersWithPhone,
@@ -263,6 +277,8 @@ public sealed class PhoneNumberLookupHashBackfill
                 "without PhoneNumberLookupHash.");
         }
 
+        await ApplyPlaintextModeAsync(ct);
+
         _logger.LogInformation(
             "PhoneNumberLookupHash backfill completed successfully. " +
             "Updated={UpdatedCount}, " +
@@ -278,4 +294,38 @@ public sealed class PhoneNumberLookupHashBackfill
             Updated: updatedCount,
             MissingAfter: missingAfter);
     }
+
+    /// <summary>
+    /// Every row now has a hash, so the clear-text copies of the number can go (DB security audit
+    /// 2026-10-29, S01). This is the "contract" step: it runs only when the backfill is requested,
+    /// after the API that searches by hash is deployed. Idempotent.
+    /// </summary>
+    private async Task ApplyPlaintextModeAsync(CancellationToken ct)
+    {
+        if (!_restorePlaintext)
+        {
+            var cleared = await _db.Database.ExecuteSqlRawAsync(PhoneIdentity.ClearPlaintextSql, ct);
+            _logger.LogInformation("Clear-text phone copies removed from {Rows} user row(s).", cleared);
+            return;
+        }
+
+        // Rollback aid: the old API found phone accounts only through NormalizedPhoneNumber.
+        var users = await _db.Users.IgnoreQueryFilters()
+            .Where(user => user.PhoneNumber != null && user.NormalizedPhoneNumber == null)
+            .ToListAsync(ct);
+        foreach (var user in users)
+        {
+            user.NormalizedPhoneNumber = user.PhoneNumber;
+            if (user.PhoneNumberLookupHash is { } hash &&
+                string.Equals(user.UserName, PhoneIdentity.UserNameFor(hash), StringComparison.Ordinal))
+            {
+                user.UserName = user.PhoneNumber;
+                user.NormalizedUserName = user.PhoneNumber!.ToUpperInvariant();
+            }
+        }
+        await _db.SaveChangesAsync(ct);
+        _db.ChangeTracker.Clear();
+        _logger.LogWarning("Clear-text phone copies restored on {Rows} user row(s) for an API rollback.", users.Count);
+    }
+
 }

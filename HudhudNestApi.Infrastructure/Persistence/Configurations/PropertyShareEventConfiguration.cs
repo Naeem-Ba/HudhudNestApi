@@ -26,7 +26,6 @@ public sealed class PropertyShareEventConfiguration : IEntityTypeConfiguration<P
 
         // UserId intentionally has no FK — it is nullable (anonymous visitors) and purely
         // informational, never joined for authorization or PII lookups.
-        builder.HasIndex(e => e.PropertyId);
         builder.HasIndex(e => e.CreatedAt);
         builder.HasIndex(e => new { e.PropertyId, e.Platform });
 

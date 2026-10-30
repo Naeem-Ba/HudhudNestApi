@@ -39,7 +39,12 @@ public sealed class UserRatingConfiguration : IEntityTypeConfiguration<UserRatin
         builder.HasIndex(r => new { r.RatedUserId, r.RaterId })
             .IsUnique();
 
-        builder.HasIndex(r => r.RatedUserId);
+        // The domain already refuses scores outside 1..5; the database now does too (DB audit 2026-10-29).
+        builder.ToTable(t =>
+        {
+            foreach (var column in new[] { "InformationAccuracy", "Credibility", "Safety", "ResponseSpeed", "Transparency", "Conduct" })
+                t.HasCheckConstraint($"CK_UserRatings_{column}", $"\"{column}\" BETWEEN 1 AND 5");
+        });
 
         // Soft-delete filter
         builder.HasQueryFilter(r => !r.IsDeleted);

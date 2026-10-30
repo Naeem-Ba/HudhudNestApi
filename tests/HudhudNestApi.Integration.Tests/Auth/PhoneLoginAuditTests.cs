@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Infrastructure.Persistence;
 using Xunit.Abstractions;
+using HudhudNestApi.Integration.Tests.TestInfrastructure;
 
 namespace HudhudNestApi.Integration.Tests.Auth;
 
@@ -117,10 +118,14 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
         await action(scope.ServiceProvider.GetRequiredService<AppDbContext>());
     }
 
+    // Accounts are found by the number's lookup hash; the number itself is not stored searchable (S01).
+    private string Hash(string phone) => TestPhoneLookup.Hash(_factory.Services, phone);
+
     private async Task SetUser(string phone, Action<HudhudNestApi.Infrastructure.Identity.Entities.ApplicationUser> mutate) =>
         await WithDb(async db =>
         {
-            var user = await db.Users.IgnoreQueryFilters().SingleAsync(u => u.NormalizedPhoneNumber == phone);
+            var phoneHash = Hash(phone);
+            var user = await db.Users.IgnoreQueryFilters().SingleAsync(u => u.PhoneNumberLookupHash == phoneHash);
             mutate(user);
             await db.SaveChangesAsync();
         });
@@ -305,7 +310,8 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
             "/api/auth/phone/registration/verify",
             new { challengeId, code, password = Password, firstName = "A", lastName = "B" })));
         Assert.Equal(1, attempts.Count(a => a.Status == HttpStatusCode.OK));
-        await WithDb(async db => Assert.Equal(1, await db.Users.CountAsync(u => u.NormalizedPhoneNumber == phone)));
+        var phoneHash = Hash(phone);
+        await WithDb(async db => Assert.Equal(1, await db.Users.CountAsync(u => u.PhoneNumberLookupHash == phoneHash)));
     }
 
     [Fact]
@@ -319,17 +325,19 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
             Post("/api/auth/phone/registration/verify", new { challengeId = c2, code = code2, password = Password, firstName = "A", lastName = "B" }));
         Assert.Equal(1, results.Count(r => r.Status == HttpStatusCode.OK));
         Assert.All(results.Where(r => r.Status != HttpStatusCode.OK), r => Assert.Equal("PHONE_ALREADY_REGISTERED", r.Code));
-        await WithDb(async db => Assert.Equal(1, await db.Users.CountAsync(u => u.NormalizedPhoneNumber == phone)));
+        var phoneHash = Hash(phone);
+        await WithDb(async db => Assert.Equal(1, await db.Users.CountAsync(u => u.PhoneNumberLookupHash == phoneHash)));
     }
 
     [Fact]
     public async Task C7b_UsernameAlreadyTaken_ButPhoneLookupMisses_ReportsPhoneAlreadyRegistered()
     {
-        // Identity checks the username in its own query, after the workflow's NormalizedPhoneNumber check, so
+        // Identity checks the username in its own query, after the workflow's lookup-hash check, so
         // a racing registration that commits in between reaches CreateAsync. Emptying the lookup column of an
         // existing account puts the second request in that state without depending on timing.
         var (phone, _, _) = await RegisterUser();
-        await SetUser(phone, u => u.NormalizedPhoneNumber = null);
+        var phoneUserName = HudhudNestApi.Infrastructure.Identity.PhoneIdentity.UserNameFor(Hash(phone));
+        await SetUser(phone, u => u.PhoneNumberLookupHash = null);
         var (_, challengeId, code) = await SendRegistrationOtp(phone);
 
         var reply = await Post("/api/auth/phone/registration/verify",
@@ -337,7 +345,7 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
 
         Assert.Equal(HttpStatusCode.BadRequest, reply.Status);
         Assert.Equal("PHONE_ALREADY_REGISTERED", reply.Code);
-        await WithDb(async db => Assert.Equal(1, await db.Users.IgnoreQueryFilters().CountAsync(u => u.UserName == phone)));
+        await WithDb(async db => Assert.Equal(1, await db.Users.IgnoreQueryFilters().CountAsync(u => u.UserName == phoneUserName)));
     }
 
     [Fact]
@@ -349,7 +357,8 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
             var phone = NewPhone();
             var send = await Post("/api/auth/phone/registration/send-otp", new { phoneNumber = phone });
             Assert.Equal(HttpStatusCode.BadRequest, send.Status);
-            await WithDb(async db => Assert.Equal(0, await db.PhoneOtpChallenges.CountAsync(c => c.NormalizedPhoneNumber == phone)));
+            var phoneHash = Hash(phone);
+            await WithDb(async db => Assert.Equal(0, await db.PhoneOtpChallenges.CountAsync(c => c.PhoneNumberLookupHash == phoneHash)));
         }
         finally { _factory.Sms.Fail = false; }
     }
@@ -588,12 +597,15 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
         Assert.Equal(HttpStatusCode.OK,
             (await Post("/api/auth/phone/change/verify", new { challengeId, code, currentPassword = Password }, bearer: access)).Status);
 
-        // For a phone-registered account UserName mirrors the number; leaving the old number there made it unregistrable.
+        // For a phone-registered account UserName is derived from the number ("ph-" + lookup hash); leaving
+        // the old one there made the old number unregistrable.
+        var newHash = Hash(newPhone);
+        var oldUserName = HudhudNestApi.Infrastructure.Identity.PhoneIdentity.UserNameFor(Hash(oldPhone));
         await WithDb(async db =>
         {
-            var user = await db.Users.SingleAsync(u => u.NormalizedPhoneNumber == newPhone);
-            Assert.Equal(newPhone, user.UserName);
-            Assert.False(await db.Users.AnyAsync(u => u.UserName == oldPhone));
+            var user = await db.Users.SingleAsync(u => u.PhoneNumberLookupHash == newHash);
+            Assert.Equal(HudhudNestApi.Infrastructure.Identity.PhoneIdentity.UserNameFor(newHash), user.UserName);
+            Assert.False(await db.Users.AnyAsync(u => u.UserName == oldUserName || u.UserName == oldPhone));
         });
 
         // The old number is genuinely free: someone else can register with it.
@@ -629,7 +641,8 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
         // Audit F-8: the wrong passwords count towards Identity lockout (5 attempts).
         await WithDb(async db =>
         {
-            var user = await db.Users.SingleAsync(u => u.NormalizedPhoneNumber == phone);
+            var phoneHash = Hash(phone);
+            var user = await db.Users.SingleAsync(u => u.PhoneNumberLookupHash == phoneHash);
             Assert.True(user.LockoutEnd > DateTimeOffset.UtcNow);
         });
     }
@@ -664,7 +677,8 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
         using (var scope = strict.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var user = await db.Users.SingleAsync(u => u.NormalizedPhoneNumber == phone);
+            var phoneHash = TestPhoneLookup.Hash(scope.ServiceProvider, phone);
+            var user = await db.Users.SingleAsync(u => u.PhoneNumberLookupHash == phoneHash);
             user.PhoneVerificationState = PhoneVerificationState.Restricted;
             await db.SaveChangesAsync();
         }
@@ -782,19 +796,33 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
     }
 
     [Fact]
-    public async Task I2_PhoneNumber_IsNotStoredInPlaintext_InThePhoneNumberColumn()
+    public async Task I2_PhoneNumber_IsNotStoredInPlaintext_Anywhere()
     {
+        // DB security audit 2026-10-29 (S01): after registration the number exists only encrypted, in
+        // Users.PhoneNumber and in the OTP challenge. No searchable column and no user name holds it.
         var (phone, _, _) = await RegisterUser();
+        var phoneHash = Hash(phone);
         await WithDb(async db =>
         {
             var conn = db.Database.GetDbConnection();
             await conn.OpenAsync();
             await using var cmd = conn.CreateCommand();
-            cmd.CommandText = """SELECT "PhoneNumber", "NormalizedPhoneNumber", "UserName" FROM "Users" WHERE "NormalizedPhoneNumber" = @p OR "UserName" = @p LIMIT 1""";
+            cmd.CommandText = """
+                SELECT (SELECT count(*) FROM "Users"
+                        WHERE "PhoneNumber" = @p OR "NormalizedPhoneNumber" = @p OR "UserName" = @p OR "NormalizedUserName" = @p),
+                       (SELECT count(*) FROM "PhoneOtpChallenges" WHERE "NormalizedPhoneNumber" = @p),
+                       (SELECT count(*) FROM "Users" WHERE "PhoneNumberLookupHash" = @h),
+                       (SELECT count(*) FROM "PhoneOtpChallenges" WHERE "PhoneNumberLookupHash" = @h)
+                """;
             var p = cmd.CreateParameter(); p.ParameterName = "p"; p.Value = phone; cmd.Parameters.Add(p);
+            var h = cmd.CreateParameter(); h.ParameterName = "h"; h.Value = phoneHash; cmd.Parameters.Add(h);
             await using var r = await cmd.ExecuteReaderAsync();
-            if (await r.ReadAsync())
-                _output.WriteLine($"PhoneNumber column starts with: {(r.IsDBNull(0) ? "<null>" : r.GetString(0)[..Math.Min(6, r.GetString(0).Length)])}; Normalized plaintext: {!r.IsDBNull(1)}; UserName plaintext: {r.GetString(2) == phone}");
+            Assert.True(await r.ReadAsync());
+            Assert.Equal(0L, r.GetInt64(0));
+            Assert.Equal(0L, r.GetInt64(1));
+            Assert.Equal(1L, r.GetInt64(2));
+            Assert.True(r.GetInt64(3) >= 1);
         });
     }
+
 }

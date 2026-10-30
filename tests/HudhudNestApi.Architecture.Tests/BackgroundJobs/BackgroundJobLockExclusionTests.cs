@@ -62,6 +62,7 @@ public sealed class BackgroundJobLockExclusionTests
     [InlineData("Services", "ServiceRequestLifecycleHostedService.cs")]
     [InlineData("ShortStay", "ShortStayBookingLifecycleHostedService.cs")]
     [InlineData("Listings", "ListingViewRetentionHostedService.cs")]
+    [InlineData("Auth\\Services", "AuthDataRetentionHostedService.cs")]
     [InlineData("Investments", "InvestmentScheduledPublishHostedService.cs")]
     public void HostedService_Should_Reference_BackgroundJobLock(string relativeDir, string fileName)
     {

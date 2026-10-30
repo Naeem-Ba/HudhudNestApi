@@ -8,6 +8,7 @@ using HudhudNestApi.Domain.Listings.Entities;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Infrastructure.Persistence;
 using HudhudNestApi.Integration.Tests.Auth;
+using HudhudNestApi.Integration.Tests.TestInfrastructure;
 
 namespace HudhudNestApi.Integration.Tests.Favorites;
 
@@ -44,7 +45,8 @@ public sealed class FavoritesCurrencyIntegrationTests : IClassFixture<PhoneLogin
         using (var scope = _factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var userId = await db.Users.Where(u => u.NormalizedPhoneNumber == phone).Select(u => u.Id).SingleAsync();
+            var phoneHash = TestPhoneLookup.Hash(scope.ServiceProvider, phone);
+            var userId = await db.Users.Where(u => u.PhoneNumberLookupHash == phoneHash).Select(u => u.Id).SingleAsync();
             var property = Property.Create("USD favourite", "A USD priced listing", userId, ListingType.ForRent, "SY", "USD");
             property.ColdRent = 1250.5m;
             property.WarmRent = 1450.5m;

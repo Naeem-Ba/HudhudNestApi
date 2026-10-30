@@ -355,8 +355,12 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.Property<string>("NormalizedPhoneNumber")
                         .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("PhoneNumberLookupHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("ProviderRequestId")
                         .HasMaxLength(128)
@@ -380,7 +384,7 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("NormalizedPhoneNumber", "Purpose", "CreatedAtUtc");
+                    b.HasIndex("PhoneNumberLookupHash", "Purpose", "CreatedAtUtc");
 
                     b.ToTable("PhoneOtpChallenges", (string)null);
                 });
@@ -437,8 +441,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasColumnType("character varying(30)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("PropertyId");
 
                     b.HasIndex("RequesterId");
 
@@ -517,8 +519,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("InvestmentProjectId");
-
                     b.HasIndex("InvestmentProjectId", "IsPublic");
 
                     b.ToTable("InvestmentDocuments", (string)null);
@@ -556,8 +556,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("InvestmentProjectId");
-
-                    b.HasIndex("UserId");
 
                     b.HasIndex("UserId", "InvestmentProjectId")
                         .IsUnique();
@@ -900,8 +898,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasIndex("InvestmentProjectId");
 
-                    b.HasIndex("UserId");
-
                     b.HasIndex("UserId", "InvestmentProjectId")
                         .IsUnique();
 
@@ -963,8 +959,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasKey("UserId", "PropertyId");
 
                     b.HasIndex("PropertyId");
-
-                    b.HasIndex("UserId");
 
                     b.ToTable("Favorites", (string)null);
                 });
@@ -1397,8 +1391,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasDatabaseName("IX_Properties_ClosedAt_PendingCompaction")
                         .HasFilter("\"ClosedAt\" IS NOT NULL AND \"ImagesCompactedAt\" IS NULL");
 
-                    b.HasIndex("CountryCode");
-
                     b.HasIndex("CreatedAt");
 
                     b.HasIndex("DistrictId");
@@ -1412,8 +1404,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasFilter("\"IsFeatured\" = true");
 
                     b.HasIndex("FurnishingStatus");
-
-                    b.HasIndex("GovernorateId");
 
                     b.HasIndex("IsDeleted");
 
@@ -1435,13 +1425,9 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasIndex("PropertyTypeId");
 
-                    b.HasIndex("Status");
-
                     b.HasIndex("TakenDownAt")
                         .HasDatabaseName("IX_Properties_TakenDownAt")
                         .HasFilter("\"TakenDownAt\" IS NOT NULL");
-
-                    b.HasIndex("CountryCode", "City");
 
                     b.HasIndex("Status", "ExpiresAt")
                         .HasDatabaseName("IX_Properties_Status_ExpiresAt");
@@ -1534,8 +1520,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("CreatedAt");
 
                     b.HasIndex("EventType");
-
-                    b.HasIndex("PropertyId");
 
                     b.HasIndex("UtmCampaign");
 
@@ -1710,8 +1694,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedAt");
-
-                    b.HasIndex("PropertyId");
 
                     b.HasIndex("UtmCampaign");
 
@@ -2246,8 +2228,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasIndex("CreatedAt");
 
-                    b.HasIndex("EventType");
-
                     b.HasIndex("LeadId");
 
                     b.HasIndex("OfferId");
@@ -2320,8 +2300,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("Status");
 
                     b.HasIndex("Status", "StartsAtUtc", "EndsAtUtc");
 
@@ -2520,8 +2498,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("PropertyId");
 
                     b.HasIndex("ReceiverId");
-
-                    b.HasIndex("SenderId");
 
                     b.HasIndex("SenderId", "ReceiverId", "PropertyId");
 
@@ -2996,14 +2972,15 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PropertyId");
-
                     b.HasIndex("ReviewerId");
 
                     b.HasIndex("PropertyId", "ReviewerId")
                         .IsUnique();
 
-                    b.ToTable("PropertyReviews", (string)null);
+                    b.ToTable("PropertyReviews", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PropertyReviews_Rating", "\"Rating\" BETWEEN 1 AND 5");
+                        });
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.Reviews.Entities.UserRating", b =>
@@ -3054,14 +3031,25 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RatedUserId");
-
                     b.HasIndex("RaterId");
 
                     b.HasIndex("RatedUserId", "RaterId")
                         .IsUnique();
 
-                    b.ToTable("UserRatings", (string)null);
+                    b.ToTable("UserRatings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_UserRatings_Conduct", "\"Conduct\" BETWEEN 1 AND 5");
+
+                            t.HasCheckConstraint("CK_UserRatings_Credibility", "\"Credibility\" BETWEEN 1 AND 5");
+
+                            t.HasCheckConstraint("CK_UserRatings_InformationAccuracy", "\"InformationAccuracy\" BETWEEN 1 AND 5");
+
+                            t.HasCheckConstraint("CK_UserRatings_ResponseSpeed", "\"ResponseSpeed\" BETWEEN 1 AND 5");
+
+                            t.HasCheckConstraint("CK_UserRatings_Safety", "\"Safety\" BETWEEN 1 AND 5");
+
+                            t.HasCheckConstraint("CK_UserRatings_Transparency", "\"Transparency\" BETWEEN 1 AND 5");
+                        });
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.Search.Entities.SavedSearch", b =>
@@ -3146,7 +3134,15 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DistrictId");
+
+                    b.HasIndex("GovernorateId");
+
                     b.HasIndex("LastMatchedAt");
+
+                    b.HasIndex("NeighborhoodId");
+
+                    b.HasIndex("PropertyTypeId");
 
                     b.HasIndex("UserId");
 
@@ -3210,8 +3206,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("Category");
 
                     b.HasIndex("CurrencyId");
 
@@ -3644,8 +3638,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasIndex("FinalPriceCurrencyId");
 
-                    b.HasIndex("PropertyId");
-
                     b.HasIndex("QuotedPriceCurrencyId");
 
                     b.HasIndex("RequestNumber")
@@ -3658,8 +3650,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("ServiceOfferingId");
 
                     b.HasIndex("ServiceProviderId");
-
-                    b.HasIndex("Status");
 
                     b.HasIndex("Status", "LastActivityAt");
 
@@ -3856,6 +3846,8 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ReviewerId");
+
                     b.HasIndex("ServiceProviderId");
 
                     b.HasIndex("ServiceRequestId")
@@ -3863,7 +3855,10 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasDatabaseName("IX_ServiceReviews_ServiceRequestId")
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.ToTable("ServiceReviews", (string)null);
+                    b.ToTable("ServiceReviews", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ServiceReviews_Rating", "\"Rating\" BETWEEN 1 AND 5");
+                        });
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.ShortStay.Entities.AccommodationType", b =>
@@ -4050,7 +4045,12 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasIndex("UnitId");
 
-                    b.ToTable("ShortStayBookings", (string)null);
+                    b.ToTable("ShortStayBookings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ShortStayBookings_Amounts", "\"DepositAmount\" >= 0 AND \"DepositAmount\" <= \"TotalAmount\" AND \"RemainingAmount\" = \"TotalAmount\" - \"DepositAmount\"");
+
+                            t.HasCheckConstraint("CK_ShortStayBookings_Dates", "\"CheckOut\" > \"CheckIn\"");
+                        });
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.ShortStay.Entities.HostVerificationRecord", b =>
@@ -4387,9 +4387,17 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasIndex("City");
 
+                    b.HasIndex("DistrictId");
+
+                    b.HasIndex("GovernorateId");
+
                     b.HasIndex("IsPublished");
 
+                    b.HasIndex("NeighborhoodId");
+
                     b.HasIndex("OwnerId");
+
+                    b.HasIndex("PropertyId");
 
                     b.HasIndex("TakenDownAt")
                         .HasDatabaseName("IX_ShortStayListings_TakenDownAt")
@@ -4507,9 +4515,14 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("BookingId")
                         .IsUnique();
 
+                    b.HasIndex("ReviewerId");
+
                     b.HasIndex("ShortStayListingId");
 
-                    b.ToTable("ShortStayReviews", (string)null);
+                    b.ToTable("ShortStayReviews", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ShortStayReviews_Rating", "\"Rating\" BETWEEN 1 AND 5");
+                        });
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.ShortStay.Entities.UnitBookingRange", b =>
@@ -4550,8 +4563,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BookingId");
-
-                    b.HasIndex("UnitId");
 
                     b.HasIndex("UnitId", "CheckIn", "CheckOut");
 
@@ -4623,8 +4634,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("IsActive");
 
                     b.HasIndex("Priority");
 
@@ -4924,8 +4933,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasIndex("Checksum");
 
-                    b.HasIndex("PropertyId");
-
                     b.HasIndex("PublicationId");
 
                     b.HasIndex("TemplateId");
@@ -5154,8 +5161,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasIndex("SocialAccountId");
 
-                    b.HasIndex("Status");
-
                     b.HasIndex("UtmCampaign");
 
                     b.HasIndex("UtmSource");
@@ -5358,6 +5363,8 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BookingId");
+
+                    b.HasIndex("CurrencyId");
 
                     b.HasIndex("PayerId");
 
@@ -5679,6 +5686,8 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasIndex("NeighborhoodId");
 
+                    b.HasIndex("PropertyTypeId");
+
                     b.HasIndex("RequesterId");
 
                     b.HasIndex("Status", "CreatedAt")
@@ -5736,8 +5745,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("AgencyId");
 
                     b.HasIndex("InquiryId");
 
@@ -5993,8 +6000,6 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.HasIndex("TokenHash")
                         .IsUnique();
-
-                    b.HasIndex("UserId");
 
                     b.HasIndex("UserId", "IsRevoked", "ExpiresAt")
                         .HasDatabaseName("IX_RefreshTokens_User_Active_ExpiresAt");
@@ -6642,6 +6647,26 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
             modelBuilder.Entity("HudhudNestApi.Domain.Search.Entities.SavedSearch", b =>
                 {
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.District", null)
+                        .WithMany()
+                        .HasForeignKey("DistrictId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.Governorate", null)
+                        .WithMany()
+                        .HasForeignKey("GovernorateId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.Neighborhood", null)
+                        .WithMany()
+                        .HasForeignKey("NeighborhoodId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.PropertyType", null)
+                        .WithMany()
+                        .HasForeignKey("PropertyTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -6667,6 +6692,11 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
             modelBuilder.Entity("HudhudNestApi.Domain.Services.Entities.ServiceProvider", b =>
                 {
+                    b.HasOne("HudhudNestApi.Domain.Agencies.Entities.Agency", null)
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -6781,6 +6811,12 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
             modelBuilder.Entity("HudhudNestApi.Domain.Services.Entities.ServiceReview", b =>
                 {
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("HudhudNestApi.Domain.Services.Entities.ServiceProvider", null)
                         .WithMany()
                         .HasForeignKey("ServiceProviderId")
@@ -6807,6 +6843,12 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
             modelBuilder.Entity("HudhudNestApi.Domain.ShortStay.Entities.Booking", b =>
                 {
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("GuestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("HudhudNestApi.Domain.ShortStay.Entities.AccommodationUnit", "Unit")
                         .WithMany()
                         .HasForeignKey("UnitId")
@@ -6842,6 +6884,15 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Unit");
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.ShortStay.Entities.HostVerificationRecord", b =>
+                {
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.ShortStay.Entities.MinimumStayRule", b =>
@@ -6884,6 +6935,32 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasForeignKey("AccommodationTypeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.District", null)
+                        .WithMany()
+                        .HasForeignKey("DistrictId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.Governorate", null)
+                        .WithMany()
+                        .HasForeignKey("GovernorateId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.Neighborhood", null)
+                        .WithMany()
+                        .HasForeignKey("NeighborhoodId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HudhudNestApi.Domain.Listings.Entities.Property", null)
+                        .WithMany()
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.OwnsOne("HudhudNestApi.Domain.ShortStay.ValueObjects.PoolDetails", "PoolDetails", b1 =>
                         {
@@ -6951,6 +7028,27 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("ShortStayListing");
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.ShortStay.Entities.ShortStayReview", b =>
+                {
+                    b.HasOne("HudhudNestApi.Domain.ShortStay.Entities.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HudhudNestApi.Domain.ShortStay.Entities.ShortStayListing", null)
+                        .WithMany()
+                        .HasForeignKey("ShortStayListingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.ShortStay.Entities.UnitBookingRange", b =>
@@ -7091,6 +7189,12 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasForeignKey("BookingId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.Currency", null)
+                        .WithMany()
+                        .HasForeignKey("CurrencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
                         .WithMany()
                         .HasForeignKey("PayerId")
@@ -7179,6 +7283,11 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasOne("HudhudNestApi.Domain.Lookups.Entities.Neighborhood", null)
                         .WithMany()
                         .HasForeignKey("NeighborhoodId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.PropertyType", null)
+                        .WithMany()
+                        .HasForeignKey("PropertyTypeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)

@@ -32,7 +32,6 @@ public sealed class ServiceOfferingConfiguration : IEntityTypeConfiguration<Serv
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(o => o.ServiceProviderId);
-        builder.HasIndex(o => o.Category);
         builder.HasIndex(o => new { o.Category, o.IsActive });
 
         builder.HasQueryFilter(o => !o.IsDeleted);

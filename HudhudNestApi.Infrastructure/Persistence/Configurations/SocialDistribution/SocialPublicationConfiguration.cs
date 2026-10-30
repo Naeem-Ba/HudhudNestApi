@@ -42,7 +42,6 @@ public sealed class SocialPublicationConfiguration : IEntityTypeConfiguration<So
 
         builder.HasIndex(p => p.PropertyId);
         builder.HasIndex(p => p.SocialAccountId);
-        builder.HasIndex(p => p.Status);
         builder.HasIndex(p => p.ScheduledAt);
         builder.HasIndex(p => p.CreatedAt);
         builder.HasIndex(p => p.NextRetryAt);

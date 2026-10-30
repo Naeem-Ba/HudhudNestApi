@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using HudhudNestApi.Infrastructure.Persistence;
+using HudhudNestApi.Integration.Tests.TestInfrastructure;
 
 namespace HudhudNestApi.Integration.Tests.Auth;
 
@@ -59,7 +60,8 @@ public sealed class PhoneConcurrencyTests : IClassFixture<PhoneLoginAuditFactory
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        return await db.Users.IgnoreQueryFilters().CountAsync(u => u.NormalizedPhoneNumber == phone);
+        var phoneHash = TestPhoneLookup.Hash(scope.ServiceProvider, phone);
+        return await db.Users.IgnoreQueryFilters().CountAsync(u => u.PhoneNumberLookupHash == phoneHash);
     }
 
     private async Task<(Guid ChallengeId, string Code)> SendRegistration(string phone)

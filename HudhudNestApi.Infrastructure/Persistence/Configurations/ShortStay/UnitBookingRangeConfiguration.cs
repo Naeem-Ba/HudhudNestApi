@@ -24,7 +24,6 @@ public sealed class UnitBookingRangeConfiguration : IEntityTypeConfiguration<Uni
             .HasForeignKey(r => r.BookingId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        builder.HasIndex(r => r.UnitId);
         builder.HasIndex(r => new { r.UnitId, r.CheckIn, r.CheckOut });
     }
 }

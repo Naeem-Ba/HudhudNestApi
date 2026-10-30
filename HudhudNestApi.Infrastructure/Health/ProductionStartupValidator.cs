@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using HudhudNestApi.Infrastructure.Auth.Services;
 using HudhudNestApi.Infrastructure.Email;
+using HudhudNestApi.Infrastructure.Security.DataProtection;
 
 namespace HudhudNestApi.Infrastructure.Health;
 
@@ -39,12 +40,16 @@ public sealed class ProductionStartupValidator : IHostedService
         ValidateSecrets();
         ValidateSmsSettings();
         ValidateEmailSettings();
+        WarnWhenKeyRingIsUnencrypted();
         await ValidatePostGisAsync(cancellationToken);
 
         _logger.LogInformation("Production startup validation completed successfully.");
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    private void WarnWhenKeyRingIsUnencrypted() =>
+        DataProtectionKeyEncryption.WarnWhenUnencrypted(_configuration, _logger);
 
     private void ValidateProductionDatabaseConnection()
     {

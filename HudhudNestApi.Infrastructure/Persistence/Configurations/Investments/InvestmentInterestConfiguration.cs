@@ -24,7 +24,6 @@ public sealed class InvestmentInterestConfiguration : IEntityTypeConfiguration<I
             .HasForeignKey(i => i.InvestmentProjectId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(i => i.UserId);
 
         // One interest record per (user, project) — Withdraw/Reactivate flip Status on the same
         // row instead of inserting duplicates (Phase 1 spec §31 idempotency).

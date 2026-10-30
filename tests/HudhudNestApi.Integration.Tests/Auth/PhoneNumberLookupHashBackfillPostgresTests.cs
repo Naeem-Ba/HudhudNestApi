@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Auth.Interfaces;
+using HudhudNestApi.Infrastructure.Identity;
 using HudhudNestApi.Infrastructure.Persistence;
 using HudhudNestApi.Infrastructure.Persistence.Backfills;
 using Xunit;
@@ -59,6 +62,67 @@ public sealed class PhoneNumberLookupHashBackfillPostgresTests
             state.ExpectedHash,
             state.StoredHash);
     }
+
+    [Fact]
+    public async Task Backfill_RemovesTheClearTextCopies_AndRestoreModeWritesThemBack()
+    {
+        // DB security audit 2026-10-29 (S01): a legacy phone account had the number in NormalizedPhoneNumber
+        // and as its user name. The backfill hashes it and removes both copies; Restore mode (rollback aid)
+        // writes them back from the encrypted PhoneNumber.
+        await using var factory = new PostgresAuthTestFactory();
+        await factory.PrepareDatabaseAsync();
+        var phone = UniquePhone();
+        var user = await factory.SeedUserAsync(UniqueEmail("plaintext"), phoneNumber: phone, phoneConfirmed: true);
+
+        await factory.InScopeAsync(async services =>
+        {
+            var db = services.GetRequiredService<AppDbContext>();
+            await db.Users.IgnoreQueryFilters().Where(u => u.Id == user.IdentityId).ExecuteUpdateAsync(set => set
+                .SetProperty(u => u.UserName, phone)
+                .SetProperty(u => u.NormalizedUserName, phone)
+                .SetProperty(u => u.NormalizedPhoneNumber, phone)
+                .SetProperty(u => u.PhoneNumberLookupHash, (string?)null));
+        });
+
+        await RunBackfillAsync(factory);
+
+        var expectedHash = await factory.InScopeAsync(services =>
+            Task.FromResult(services.GetRequiredService<IPhoneNumberLookupHasher>().Compute(phone)));
+        var cleared = await ReadNamesAsync(factory, user.IdentityId);
+        Assert.Equal(expectedHash, cleared.Hash);
+        Assert.Null(cleared.Normalized);
+        Assert.Equal(PhoneIdentity.UserNameFor(expectedHash), cleared.UserName);
+        Assert.Equal(PhoneIdentity.UserNameFor(expectedHash).ToUpperInvariant(), cleared.NormalizedUserName);
+
+        await factory.InScopeAsync(async services =>
+        {
+            var restore = new PhoneNumberLookupHashBackfill(
+                services.GetRequiredService<AppDbContext>(),
+                services.GetRequiredService<IPhoneNumberLookupHasher>(),
+                services.GetRequiredService<ILogger<PhoneNumberLookupHashBackfill>>(),
+                new ConfigurationBuilder()
+                    .AddInMemoryCollection(new Dictionary<string, string?> { [PhoneNumberLookupHashBackfill.ModeKey] = "Restore" })
+                    .Build());
+            await restore.RunAsync();
+        });
+
+        var restored = await ReadNamesAsync(factory, user.IdentityId);
+        Assert.Equal(phone, restored.Normalized);
+        Assert.Equal(phone, restored.UserName);
+        Assert.Equal(expectedHash, restored.Hash);
+    }
+
+    private static Task<(string? UserName, string? NormalizedUserName, string? Normalized, string? Hash)> ReadNamesAsync(
+        PostgresAuthTestFactory factory, Guid userId) =>
+        factory.InScopeAsync(async services =>
+        {
+            var db = services.GetRequiredService<AppDbContext>();
+            var row = await db.Users.IgnoreQueryFilters().AsNoTracking()
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.UserName, u.NormalizedUserName, u.NormalizedPhoneNumber, u.PhoneNumberLookupHash })
+                .SingleAsync();
+            return (row.UserName, row.NormalizedUserName, row.NormalizedPhoneNumber, row.PhoneNumberLookupHash);
+        });
 
     [Fact]
     public async Task SecondExecution_IsIdempotent()

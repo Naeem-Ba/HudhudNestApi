@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings.Entities;
+using HudhudNestApi.Domain.Lookups.Entities;
 using HudhudNestApi.Domain.Transactions.Entities;
 using HudhudNestApi.Domain.Transactions.Enums;
 using HudhudNestApi.Infrastructure.Persistence;
@@ -105,13 +106,24 @@ public sealed class TransactionConcurrencyTests : IAsyncLifetime
             ListingType.ForRent);
         db.Properties.Add(property);
 
+        // Transactions.CurrencyId carries a real FK too since the 2026-10-29 schema audit
+        // (FK_Transactions_Currencies_CurrencyId); the test database is reset between runs, so
+        // the seeded currency rows may be gone and a hard-coded id 1 points at nothing.
+        var currency = await db.Currencies.FirstOrDefaultAsync();
+        if (currency is null)
+        {
+            currency = Currency.Create("USD", "US Dollar", "الدولار الأمريكي", "$", 1m, isBaseCurrency: true);
+            db.Currencies.Add(currency);
+            await db.SaveChangesAsync();
+        }
+
         var fee = Transaction.Create(
             propertyId: property.Id,
             payerId: payer.UserAccountId,
             receiverId: receiver.UserAccountId,
             transactionType: TransactionType.FeaturedListingFee,
             amount: 5m,
-            currencyId: 1,
+            currencyId: currency.Id,
             exchangeRateToUSD: 1m,
             paymentMethod: TransactionPaymentMethod.Cash);
 

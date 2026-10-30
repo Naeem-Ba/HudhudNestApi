@@ -30,7 +30,6 @@ public sealed class VisitRequestConfiguration : IEntityTypeConfiguration<VisitRe
             .OnDelete(DeleteBehavior.Restrict);
 
         // Indexes
-        builder.HasIndex(v => v.PropertyId);
         builder.HasIndex(v => v.RequesterId);
         builder.HasIndex(v => new { v.PropertyId, v.RequesterId, v.Status });
 
