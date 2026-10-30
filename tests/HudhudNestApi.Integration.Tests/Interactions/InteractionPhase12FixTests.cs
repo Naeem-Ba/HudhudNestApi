@@ -4,7 +4,10 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using HudhudNestApi.Application.Common.Interfaces;
+using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Lookups.Entities;
+using HudhudNestApi.Domain.Notifications.Enums;
+using HudhudNestApi.Domain.Users.Constants;
 using HudhudNestApi.Infrastructure.Persistence;
 using HudhudNestApi.Integration.Tests.Investments;
 
@@ -226,5 +229,84 @@ public sealed class InteractionPhase12FixTests : IAsyncLifetime
         using var anonymous = _factory.CreateClient();
         var response = await anonymous.PostAsJsonAsync("/api/surveys/landing", new { willingnessToPay = 99 });
         await Body(response, HttpStatusCode.UnprocessableEntity);
+    }
+
+    // ── Decisions on the open points (P12-D05, admin alert) ──────────────────────────────
+
+    private async Task<Guid> RequestVisitAsync(Guid propertyId, HttpStatusCode expected = HttpStatusCode.Created)
+    {
+        var response = await VisitorClient.PostAsJsonAsync("/api/visits", new
+        {
+            propertyId,
+            proposedAt = DateTime.UtcNow.AddDays(3),
+            visitorName = "Visitor",
+            visitorPhone = "+963 944 123 456",
+            visitorNote = "hi",
+        });
+        var body = await Body(response, expected);
+        return expected == HttpStatusCode.Created ? JsonDocument.Parse(body).RootElement.GetProperty("id").GetGuid() : Guid.Empty;
+    }
+
+    [Fact]
+    public async Task CompleteVisit_BeforeItsDate_Answers400_AndWorksOnceTheDateHasPassed()
+    {
+        var property = await NewPropertyAsync(_owner.Id, published: true);
+        var id = await RequestVisitAsync(property);
+        await Body(await OwnerClient.PutAsJsonAsync($"/api/visits/{id}/confirm", new { note = "ok" }), HttpStatusCode.NoContent);
+
+        await Body(await OwnerClient.PutAsync($"/api/visits/{id}/complete", null), HttpStatusCode.BadRequest);
+
+        await _factory.InScopeAsync(async services =>
+        {
+            var db = services.GetRequiredService<AppDbContext>();
+            await db.VisitRequests.Where(v => v.Id == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(v => v.ProposedAt, DateTime.UtcNow.AddHours(-2)));
+            return 0;
+        });
+
+        await Body(await OwnerClient.PutAsync($"/api/visits/{id}/complete", null), HttpStatusCode.NoContent);
+    }
+
+    [Theory]
+    [InlineData(PropertyStatus.Sold)]
+    [InlineData(PropertyStatus.Rented)]
+    public async Task RequestVisit_OnASoldOrRentedListing_Answers400(PropertyStatus status)
+    {
+        var property = await NewPropertyAsync(_owner.Id, published: true);
+        await _factory.InScopeAsync(async services =>
+        {
+            var db = services.GetRequiredService<AppDbContext>();
+            await db.Properties.Where(p => p.Id == property).ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, status));
+            return 0;
+        });
+
+        await RequestVisitAsync(property, HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task ContactMessage_NotifiesEveryAdmin_OncePerMessage()
+    {
+        var admin = await _factory.SeedUserAsync("admin", RoleNames.Admin);
+        using var anonymous = _factory.CreateClient();
+
+        await Body(await anonymous.PostAsJsonAsync("/api/contact", new
+        {
+            name = "Someone",
+            email = "someone@example.test",
+            subject = "A question",
+            message = "a message that is long enough",
+        }), HttpStatusCode.OK);
+
+        await _factory.InScopeAsync(async services =>
+        {
+            var db = services.GetRequiredService<AppDbContext>();
+            var notes = await db.Notifications
+                .Where(n => n.Type == NotificationType.ContactMessageReceived).ToListAsync();
+            var note = Assert.Single(notes);
+            Assert.Equal(admin.Id, note.RecipientId);
+            Assert.NotNull(note.RelatedEntityId);
+            Assert.DoesNotContain("someone@example.test", note.Message);
+            return 0;
+        });
     }
 }

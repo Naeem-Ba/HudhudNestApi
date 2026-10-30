@@ -290,6 +290,15 @@ public static class NotificationCatalog
             "New interest in the investment project '{title}'. Active interested people now: {count}.",
             "Neues Interesse am Investitionsprojekt '{title}'. Aktuell interessierte Personen: {count}."),
 
+        // ---- contact form ----
+        // Tells the admins a message arrived; the message itself is in the admin contact list.
+        ["msg.contact_message_received"] = new(
+            "رسالة اتصال جديدة من {name}. الموضوع: {subject}.",
+            "New contact message from {name}. Subject: {subject}.",
+            "Neue Kontaktnachricht von {name}. Betreff: {subject}."),
+
+        ["msg.contact_message_no_subject"] = new("بلا موضوع", "no subject", "ohne Betreff"),
+
         // ---- listing reports (moderation) ----
         // Admin messages never name the reporter; reporter messages never name the reviewer or the action details.
         ["msg.listing_report_submitted"] = new(

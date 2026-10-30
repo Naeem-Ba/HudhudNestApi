@@ -209,4 +209,9 @@ public enum NotificationType
 
     /// <summary>Someone expressed interest in an investment project. Sent to admins (never names the person).</summary>
     InvestmentInterestReceived = 55,
+
+    // ── Contact form. RelatedEntityId is the ContactMessage id.
+
+    /// <summary>A visitor sent a message through the public contact form. Sent to admins.</summary>
+    ContactMessageReceived = 56,
 }

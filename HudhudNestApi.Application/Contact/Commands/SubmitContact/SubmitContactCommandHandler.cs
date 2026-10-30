@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Contact.Interfaces;
+using HudhudNestApi.Application.Contact.Services;
 using HudhudNestApi.Domain.Messaging.Entities;
 
 namespace HudhudNestApi.Application.Contact.Commands.SubmitContact;
@@ -10,11 +11,14 @@ public sealed class SubmitContactCommandHandler
 {
     private readonly IContactMessageRepository _messages;
     private readonly IUnitOfWork _uow;
+    private readonly ContactMessageNotifier _notifier;
 
-    public SubmitContactCommandHandler(IContactMessageRepository messages, IUnitOfWork uow)
+    public SubmitContactCommandHandler(
+        IContactMessageRepository messages, IUnitOfWork uow, ContactMessageNotifier notifier)
     {
         _messages = messages;
         _uow = uow;
+        _notifier = notifier;
     }
 
     public async Task<Guid> Handle(
@@ -32,6 +36,7 @@ public sealed class SubmitContactCommandHandler
 
         _messages.Add(message);
         await _uow.SaveChangesAsync(cancellationToken);
+        await _notifier.NotifyAdminsAsync(message, cancellationToken);
 
         return message.Id;
     }

@@ -55,6 +55,7 @@ public static class DependencyInjection
         // Listing reports (moderation): the notifier and the admin detail view are shared by several handlers.
         services.AddScoped<Moderation.ListingReportNotifier>();
         services.AddScoped<Investments.Services.InvestmentInterestNotifier>();
+        services.AddScoped<Contact.Services.ContactMessageNotifier>();
         services.AddScoped<Moderation.ListingReportAdminDetailBuilder>();
         // Bound to the "ListingReports" section in AddRepositoryInfrastructure; the defaults apply without it.
         services.AddOptions<Moderation.ListingReportOptions>();
