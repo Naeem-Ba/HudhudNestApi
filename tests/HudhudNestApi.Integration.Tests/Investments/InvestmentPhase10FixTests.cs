@@ -114,6 +114,23 @@ public sealed class InvestmentPhase10FixTests : IClassFixture<InvestmentApiTestF
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    [Theory(DisplayName = "P10-D07 (rest): the calculator refuses amounts outside the project's own minimum / maximum")]
+    [InlineData("999", false)]
+    [InlineData("1000", true)]
+    [InlineData("50000", true)]
+    [InlineData("50001", false)]
+    public async Task Calculator_RespectsProjectMinAndMax(string amount, bool accepted)
+    {
+        var (_, _, projectId) = await SeedAsync(InvestmentProjectStatus.Published);
+        await SqlAsync("UPDATE \"InvestmentProjects\" SET \"MaximumInvestment\" = 50000 WHERE \"Id\" = {0}", projectId);
+
+        var response = await _factory.AuthedClient().PostAsync(
+            $"{Public}/projects/{projectId}/calculator",
+            new StringContent($"{{\"amount\":{amount},\"termMonths\":12}}", System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(accepted ? HttpStatusCode.OK : HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
     // ── D08: parallel watchlist / interest ────────────────────────────
 
     [Fact(DisplayName = "P10-D08: parallel watchlist adds never 500; exactly one row is kept")]
@@ -198,6 +215,40 @@ public sealed class InvestmentPhase10FixTests : IClassFixture<InvestmentApiTestF
             $"{kind}: got {(int)response.StatusCode}");
         var control = await _factory.AuthedClient(admin.AccessToken).PutAsJsonAsync($"{Admin}/{projectId}", ValidUpdate());
         Assert.Equal(HttpStatusCode.NoContent, control.StatusCode);
+    }
+
+    [Theory(DisplayName = "P10-D09 (rest): an absurd start or end date is refused; a project already under way is still allowed")]
+    [InlineData(-36500, null, false)]   // a century ago
+    [InlineData(-400, null, true)]      // started last year
+    [InlineData(30, null, true)]
+    [InlineData(5000, null, false)]     // ~14 years ahead
+    [InlineData(30, 40000, false)]      // end date ~110 years ahead
+    [InlineData(30, 400, true)]
+    public async Task AdminUpdate_StartAndEndDateWindow(int startOffsetDays, int? endOffsetDays, bool accepted)
+    {
+        var (admin, _, projectId) = await SeedAsync(InvestmentProjectStatus.Draft, withReadiness: false);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var body = new
+        {
+            title = "Valid title",
+            shortDescription = "short",
+            description = "A valid description.",
+            projectType = "Residential",
+            targetAmount = 100000m,
+            minimumInvestment = 1000m,
+            maximumInvestment = (decimal?)null,
+            currency = "USD",
+            investmentTermMonths = 12,
+            expectedReturnMin = 5m,
+            expectedReturnMax = 10m,
+            startDate = today.AddDays(startOffsetDays).ToString("yyyy-MM-dd"),
+            endDate = endOffsetDays is { } e ? today.AddDays(e).ToString("yyyy-MM-dd") : null,
+            raisedAmount = 0m,
+        };
+
+        var response = await _factory.AuthedClient(admin.AccessToken).PutAsJsonAsync($"{Admin}/{projectId}", body);
+
+        Assert.Equal(accepted ? HttpStatusCode.NoContent : HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     [Fact(DisplayName = "P10-D09: an honest guarantee disclaimer in the description is not banned")]

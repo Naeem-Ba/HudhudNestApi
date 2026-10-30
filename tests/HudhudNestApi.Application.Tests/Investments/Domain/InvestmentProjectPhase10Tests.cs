@@ -1,4 +1,6 @@
 using FluentValidation;
+using Moq;
+using HudhudNestApi.Application.Investments.Interfaces;
 using HudhudNestApi.Application.Investments.Commands.UpdateInvestmentProject;
 using HudhudNestApi.Application.Investments.Queries.CalculateInvestmentReturn;
 using HudhudNestApi.Application.Investments.Queries.GetInvestmentProjects;
@@ -191,6 +193,39 @@ public sealed class InvestmentProjectPhase10Tests
     {
         var query = new CalculateInvestmentReturnQuery(Guid.NewGuid(), decimal.Parse(amount), term);
         Assert.False(new CalculateInvestmentReturnQueryValidator().Validate(query).IsValid);
+    }
+
+    [Theory]
+    [InlineData(-36500, false)]
+    [InlineData(-400, true)]
+    [InlineData(30, true)]
+    [InlineData(5000, false)]
+    public void UpdateValidator_StartDateWindow(int offsetDays, bool valid)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var command = Update() with { StartDate = today.AddDays(offsetDays) };
+        Assert.Equal(valid, new UpdateInvestmentProjectCommandValidator().Validate(command).IsValid);
+    }
+
+    [Theory]
+    [InlineData(500, false)]
+    [InlineData(1_000, true)]
+    [InlineData(50_000, true)]
+    [InlineData(50_001, false)]
+    public async Task CalculatorHandler_AppliesProjectMinAndMax(int amount, bool accepted)
+    {
+        var dto = new InvestmentProjectDetailsDto(
+            Guid.NewGuid(), Guid.NewGuid(), "t", null, "d", InvestmentProjectType.Residential,
+            InvestmentProjectStatus.Published, "p", "c", null, null, null, null, 100_000m, 0m, 1_000m, 50_000m, "USD",
+            12, 5m, 10m, null, null, null, null);
+        var repo = new Mock<IInvestmentProjectRepository>();
+        repo.Setup(r => r.GetPublishedDetailsAsync(dto.Id, It.IsAny<CancellationToken>())).ReturnsAsync(dto);
+        var handler = new CalculateInvestmentReturnQueryHandler(repo.Object);
+
+        var act = () => handler.Handle(new CalculateInvestmentReturnQuery(dto.Id, amount, 12), CancellationToken.None);
+
+        if (accepted) Assert.NotNull(await act());
+        else await Assert.ThrowsAsync<HudhudNestApi.Application.Common.Exceptions.ValidationException>(act);
     }
 
     [Fact]
