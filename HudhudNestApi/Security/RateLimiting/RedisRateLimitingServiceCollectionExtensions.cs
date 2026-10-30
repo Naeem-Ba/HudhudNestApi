@@ -14,6 +14,7 @@ public static class RedisRateLimitingServiceCollectionExtensions
         var redisConnectionString = ResolveRedisConnectionString(configuration);
 
         services.TryAddSingleton<RedisRateLimitingRegistration>();
+        services.TryAddSingleton<InProcessFixedWindowCounter>();
 
         services.AddOptions<RedisRateLimitingOptions>()
             .Bind(configuration.GetSection(RedisRateLimitingOptions.SectionName))
@@ -34,9 +35,13 @@ public static class RedisRateLimitingServiceCollectionExtensions
 
                 foreach (var policy in RedisRateLimitingDefaults.Policies)
                 {
-                    if (!options.Policies.ContainsKey(policy.Key))
+                    if (!options.Policies.TryGetValue(policy.Key, out var configured))
                     {
                         options.Policies[policy.Key] = policy.Value;
+                    }
+                    else
+                    {
+                        configured.InProcess ??= policy.Value.InProcess;
                     }
                 }
             })
