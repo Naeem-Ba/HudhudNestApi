@@ -10,16 +10,19 @@ using HudhudNestApi.Application.Investments.Commands.CreateInvestmentProject;
 using HudhudNestApi.Application.Investments.Commands.PublishInvestmentProject;
 using HudhudNestApi.Application.Investments.Commands.RejectInvestmentProject;
 using HudhudNestApi.Application.Investments.Commands.RemoveInvestmentDocument;
+using HudhudNestApi.Application.Investments.Commands.ResumeInvestmentProject;
 using HudhudNestApi.Application.Investments.Commands.ScheduleInvestmentProject;
 using HudhudNestApi.Application.Investments.Commands.SetInvestmentDocumentVisibility;
 using HudhudNestApi.Application.Investments.Commands.SetInvestmentProjectFinancials;
 using HudhudNestApi.Application.Investments.Commands.SetInvestmentProjectRiskAssessment;
 using HudhudNestApi.Application.Investments.Commands.SubmitInvestmentProjectForReview;
 using HudhudNestApi.Application.Investments.Commands.SuspendInvestmentProject;
+using HudhudNestApi.Application.Investments.Commands.UpdateInvestmentProgress;
 using HudhudNestApi.Application.Investments.Commands.UpdateInvestmentProject;
 using HudhudNestApi.Application.Investments.DTOs;
 using HudhudNestApi.Application.Investments.Queries.GetAdminInvestmentDocuments;
 using HudhudNestApi.Application.Investments.Queries.GetAdminInvestmentProjects;
+using HudhudNestApi.Application.Investments.Queries.GetAdminInvestmentInterests;
 using HudhudNestApi.Application.Investments.Queries.GetInvestmentProjectReview;
 using HudhudNestApi.Domain.Users.Constants;
 
@@ -134,6 +137,36 @@ public sealed class AdminInvestmentsController : ControllerBase
     {
         await _sender.Send(new SuspendInvestmentProjectCommand(id), ct);
         return NoContent();
+    }
+
+    [HttpPost("projects/{id:guid}/resume")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Resume(Guid id, CancellationToken ct)
+    {
+        await _sender.Send(new ResumeInvestmentProjectCommand(id), ct);
+        return NoContent();
+    }
+
+    /// <summary>Corrects the informational raised-amount figure of a project past the editing stage.</summary>
+    [HttpPut("projects/{id:guid}/progress")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateProgress(Guid id, [FromBody] UpdateInvestmentProgressRequest request, CancellationToken ct)
+    {
+        await _sender.Send(new UpdateInvestmentProgressCommand(id, request.RaisedAmount), ct);
+        return NoContent();
+    }
+
+    /// <summary>Who has expressed interest in the project (P10-D01: until now nobody on the staff side could see it).</summary>
+    [HttpGet("projects/{id:guid}/interests")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetInterests(Guid id, CancellationToken ct)
+    {
+        var result = await _sender.Send(new GetAdminInvestmentInterestsQuery(id), ct);
+        return Ok(result);
     }
 
     [HttpPost("projects/{id:guid}/close")]
@@ -272,6 +305,8 @@ public sealed record UpdateInvestmentProjectRequest(
     decimal RaisedAmount);
 
 public sealed record RejectInvestmentProjectRequest(string Reason);
+
+public sealed record UpdateInvestmentProgressRequest(decimal RaisedAmount);
 
 public sealed record ScheduleInvestmentProjectRequest(DateTime? ScheduledPublishAt);
 

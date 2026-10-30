@@ -1,4 +1,5 @@
 using FluentValidation;
+using HudhudNestApi.Application.Common.Validation;
 using HudhudNestApi.Application.Investments.Validation;
 
 namespace HudhudNestApi.Application.Investments.Commands.SetInvestmentProjectRiskAssessment;
@@ -22,6 +23,7 @@ public sealed class SetInvestmentProjectRiskAssessmentCommandValidator
         RuleFor(x => x.RiskSummary)
             .NotEmpty().WithMessage("ملخص المخاطر مطلوب.")
             .MaximumLength(4000)
+            .NoNulCharacters()
             .MustNotImplyGuaranteedReturn();
     }
 }

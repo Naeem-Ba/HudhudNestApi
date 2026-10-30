@@ -26,15 +26,16 @@ public sealed class InvestmentWatchlistRepository : IInvestmentWatchlistReposito
 
     public void Remove(InvestmentWatchlistItem item) => _db.InvestmentWatchlistItems.Remove(item);
 
-    /// <summary>Card projection regardless of the project's current status — this is the owning
-    /// user's own saved list, not public exposure of the project.</summary>
+    /// <summary>The owning user's saved list. P10-D05: only projects that are publicly visible right now
+    /// (Published, property alive) are shown — a suspended/closed/withdrawn project must not keep leaking its card
+    /// (title, amounts) through the list. The row itself is kept, so the project reappears if it is re-published.</summary>
     public async Task<IReadOnlyList<InvestmentWatchlistDto>> GetByUserIdAsync(Guid userId, CancellationToken ct = default)
     {
         var query =
             from item in _db.InvestmentWatchlistItems.AsNoTracking()
             join project in _db.InvestmentProjects.AsNoTracking() on item.InvestmentProjectId equals project.Id
             join property in _db.Properties.AsNoTracking() on project.PropertyId equals property.Id
-            where item.UserId == userId
+            where item.UserId == userId && project.Status == InvestmentProjectStatus.Published
             orderby item.CreatedAt descending
             select new InvestmentWatchlistDto(
                 item.InvestmentProjectId,

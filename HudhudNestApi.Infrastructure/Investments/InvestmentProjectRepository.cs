@@ -70,7 +70,7 @@ public sealed class InvestmentProjectRepository : IInvestmentProjectRepository
             query = query.Where(p => p.ProjectType == filter.ProjectType.Value);
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
-            query = query.Where(p => EF.Functions.ILike(p.Title, $"%{filter.Search}%"));
+            query = query.Where(p => EF.Functions.ILike(p.Title, $"%{EscapeLike(filter.Search.Trim())}%", LikeEscape));
 
         var totalCount = await query.CountAsync(ct);
 
@@ -80,7 +80,8 @@ public sealed class InvestmentProjectRepository : IInvestmentProjectRepository
             .Take(filter.PageSize)
             .Select(p => new AdminInvestmentProjectListDto(
                 p.Id, p.Title, p.Status, p.ProjectType, p.OwnerUserId,
-                p.TargetAmount, p.RaisedAmount, p.CreatedAt, p.PublishedAt))
+                p.TargetAmount, p.RaisedAmount, p.CreatedAt, p.PublishedAt,
+                _db.InvestmentInterests.Count(i => i.InvestmentProjectId == p.Id && i.Status == InvestmentInterestStatus.Active)))
             .ToListAsync(ct);
 
         return new PagedResult<AdminInvestmentProjectListDto>
@@ -117,6 +118,12 @@ public sealed class InvestmentProjectRepository : IInvestmentProjectRepository
         join property in _db.Properties.AsNoTracking() on project.PropertyId equals property.Id
         select new ProjectWithProperty { Project = project, Property = property };
 
+    private const string LikeEscape = "\\";
+
+    /// <summary>A user's % or _ is text, not a wildcard (the search box would otherwise match everything).</summary>
+    private static string EscapeLike(string value)
+        => value.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+
     private static IQueryable<ProjectWithProperty> ApplyPublicFilters(
         IQueryable<ProjectWithProperty> query,
         InvestmentProjectFilterDto filter)
@@ -124,8 +131,8 @@ public sealed class InvestmentProjectRepository : IInvestmentProjectRepository
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             query = query.Where(x =>
-                EF.Functions.ILike(x.Project.Title, $"%{filter.Search}%") ||
-                (x.Project.ShortDescription != null && EF.Functions.ILike(x.Project.ShortDescription, $"%{filter.Search}%")));
+                EF.Functions.ILike(x.Project.Title, $"%{EscapeLike(filter.Search.Trim())}%", LikeEscape) ||
+                (x.Project.ShortDescription != null && EF.Functions.ILike(x.Project.ShortDescription, $"%{EscapeLike(filter.Search.Trim())}%", LikeEscape)));
         }
 
         if (filter.ProjectType.HasValue)
@@ -150,7 +157,7 @@ public sealed class InvestmentProjectRepository : IInvestmentProjectRepository
             query = query.Where(x => x.Project.ExpectedReturnMax >= filter.MinExpectedReturn.Value);
 
         if (!string.IsNullOrWhiteSpace(filter.City))
-            query = query.Where(x => EF.Functions.ILike(x.Property.City, $"%{filter.City}%"));
+            query = query.Where(x => EF.Functions.ILike(x.Property.City, $"%{EscapeLike(filter.City.Trim())}%", LikeEscape));
 
         return query;
     }

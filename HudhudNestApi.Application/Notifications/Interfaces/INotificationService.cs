@@ -150,6 +150,17 @@ public interface INotificationService
         string dedupeKey,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Investment discovery: an admin is told that someone expressed interest in a project.
+    /// <paramref name="dedupeKey"/> makes a retry of the same event a no-op.
+    /// </summary>
+    Task NotifyInvestmentInterestAsync(
+        Guid recipientId,
+        NotificationText message,
+        Guid investmentProjectId,
+        string dedupeKey,
+        CancellationToken ct = default);
+
     Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(
         Guid userId,
         int page,

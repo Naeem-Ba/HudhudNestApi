@@ -2,7 +2,9 @@ using MediatR;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Investments.Interfaces;
+using HudhudNestApi.Domain.Common.Exceptions;
 using HudhudNestApi.Domain.Investments.Entities;
+using HudhudNestApi.Domain.Investments.Enums;
 
 namespace HudhudNestApi.Application.Investments.Commands.AddInvestmentUpdate;
 
@@ -24,9 +26,12 @@ public sealed class AddInvestmentUpdateCommandHandler : IRequestHandler<AddInves
 
     public async Task<Guid> Handle(AddInvestmentUpdateCommand request, CancellationToken ct)
     {
-        var projectExists = await _projects.GetByIdAsync(request.InvestmentProjectId, ct) is not null;
-        if (!projectExists)
-            throw new NotFoundException($"Investment project {request.InvestmentProjectId} was not found.");
+        var project = await _projects.GetByIdAsync(request.InvestmentProjectId, ct)
+            ?? throw new NotFoundException($"Investment project {request.InvestmentProjectId} was not found.");
+
+        // QA Phase 10, P10-D10: a closed project is finished; nothing new is announced on it.
+        if (project.Status == InvestmentProjectStatus.Closed)
+            throw new DomainException("لا يمكن إضافة تحديث لمشروع مغلق.");
 
         var update = InvestmentUpdate.Create(
             request.InvestmentProjectId,

@@ -3,22 +3,26 @@ using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Investments.Interfaces;
+using HudhudNestApi.Application.Investments.Services;
 
 namespace HudhudNestApi.Application.Investments.Commands.RemoveInvestmentDocument;
 
 public sealed class RemoveInvestmentDocumentCommandHandler : IRequestHandler<RemoveInvestmentDocumentCommand>
 {
+    private readonly IInvestmentProjectRepository _projects;
     private readonly IInvestmentDocumentRepository _documents;
     private readonly IMediaStorageService _storage;
     private readonly IUnitOfWork _uow;
     private readonly ILogger<RemoveInvestmentDocumentCommandHandler> _logger;
 
     public RemoveInvestmentDocumentCommandHandler(
+        IInvestmentProjectRepository projects,
         IInvestmentDocumentRepository documents,
         IMediaStorageService storage,
         IUnitOfWork uow,
         ILogger<RemoveInvestmentDocumentCommandHandler> logger)
     {
+        _projects = projects;
         _documents = documents;
         _storage = storage;
         _uow = uow;
@@ -32,6 +36,9 @@ public sealed class RemoveInvestmentDocumentCommandHandler : IRequestHandler<Rem
 
         if (document.InvestmentProjectId != request.InvestmentProjectId)
             throw new NotFoundException($"Document {request.DocumentId} was not found.");
+
+        await RequiredDocumentGuard.EnsureNotLastRequiredAsync(
+            _projects, _documents, request.InvestmentProjectId, request.DocumentId, ct);
 
         document.Remove(request.RemovedByUserId);
         await _uow.SaveChangesAsync(ct);

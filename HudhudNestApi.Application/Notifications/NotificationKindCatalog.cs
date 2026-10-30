@@ -97,6 +97,8 @@ public static class NotificationKindCatalog
         [NotificationType.ListingReportSubmitted] = new(Account, NotificationPriority.Normal, "admin-listing-report", true),
         [NotificationType.ListingReportInfoRequested] = new(Account, NotificationPriority.High, "my-listing-report", true),
         [NotificationType.ListingReportClosed] = new(Account, NotificationPriority.Normal, "my-listing-report", true),
+        // Admin-only; mandatory like the listing-report notice so the account category stays un-mutable.
+        [NotificationType.InvestmentInterestReceived] = new(Account, NotificationPriority.Normal, "admin-investment", true),
         [NotificationType.UserRated] = new(Social, NotificationPriority.Low, "profile", false),
     };
 

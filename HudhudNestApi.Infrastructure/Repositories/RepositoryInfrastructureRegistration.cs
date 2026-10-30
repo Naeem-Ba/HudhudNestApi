@@ -158,6 +158,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IInvestmentUpdateRepository, InvestmentUpdateRepository>();
         services.AddScoped<IInvestmentWatchlistRepository, InvestmentWatchlistRepository>();
         services.AddScoped<IInvestmentInterestRepository, InvestmentInterestRepository>();
+        services.AddHostedService<InvestmentScheduledPublishHostedService>();
 
         // Valuation module (Stage 5 — 24h SLA enforcement; Stage 6 — office dashboard/response)
         services.AddScoped<IValuationInquiryRepository, ValuationInquiryRepository>();

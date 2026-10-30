@@ -13,7 +13,20 @@ public sealed record AdminInvestmentProjectListDto(
     decimal TargetAmount,
     decimal RaisedAmount,
     DateTime CreatedAt,
-    DateTime? PublishedAt);
+    DateTime? PublishedAt,
+    int ActiveInterestCount);
+
+/// <summary>One person who expressed interest in a project (staff view, P10-D01). An expression of interest is not
+/// an investment: it carries no amount and no commitment.</summary>
+public sealed record AdminInvestmentInterestDto(
+    Guid Id,
+    Guid UserId,
+    string UserName,
+    string? Email,
+    string? PhoneNumber,
+    InvestmentInterestStatus Status,
+    DateTime CreatedAt,
+    DateTime UpdatedAt);
 
 /// <summary>Full staff review view of one project — includes internal-only fields (rejection
 /// reason, readiness checklist) that never appear in the public DTO.</summary>

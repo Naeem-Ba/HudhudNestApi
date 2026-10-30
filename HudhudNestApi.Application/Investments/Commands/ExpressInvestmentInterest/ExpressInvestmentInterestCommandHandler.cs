@@ -2,6 +2,7 @@ using MediatR;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Investments.DTOs;
 using HudhudNestApi.Application.Investments.Interfaces;
+using HudhudNestApi.Application.Investments.Services;
 using HudhudNestApi.Domain.Investments.Entities;
 using HudhudNestApi.Domain.Investments.Enums;
 
@@ -13,15 +14,18 @@ public sealed class ExpressInvestmentInterestCommandHandler
     private readonly IInvestmentInterestRepository _interests;
     private readonly IInvestmentProjectRepository _projects;
     private readonly IUnitOfWork _uow;
+    private readonly InvestmentInterestNotifier _notifier;
 
     public ExpressInvestmentInterestCommandHandler(
         IInvestmentInterestRepository interests,
         IInvestmentProjectRepository projects,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        InvestmentInterestNotifier notifier)
     {
         _interests = interests;
         _projects = projects;
         _uow = uow;
+        _notifier = notifier;
     }
 
     public async Task<InvestmentInterestMutationResult> Handle(
@@ -47,6 +51,8 @@ public sealed class ExpressInvestmentInterestCommandHandler
 
             existing.Reactivate();
             await _uow.SaveChangesAsync(ct);
+            var reactivatedProject = await _projects.GetByIdAsync(request.InvestmentProjectId, ct);
+            await _notifier.NotifyAdminsAsync(existing, reactivatedProject?.Title ?? string.Empty, ct);
             return InvestmentInterestMutationResult.Success(ToDto(existing), "Interest registered successfully.");
         }
 
@@ -54,6 +60,7 @@ public sealed class ExpressInvestmentInterestCommandHandler
         var interest = InvestmentInterest.Create(request.UserId, request.InvestmentProjectId);
         _interests.Add(interest);
         await _uow.SaveChangesAsync(ct);
+        await _notifier.NotifyAdminsAsync(interest, project?.Title ?? string.Empty, ct);
 
         return InvestmentInterestMutationResult.Success(
             ToDto(interest, project?.Title),
