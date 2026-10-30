@@ -98,6 +98,10 @@ public sealed class InvestmentApiTestFactory : WebApplicationFactory<Program>
         await db.Database.MigrateAsync();
         await DatabaseSeeder.SeedAsync(scope.ServiceProvider);
         await TruncateMutableTablesAsync(db);
+
+        // The lookup tables were just emptied, so a cached catalog no longer matches them.
+        await scope.ServiceProvider.GetRequiredService<HudhudNestApi.Application.Common.Interfaces.ICommonLookupService>()
+            .RefreshAllAsync();
     }
 
     public async Task<T> InScopeAsync<T>(Func<IServiceProvider, Task<T>> action)

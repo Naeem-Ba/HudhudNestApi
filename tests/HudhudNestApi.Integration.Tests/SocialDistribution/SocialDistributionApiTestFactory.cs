@@ -141,6 +141,12 @@ public sealed class SocialDistributionApiTestFactory : WebApplicationFactory<Pro
             "\"SocialPostContents\", \"DistributionRules\", \"DistributionRuns\", \"SocialAccounts\", " +
             "\"SocialChannels\", \"SocialMediaAssets\", \"Properties\" RESTART IDENTITY CASCADE;");
 
+        // The lookup cache outlives a test class. Another class that emptied and re-seeded the lookup tables
+        // can leave a property type catalog with ids that no longer exist, and CreatePropertyCommand then
+        // fails with "Unknown property type" for every listing this class creates.
+        await scope.ServiceProvider.GetRequiredService<HudhudNestApi.Application.Common.Interfaces.ICommonLookupService>()
+            .RefreshAllAsync();
+
         Storage.Uploads.Clear();
         Switch.IsEnabled = true;
         foreach (var publisher in Publishers.Values)
