@@ -33,6 +33,9 @@ public sealed class CreateServiceOfferingCommandHandler
         if (provider.Status == Domain.Services.Enums.ServiceProviderStatus.Revoked)
             throw new ForbiddenException("تم إلغاء اعتمادك كمزوّد خدمة.", "SERVICE_PROVIDER_REVOKED");
 
+        if (!provider.IsActive)
+            throw new ConflictException("ملف مزوّد الخدمة موقوف، فلا يمكن إضافة عروض جديدة.");
+
         if (!provider.IsApprovedFor(request.Category))
             throw new ForbiddenException("هذه الفئة غير معتمدة لك. تواصل مع الإدارة لإضافتها.", "SERVICE_CATEGORY_NOT_APPROVED");
 

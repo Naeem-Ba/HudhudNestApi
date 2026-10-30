@@ -18,6 +18,7 @@ public sealed class CreateServiceProviderCommandValidator : AbstractValidator<Cr
 
         RuleFor(x => x.ContactEmail)
             .EmailAddress().WithMessage("صيغة البريد الإلكتروني غير صحيحة.")
+            .MaximumLength(ServiceValidationLimits.MaxContactEmailLength)
             .When(x => !string.IsNullOrWhiteSpace(x.ContactEmail));
 
         RuleFor(x => x.ContactPhone)

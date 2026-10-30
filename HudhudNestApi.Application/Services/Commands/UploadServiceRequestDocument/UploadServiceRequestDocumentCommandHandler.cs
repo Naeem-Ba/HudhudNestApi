@@ -7,6 +7,7 @@ using HudhudNestApi.Application.Services.DTOs;
 using HudhudNestApi.Application.Services.Interfaces;
 using HudhudNestApi.Application.Services.Mapping;
 using HudhudNestApi.Domain.Services.Entities;
+using HudhudNestApi.Domain.Services.Enums;
 
 namespace HudhudNestApi.Application.Services.Commands.UploadServiceRequestDocument;
 
@@ -65,6 +66,12 @@ public sealed class UploadServiceRequestDocumentCommandHandler
 
         if (!isRequester && !isProvider)
             throw new ForbiddenException("لا يمكنك إرفاق مستندات لطلب خدمة لا يخصّك.");
+
+        // Nothing is attached to a request that ended without service (P11-D10). A completed
+        // request still takes documents: the provider's report arrives after completion.
+        if (serviceRequest.Status is ServiceRequestStatus.Rejected or ServiceRequestStatus.Cancelled
+            or ServiceRequestStatus.NotCompleted or ServiceRequestStatus.Expired)
+            throw new ConflictException("لا يمكن إرفاق مستندات بطلب خدمة منتهٍ.");
 
         if (request.Length == 0)
             throw new HudhudNestApi.Application.Common.Exceptions.ValidationException(

@@ -1,4 +1,5 @@
 using FluentValidation;
+using HudhudNestApi.Application.Currencies.Interfaces;
 
 namespace HudhudNestApi.Application.Common.Validation;
 
@@ -44,4 +45,16 @@ public static class ValidationRuleExtensions
             .Must(value => value is null || value < MaxMoneyAmount)
             .WithMessage("{PropertyName} is larger than the allowed maximum.")
             .WithErrorCode("AMOUNT_TOO_LARGE");
+
+    /// <summary>
+    /// A currency id the client sends must be one of the active currencies. An unknown id passed
+    /// validation and failed at the foreign key, which surfaced as a 500 (QA Phase 11, P11-D03).
+    /// An absent id is left to the caller's own "currency required when a price is given" rule.
+    /// </summary>
+    public static IRuleBuilderOptions<T, int?> MustBeActiveCurrency<T>(
+        this IRuleBuilder<T, int?> rule, ICurrencyRepository currencies)
+        => rule
+            .MustAsync(async (id, ct) => id is null || (await currencies.GetActiveAsync(ct)).Any(c => c.Id == id))
+            .WithMessage("عملة السعر غير معروفة.")
+            .WithErrorCode("UNKNOWN_CURRENCY");
 }

@@ -62,6 +62,11 @@ public sealed class CreateServiceRequestCommandHandler
         var property = await _properties.GetByIdAsync(request.PropertyId, ct)
             ?? throw new NotFoundException("العقار غير موجود.");
 
+        // A draft or unpublished listing is visible to its owner only; for anyone else it does not
+        // exist, and the provider must not see its title through a request (P11-D09).
+        if (!property.IsPublished && property.OwnerId != request.RequesterId)
+            throw new NotFoundException("العقار غير موجود.");
+
         var offering = await _offerings.GetByIdAsync(request.ServiceOfferingId, ct)
             ?? throw new NotFoundException("الخدمة غير موجودة.");
 

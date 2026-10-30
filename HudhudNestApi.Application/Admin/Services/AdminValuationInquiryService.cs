@@ -134,6 +134,8 @@ public sealed class AdminValuationInquiryService : IAdminValuationInquiryService
             .ToList();
     }
 
+    private const int MaxFlagReasonLength = 2000;
+
     public async Task<AdminOperationResult> FlagOfficeForReviewAsync(
         Guid agencyId,
         string reason,
@@ -144,6 +146,12 @@ public sealed class AdminValuationInquiryService : IAdminValuationInquiryService
         if (string.IsNullOrWhiteSpace(reason))
         {
             return AdminOperationResult.BadRequest("سبب تعليم المكتب للمراجعة مطلوب.");
+        }
+
+        // Agencies.ManualReviewReason is varchar(2000); a longer reason failed at the column as a 500.
+        if (reason.Trim().Length > MaxFlagReasonLength)
+        {
+            return AdminOperationResult.BadRequest($"سبب التعليم يجب ألا يتجاوز {MaxFlagReasonLength} حرفًا.");
         }
 
         var agency = await _agencies.GetByIdAsync(agencyId, ct);
@@ -191,6 +199,12 @@ public sealed class AdminValuationInquiryService : IAdminValuationInquiryService
         if (agency is null)
         {
             return new AdminOperationResult { Succeeded = false, NotFound = true, Message = "Agency not found." };
+        }
+
+        // Clearing a flag that is not set changes nothing, so it writes no audit row either.
+        if (!agency.RequiresManualReview)
+        {
+            return AdminOperationResult.Ok("المكتب غير معلَّم للمراجعة أصلًا.");
         }
 
         var oldSnapshot = SnapshotFlag(agency);

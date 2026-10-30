@@ -23,8 +23,12 @@ public sealed class ScheduleServiceRequestCommandValidator : AbstractValidator<S
     public ScheduleServiceRequestCommandValidator()
     {
         RuleFor(x => x.ScheduledAt)
-            .GreaterThan(DateTime.UtcNow)
+            .GreaterThan(_ => DateTime.UtcNow)
             .WithMessage("لا يمكن جدولة الخدمة في وقت ماضٍ.");
+
+        RuleFor(x => x.ScheduledAt)
+            .LessThan(_ => DateTime.UtcNow.Add(ServiceValidationLimits.MaxScheduleAhead))
+            .WithMessage("موعد الخدمة بعيد جداً.");
     }
 }
 

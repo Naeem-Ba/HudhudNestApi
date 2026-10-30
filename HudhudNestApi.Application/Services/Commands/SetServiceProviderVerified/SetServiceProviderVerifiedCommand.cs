@@ -1,3 +1,4 @@
+using FluentValidation;
 using MediatR;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
@@ -15,6 +16,15 @@ public sealed record SetServiceProviderVerifiedCommand(
     ServiceProviderVerificationLevel Level,
     Guid? AdminUserId = null,
     string? IpAddress = null) : IRequest<ServiceProviderDto>;
+
+public sealed class SetServiceProviderVerifiedCommandValidator : AbstractValidator<SetServiceProviderVerifiedCommand>
+{
+    public SetServiceProviderVerifiedCommandValidator()
+    {
+        // An out-of-range number deserialised into the enum and was stored as a level that does not exist.
+        RuleFor(x => x.Level).IsInEnum().WithMessage("مستوى التحقق غير معروف.");
+    }
+}
 
 public sealed class SetServiceProviderVerifiedCommandHandler
     : IRequestHandler<SetServiceProviderVerifiedCommand, ServiceProviderDto>

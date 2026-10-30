@@ -54,6 +54,11 @@ public sealed class UnitOfWork : IUnitOfWork
                 "المشروع موجود في قائمة مراقبتك بالفعل.",
             ["IX_InvestmentInterests_UserId_InvestmentProjectId"] =
                 "تم تسجيل اهتمامك بهذا المشروع بالفعل.",
+
+            // QA Phase 11, P11-D06: two reviews of one service request racing past the handler's
+            // own check hit this unique index; one is stored, the other must answer 409, not 500.
+            ["IX_ServiceReviews_ServiceRequestId"] =
+                "تم تقييم هذا الطلب بالفعل.",
         };
 
     private readonly AppDbContext _db;

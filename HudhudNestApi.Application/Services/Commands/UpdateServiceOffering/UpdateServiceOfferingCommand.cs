@@ -49,6 +49,9 @@ public sealed class UpdateServiceOfferingCommandHandler
 
         // An offering can only go (back) on sale in a category the admin still approves for this
         // provider; switching one off is always allowed.
+        if (request.IsActive && !offering.IsActive && !provider.IsActive)
+            throw new ConflictException("ملف مزوّد الخدمة موقوف، فلا يمكن تفعيل العروض.");
+
         if (request.IsActive && !offering.IsActive && !provider.IsApprovedFor(offering.Category))
             throw new ForbiddenException("هذه الفئة غير معتمدة لك، فلا يمكن تفعيل العرض فيها.", "SERVICE_CATEGORY_NOT_APPROVED");
 

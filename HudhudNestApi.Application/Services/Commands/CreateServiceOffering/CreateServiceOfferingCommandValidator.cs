@@ -1,10 +1,12 @@
 using FluentValidation;
+using HudhudNestApi.Application.Common.Validation;
+using HudhudNestApi.Application.Currencies.Interfaces;
 
 namespace HudhudNestApi.Application.Services.Commands.CreateServiceOffering;
 
 public sealed class CreateServiceOfferingCommandValidator : AbstractValidator<CreateServiceOfferingCommand>
 {
-    public CreateServiceOfferingCommandValidator()
+    public CreateServiceOfferingCommandValidator(ICurrencyRepository currencies)
     {
         RuleFor(x => x.ActorUserId).NotEmpty();
 
@@ -22,12 +24,16 @@ public sealed class CreateServiceOfferingCommandValidator : AbstractValidator<Cr
             .GreaterThanOrEqualTo(0).WithMessage("سعر الخدمة لا يمكن أن يكون سالباً.")
             .When(x => x.BasePrice is not null);
 
+        RuleFor(x => x.BasePrice).WithinMoneyRange();
+
+        RuleFor(x => x.CurrencyId).MustBeActiveCurrency(currencies);
+
         RuleFor(x => x.CurrencyId)
             .NotNull().WithMessage("عملة السعر مطلوبة عند تحديد سعر للخدمة.")
             .When(x => x.BasePrice is not null);
 
         RuleFor(x => x.EstimatedDurationDays)
-            .GreaterThanOrEqualTo(0)
+            .InclusiveBetween(0, ServiceValidationLimits.MaxEstimatedDurationDays)
             .When(x => x.EstimatedDurationDays is not null);
     }
 }
