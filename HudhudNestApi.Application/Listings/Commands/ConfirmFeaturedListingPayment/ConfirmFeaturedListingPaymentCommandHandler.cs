@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Interfaces;
+using HudhudNestApi.Application.Plans.Services;
+using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings;
 using HudhudNestApi.Domain.Transactions.Enums;
 
@@ -21,17 +23,20 @@ public sealed class ConfirmFeaturedListingPaymentCommandHandler
     private readonly IListingFeeRepository _fees;
     private readonly IPropertyRepository _properties;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly BillingNotifier _billing;
     private readonly ILogger<ConfirmFeaturedListingPaymentCommandHandler> _logger;
 
     public ConfirmFeaturedListingPaymentCommandHandler(
         IListingFeeRepository fees,
         IPropertyRepository properties,
         IUnitOfWork unitOfWork,
+        BillingNotifier billing,
         ILogger<ConfirmFeaturedListingPaymentCommandHandler> logger)
     {
         _fees = fees;
         _properties = properties;
         _unitOfWork = unitOfWork;
+        _billing = billing;
         _logger = logger;
     }
 
@@ -67,6 +72,16 @@ public sealed class ConfirmFeaturedListingPaymentCommandHandler
                 "لم يعد الإعلان موجوداً — لا يمكن تمييزه.");
         }
 
+        // The fee was quoted while the listing could still be promoted; it may have been sold, archived, switched off or
+        // taken down since. Refuse and leave the fee Pending so the administrator settles it with the owner
+        // (QA Phase 13, P13-D01), exactly as the extension confirmation does.
+        if (!property.CanBeFeatured && property.Status != PropertyStatus.Expired)
+        {
+            throw new ConflictException(
+                "لا يمكن تأكيد هذا التمييز: الإعلان غير منشور أو مباع أو مؤجَّر أو مؤرشف أو موقوف من الإدارة. " +
+                "عالج الرسوم مع المالك دون تمييز.");
+        }
+
         var now = DateTime.UtcNow;
 
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
@@ -98,6 +113,8 @@ public sealed class ConfirmFeaturedListingPaymentCommandHandler
             fee.Id,
             request.ConfirmingUserId,
             property.FeaturedUntil);
+
+        await _billing.ListingFeaturedConfirmedAsync(fee.PayerId, fee.Id, property.Title, property.FeaturedUntil!.Value, cancellationToken);
 
         return property.FeaturedUntil!.Value;
     }

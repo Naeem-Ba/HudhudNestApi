@@ -4,6 +4,7 @@ using HudhudNestApi.Application.Admin.DTOs;
 using HudhudNestApi.Application.Admin.Interfaces;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Plans.Interfaces;
+using HudhudNestApi.Application.Plans.Services;
 using HudhudNestApi.Application.Users;
 using HudhudNestApi.Application.Users.Interfaces;
 using HudhudNestApi.Domain.Audit.Constants;
@@ -30,6 +31,7 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
     private readonly IPlanRequestRepository _planRequests;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAuditLogService _auditLogs;
+    private readonly BillingNotifier _billing;
     private readonly ILogger<AdminSubscriptionService> _logger;
 
     public AdminSubscriptionService(
@@ -38,6 +40,7 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
         IPlanRequestRepository planRequests,
         IUnitOfWork unitOfWork,
         IAuditLogService auditLogs,
+        BillingNotifier billing,
         ILogger<AdminSubscriptionService> logger)
     {
         _accounts = accounts;
@@ -45,6 +48,7 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
         _planRequests = planRequests;
         _unitOfWork = unitOfWork;
         _auditLogs = auditLogs;
+        _billing = billing;
         _logger = logger;
     }
 
@@ -85,6 +89,11 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
             await _unitOfWork.AcquireAdvisoryLockAsync(UserSubscriptionLock.ForUser(userId), ct);
 
             account.ActivatePlanByAdmin(plan.Id, expiresAt, performedByUserId, now);
+
+            // A plan the administrator grants directly settles whatever the user had asked for: left Pending, the old request
+            // would sit in the queue and later overwrite this decision (QA Phase 13, P13-D06).
+            var outstanding = await _planRequests.GetPendingForUserAsync(userId, ct);
+            outstanding?.Supersede(now);
 
             await _unitOfWork.SaveChangesAsync(ct);
             await _unitOfWork.CommitTransactionAsync(ct);
@@ -189,6 +198,11 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
         {
             return AdminOperationResult.ConflictResult(
                 "This account has never selected a plan — there is nothing to cancel.");
+        }
+
+        if (account.PlanStatus == HudhudNestApi.Domain.Users.Enums.PlanStatus.Cancelled)
+        {
+            return AdminOperationResult.ConflictResult("This subscription is already cancelled.");
         }
 
         var oldSnapshot = SnapshotSubscription(account);
@@ -309,6 +323,8 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
             "Plan request approved. RequestId={RequestId}, UserId={UserId}, Tier={Tier}, ExpiresAt={ExpiresAt}, ApprovedBy={ApprovedBy}",
             requestId, account.Id, plan.Tier, expiresAt, performedByUserId);
 
+        await _billing.PlanRequestApprovedAsync(account.Id, requestId, plan.Tier, expiresAt, ct);
+
         return AdminOperationResult.Ok($"Plan '{plan.Tier}' activated until {expiresAt:O}.");
     }
 
@@ -368,6 +384,12 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
         _logger.LogInformation(
             "Plan request rejected. RequestId={RequestId}, UserId={UserId}, RejectedBy={RejectedBy}",
             requestId, planRequest.UserId, performedByUserId);
+
+        var rejectedPlan = await _plans.GetByIdAsync(planRequest.PlanId, ct);
+        if (rejectedPlan is not null)
+        {
+            await _billing.PlanRequestRejectedAsync(planRequest.UserId, requestId, rejectedPlan.Tier, reason, ct);
+        }
 
         return AdminOperationResult.Ok("Plan request rejected.");
     }

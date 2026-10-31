@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using HudhudNestApi.Application.Notifications.Interfaces;
+using HudhudNestApi.Application.Plans.Services;
 using HudhudNestApi.Application.Admin.Interfaces;
 using HudhudNestApi.Application.Admin.Services;
 using HudhudNestApi.Application.Common.Interfaces;
@@ -222,6 +224,7 @@ public sealed class AdminPaymentRequestTests
             requests.Object,
             Mock.Of<IUnitOfWork>(),
             auditLogs.Object,
+            new BillingNotifier(Mock.Of<INotificationService>(), NullLogger<BillingNotifier>.Instance),
             NullLogger<AdminSubscriptionService>.Instance);
     }
 
@@ -233,8 +236,10 @@ public sealed class AdminPaymentRequestTests
         return new AdminPaymentRequestService(
             Mock.Of<IAdminPaymentRequestQueryRepository>(),
             fees.Object,
+            Mock.Of<IPropertyRepository>(),
             Mock.Of<IUnitOfWork>(),
             auditLogs.Object,
+            new BillingNotifier(Mock.Of<INotificationService>(), NullLogger<BillingNotifier>.Instance),
             NullLogger<AdminPaymentRequestService>.Instance);
     }
 }

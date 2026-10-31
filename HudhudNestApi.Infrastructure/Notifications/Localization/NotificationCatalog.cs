@@ -299,6 +299,51 @@ public static class NotificationCatalog
 
         ["msg.contact_message_no_subject"] = new("بلا موضوع", "no subject", "ohne Betreff"),
 
+        // ---- plans and listing fees (manual settlement) ----
+        ["generic.plan_free"] = new("المجانية", "Free", "Kostenlos"),
+        ["generic.plan_basic"] = new("الأساسية", "Basic", "Basic"),
+        ["generic.plan_premium"] = new("بريميوم", "Premium", "Premium"),
+        ["generic.plan_elite"] = new("النخبة", "Elite", "Elite"),
+        ["generic.fee_extension"] = new("تمديد", "extension", "Verlängerung"),
+        ["generic.fee_featured"] = new("تمييز", "featured placement", "Hervorhebung"),
+
+        ["msg.plan_request_approved"] = new(
+            "تم اعتماد طلبك: خطة {plan} مفعّلة حتى {until}.",
+            "Your request was approved: the {plan} plan is active until {until}.",
+            "Ihre Anfrage wurde bestätigt: Der Tarif {plan} ist bis {until} aktiv."),
+        ["msg.plan_request_rejected"] = new(
+            "لم نتمكن من اعتماد طلب خطة {plan} لأن الدفع لم يصلنا. تواصل معنا إن كنت قد دفعت.",
+            "We could not approve your {plan} plan request because we did not receive the payment. Contact us if you have paid.",
+            "Wir konnten Ihre Anfrage für den Tarif {plan} nicht bestätigen, da die Zahlung nicht eingegangen ist. Kontaktieren Sie uns, falls Sie bezahlt haben."),
+        ["msg.plan_request_rejected_reason"] = new(
+            "لم نتمكن من اعتماد طلب خطة {plan}. السبب: {reason}",
+            "We could not approve your {plan} plan request. Reason: {reason}",
+            "Wir konnten Ihre Anfrage für den Tarif {plan} nicht bestätigen. Grund: {reason}"),
+        ["msg.listing_fee_confirmed_extension"] = new(
+            "تم تأكيد دفع رسوم تمديد إعلان «{title}». ينتهي نشره الآن في {until}.",
+            "Your extension fee for \"{title}\" was confirmed. It is now published until {until}.",
+            "Ihre Verlängerungsgebühr für „{title}“ wurde bestätigt. Die Anzeige läuft jetzt bis {until}."),
+        ["msg.listing_fee_confirmed_featured"] = new(
+            "تم تأكيد دفع رسوم تمييز إعلان «{title}». هو مميّز حتى {until}.",
+            "Your featured-placement fee for \"{title}\" was confirmed. It is featured until {until}.",
+            "Ihre Gebühr für die Hervorhebung von „{title}“ wurde bestätigt. Die Anzeige ist bis {until} hervorgehoben."),
+        ["msg.listing_fee_rejected"] = new(
+            "لم يُؤكَّد دفع رسوم {kind} إعلان «{title}» ولم يتغير الإعلان. تواصل معنا إن كنت قد دفعت.",
+            "The {kind} fee for \"{title}\" was not confirmed and the listing is unchanged. Contact us if you have paid.",
+            "Die Gebühr für {kind} von „{title}“ wurde nicht bestätigt, die Anzeige blieb unverändert. Kontaktieren Sie uns, falls Sie bezahlt haben."),
+        ["msg.listing_fee_rejected_reason"] = new(
+            "لم يُؤكَّد دفع رسوم {kind} إعلان «{title}». السبب: {reason}",
+            "The {kind} fee for \"{title}\" was not confirmed. Reason: {reason}",
+            "Die Gebühr für {kind} von „{title}“ wurde nicht bestätigt. Grund: {reason}"),
+        ["msg.plan_expiring_soon"] = new(
+            "ينتهي اشتراكك في خطة {plan} في {until}. بعد ذلك يعود حد الإعلانات إلى حد الخطة المجانية وتبقى إعلاناتك القائمة كما هي. اطلب التجديد من صفحة الأسعار.",
+            "Your {plan} plan ends on {until}. After that your listing limit goes back to the free plan's and your existing listings stay as they are. Request a renewal on the pricing page.",
+            "Ihr Tarif {plan} endet am {until}. Danach gilt wieder das Anzeigenlimit des kostenlosen Tarifs, bestehende Anzeigen bleiben unverändert. Beantragen Sie die Verlängerung auf der Preisseite."),
+        ["msg.plan_expired"] = new(
+            "انتهى اشتراكك في خطة {plan}. عاد حد الإعلانات إلى حد الخطة المجانية وتبقى إعلاناتك القائمة كما هي. اطلب التجديد من صفحة الأسعار.",
+            "Your {plan} plan has ended. Your listing limit is back to the free plan's and your existing listings stay as they are. Request a renewal on the pricing page.",
+            "Ihr Tarif {plan} ist abgelaufen. Das Anzeigenlimit entspricht wieder dem kostenlosen Tarif, bestehende Anzeigen bleiben unverändert. Beantragen Sie die Verlängerung auf der Preisseite."),
+
         // ---- listing reports (moderation) ----
         // Admin messages never name the reporter; reporter messages never name the reviewer or the action details.
         ["msg.listing_report_submitted"] = new(

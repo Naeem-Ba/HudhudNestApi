@@ -9,4 +9,7 @@ public interface IAdminPaymentRequestQueryRepository
 
     /// <summary>Pending featured-placement fees, oldest first.</summary>
     Task<IReadOnlyList<PendingFeaturedRequestDto>> GetPendingFeaturedRequestsAsync(CancellationToken ct = default);
+
+    /// <summary>Pending listing-extension fees, oldest first.</summary>
+    Task<IReadOnlyList<PendingExtensionRequestDto>> GetPendingExtensionRequestsAsync(CancellationToken ct = default);
 }

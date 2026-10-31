@@ -101,6 +101,13 @@ public static class NotificationKindCatalog
         [NotificationType.InvestmentInterestReceived] = new(Account, NotificationPriority.Normal, "admin-investment", true),
         // Admin-only, like the two notices above.
         [NotificationType.ContactMessageReceived] = new(Account, NotificationPriority.Normal, "admin-contact", true),
+        // Money and plan events are never switchable: the user paid by hand and must hear what became of it.
+        [NotificationType.PlanRequestApproved] = new(Account, NotificationPriority.High, "pricing", true),
+        [NotificationType.PlanRequestRejected] = new(Account, NotificationPriority.High, "pricing", true),
+        [NotificationType.PlanExpiringSoon] = new(Account, NotificationPriority.High, "pricing", true),
+        [NotificationType.PlanExpired] = new(Account, NotificationPriority.High, "pricing", true),
+        [NotificationType.ListingFeeConfirmed] = new(Listings, NotificationPriority.High, "my-listings", true),
+        [NotificationType.ListingFeeRejected] = new(Listings, NotificationPriority.High, "my-listings", true),
         [NotificationType.UserRated] = new(Social, NotificationPriority.Low, "profile", false),
     };
 

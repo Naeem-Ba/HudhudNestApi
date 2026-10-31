@@ -21,6 +21,9 @@ public sealed class SelectPlanCommandHandler : IRequestHandler<SelectPlanCommand
     /// <summary>Stable code the client maps to its own localised message.</summary>
     public const string AgencyFreePlanNotAllowedCode = "AGENCY_FREE_PLAN_NOT_ALLOWED";
 
+    /// <summary>A paid plan is in force, so the free tier cannot be chosen over it.</summary>
+    public const string PaidPlanActiveCode = "PAID_PLAN_ACTIVE";
+
     private readonly IUserIdentityReadService _identity;
     private readonly IUserAccountRepository _accounts;
     private readonly IPlanRepository _plans;
@@ -89,9 +92,42 @@ public sealed class SelectPlanCommandHandler : IRequestHandler<SelectPlanCommand
 
         if (string.Equals(plan.Tier, PlanTiers.Free, StringComparison.OrdinalIgnoreCase))
         {
-            account.SelectPlan(plan.Id, now);
+            // A paid plan that is in force is not dropped by one tap on the free card: the subscriber paid by hand and
+            // only an administrator ends it (QA Phase 13, P13-D04). An expired or cancelled plan is already worth nothing,
+            // so choosing the free tier then is just recording what is true.
+            if (account.PlanId is { } currentPlanId && account.HasActivePlanBenefits(now))
+            {
+                var current = await _plans.GetByIdAsync(currentPlanId, cancellationToken);
+                if (current is not null && !string.Equals(current.Tier, PlanTiers.Free, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new ConflictException(
+                        "لديك اشتراك مدفوع فعّال. لا يمكن الانتقال إلى الخطة المجانية قبل انتهائه، وتواصل معنا إن أردت إلغاءه.",
+                        PaidPlanActiveCode);
+                }
+            }
 
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            // Same lock the admin actions take, and the user's own outstanding request is closed in the same save: asking
+            // for the free tier replaces whatever was pending (QA Phase 13, P13-D06).
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
+            try
+            {
+                await _unitOfWork.AcquireAdvisoryLockAsync(
+                    UserSubscriptionLock.ForUser(account.Id), cancellationToken);
+
+                var outstanding = await _planRequests.GetPendingForUserAsync(account.Id, cancellationToken);
+                outstanding?.Supersede(now);
+
+                account.SelectPlan(plan.Id, now);
+
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                throw;
+            }
 
             return new SelectPlanResult(SelectPlanOutcome.Activated, plan.Tier);
         }

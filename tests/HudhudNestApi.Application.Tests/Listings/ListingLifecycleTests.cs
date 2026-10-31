@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using MediatR;
 using Moq;
+using HudhudNestApi.Application.Notifications.Interfaces;
+using HudhudNestApi.Application.Plans.Services;
 using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Application.Auth.Models;
@@ -1264,6 +1266,7 @@ public sealed class ListingLifecycleTests
                 NullLogger<ListingQuotaGuard>.Instance),
             Mock.Of<IUnitOfWork>(),
             (publisher ?? new Mock<IPublisher>()).Object,
+            new BillingNotifier(Mock.Of<INotificationService>(), NullLogger<BillingNotifier>.Instance),
             NullLogger<ConfirmListingExtensionPaymentCommandHandler>.Instance);
     }
 

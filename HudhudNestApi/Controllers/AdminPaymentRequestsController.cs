@@ -5,13 +5,15 @@ using Microsoft.AspNetCore.Mvc;
 using HudhudNestApi.Application.Admin.DTOs;
 using HudhudNestApi.Application.Admin.Interfaces;
 using HudhudNestApi.Application.Listings.Commands.ConfirmFeaturedListingPayment;
+using HudhudNestApi.Application.Listings.Commands.ConfirmListingExtensionPayment;
 using HudhudNestApi.Domain.Users.Constants;
+using HudhudNestApi.Validation;
 
 namespace HudhudNestApi.Controllers;
 
 /// <summary>
-/// The administrator's queue of paid things users asked for — paid plans and featured
-/// placement. Both are requested by the user and only activated here, after the
+/// The administrator's queue of paid things users asked for — paid plans, featured
+/// placement and listing extensions. All are requested by the user and only activated here, after the
 /// administrator has confirmed the payment arrived (there is no payment gateway).
 ///
 /// A controller of its own rather than more actions on AdminController: that one is
@@ -118,9 +120,46 @@ public sealed class AdminPaymentRequestsController : ControllerBase
         return ToActionResult(result);
     }
 
-    public sealed record ApprovePlanRequestBody(int DurationDays, string? Reason = null);
+    // POST /api/admin/payment-requests/extensions/{transactionId}/approve
+    // Same effect as POST /api/properties/extension/{id}/confirm — the one place a listing is
+    // extended — exposed here so the whole queue is worked from one place (QA Phase 13, P13-D02).
+    [HttpPost("extensions/{transactionId:guid}/approve")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ApproveExtension(Guid transactionId, CancellationToken ct)
+    {
+        var actorId = GetCurrentUserId();
+        if (actorId is null) return Unauthorized();
 
-    public sealed record RejectPaymentRequestBody(string? Reason = null);
+        var expiresAt = await _sender.Send(
+            new ConfirmListingExtensionPaymentCommand(transactionId, actorId.Value), ct);
+
+        return Ok(new { expiresAt });
+    }
+
+    // POST /api/admin/payment-requests/extensions/{transactionId}/reject  { reason? }
+    [HttpPost("extensions/{transactionId:guid}/reject")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RejectExtension(
+        Guid transactionId,
+        [FromBody] RejectPaymentRequestBody body,
+        CancellationToken ct)
+    {
+        var actorId = GetCurrentUserId();
+        if (actorId is null) return Unauthorized();
+
+        var result = await _requests.RejectExtensionAsync(
+            transactionId, body.Reason, actorId.Value, GetClientIp(), ct);
+
+        return ToActionResult(result);
+    }
+
+    public sealed record ApprovePlanRequestBody(int DurationDays, [AdminReason] string? Reason = null);
+
+    public sealed record RejectPaymentRequestBody([AdminReason] string? Reason = null);
 
     private IActionResult ToActionResult(AdminOperationResult result)
     {

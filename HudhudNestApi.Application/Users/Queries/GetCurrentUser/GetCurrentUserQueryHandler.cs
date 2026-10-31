@@ -99,6 +99,8 @@ public sealed class GetCurrentUserQueryHandler
             PlanTier = planTier,
             PendingPlanTier = pendingPlanTier,
             PlanSelectedAt = account.PlanSelectedAt,
+            PlanStatus = account.GetEffectivePlanStatus(DateTime.UtcNow).ToString(),
+            PlanExpiresAt = account.PlanExpiresAt.AsUtc(),
             CreatedAt = account.CreatedAt,
             DeletionScheduledFor = account.DeletionScheduledFor.AsUtc(),
             Roles = roles.ToList().AsReadOnly()

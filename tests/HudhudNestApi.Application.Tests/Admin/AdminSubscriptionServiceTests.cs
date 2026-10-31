@@ -2,7 +2,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using HudhudNestApi.Application.Admin.Services;
 using HudhudNestApi.Application.Common.Interfaces;
+using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Application.Plans.Interfaces;
+using HudhudNestApi.Application.Plans.Services;
 using HudhudNestApi.Application.Users.Interfaces;
 using HudhudNestApi.Domain.Audit.Constants;
 using HudhudNestApi.Domain.Plans.Entities;
@@ -286,7 +288,9 @@ public sealed class AdminSubscriptionServiceTests
         IPlanRepository plans,
         IUnitOfWork unitOfWork,
         IAuditLogService auditLogs)
-        => new(accounts, plans, Mock.Of<IPlanRequestRepository>(), unitOfWork, auditLogs, NullLogger<AdminSubscriptionService>.Instance);
+        => new(accounts, plans, Mock.Of<IPlanRequestRepository>(), unitOfWork, auditLogs,
+            new BillingNotifier(Mock.Of<INotificationService>(), NullLogger<BillingNotifier>.Instance),
+            NullLogger<AdminSubscriptionService>.Instance);
 
     private static Mock<IUserAccountRepository> FakeAccounts(Guid userId, UserAccount account)
     {

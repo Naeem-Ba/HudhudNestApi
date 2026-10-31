@@ -56,6 +56,7 @@ public static class DependencyInjection
         services.AddScoped<Moderation.ListingReportNotifier>();
         services.AddScoped<Investments.Services.InvestmentInterestNotifier>();
         services.AddScoped<Contact.Services.ContactMessageNotifier>();
+        services.AddScoped<Plans.Services.BillingNotifier>();
         services.AddScoped<Moderation.ListingReportAdminDetailBuilder>();
         // Bound to the "ListingReports" section in AddRepositoryInfrastructure; the defaults apply without it.
         services.AddOptions<Moderation.ListingReportOptions>();

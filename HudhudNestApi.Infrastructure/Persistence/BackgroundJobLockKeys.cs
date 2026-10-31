@@ -46,4 +46,6 @@ public static class BackgroundJobLockKeys
     public const long ListingViewRetention = 20261029_1012;
 
     public const long InvestmentScheduledPublish = 20261029_1013;
+
+    public const long PlanExpiryNotice = 20261031_1014;
 }

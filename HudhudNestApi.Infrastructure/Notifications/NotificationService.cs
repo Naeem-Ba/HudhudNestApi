@@ -298,6 +298,39 @@ public sealed class NotificationService : INotificationService
             investmentProjectId);
     }
 
+    public async Task NotifyBillingAsync(
+        Guid recipientId,
+        NotificationType type,
+        NotificationText message,
+        Guid? relatedEntityId,
+        string? dedupeKey,
+        CancellationToken ct = default)
+    {
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+
+        if (type is not (NotificationType.PlanRequestApproved or NotificationType.PlanRequestRejected
+            or NotificationType.PlanExpiringSoon or NotificationType.PlanExpired
+            or NotificationType.ListingFeeConfirmed or NotificationType.ListingFeeRejected))
+        {
+            throw new ArgumentOutOfRangeException(nameof(type), type, "Not a plan or listing-fee notification type.");
+        }
+
+        var lang = await LanguageOfAsync(recipientId, ct);
+
+        await PersistAndPushAsync(
+            New(recipientId, type,
+                NotificationCatalog.Render(message ?? NotificationText.Empty, lang),
+                relatedEntityId: relatedEntityId,
+                dedupeKey: dedupeKey),
+            ct);
+
+        _logger.LogInformation(
+            "Billing notification created. RecipientId={RecipientId}, Type={Type}, RelatedEntityId={RelatedEntityId}",
+            recipientId,
+            type,
+            relatedEntityId);
+    }
+
     public async Task NotifyContactMessageAsync(
         Guid recipientId,
         NotificationText message,
