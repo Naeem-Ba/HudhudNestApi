@@ -28,6 +28,10 @@ public sealed class EnableAppReleaseCommandHandler : IRequestHandler<EnableAppRe
         var release = await _releases.GetByIdAsync(request.Id, ct)
             ?? throw new NotFoundException($"App release {request.Id} was not found.");
 
+        // Already on: nothing changed, so nothing is written to the audit log (phase 14, D09).
+        if (release.IsEnabled)
+            return;
+
         // Re-checked on enable: a release may have been saved while disabled without its store link.
         var linkProblem = AppStoreLinkPolicy.Check(release.Platform, release.StoreUrl, enabled: true);
         if (linkProblem is not null)

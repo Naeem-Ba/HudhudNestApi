@@ -1,4 +1,5 @@
 using MediatR;
+using HudhudNestApi.Domain.SocialDistribution.Enums;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.SocialDistribution.DTOs;
@@ -22,6 +23,10 @@ public sealed class RejectSocialContentCommandHandler : IRequestHandler<RejectSo
     {
         var publication = await _publications.GetByIdAsync(request.PublicationId, ct)
             ?? throw new NotFoundException("منشور التوزيع غير موجود.");
+
+        // Phase 14 (D12): a finished or withdrawn publication has nothing left to review.
+        if (publication.Status is SocialPublicationStatus.Cancelled or SocialPublicationStatus.Published)
+            throw new ConflictException("لا يمكن مراجعة محتوى منشور ملغى أو منشور بالفعل.");
 
         if (publication.Content is null)
             throw new ConflictException("لا يوجد محتوى لهذا المنشور.");

@@ -234,4 +234,10 @@ public enum NotificationType
 
     /// <summary>A time-limited plan ended; the account is back on the free tier's limits.</summary>
     PlanExpired = 62,
+
+    /// <summary>
+    /// The reporter answered an admin's question about their report. Sent to the assigned admin (or to all
+    /// admins when nobody is assigned); the message carries an excerpt of the answer. RelatedEntityId is the report id.
+    /// </summary>
+    ListingReportReporterResponded = 63,
 }

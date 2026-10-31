@@ -107,6 +107,7 @@ public sealed class PropertyImagesController : ControllerBase
     }
 
     [HttpDelete("{imageId:guid}")]
+    [ServiceFilter(typeof(HudhudNestApi.Filters.AdminAuditFilter))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -122,7 +123,8 @@ public sealed class PropertyImagesController : ControllerBase
             return Unauthorized();
 
         var result = await _sender.Send(
-            new DeletePropertyImageCommand(propertyId, imageId, userId.Value),
+            new DeletePropertyImageCommand(
+                propertyId, imageId, userId.Value, User.IsInRole(HudhudNestApi.Domain.Users.Constants.RoleNames.Admin)),
             ct);
 
         return ToMutationActionResult(result);

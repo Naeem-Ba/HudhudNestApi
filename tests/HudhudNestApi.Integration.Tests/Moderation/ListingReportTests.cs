@@ -109,6 +109,8 @@ public sealed class ListingReportTests : IAsyncLifetime
             var adminNote = await db.Notifications.SingleAsync(n => n.RecipientId == admin.Id && n.Type == NotificationType.ListingReportSubmitted);
             Assert.Equal(reportId, adminNote.RelatedEntityId);
             Assert.DoesNotContain(reporter.Email, adminNote.Message);
+            // The reporter's own message reaches the admin in the notification (excerpt), not only the reason.
+            Assert.Contains("asked for money upfront", adminNote.Message);
             // The owner is never told about a report.
             Assert.Equal(0, await db.Notifications.CountAsync(n => n.RecipientId == owner.Id));
         });
@@ -173,6 +175,12 @@ public sealed class ListingReportTests : IAsyncLifetime
             var property = await db.Properties.IgnoreQueryFilters().SingleAsync(p => p.Id == propertyId);
             Assert.True(property.IsTakenDown);
             Assert.False(property.IsDeleted); // a report never deletes a listing
+
+            // The reporter's answer reaches the assigned admin (it used to sit unseen in the timeline).
+            var replyNote = await db.Notifications.SingleAsync(n => n.RecipientId == admin.Id && n.Type == NotificationType.ListingReportReporterResponded);
+            Assert.Equal(reportId, replyNote.RelatedEntityId);
+            Assert.Contains("No payment yet", replyNote.Message);
+            Assert.DoesNotContain(reporter.Email, replyNote.Message);
 
             // Reporter notifications, rendered in the reporter's language (de).
             var info = await db.Notifications.SingleAsync(n => n.RecipientId == reporter.Id && n.Type == NotificationType.ListingReportInfoRequested);

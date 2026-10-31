@@ -7,6 +7,7 @@ using HudhudNestApi.Domain.Users.Constants;
 namespace HudhudNestApi.Controllers;
 
 [ApiController]
+[ServiceFilter(typeof(HudhudNestApi.Filters.AdminAuditFilter))]
 [Route("api/lookups")]
 public sealed class LookupsController : ControllerBase
 {
