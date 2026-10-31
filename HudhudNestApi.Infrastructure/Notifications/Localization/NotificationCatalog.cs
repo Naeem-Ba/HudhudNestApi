@@ -354,6 +354,18 @@ public static class NotificationCatalog
             "بلاغ بأولوية عالية ({ref}) عن الإعلان '{title}'. السبب: {reason}. يُرجى مراجعته قريبًا.",
             "High-priority report ({ref}) about the listing '{title}'. Reason: {reason}. Please review it soon.",
             "Meldung mit hoher Priorität ({ref}) zum Inserat '{title}'. Grund: {reason}. Bitte zeitnah prüfen."),
+        ["msg.listing_report_submitted_details"] = new(
+            "بلاغ جديد ({ref}) عن الإعلان '{title}'. السبب: {reason}. رسالة المبلّغ: «{details}»",
+            "New report ({ref}) about the listing '{title}'. Reason: {reason}. Reporter's message: \"{details}\"",
+            "Neue Meldung ({ref}) zum Inserat '{title}'. Grund: {reason}. Nachricht der meldenden Person: „{details}“"),
+        ["msg.listing_report_submitted_urgent_details"] = new(
+            "بلاغ بأولوية عالية ({ref}) عن الإعلان '{title}'. السبب: {reason}. رسالة المبلّغ: «{details}»",
+            "High-priority report ({ref}) about the listing '{title}'. Reason: {reason}. Reporter's message: \"{details}\"",
+            "Meldung mit hoher Priorität ({ref}) zum Inserat '{title}'. Grund: {reason}. Nachricht der meldenden Person: „{details}“"),
+        ["msg.listing_report_reporter_responded"] = new(
+            "ردّ المبلّغ على سؤال الإدارة في البلاغ ({ref}) عن الإعلان '{title}': «{message}»",
+            "The reporter answered the team's question on report ({ref}) about the listing '{title}': \"{message}\"",
+            "Die meldende Person hat die Rückfrage zur Meldung ({ref}) zum Inserat '{title}' beantwortet: „{message}“"),
         ["msg.listing_report_info_requested"] = new(
             "تحتاج الإدارة إلى معلومات إضافية حول بلاغك ({ref}) عن الإعلان '{title}': {message}",
             "The HudhudNest team needs more information about your report ({ref}) on the listing '{title}': {message}",

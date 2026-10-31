@@ -477,7 +477,8 @@ internal static class ListingReportAdminViews
             r.AssignedAdminId,
             r.AssignedAdminId is { } a ? Label(labels, a) : null,
             r.CreatedAt,
-            r.UpdatedAt);
+            r.UpdatedAt,
+            ListingReportNotifier.Excerpt(r.Details));
     }
 }
 

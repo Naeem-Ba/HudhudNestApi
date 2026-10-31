@@ -115,6 +115,12 @@ public class Property : AuditableEntity
 
     public const int MaxTakeDownReasonLength = 500;
 
+    /// <summary>
+    /// The fixed take-down reason an administrator's account disable writes (phase 14). Re-enabling the
+    /// account lifts exactly the take-downs that carry it, never one an admin made for another reason.
+    /// </summary>
+    public const string AccountDisabledTakeDownReason = "ACCOUNT_DISABLED";
+
     public bool IsTakenDown => TakenDownAt is not null;
 
     /// <summary>

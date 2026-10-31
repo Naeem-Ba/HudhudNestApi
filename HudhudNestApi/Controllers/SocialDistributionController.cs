@@ -59,6 +59,7 @@ namespace HudhudNestApi.Controllers;
 /// codebase uses yet).
 /// </summary>
 [ApiController]
+[ServiceFilter(typeof(HudhudNestApi.Filters.AdminAuditFilter))]
 [Route("api/social-distribution")]
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class SocialDistributionController : ControllerBase

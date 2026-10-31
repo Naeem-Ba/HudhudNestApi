@@ -246,6 +246,20 @@ public sealed class AdminServiceTests
             return Task.FromResult(AdminOperationResult.Ok("Role removed."));
         }
 
+        public int EnableCalls { get; private set; }
+
+        public Task<AdminOperationResult> EnableUserAsync(
+            Guid userId,
+            string reason,
+            Guid performedByUserId,
+            string? ipAddress,
+            CancellationToken ct = default)
+        {
+            LastUserId = userId;
+            EnableCalls++;
+            return Task.FromResult(AdminOperationResult.Ok("User re-enabled."));
+        }
+
         public Task<AdminOperationResult> DisableUserAsync(
             Guid userId,
             Guid performedByUserId,

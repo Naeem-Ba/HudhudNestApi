@@ -149,6 +149,7 @@ builder.Services.AddHudhudNestApiJwtAuthentication(builder.Configuration, builde
 builder.Services.AddHudhudNestApiCors(builder.Configuration, builder.Environment, isTestingOrCi);
 
 // -- 6. Controllers + JSON -------------------------------------
+builder.Services.AddScoped<HudhudNestApi.Filters.AdminAuditFilter>();
 builder.Services
     .AddControllers()
     .AddJsonOptions(options =>

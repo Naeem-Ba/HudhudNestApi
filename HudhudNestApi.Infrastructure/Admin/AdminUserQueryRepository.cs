@@ -33,7 +33,9 @@ public sealed class AdminUserQueryRepository
         // visible here (with AccountStatus="Disabled") rather than vanishing entirely —
         // an admin reviewing/managing accounts needs to find a disabled one, not just the
         // active ones. accountStatus lets them filter either way.
-        var query = _db.Users.AsNoTracking().AsQueryable();
+        // Phase 14 (D03): the Identity user set carries a query filter that hides disabled accounts, so the
+        // comment above was not true until the filter was lifted here.
+        var query = _db.Users.AsNoTracking().IgnoreQueryFilters().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(role))
         {
@@ -259,7 +261,7 @@ public sealed class AdminUserQueryRepository
         Guid userId,
         CancellationToken ct = default)
     {
-        var user = await _db.Users.AsNoTracking()
+        var user = await _db.Users.AsNoTracking().IgnoreQueryFilters()
             .FirstOrDefaultAsync(u => u.Id == userId, ct);
 
         if (user is null)

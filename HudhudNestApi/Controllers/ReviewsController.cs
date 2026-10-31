@@ -55,6 +55,7 @@ public sealed class ReviewsController : ControllerBase
 
     [HttpDelete("{id:guid}")]
     [Authorize]
+    [ServiceFilter(typeof(HudhudNestApi.Filters.AdminAuditFilter))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {

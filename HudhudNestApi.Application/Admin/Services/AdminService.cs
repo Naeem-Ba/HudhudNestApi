@@ -107,6 +107,14 @@ public sealed class AdminService : IAdminService
             ct);
     }
 
+    public Task<AdminOperationResult> EnableUserAsync(
+        Guid userId,
+        string reason,
+        Guid performedByUserId,
+        string? ipAddress,
+        CancellationToken ct = default)
+        => _identity.EnableUserAsync(userId, reason, performedByUserId, ipAddress, ct);
+
     public Task<AdminOperationResult> DisableUserAsync(
         Guid userId,
         Guid performedByUserId,

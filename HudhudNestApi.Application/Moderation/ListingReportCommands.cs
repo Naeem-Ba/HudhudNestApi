@@ -284,11 +284,13 @@ public sealed class RespondToListingReportCommandHandler : IRequestHandler<Respo
 {
     private readonly IListingReportRepository _reports;
     private readonly IUnitOfWork _uow;
+    private readonly ListingReportNotifier _notifier;
 
-    public RespondToListingReportCommandHandler(IListingReportRepository reports, IUnitOfWork uow)
+    public RespondToListingReportCommandHandler(IListingReportRepository reports, IUnitOfWork uow, ListingReportNotifier notifier)
     {
         _reports = reports;
         _uow = uow;
+        _notifier = notifier;
     }
 
     public async Task<MyListingReportDto> Handle(RespondToListingReportCommand request, CancellationToken ct)
@@ -300,10 +302,14 @@ public sealed class RespondToListingReportCommandHandler : IRequestHandler<Respo
         var now = DateTime.UtcNow;
         var before = report.Status;
         report.RecordReporterResponse(request.ReporterUserId, now);
-        await _reports.AddEventAsync(ListingReportEvent.Record(
+        var responded = ListingReportEvent.Record(
             report.Id, request.ReporterUserId, ListingReportEventType.ReporterResponded, isInternal: false, now,
-            note: request.Message, fromValue: before.ToString(), toValue: report.Status.ToString()), ct);
+            note: request.Message, fromValue: before.ToString(), toValue: report.Status.ToString());
+        await _reports.AddEventAsync(responded, ct);
         await _uow.SaveChangesAsync(ct);
+
+        // Without this the answer sat in the timeline and no admin ever learned it had arrived.
+        await _notifier.NotifyAdminsOfReporterResponseAsync(report, responded.Id, request.Message, ct);
 
         return await ListingReportViews.ForReporterAsync(report, _reports, ct);
     }

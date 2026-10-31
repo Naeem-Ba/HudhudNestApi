@@ -31,9 +31,8 @@ public sealed class AuditLogService : IAuditLogService
         if (normalizedAction.Length > MaxActionLength)
             normalizedAction = normalizedAction[..MaxActionLength];
 
-        var normalizedIp = string.IsNullOrWhiteSpace(ipAddress)
-            ? null
-            : ipAddress.Trim();
+        // Masked at write time (phase 14, D07); the raw address is never stored.
+        var normalizedIp = AuditIpMask.Mask(ipAddress);
 
         if (normalizedIp?.Length > MaxIpAddressLength)
             normalizedIp = normalizedIp[..MaxIpAddressLength];

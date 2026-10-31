@@ -40,10 +40,14 @@ public readonly struct AppVersion : IComparable<AppVersion>, IEquatable<AppVersi
         if (!match.Success)
             return false;
 
-        // Anchored digits-only groups always parse; int.Parse cannot throw here.
-        var major = int.Parse(match.Groups["major"].Value);
-        var minor = int.Parse(match.Groups["minor"].Value);
-        var patch = int.Parse(match.Groups["patch"].Value);
+        // The groups are digits only, but not necessarily small: "99999999999.1.1" matched the pattern and
+        // used to throw from int.Parse (a 500 on the public update check, phase 14 D08).
+        if (!int.TryParse(match.Groups["major"].Value, out var major)
+            || !int.TryParse(match.Groups["minor"].Value, out var minor)
+            || !int.TryParse(match.Groups["patch"].Value, out var patch))
+        {
+            return false;
+        }
 
         version = new AppVersion(major, minor, patch);
         return true;
