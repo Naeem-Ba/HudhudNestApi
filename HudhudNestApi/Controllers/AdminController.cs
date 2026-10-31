@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using HudhudNestApi.Application.Admin.DTOs;
 using HudhudNestApi.Application.Admin.Interfaces;
 using HudhudNestApi.Domain.Users.Constants;
+using HudhudNestApi.Validation;
 
 namespace HudhudNestApi.Controllers;
 
@@ -477,20 +478,20 @@ public sealed class AdminController : ControllerBase
 
 public sealed record UpdateRoleRequest(string Role);
 
-public sealed record ActivateSubscriptionRequest(string Tier, int DurationDays, string? Reason);
+public sealed record ActivateSubscriptionRequest(string Tier, int DurationDays, [AdminReason] string? Reason);
 
-public sealed record ExtendSubscriptionRequest(int Days, string? Reason);
+public sealed record ExtendSubscriptionRequest(int Days, [AdminReason] string? Reason);
 
-public sealed record CancelSubscriptionRequest(string? Reason);
+public sealed record CancelSubscriptionRequest([AdminReason] string? Reason);
 
-public sealed record FeatureListingRequest(int? Days, string? Reason);
+public sealed record FeatureListingRequest(int? Days, [AdminReason] string? Reason);
 
-public sealed record UnfeatureListingRequest(string? Reason);
+public sealed record UnfeatureListingRequest([AdminReason] string? Reason);
 
-public sealed record TakeDownListingRequest(string? Reason);
+public sealed record TakeDownListingRequest([AdminReason] string? Reason);
 
-public sealed record RestoreListingRequest(string? Reason);
+public sealed record RestoreListingRequest([AdminReason] string? Reason);
 
-public sealed record ExtendListingRequest(int Days, string? Reason);
+public sealed record ExtendListingRequest(int Days, [AdminReason] string? Reason);
 
-public sealed record FlagValuationOfficeRequest(string Reason);
+public sealed record FlagValuationOfficeRequest([AdminReason] string Reason);

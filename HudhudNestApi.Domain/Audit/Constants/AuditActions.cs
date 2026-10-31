@@ -35,6 +35,7 @@ public static class AuditActions
     public const string PlanRequestApprovedByAdmin = "PlanRequestApprovedByAdmin";
     public const string PlanRequestRejectedByAdmin = "PlanRequestRejectedByAdmin";
     public const string FeaturedRequestRejectedByAdmin = "FeaturedRequestRejectedByAdmin";
+    public const string ExtensionRequestRejectedByAdmin = "ExtensionRequestRejectedByAdmin";
 
     // -- Admin dashboard: listing lifecycle --------------------------------
     public const string ListingFeaturedByAdmin = "ListingFeaturedByAdmin";

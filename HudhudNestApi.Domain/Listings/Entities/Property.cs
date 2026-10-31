@@ -695,6 +695,20 @@ public class Property : AuditableEntity
     }
 
     /// <summary>
+    /// Whether a paid featured placement can be delivered: the listing is published and still on offer. A concluded
+    /// deal, an archived or expired listing, one an administrator took down and one the owner switched off are all
+    /// invisible to buyers, so promoting them would take money for a placement nobody can see (QA Phase 13, P13-D01).
+    /// </summary>
+    public bool CanBeFeatured
+        => !IsDeleted &&
+           !IsTakenDown &&
+           IsPublished &&
+           Status != PropertyStatus.Sold &&
+           Status != PropertyStatus.Rented &&
+           Status != PropertyStatus.Archived &&
+           Status != PropertyStatus.Expired;
+
+    /// <summary>
     /// Ends the featured placement. Called by the scheduler once FeaturedUntil has passed,
     /// and by an admin reversing a placement.
     /// </summary>

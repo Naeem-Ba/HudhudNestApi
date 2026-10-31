@@ -97,4 +97,47 @@ public sealed class AdminPaymentRequestQueryRepository : IAdminPaymentRequestQue
                 r.TransactedAt))
             .ToList();
     }
+
+    public async Task<IReadOnlyList<PendingExtensionRequestDto>> GetPendingExtensionRequestsAsync(
+        CancellationToken ct = default)
+    {
+        var rows = await (
+            from fee in _db.Transactions.AsNoTracking()
+            where fee.TransactionType == TransactionType.ListingExtensionFee
+                  && fee.Status == TransactionStatus.Pending
+            join property in _db.Properties.AsNoTracking() on fee.PropertyId equals property.Id
+            join account in _db.UserAccounts.AsNoTracking() on fee.PayerId equals account.Id
+            join identity in _db.Users.AsNoTracking() on fee.PayerId equals identity.Id into identities
+            from identity in identities.DefaultIfEmpty()
+            orderby fee.TransactedAt
+            select new
+            {
+                fee.Id,
+                fee.PropertyId,
+                property.Title,
+                fee.PayerId,
+                account.FirstName,
+                account.LastName,
+                account.DisplayName,
+                Email = identity != null ? identity.Email : null,
+                fee.AmountInUSD,
+                fee.TransactedAt,
+                property.ExpiresAt
+            })
+            .Take(MaxRows)
+            .ToListAsync(ct);
+
+        return rows
+            .Select(r => new PendingExtensionRequestDto(
+                r.Id,
+                r.PropertyId,
+                r.Title,
+                r.PayerId,
+                string.IsNullOrWhiteSpace(r.DisplayName) ? $"{r.FirstName} {r.LastName}".Trim() : r.DisplayName!,
+                r.Email,
+                r.AmountInUSD,
+                r.TransactedAt,
+                r.ExpiresAt))
+            .ToList();
+    }
 }

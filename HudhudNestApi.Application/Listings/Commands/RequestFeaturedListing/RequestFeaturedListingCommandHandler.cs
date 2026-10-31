@@ -72,10 +72,16 @@ public sealed class RequestFeaturedListingCommandHandler
                 "لا يمكن تمييز إعلان منتهٍ. مدّد الإعلان أولاً ثم ميّزه.");
         }
 
-        if (!property.IsPublished)
+        if (property.IsTakenDown)
         {
-            throw new ConflictException(
-                "لا يمكن تمييز إعلان غير منشور. انشر الإعلان أولاً ثم ميّزه.");
+            throw new ConflictException("أوقفت الإدارة هذا الإعلان ولا يمكن تمييزه.");
+        }
+
+        if (!property.CanBeFeatured)
+        {
+            throw new ConflictException(property.IsPublished
+                ? "لا يمكن تمييز إعلان مباع أو مؤجَّر أو مؤرشف."
+                : "لا يمكن تمييز إعلان غير منشور. انشر الإعلان أولاً ثم ميّزه.");
         }
 
         var now = DateTime.UtcNow;

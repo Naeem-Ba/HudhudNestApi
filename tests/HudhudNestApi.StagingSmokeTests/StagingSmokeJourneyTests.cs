@@ -633,8 +633,22 @@ public sealed class StagingSmokeJourneyTests
 
         private async Task<Session> LoginPhoneAsync(string phone)
         {
+            // Staging runs on a small Render instance that can answer 502/503/504 for a moment right
+            // after a deploy or a restart (one such answer failed the whole gate while the same commit
+            // had passed hours earlier). A gateway answer means the request never reached the
+            // application, so repeating the login is safe; a real rejection (401/403/...) is not
+            // retried and still fails at once.
             var response = await SendJsonAsync(HttpMethod.Post, "/api/auth/phone/login",
                 new { PhoneNumber = phone, Password = _config.Password });
+            for (var attempt = 1;
+                 attempt < _config.MaxRetries && IsGatewayError(response.StatusCode);
+                 attempt++)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(_config.RetryDelaySeconds));
+                response = await SendJsonAsync(HttpMethod.Post, "/api/auth/phone/login",
+                    new { PhoneNumber = phone, Password = _config.Password });
+            }
+
             Expect(response.StatusCode == HttpStatusCode.OK, "Correct phone credentials were rejected.");
             using var body = await ReadJsonAsync(response);
             return SessionFrom(response, body.RootElement);

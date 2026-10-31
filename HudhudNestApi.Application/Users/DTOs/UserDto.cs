@@ -55,6 +55,16 @@ public sealed class UserDto
     public DateTime? PlanSelectedAt { get; set; }
 
     /// <summary>
+    /// What the plan is worth right now: "NoPlan" | "Active" | "Expired" | "Cancelled" (UserAccount.GetEffectivePlanStatus).
+    /// PlanTier above keeps naming the stored plan, so an expired or cancelled paid plan still reads as that tier; this is
+    /// what tells the client the benefits are gone (QA Phase 13, P13-D03).
+    /// </summary>
+    public string PlanStatus { get; set; } = "NoPlan";
+
+    /// <summary>When a time-limited plan ends; null for a plan with no end date.</summary>
+    public DateTime? PlanExpiresAt { get; set; }
+
+    /// <summary>
     /// The paid tier this user asked for and an administrator has not activated yet (payment
     /// not confirmed). It grants nothing: PlanTier above is what is actually in force. Null
     /// when there is no outstanding request.

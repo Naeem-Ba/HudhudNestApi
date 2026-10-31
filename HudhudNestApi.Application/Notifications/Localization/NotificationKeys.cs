@@ -52,6 +52,29 @@ public static class NotificationKeys
     public const string ContactMessageReceived = "msg.contact_message_received";
     public const string ContactMessageNoSubject = "msg.contact_message_no_subject";
 
+    // Plans and listing fees (manual settlement).
+    public const string PlanRequestApproved = "msg.plan_request_approved";
+    public const string PlanRequestRejected = "msg.plan_request_rejected";
+    public const string PlanRequestRejectedWithReason = "msg.plan_request_rejected_reason";
+    public const string ListingFeeConfirmedExtension = "msg.listing_fee_confirmed_extension";
+    public const string ListingFeeConfirmedFeatured = "msg.listing_fee_confirmed_featured";
+    public const string ListingFeeRejected = "msg.listing_fee_rejected";
+    public const string ListingFeeRejectedWithReason = "msg.listing_fee_rejected_reason";
+    public const string PlanExpiringSoon = "msg.plan_expiring_soon";
+    public const string PlanExpired = "msg.plan_expired";
+    public const string FeeKindExtension = "generic.fee_extension";
+    public const string FeeKindFeatured = "generic.fee_featured";
+
+    /// <summary>Localized name of a plan tier (free, basic, premium, elite); an unknown tier is passed through.</summary>
+    public static NotificationText PlanName(string tier) => tier.ToLowerInvariant() switch
+    {
+        "free" => NotificationText.Of("generic.plan_free"),
+        "basic" => NotificationText.Of("generic.plan_basic"),
+        "premium" => NotificationText.Of("generic.plan_premium"),
+        "elite" => NotificationText.Of("generic.plan_elite"),
+        _ => NotificationText.FromLiteral(tier)
+    };
+
     // Listing reports (moderation).
     public const string ListingReportSubmitted = "msg.listing_report_submitted";
     public const string ListingReportSubmittedUrgent = "msg.listing_report_submitted_urgent";

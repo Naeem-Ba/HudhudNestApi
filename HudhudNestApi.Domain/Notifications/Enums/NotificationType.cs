@@ -214,4 +214,24 @@ public enum NotificationType
 
     /// <summary>A visitor sent a message through the public contact form. Sent to admins.</summary>
     ContactMessageReceived = 56,
+
+    // ── Plans and listing fees (manual settlement). RelatedEntityId is the plan request id or the fee Transaction id.
+
+    /// <summary>An administrator approved the user's paid-plan request; the plan is active.</summary>
+    PlanRequestApproved = 57,
+
+    /// <summary>An administrator declined the user's paid-plan request (payment not received).</summary>
+    PlanRequestRejected = 58,
+
+    /// <summary>The user's listing fee (extension or featured placement) was confirmed and delivered.</summary>
+    ListingFeeConfirmed = 59,
+
+    /// <summary>The user's listing fee was declined (payment not received); the listing is untouched.</summary>
+    ListingFeeRejected = 60,
+
+    /// <summary>A time-limited plan ends in a few days.</summary>
+    PlanExpiringSoon = 61,
+
+    /// <summary>A time-limited plan ended; the account is back on the free tier's limits.</summary>
+    PlanExpired = 62,
 }

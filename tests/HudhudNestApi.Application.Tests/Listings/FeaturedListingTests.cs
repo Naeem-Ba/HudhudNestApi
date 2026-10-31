@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using HudhudNestApi.Application.Notifications.Interfaces;
+using HudhudNestApi.Application.Plans.Services;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Commands.ConfirmFeaturedListingPayment;
@@ -408,6 +410,7 @@ public sealed class FeaturedListingTests
             fees.Object,
             properties.Object,
             Mock.Of<IUnitOfWork>(),
+            new BillingNotifier(Mock.Of<INotificationService>(), NullLogger<BillingNotifier>.Instance),
             NullLogger<ConfirmFeaturedListingPaymentCommandHandler>.Instance);
     }
 }

@@ -5,6 +5,7 @@ using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Listings.Events;
 using HudhudNestApi.Application.Listings.Interfaces;
+using HudhudNestApi.Application.Plans.Services;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings;
 using HudhudNestApi.Domain.Transactions.Enums;
@@ -27,6 +28,7 @@ public sealed class ConfirmListingExtensionPaymentCommandHandler
     private readonly IListingQuotaGuard _quotaGuard;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPublisher _publisher;
+    private readonly BillingNotifier _billing;
     private readonly ILogger<ConfirmListingExtensionPaymentCommandHandler> _logger;
 
     public ConfirmListingExtensionPaymentCommandHandler(
@@ -36,6 +38,7 @@ public sealed class ConfirmListingExtensionPaymentCommandHandler
         IListingQuotaGuard quotaGuard,
         IUnitOfWork unitOfWork,
         IPublisher publisher,
+        BillingNotifier billing,
         ILogger<ConfirmListingExtensionPaymentCommandHandler> logger)
     {
         _extensions = extensions;
@@ -44,6 +47,7 @@ public sealed class ConfirmListingExtensionPaymentCommandHandler
         _quotaGuard = quotaGuard;
         _unitOfWork = unitOfWork;
         _publisher = publisher;
+        _billing = billing;
         _logger = logger;
     }
 
@@ -147,6 +151,8 @@ public sealed class ConfirmListingExtensionPaymentCommandHandler
         {
             _logger.LogError(ex, "Failed to publish PropertyPublishedEvent after a paid listing extension. PropertyId={PropertyId}", property.Id);
         }
+
+        await _billing.ListingExtensionConfirmedAsync(fee.PayerId, fee.Id, property.Title, property.ExpiresAt!.Value, cancellationToken);
 
         return property.ExpiresAt!.Value;
     }

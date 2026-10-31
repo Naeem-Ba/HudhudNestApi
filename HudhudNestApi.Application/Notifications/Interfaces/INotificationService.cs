@@ -162,6 +162,19 @@ public interface INotificationService
         CancellationToken ct = default);
 
     /// <summary>
+    /// QA Phase 13 (P13-D03): tells a user what became of a plan request or listing fee they paid for by hand, or that
+    /// their plan is about to end or has ended. <paramref name="type"/> must be one of the plan/fee types;
+    /// <paramref name="relatedEntityId"/> is the plan request id or the fee Transaction id.
+    /// </summary>
+    Task NotifyBillingAsync(
+        Guid recipientId,
+        NotificationType type,
+        NotificationText message,
+        Guid? relatedEntityId,
+        string? dedupeKey,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// A contact-form message arrived (QA Phase 12): sent to admins, RelatedEntityId is the message id.
     /// <paramref name="dedupeKey"/> makes a retry of the same event a no-op.
     /// </summary>

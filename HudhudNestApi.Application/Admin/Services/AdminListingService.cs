@@ -152,6 +152,12 @@ public sealed class AdminListingService : IAdminListingService
             return new AdminOperationResult { Succeeded = false, NotFound = true, Message = "Listing not found." };
         }
 
+        // Ending a placement that is not running is a no-op that would still write an audit row (QA Phase 13, P13-D08).
+        if (!property.IsFeatured)
+        {
+            return AdminOperationResult.ConflictResult("This listing is not featured.");
+        }
+
         var oldSnapshot = SnapshotListing(property);
 
         await _unitOfWork.BeginTransactionAsync(ct);
