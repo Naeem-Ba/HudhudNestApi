@@ -33,7 +33,8 @@ public sealed class PropertyReadRepository : IPropertyReadRepository
                 p.Longitude,
                 p.PurchasePrice ?? p.ColdRent,
                 p.CurrencyCode,
-                p.GovernorateId))
+                p.GovernorateId,
+                p.Status))
             .FirstOrDefaultAsync(ct);
     }
 }

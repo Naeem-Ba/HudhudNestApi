@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using HudhudNestApi.Application.Contact.DTOs;
 using HudhudNestApi.Application.Contact.Interfaces;
 using HudhudNestApi.Domain.Messaging.Entities;
+using HudhudNestApi.Domain.Users.Constants;
 using HudhudNestApi.Infrastructure.Persistence;
 using HudhudNestApi.Application.Common.Paging;
 
@@ -55,4 +56,12 @@ public sealed class ContactMessageRepository : IContactMessageRepository
     {
         _db.ContactMessages.Remove(message);
     }
+
+    public async Task<IReadOnlyList<Guid>> ListAdminIdsAsync(CancellationToken ct = default) =>
+        await (from user in _db.Users.AsNoTracking()
+               join userRole in _db.UserRoles.AsNoTracking() on user.Id equals userRole.UserId
+               join role in _db.Roles.AsNoTracking() on userRole.RoleId equals role.Id
+               join account in _db.UserAccounts.AsNoTracking() on user.Id equals account.Id
+               where role.Name == RoleNames.Admin && !account.IsDeleted
+               select user.Id).ToListAsync(ct);
 }

@@ -36,5 +36,6 @@ public sealed record PropertySummary(
     decimal? Longitude = null,
     decimal? EstimatedValue = null,
     string? CurrencyCode = null,
-    int? GovernorateId = null
+    int? GovernorateId = null,
+    HudhudNestApi.Domain.Enums.PropertyStatus? Status = null
 );

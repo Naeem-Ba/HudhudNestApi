@@ -2,6 +2,9 @@ using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Contact.Commands.MarkContactMessageRead;
 using HudhudNestApi.Application.Contact.Commands.SubmitContact;
 using HudhudNestApi.Application.Contact.Interfaces;
+using HudhudNestApi.Application.Contact.Services;
+using HudhudNestApi.Application.Notifications.Interfaces;
+using Microsoft.Extensions.Logging.Abstractions;
 using HudhudNestApi.Domain.Messaging.Entities;
 
 namespace HudhudNestApi.Auth.Tests.Application.Handlers;
@@ -15,7 +18,9 @@ public sealed class ContactHandlerTests
         var uow = new Mock<IUnitOfWork>();
         uow.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
-        var handler = new SubmitContactCommandHandler(repository.Object, uow.Object);
+        var handler = new SubmitContactCommandHandler(
+            repository.Object, uow.Object,
+            new ContactMessageNotifier(Mock.Of<INotificationService>(), repository.Object, NullLogger<ContactMessageNotifier>.Instance));
 
         await handler.Handle(
             new SubmitContactCommand(" Naeem ", " TEST@EXAMPLE.COM ", " Subject ", " Message body ", "127.0.0.1"),

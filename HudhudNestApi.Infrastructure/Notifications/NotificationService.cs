@@ -298,6 +298,31 @@ public sealed class NotificationService : INotificationService
             investmentProjectId);
     }
 
+    public async Task NotifyContactMessageAsync(
+        Guid recipientId,
+        NotificationText message,
+        Guid contactMessageId,
+        string dedupeKey,
+        CancellationToken ct = default)
+    {
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(contactMessageId, "Contact message id is required.", nameof(contactMessageId));
+
+        var lang = await LanguageOfAsync(recipientId, ct);
+
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.ContactMessageReceived,
+                NotificationCatalog.Render(message ?? NotificationText.Empty, lang),
+                relatedEntityId: contactMessageId,
+                dedupeKey: dedupeKey),
+            ct);
+
+        _logger.LogInformation(
+            "Contact message notification created. RecipientId={RecipientId}, ContactMessageId={ContactMessageId}",
+            recipientId,
+            contactMessageId);
+    }
+
     public async Task NotifyAgencyInvitationReceivedAsync(
         Guid recipientId,
         Guid invitationId,

@@ -8,6 +8,7 @@ using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Domain.Bookings.Entities;
 using HudhudNestApi.Domain.Common.Exceptions;
+using HudhudNestApi.Domain.Listings.Entities;
 using HudhudNestApi.Domain.Notifications.Enums;
 
 namespace HudhudNestApi.Application.Bookings.Commands.RequestVisit;
@@ -42,6 +43,12 @@ public sealed class RequestVisitCommandHandler : IRequestHandler<RequestVisitCom
         if (!property.IsPublished)
         {
             throw new DomainException("Cannot request a visit for an unpublished property.");
+        }
+
+        // A sold or rented listing is documentation, not an offer (QA Phase 12, P12-D05).
+        if (property.Status is { } status && Property.IsClosedDeal(status))
+        {
+            throw new DomainException("لا يمكن طلب زيارة لعقار تم بيعه أو تأجيره.");
         }
 
         if (property.OwnerId == request.RequesterId)

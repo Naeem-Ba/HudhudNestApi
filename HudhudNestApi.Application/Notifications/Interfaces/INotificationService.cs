@@ -161,6 +161,17 @@ public interface INotificationService
         string dedupeKey,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// A contact-form message arrived (QA Phase 12): sent to admins, RelatedEntityId is the message id.
+    /// <paramref name="dedupeKey"/> makes a retry of the same event a no-op.
+    /// </summary>
+    Task NotifyContactMessageAsync(
+        Guid recipientId,
+        NotificationText message,
+        Guid contactMessageId,
+        string dedupeKey,
+        CancellationToken ct = default);
+
     Task<IReadOnlyList<NotificationDto>> GetUserNotificationsAsync(
         Guid userId,
         int page,

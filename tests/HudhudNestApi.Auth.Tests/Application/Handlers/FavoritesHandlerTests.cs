@@ -16,7 +16,7 @@ public sealed class FavoritesHandlerTests
         var propertyId = Guid.NewGuid();
 
         var repository = new Mock<IFavoriteRepository>();
-        repository.Setup(x => x.PropertyExistsAsync(propertyId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        repository.Setup(x => x.PropertyVisibleToAsync(propertyId, It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
         repository.Setup(x => x.ExistsAsync(userId, propertyId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
         var handler = new AddFavoriteCommandHandler(repository.Object, Mock.Of<IUnitOfWork>());

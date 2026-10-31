@@ -526,6 +526,7 @@ public sealed class ListingReportTests : IAsyncLifetime
         public Task NotifyListingReportAsync(Guid recipientId, NotificationType type, NotificationText message, Guid reportId, Guid? propertyId, string dedupeKey, CancellationToken ct = default) => Boom();
 
         public Task NotifyInvestmentInterestAsync(Guid recipientId, NotificationText message, Guid investmentProjectId, string dedupeKey, CancellationToken ct = default) => Boom();
+        public Task NotifyContactMessageAsync(Guid recipientId, NotificationText message, Guid contactMessageId, string dedupeKey, CancellationToken ct = default) => Boom();
         public Task NotifyNewMessageAsync(Guid recipientId, Guid senderId, string senderName, Guid messageId, Guid propertyId, CancellationToken ct = default) => Boom();
         public Task NotifyPropertyUpdateAsync(Guid recipientId, Guid propertyId, string propertyTitle, NotificationType type, NotificationText detail, Guid? relatedEntityId = null, CancellationToken ct = default) => Boom();
         public Task NotifySavedSearchMatchAsync(Guid recipientId, Guid propertyId, string propertyTitle, string savedSearchName, CancellationToken ct = default) => Boom();

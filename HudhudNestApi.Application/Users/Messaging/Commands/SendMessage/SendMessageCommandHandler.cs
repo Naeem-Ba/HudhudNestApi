@@ -65,6 +65,14 @@ public sealed class SendMessageCommandHandler
                 "Property was not found.");
         }
 
+        // A draft or switched-off listing is invisible to everyone but its owner (GET returns 404);
+        // writing to its owner would reveal that it exists and notify them (QA Phase 12, P12-D04).
+        if (senderId != property.OwnerId && !property.IsPublished)
+        {
+            throw new NotFoundException(
+                "Property was not found.");
+        }
+
         Guid receiverId;
 
         if (senderId != property.OwnerId)

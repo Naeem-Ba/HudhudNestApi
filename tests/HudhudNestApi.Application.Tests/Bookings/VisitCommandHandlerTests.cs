@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using HudhudNestApi.Application.Bookings.Commands.AcceptRescheduledVisit;
 using HudhudNestApi.Application.Bookings.Commands.CancelVisit;
+using HudhudNestApi.Application.Bookings.Commands.CompleteVisit;
 using HudhudNestApi.Application.Bookings.Commands.ConfirmVisit;
 using HudhudNestApi.Application.Bookings.Commands.DeclineRescheduledVisit;
 using HudhudNestApi.Application.Bookings.Commands.DeclineVisit;
@@ -14,6 +15,7 @@ using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Application.Notifications.Localization;
 using HudhudNestApi.Domain.Bookings.Entities;
 using HudhudNestApi.Domain.Bookings.Enums;
+using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Notifications.Enums;
 
 namespace HudhudNestApi.Application.Tests.Bookings;
@@ -563,5 +565,59 @@ public sealed class VisitCommandHandlerTests
             new RequestVisitCommand(
                 propertyId, requesterId, DateTime.UtcNow.AddDays(1), "زائر", "0999999999", null),
             CancellationToken.None));
+    }
+
+    // ── QA Phase 12, P12-D05 ───────────────────────────────────────
+
+    [Theory]
+    [InlineData(PropertyStatus.Sold)]
+    [InlineData(PropertyStatus.Rented)]
+    public async Task RequestVisit_OnAClosedDeal_IsRejected(PropertyStatus status)
+    {
+        var propertyId = Guid.NewGuid();
+        var property = MakeProperty(propertyId, Guid.NewGuid()) with { Status = status };
+
+        var handler = new RequestVisitCommandHandler(
+            Mock.Of<IVisitRepository>(), Mock.Of<IUnitOfWork>(), Mock.Of<INotificationService>(),
+            PropertiesReturning(property).Object, NullLogger<RequestVisitCommandHandler>.Instance);
+
+        await Assert.ThrowsAsync<HudhudNestApi.Domain.Common.Exceptions.DomainException>(() => handler.Handle(
+            new RequestVisitCommand(propertyId, Guid.NewGuid(), DateTime.UtcNow.AddDays(1), "زائر", "0999999999", null),
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task RequestVisit_OnAnAvailableListing_StillWorks()
+    {
+        var propertyId = Guid.NewGuid();
+        var property = MakeProperty(propertyId, Guid.NewGuid()) with { Status = PropertyStatus.Available };
+
+        var handler = new RequestVisitCommandHandler(
+            Mock.Of<IVisitRepository>(), Mock.Of<IUnitOfWork>(), Mock.Of<INotificationService>(),
+            PropertiesReturning(property).Object, NullLogger<RequestVisitCommandHandler>.Instance);
+
+        var result = await handler.Handle(
+            new RequestVisitCommand(propertyId, Guid.NewGuid(), DateTime.UtcNow.AddDays(1), "زائر", "0999999999", null),
+            CancellationToken.None);
+
+        Assert.NotEqual(Guid.Empty, result.Id);
+    }
+
+    [Fact]
+    public async Task CompleteVisit_BeforeItsDate_IsRejected_AndNothingIsSaved()
+    {
+        var ownerId = Guid.NewGuid();
+        var visit = CreatePendingVisit(Guid.NewGuid(), out var propertyId);
+        visit.Confirm();
+        var uow = new Mock<IUnitOfWork>();
+
+        var handler = new CompleteVisitCommandHandler(
+            VisitsReturning(visit).Object, uow.Object, PropertiesReturning(MakeProperty(propertyId, ownerId)).Object);
+
+        await Assert.ThrowsAsync<HudhudNestApi.Domain.Common.Exceptions.DomainException>(() =>
+            handler.Handle(new CompleteVisitCommand(visit.Id, ownerId), CancellationToken.None));
+
+        Assert.Equal(VisitStatus.Confirmed, visit.Status);
+        uow.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 }

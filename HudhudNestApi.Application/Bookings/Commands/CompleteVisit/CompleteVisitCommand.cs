@@ -2,6 +2,8 @@ using MediatR;
 using HudhudNestApi.Application.Bookings.Interfaces;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
+using HudhudNestApi.Domain.Bookings.Enums;
+using HudhudNestApi.Domain.Common.Exceptions;
 
 namespace HudhudNestApi.Application.Bookings.Commands.CompleteVisit;
 
@@ -36,6 +38,13 @@ public sealed class CompleteVisitCommandHandler : IRequestHandler<CompleteVisitC
         if (property.OwnerId != request.OwnerId)
         {
             throw new ForbiddenException("Only the property owner can complete this visit.");
+        }
+
+        // Completing opens the reviews for the listing, so the owner must not be able to do it before the visit
+        // was due (QA Phase 12, P12-D05).
+        if (visit.Status == VisitStatus.Confirmed && visit.ProposedAt > DateTime.UtcNow)
+        {
+            throw new DomainException("لا يمكن إتمام الزيارة قبل موعدها.");
         }
 
         visit.Complete();

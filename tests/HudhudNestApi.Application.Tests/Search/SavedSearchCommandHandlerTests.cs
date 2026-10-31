@@ -1,3 +1,4 @@
+using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Search.Commands.CreateSavedSearch;
 using HudhudNestApi.Application.Search.Commands.DeleteSavedSearch;
@@ -26,6 +27,26 @@ public sealed class SavedSearchCommandHandlerTests
         Assert.NotEqual(Guid.Empty, id);
         Assert.Single(repo.Items);
         Assert.Equal(userId, repo.Items[0].UserId);
+    }
+
+    [Fact]
+    public async Task CreateSavedSearch_AtTheCap_IsRefusedWith409_AndOtherUsersAreNotAffected()
+    {
+        var userId = Guid.NewGuid();
+        var existing = Enumerable.Range(0, CreateSavedSearchCommandHandler.MaxSavedSearchesPerUser)
+            .Select(_ => SavedSearch.Create(userId, "s", null, "x", null, null, null, null, null, null, null, null, null, null, null, null, null))
+            .ToArray();
+        var repo = new InMemorySavedSearchRepository(existing);
+        var handler = new CreateSavedSearchCommandHandler(repo, new NoOpUnitOfWork());
+
+        CreateSavedSearchCommand For(Guid user) => new(
+            user, "n", null, "دمشق", null, null, null, null, null, null, null, null, null, null, null, null, null);
+
+        await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(For(userId), CancellationToken.None));
+        Assert.Equal(CreateSavedSearchCommandHandler.MaxSavedSearchesPerUser, repo.Items.Count);
+
+        await handler.Handle(For(Guid.NewGuid()), CancellationToken.None);
+        Assert.Equal(CreateSavedSearchCommandHandler.MaxSavedSearchesPerUser + 1, repo.Items.Count);
     }
 
     [Fact]

@@ -48,6 +48,10 @@ public static class NotificationKeys
     // Investment discovery.
     public const string InvestmentInterestReceived = "msg.investment_interest_received";
 
+    // Contact form.
+    public const string ContactMessageReceived = "msg.contact_message_received";
+    public const string ContactMessageNoSubject = "msg.contact_message_no_subject";
+
     // Listing reports (moderation).
     public const string ListingReportSubmitted = "msg.listing_report_submitted";
     public const string ListingReportSubmittedUrgent = "msg.listing_report_submitted_urgent";

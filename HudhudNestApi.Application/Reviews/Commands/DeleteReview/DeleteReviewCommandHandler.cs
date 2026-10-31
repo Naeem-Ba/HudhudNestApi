@@ -17,10 +17,10 @@ public sealed class DeleteReviewCommandHandler
     public async Task<bool> Handle(DeleteReviewCommand request, CancellationToken ct)
     {
         var review = await _reviews.GetByIdAsync(request.ReviewId, ct)
-            ?? throw new NotFoundException("Ø§Ù„ØªÙ‚ÙŠÙŠÙ… ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯.");
+            ?? throw new NotFoundException("التقييم غير موجود.");
 
         if (!request.IsAdmin && review.ReviewerId != request.ActorId)
-            throw new ForbiddenException("ÙŠÙ…ÙƒÙ†Ùƒ Ø­Ø°Ù ØªÙ‚ÙŠÙŠÙ…Ø§ØªÙƒ ÙÙ‚Ø·.");
+            throw new ForbiddenException("يمكنك حذف تقييماتك فقط.");
 
         await _reviews.DeleteAsync(review, ct);
         await _uow.SaveChangesAsync(ct);

@@ -1,9 +1,11 @@
 using HudhudNestApi.Application.Notifications.Localization;
+using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Bookings.Interfaces;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
+using HudhudNestApi.Application.Common.Validation;
 using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Domain.Notifications.Enums;
 
@@ -13,6 +15,19 @@ public sealed record ConfirmVisitCommand(
     Guid VisitId,
     Guid OwnerId,
     string? OwnerNote = null) : IRequest<bool>;
+
+public sealed class ConfirmVisitCommandValidator : AbstractValidator<ConfirmVisitCommand>
+{
+    public ConfirmVisitCommandValidator()
+    {
+        // The column is varchar(500); a longer note used to reach PostgreSQL and came back as a 500.
+        RuleFor(x => x.OwnerNote)
+            .MaximumLength(500)
+            .WithMessage("الملاحظة يجب ألا تتجاوز 500 حرف.")
+            .NoNulCharacters()
+            .When(x => x.OwnerNote is not null);
+    }
+}
 
 public sealed class ConfirmVisitCommandHandler : IRequestHandler<ConfirmVisitCommand, bool>
 {

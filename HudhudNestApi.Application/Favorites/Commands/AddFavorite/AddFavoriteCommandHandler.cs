@@ -22,7 +22,7 @@ public sealed class AddFavoriteCommandHandler
         AddFavoriteCommand request,
         CancellationToken cancellationToken)
     {
-        var propertyExists = await _favorites.PropertyExistsAsync(request.PropertyId, cancellationToken);
+        var propertyExists = await _favorites.PropertyVisibleToAsync(request.PropertyId, request.UserId, cancellationToken);
         if (!propertyExists)
             return FavoriteMutationResult.NotFound("Property not found.");
 

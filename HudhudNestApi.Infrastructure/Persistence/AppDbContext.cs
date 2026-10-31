@@ -237,6 +237,11 @@ public sealed class AppDbContext
 
         builder.Entity<Favorite>().HasQueryFilter(favorite => !favorite.Property.IsDeleted);
 
+        // QA Phase 12 (P12-D11): deleting a saved search is a soft delete (SaveChanges turns the Remove into
+        // IsDeleted=true), but without a filter the row stayed in "my searches", kept being matched and
+        // notified, and counted toward the per-user cap.
+        builder.Entity<SavedSearch>().HasQueryFilter(s => !s.IsDeleted);
+
         // Translations follow their listing: a soft-deleted listing's translations are unreachable through EF too.
         builder.Entity<ListingTranslation>().HasQueryFilter(t =>
             (t.PropertyId == null || (t.Property != null && !t.Property.IsDeleted)) &&
