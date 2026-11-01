@@ -32,7 +32,7 @@ Recent sign-ups have had less than 30 days, so the last weeks of a window always
 - **Only e-mail sign-ups carry tags today.** Google/Apple and phone sign-ups are counted in New accounts but
   not in this table (known gap, D-10). "Untagged" counts e-mail sign-ups that arrived with no UTM tags.
 - Top 50 rows by sign-ups. Tags are stored lower case, letters, digits, `-`, `_`, `.` only.
-- The admin page has a link builder: pick the page, source, medium and campaign, copy the link (or its QR).
+- The admin page has a link builder: pick the page, source, medium and campaign, copy the link.
 
 ## Retention (rolling)
 - Cohort: accounts created in the window **on or after the first recorded active day** (the dashboard says the
