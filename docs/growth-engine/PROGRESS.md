@@ -3,10 +3,11 @@
 ## Current position (2026-11-01)
 
 - Last completed phase: Phase 0 (audit) and planning documents.
-- Last completed tasks: P1 (price history + saved-search fix) and P2 (search requests + matching engine v1),
-  API and app, tested locally, one PR per repository on branch `claude/project-thread-1oghdc`.
-- In progress: none.
-- Next task: P3 — search alerts v2 (edit, pause, frequency, amenity filters), then P4 growth event log.
+- Last completed tasks: P1 (price history + saved-search fix), P2 (search requests + matching engine v1),
+  P3 (saved-search alerts v2), API and app, tested locally, one PR per repository on branch
+  `claude/project-thread-1oghdc` (later packages are added to the same PRs).
+- In progress: P4 growth event log.
+- Next task: P5 referral system.
 
 ## P1 — Price history and follower alerts
 
@@ -69,8 +70,7 @@ routes behind `AuthGuard`, account-menu and mobile-drawer links, notification ro
 i18n `SEARCH_REQUESTS` in ar/en/de.
 
 Tests run locally (GitHub Actions not used) with P1 + P2 together:
-- API: build Release 0 errors; Application 1882/1882; Architecture 207/207; Infrastructure 609/609;
-  Integration: see the PR description; migration gate and `dotnet format` see the PR description.
+- API: see the P3 section (one run covers P1–P3).
 - App: unit 1442/1442, `check:i18n` parity (2641 keys), `typecheck:strict` clean, production `ng build` OK.
 - Not run: Android/iOS native builds (no native change), real device, Production.
 
@@ -79,6 +79,25 @@ cannot be scraped by non-advertisers). A new request is first checked against th
 live listings in its governorate; those matches appear on the request page without a push. Later sweeps only
 look at listings changed since the previous sweep. Above 5 new matches in one sweep, the extra ones are listed
 on the page but not pushed.
+
+## P3 — Saved-search alerts v2
+
+API: `PUT /api/savedsearch/{id}`, `POST /api/savedsearch/{id}/pause|resume`, frequency Instant/Daily (daily =
+one `SavedSearchDigest` notification per 24 h with the count), balcony/elevator/parking filters, delivery log
+(`LastNotifiedAt`, `NotifiedCount`). Decisions D-07 to D-09. Migration `20261101181305_AddSavedSearchAlertsV2`
+(additive). The integration run also found and fixed a P2 bug: the per-listing facts query could not be
+translated by EF (500 on `for-listing` and `proposals`).
+
+App: saved-searches page with inline edit, pause/resume, chips, delivery line, localized summary; digest
+notifications open the page.
+
+Tests run locally with P1 + P2 + P3 (GitHub Actions not used):
+- API: build Release 0 errors; Application 1888/1888; Architecture 207/207; Infrastructure 612/612;
+  Integration 986/986 on a fresh PostgreSQL 16 + PostGIS database built by the Migrator (90 migrations);
+  migration risk gate passed; `dotnet format --verify-no-changes` clean.
+- App: unit 1447/1447, `check:i18n` parity (2666 keys), `typecheck:strict` clean, production `ng build` OK.
+- One earlier run had a failure in `ClosedDealLifecyclePostgresTests` (existing test, capped batch ordered by
+  `UpdatedAt` on a shared database); it passed in the clean run. Flaky, not caused by these packages.
 
 ## Blockers carried (see IMPLEMENTATION-ROADMAP.md)
 
