@@ -103,12 +103,16 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
                         var filter = ToFilterDto(savedSearch);
                         var query = PropertyRepository.ApplyFilter(db.Properties.AsNoTracking(), filter,
                             await PropertyRepository.ResolveLocationFallbackAsync(db, filter, ct), rates)
-                            .Where(p => p.CreatedAt > since);
+                            // Growth engine P1 (G3.1): the moment a listing went public, not when its draft
+                            // was created. A draft created before the cursor and published later used to be
+                            // skipped forever. ApplyFilter already limits this to listings on the market.
+                            .Where(p => (p.PublishedAt ?? p.CreatedAt) > since);
 
                         var matches = await query
                             // Oldest first: when more than the cap match, the rest are picked up by the next
                             // sweep (the cursor below only advances past what was actually handled).
-                            .OrderBy(p => p.CreatedAt)
+                            .OrderBy(p => p.PublishedAt ?? p.CreatedAt)
+                            .ThenBy(p => p.Id)
                             .Take(MaxMatchesPerSearchPerRun) // Cap per run — an unusually broad saved search should not spam the user.
                             .ToListAsync(ct);
 
@@ -129,7 +133,7 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
                         // returns tracked entities specifically so this mutation is picked up
                         // by the single SaveChangesAsync call below — no explicit Update()
                         // call needed.
-                        savedSearch.MarkMatchedUpTo(matches[^1].CreatedAt);
+                        savedSearch.MarkMatchedUpTo(matches[^1].PublishedAt ?? matches[^1].CreatedAt);
                         matchedCount += matches.Count;
                     }
 

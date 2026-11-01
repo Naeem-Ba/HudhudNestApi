@@ -454,6 +454,182 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.ToTable("VisitRequests", (string)null);
                 });
 
+            modelBuilder.Entity("HudhudNestApi.Domain.Demand.Entities.PropertySearchRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("DistrictId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("GovernorateId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ListingType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("MatchedUpTo")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<decimal?>("MaxArea")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal>("MaxBudget")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("MinArea")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal?>("MinBudget")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("MinRooms")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("NeedsBalcony")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NeedsElevator")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NeedsFurnished")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NeedsParking")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("NeighborhoodId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PropertyTypeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DistrictId");
+
+                    b.HasIndex("NeighborhoodId");
+
+                    b.HasIndex("PropertyTypeId");
+
+                    b.HasIndex("UserId", "Status");
+
+                    b.HasIndex("GovernorateId", "ListingType", "ExpiresAt")
+                        .HasDatabaseName("IX_PropertySearchRequests_Active")
+                        .HasFilter("\"Status\" = 'Active'");
+
+                    b.ToTable("PropertySearchRequests", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PropertySearchRequests_Area", "\"MinArea\" IS NULL OR \"MaxArea\" IS NULL OR \"MinArea\" <= \"MaxArea\"");
+
+                            t.HasCheckConstraint("CK_PropertySearchRequests_Budget", "\"MaxBudget\" > 0 AND (\"MinBudget\" IS NULL OR \"MinBudget\" <= \"MaxBudget\")");
+                        });
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Demand.Entities.SearchRequestMatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("OwnerNotifiedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("PropertyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ProposedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("ProposedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reasons")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("RequesterNotifiedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SearchRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PropertyId");
+
+                    b.HasIndex("ProposedByUserId", "ProposedAt")
+                        .HasFilter("\"ProposedByUserId\" IS NOT NULL");
+
+                    b.HasIndex("SearchRequestId", "PropertyId")
+                        .IsUnique();
+
+                    b.ToTable("SearchRequestMatches", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SearchRequestMatches_Score", "\"Score\" BETWEEN 0 AND 100");
+                        });
+                });
+
             modelBuilder.Entity("HudhudNestApi.Domain.Investments.Entities.InvestmentDocument", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1624,11 +1800,19 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<DateTime?>("FollowersNotifiedAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
                     b.Property<decimal?>("NewValue")
                         .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("OldCurrencyCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .IsFixedLength();
 
                     b.Property<decimal?>("OldValue")
                         .HasColumnType("decimal(18,4)");
@@ -1645,6 +1829,10 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ChangedAt")
+                        .HasDatabaseName("IX_PropertyPriceHistories_FollowersPending")
+                        .HasFilter("\"FollowersNotifiedAt\" IS NULL");
 
                     b.HasIndex("PropertyId", "ChangedAt");
 
@@ -6221,6 +6409,58 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Navigation("Property");
 
                     b.Navigation("Requester");
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Demand.Entities.PropertySearchRequest", b =>
+                {
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.District", null)
+                        .WithMany()
+                        .HasForeignKey("DistrictId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.Governorate", null)
+                        .WithMany()
+                        .HasForeignKey("GovernorateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.Neighborhood", null)
+                        .WithMany()
+                        .HasForeignKey("NeighborhoodId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.PropertyType", null)
+                        .WithMany()
+                        .HasForeignKey("PropertyTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Demand.Entities.SearchRequestMatch", b =>
+                {
+                    b.HasOne("HudhudNestApi.Domain.Listings.Entities.Property", "Property")
+                        .WithMany()
+                        .HasForeignKey("PropertyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ProposedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("HudhudNestApi.Domain.Demand.Entities.PropertySearchRequest", null)
+                        .WithMany()
+                        .HasForeignKey("SearchRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Property");
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.Investments.Entities.InvestmentDocument", b =>

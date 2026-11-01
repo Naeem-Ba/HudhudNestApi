@@ -89,6 +89,12 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IPropertyPriceHistoryRepository, PropertyPriceHistoryRepository>();
         services.AddScoped<ISavedSearchRepository, SavedSearchRepository>();
         services.AddHostedService<SavedSearchMatchHostedService>();
+        services.AddHostedService<HudhudNestApi.Infrastructure.Listings.PriceChangeFollowerNotificationHostedService>();
+        // Growth engine P2: search requests and the matcher (weights in "SearchRequests:Matching").
+        services.AddOptions<HudhudNestApi.Application.Demand.Matching.SearchRequestMatchingOptions>()
+            .Bind(configuration.GetSection(HudhudNestApi.Application.Demand.Matching.SearchRequestMatchingOptions.SectionName));
+        services.AddScoped<HudhudNestApi.Application.Demand.Interfaces.ISearchRequestRepository, HudhudNestApi.Infrastructure.Demand.SearchRequestRepository>();
+        services.AddHostedService<HudhudNestApi.Infrastructure.Demand.SearchRequestMatchHostedService>();
         services.AddScoped<IListingFeeRepository, ListingFeeRepository>();
         services.AddScoped<IAgencyRepository, AgencyRepository>();
         services.AddScoped<IAgencyInvitationRepository, AgencyInvitationRepository>();

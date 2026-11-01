@@ -22,6 +22,7 @@ using HudhudNestApi.Application.Listings.Commands.UpdateProperty;
 using HudhudNestApi.Application.Listings.Commands.PublishProperty;
 using HudhudNestApi.Application.Listings.Queries.GetPropertiesList;
 using HudhudNestApi.Application.Listings.Queries.GetPropertyById;
+using HudhudNestApi.Application.Listings.Queries.GetPropertyPriceHistory;
 using HudhudNestApi.Application.Listings.Queries.GetPropertyForManagement;
 using HudhudNestApi.Application.Listings.Queries.GetMyProperties;
 using HudhudNestApi.Application.Listings.Queries.SearchPropertiesNearby;
@@ -104,6 +105,27 @@ public sealed class PropertiesController : ControllerBase
 
         var result = await _mediator.Send(new GetPropertyByIdQuery(id), ct);
         return result is null ? NotFound() : Ok(result);
+    }
+
+    // ── GET /api/properties/{id}/price-history ───────────────────
+    /// <summary>
+    /// Public price timeline (growth engine P1), newest first. 404 when the listing is not publicly
+    /// viewable. Never says who changed the price. Cached like the detail page and evicted with it.
+    /// </summary>
+    [HttpGet("{id:guid}/price-history")]
+    [AllowAnonymous]
+    [EnableRateLimiting("public-read")]
+    [OutputCache(PolicyName = OutputCacheRegistration.PublicPropertyDetailsPolicy)]
+    [ProducesResponseType(typeof(PropertyPriceHistoryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPriceHistory(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new GetPropertyPriceHistoryQuery(id), ct);
+        if (result is null)
+            return NotFound();
+
+        SetPublicCacheControl(OutputCacheRegistration.PublicPropertyDetailsMaxAge);
+        return Ok(result);
     }
 
     private void SetPublicCacheControl(TimeSpan maxAge)

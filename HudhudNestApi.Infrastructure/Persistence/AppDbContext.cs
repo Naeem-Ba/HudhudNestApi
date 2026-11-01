@@ -102,6 +102,8 @@ public sealed class AppDbContext
     public DbSet<LocationSuggestion> LocationSuggestions => Set<LocationSuggestion>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<SavedSearch> SavedSearches => Set<SavedSearch>();
+    public DbSet<HudhudNestApi.Domain.Demand.Entities.PropertySearchRequest> PropertySearchRequests => Set<HudhudNestApi.Domain.Demand.Entities.PropertySearchRequest>();
+    public DbSet<HudhudNestApi.Domain.Demand.Entities.SearchRequestMatch> SearchRequestMatches => Set<HudhudNestApi.Domain.Demand.Entities.SearchRequestMatch>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
     public DbSet<ConsentRecord> ConsentRecords => Set<ConsentRecord>();

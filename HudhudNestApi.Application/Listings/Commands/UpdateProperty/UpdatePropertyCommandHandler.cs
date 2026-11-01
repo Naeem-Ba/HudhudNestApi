@@ -81,6 +81,7 @@ public sealed class UpdatePropertyCommandHandler
         var oldColdRent = property.ColdRent;
         var oldWarmRent = property.WarmRent;
         var oldPurchasePrice = property.PurchasePrice;
+        var oldCurrencyCode = property.CurrencyCode;
         var oldIsPublished = property.IsPublished;
 
         if (request.Title is not null)
@@ -190,6 +191,8 @@ public sealed class UpdatePropertyCommandHandler
             oldColdRent,
             oldWarmRent,
             oldPurchasePrice,
+            oldCurrencyCode,
+            oldIsPublished,
             request.RequestingUserId,
             cancellationToken);
 
@@ -302,33 +305,44 @@ public sealed class UpdatePropertyCommandHandler
     /// Queued on the same UnitOfWork as the property update itself (SaveChangesAsync
     /// is called once, after this method returns) so history and the property row
     /// are always consistent — never lands "half saved".
+    ///
+    /// Growth engine P1 (DECISIONS.md D-02): only changes the public could see count, i.e. the
+    /// listing was published before and after the edit; draft edits are not price changes. A
+    /// currency switch is a change too, even when the number stays the same, and the row keeps
+    /// the old currency so the timeline never shows the old number in the new currency.
     /// </summary>
     private async Task RecordPriceChangesAsync(
         Property property,
         decimal? oldColdRent,
         decimal? oldWarmRent,
         decimal? oldPurchasePrice,
+        string? oldCurrencyCode,
+        bool wasPublished,
         Guid changedByUserId,
         CancellationToken cancellationToken)
     {
-        if (property.ColdRent != oldColdRent)
-        {
-            await _priceHistory.AddAsync(
-                PropertyPriceHistory.Create(property.Id, nameof(property.ColdRent), oldColdRent, property.ColdRent, property.CurrencyCode, changedByUserId),
-                cancellationToken);
-        }
+        if (!wasPublished || !property.IsPublished)
+            return;
 
-        if (property.WarmRent != oldWarmRent)
-        {
-            await _priceHistory.AddAsync(
-                PropertyPriceHistory.Create(property.Id, nameof(property.WarmRent), oldWarmRent, property.WarmRent, property.CurrencyCode, changedByUserId),
-                cancellationToken);
-        }
+        var currencyChanged = !string.Equals(
+            oldCurrencyCode ?? string.Empty, property.CurrencyCode ?? string.Empty, StringComparison.OrdinalIgnoreCase);
 
-        if (property.PurchasePrice != oldPurchasePrice)
+        foreach (var (field, oldValue, newValue) in new[]
         {
+            (nameof(property.ColdRent), oldColdRent, property.ColdRent),
+            (nameof(property.WarmRent), oldWarmRent, property.WarmRent),
+            (nameof(property.PurchasePrice), oldPurchasePrice, property.PurchasePrice),
+        })
+        {
+            var valueChanged = oldValue != newValue;
+            var shownInOtherCurrency = currencyChanged && (oldValue.HasValue || newValue.HasValue);
+            if (!valueChanged && !shownInOtherCurrency)
+                continue;
+
             await _priceHistory.AddAsync(
-                PropertyPriceHistory.Create(property.Id, nameof(property.PurchasePrice), oldPurchasePrice, property.PurchasePrice, property.CurrencyCode, changedByUserId),
+                PropertyPriceHistory.Create(
+                    property.Id, field, oldValue, newValue, property.CurrencyCode ?? string.Empty, changedByUserId,
+                    oldCurrencyCode: currencyChanged ? oldCurrencyCode : null),
                 cancellationToken);
         }
     }

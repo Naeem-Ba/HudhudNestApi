@@ -4,11 +4,12 @@ namespace HudhudNestApi.Application.Listings.Interfaces;
 
 /// <summary>
 /// Append-only repository for PropertyPriceHistory rows.
-/// Kept as its own tiny interface (rather than folded into IPropertyRepository)
-/// because it has a single write-only operation and no query methods yet —
-/// growing it in place is easy once a "price timeline" read endpoint is needed.
+/// Kept as its own small interface (rather than folded into IPropertyRepository).
 /// </summary>
 public interface IPropertyPriceHistoryRepository
 {
     Task AddAsync(PropertyPriceHistory entry, CancellationToken ct = default);
+
+    /// <summary>Newest first, at most <paramref name="take"/> rows, read-only.</summary>
+    Task<IReadOnlyList<PropertyPriceHistory>> GetLatestAsync(Guid propertyId, int take, CancellationToken ct = default);
 }
