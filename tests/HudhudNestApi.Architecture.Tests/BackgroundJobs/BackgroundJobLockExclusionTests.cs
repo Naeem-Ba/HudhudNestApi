@@ -35,7 +35,7 @@ public sealed class BackgroundJobLockExclusionTests
         // hosted service is added, it must either get a key here (and a corresponding case in
         // AdvisoryLockConcurrencyTests) or be added to the excluded list with its own
         // reasoning -- not silently fall through either check.
-        Assert.Equal(16, System.Text.RegularExpressions.Regex.Matches(source, @"public const long \w+ =").Count);
+        Assert.Equal(17, System.Text.RegularExpressions.Regex.Matches(source, @"public const long \w+ =").Count);
     }
 
     [Fact(DisplayName = "SecurityAlertBackgroundService does not take a BackgroundJobLock")]
@@ -67,6 +67,7 @@ public sealed class BackgroundJobLockExclusionTests
     [InlineData("Plans", "PlanExpiryNoticeHostedService.cs")]
     [InlineData("Listings", "PriceChangeFollowerNotificationHostedService.cs")]
     [InlineData("Demand", "SearchRequestMatchHostedService.cs")]
+    [InlineData("Referrals", "ReferralQualificationHostedService.cs")]
     public void HostedService_Should_Reference_BackgroundJobLock(string relativeDir, string fileName)
     {
         var source = ReadSource(

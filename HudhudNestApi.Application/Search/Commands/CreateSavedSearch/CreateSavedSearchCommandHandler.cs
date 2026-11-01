@@ -1,4 +1,6 @@
 using MediatR;
+using HudhudNestApi.Application.Growth;
+using HudhudNestApi.Domain.Growth.Entities;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Search.Interfaces;
@@ -17,11 +19,13 @@ public sealed class CreateSavedSearchCommandHandler
 
     private readonly ISavedSearchRepository _repo;
     private readonly IUnitOfWork _uow;
+    private readonly IGrowthEventRecorder _growth;
 
-    public CreateSavedSearchCommandHandler(ISavedSearchRepository repo, IUnitOfWork uow)
+    public CreateSavedSearchCommandHandler(ISavedSearchRepository repo, IUnitOfWork uow, IGrowthEventRecorder? growth = null)
     {
         _repo = repo;
         _uow = uow;
+        _growth = growth ?? NullGrowthEventRecorder.Instance;
     }
 
     public async Task<Guid> Handle(CreateSavedSearchCommand request, CancellationToken cancellationToken)
@@ -55,6 +59,8 @@ public sealed class CreateSavedSearchCommandHandler
 
         _repo.Add(savedSearch);
         await _uow.SaveChangesAsync(cancellationToken);
+        await _growth.RecordAsync(GrowthEventNames.SavedSearchCreated, $"saved_search_created:{savedSearch.Id:N}",
+            request.UserId, subjectId: savedSearch.Id, ct: cancellationToken);
 
         return savedSearch.Id;
     }

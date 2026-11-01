@@ -79,6 +79,9 @@ public interface INotificationService
         DateTime nowUtc,
         CancellationToken ct = default);
 
+    /// <summary>Growth engine P5: tells a referrer that one invitation qualified. Never names the invited person.</summary>
+    Task NotifyReferralQualifiedAsync(Guid recipientId, Guid referralId, CancellationToken ct = default);
+
     Task NotifyListingDemandAsync(
         Guid recipientId,
         Guid propertyId,

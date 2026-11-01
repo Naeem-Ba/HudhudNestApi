@@ -630,6 +630,68 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("HudhudNestApi.Domain.Growth.Entities.GrowthEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Campaign")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<string>("Medium")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("PropertyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("SubjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("Name", "OccurredAt");
+
+                    b.HasIndex("UserId", "OccurredAt")
+                        .HasFilter("\"UserId\" IS NOT NULL");
+
+                    b.ToTable("GrowthEvents", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_GrowthEvents_Name_NotEmpty", "length(\"Name\") > 0");
+                        });
+                });
+
             modelBuilder.Entity("HudhudNestApi.Domain.Investments.Entities.InvestmentDocument", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3130,6 +3192,84 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("Status", "CreatedAt");
 
                     b.ToTable("PlanRequests", (string)null);
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Referrals.Entities.Referral", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character(8)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<Guid>("ReferredUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ReferrerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("RewardedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("RewardedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("IX_Referrals_Pending")
+                        .HasFilter("\"Status\" = 1");
+
+                    b.HasIndex("ReferredUserId")
+                        .IsUnique();
+
+                    b.HasIndex("ReferrerUserId", "Status");
+
+                    b.ToTable("Referrals", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Referrals_NotSelf", "\"ReferrerUserId\" <> \"ReferredUserId\"");
+
+                            t.HasCheckConstraint("CK_Referrals_Status", "\"Status\" BETWEEN 1 AND 4");
+                        });
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Referrals.Entities.ReferralCode", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character(8)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("ReferralCodes", (string)null);
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.Reviews.Entities.PropertyReview", b =>
@@ -6486,6 +6626,14 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Navigation("Property");
                 });
 
+            modelBuilder.Entity("HudhudNestApi.Domain.Growth.Entities.GrowthEvent", b =>
+                {
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
             modelBuilder.Entity("HudhudNestApi.Domain.Investments.Entities.InvestmentDocument", b =>
                 {
                     b.HasOne("HudhudNestApi.Domain.Investments.Entities.InvestmentProject", null)
@@ -6873,6 +7021,30 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Referrals.Entities.Referral", b =>
+                {
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ReferredUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ReferrerUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Referrals.Entities.ReferralCode", b =>
+                {
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

@@ -9,6 +9,8 @@ using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Domain.Demand.Entities;
 using HudhudNestApi.Domain.Enums;
 using MediatR;
+using HudhudNestApi.Application.Growth;
+using HudhudNestApi.Domain.Growth.Entities;
 using Microsoft.Extensions.Options;
 
 namespace HudhudNestApi.Application.Demand.Commands;
@@ -108,6 +110,7 @@ public sealed class SearchRequestCommandHandlers :
     private readonly IUnitOfWork _uow;
     private readonly SearchRequestMatchingOptions _options;
     private readonly TimeProvider _clock;
+    private readonly IGrowthEventRecorder _growth;
 
     public SearchRequestCommandHandlers(
         ISearchRequestRepository repo,
@@ -115,8 +118,10 @@ public sealed class SearchRequestCommandHandlers :
         INotificationService notifications,
         IUnitOfWork uow,
         IOptions<SearchRequestMatchingOptions> options,
-        TimeProvider clock)
+        TimeProvider clock,
+        IGrowthEventRecorder? growth = null)
     {
+        _growth = growth ?? NullGrowthEventRecorder.Instance;
         _repo = repo;
         _ownership = ownership;
         _notifications = notifications;
@@ -140,6 +145,8 @@ public sealed class SearchRequestCommandHandlers :
 
         _repo.Add(request);
         await _uow.SaveChangesAsync(ct);
+        await _growth.RecordAsync(GrowthEventNames.SearchRequestCreated, $"search_request_created:{request.Id:N}",
+            c.UserId, subjectId: request.Id, ct: ct);
 
         // Matching runs in the background sweep, never inside this request (brief §27).
         return SearchRequestDto.From(request, 0);
@@ -231,6 +238,8 @@ public sealed class SearchRequestCommandHandlers :
         var alreadyTold = match.RequesterNotifiedAt is not null;
         match.MarkRequesterNotified(now);
         await _uow.SaveChangesAsync(ct);
+        await _growth.RecordAsync(GrowthEventNames.ListingProposed, $"listing_proposed:{request.Id:N}:{c.PropertyId:N}",
+            c.UserId, c.PropertyId, request.Id, ct: ct);
 
         if (!alreadyTold)
         {

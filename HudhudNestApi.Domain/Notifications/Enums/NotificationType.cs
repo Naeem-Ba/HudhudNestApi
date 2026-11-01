@@ -255,4 +255,7 @@ public enum NotificationType
 
     /// <summary>Growth engine P3: daily summary of new listings for a saved search set to "daily".</summary>
     SavedSearchDigest = 68,
+
+    /// <summary>Growth engine P5: someone the recipient invited did the qualifying activity.</summary>
+    ReferralQualified = 69,
 }

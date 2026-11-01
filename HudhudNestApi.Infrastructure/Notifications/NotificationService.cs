@@ -228,6 +228,21 @@ public sealed class NotificationService : INotificationService
             ct);
     }
 
+    public async Task NotifyReferralQualifiedAsync(Guid recipientId, Guid referralId, CancellationToken ct = default)
+    {
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(referralId, "Referral id is required.", nameof(referralId));
+
+        var lang = await LanguageOfAsync(recipientId, ct);
+
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.ReferralQualified,
+                Say(lang, "msg.referral_qualified"),
+                relatedEntityId: referralId,
+                dedupeKey: $"rq:{referralId:N}"),
+            ct);
+    }
+
     public async Task NotifyListingDemandAsync(
         Guid recipientId,
         Guid propertyId,

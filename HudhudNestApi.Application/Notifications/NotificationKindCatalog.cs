@@ -56,6 +56,8 @@ public static class NotificationKindCatalog
         [NotificationType.SearchRequestProposal] = new(SavedSearch, NotificationPriority.Normal, "property", false),
         [NotificationType.ListingDemandMatch] = new(Listings, NotificationPriority.Low, "listing-demand", false),
         [NotificationType.SavedSearchDigest] = new(SavedSearch, NotificationPriority.Normal, "saved-searches", false),
+        // Account holds only mandatory kinds; this one is rare (capped per month) and about the user's own invitations.
+        [NotificationType.ReferralQualified] = new(Account, NotificationPriority.Normal, "referrals", true),
 
         [NotificationType.VisitRequested] = new(Visits, NotificationPriority.Normal, "visit", false),
         [NotificationType.VisitConfirmed] = new(Visits, NotificationPriority.Normal, "visit", false),

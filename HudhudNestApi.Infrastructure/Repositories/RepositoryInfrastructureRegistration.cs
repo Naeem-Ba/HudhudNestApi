@@ -95,6 +95,13 @@ internal static class RepositoryInfrastructureRegistration
             .Bind(configuration.GetSection(HudhudNestApi.Application.Demand.Matching.SearchRequestMatchingOptions.SectionName));
         services.AddScoped<HudhudNestApi.Application.Demand.Interfaces.ISearchRequestRepository, HudhudNestApi.Infrastructure.Demand.SearchRequestRepository>();
         services.AddHostedService<HudhudNestApi.Infrastructure.Demand.SearchRequestMatchHostedService>();
+        // Growth engine P4: append-only growth event log.
+        services.AddScoped<HudhudNestApi.Application.Growth.IGrowthEventRecorder, HudhudNestApi.Infrastructure.Growth.GrowthEventRecorder>();
+        // Growth engine P5: referrals (rules in "Referrals").
+        services.AddOptions<HudhudNestApi.Application.Referrals.ReferralOptions>()
+            .Bind(configuration.GetSection(HudhudNestApi.Application.Referrals.ReferralOptions.SectionName));
+        services.AddScoped<HudhudNestApi.Application.Referrals.IReferralStore, HudhudNestApi.Infrastructure.Referrals.ReferralStore>();
+        services.AddHostedService<HudhudNestApi.Infrastructure.Referrals.ReferralQualificationHostedService>();
         services.AddScoped<IListingFeeRepository, ListingFeeRepository>();
         services.AddScoped<IAgencyRepository, AgencyRepository>();
         services.AddScoped<IAgencyInvitationRepository, AgencyInvitationRepository>();

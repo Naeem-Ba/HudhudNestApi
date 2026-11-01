@@ -48,3 +48,24 @@ A search set to "daily" gets at most one notification per 24 hours with the numb
 ## D-09 Delivery log as counters, not a table (default, 2026-11-01)
 Each saved search keeps `LastNotifiedAt` and `NotifiedCount`. The notifications themselves are the detailed
 log (already stored, deduplicated and visible in the inbox). A separate delivery table would duplicate them.
+
+## D-10 One growth event log, written after the action is saved (default, 2026-11-01)
+`GrowthEvents` is append-only with stable snake_case names (`GrowthEventNames`), a unique idempotency key
+per fact (for example `favorite_added:{user}:{listing}`, so saving, removing and saving again counts once)
+and no personal data: internal ids, UTM-style tags (lower case, letters, digits, `-_.` only, others dropped)
+and the trace id. The recorder runs after the action is committed and never throws, so analytics cannot fail
+or roll back a user action. Acquisition uses the first UTM touch within 30 days (the app's existing
+attribution store). Events written now: user_registered, listing_published (first time only),
+search_request_created, saved_search_created, favorite_added, contact_started, listing_proposed.
+Google/Apple sign-ups are not yet recorded as user_registered (the dashboard counts accounts from
+UserAccounts instead); to add when the social login is touched next.
+
+## D-11 Referrals qualify on real activity; rewards stay manual until decided (default, 2026-11-01)
+An invitation counts only when the invited account (a) still exists and is not banned, (b) confirmed a phone
+number, and (c) has a listing that has stayed on the market at least 7 days. Self-referral is impossible
+(new account), one referrer per account, a 90-day window, and at most 10 counted invitations per referrer per
+30 days (above that: rejected `referrer_cap`). All values live in `Referrals` settings. **No reward is granted
+automatically**: an admin records "reward given" on a counted invitation (audited). Reason: any automatic
+reward is a commercial promise and an incentive to game; the owner decides the reward (free featured days,
+plan month, cash) and its text (`Referrals:RewardDescriptionAr/En/De`, shown on the invite page). Until then
+the invite page says no reward is announced. The referrer never sees who signed up, only dates and statuses.

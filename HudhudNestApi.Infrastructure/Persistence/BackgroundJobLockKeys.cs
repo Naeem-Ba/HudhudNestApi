@@ -52,4 +52,6 @@ public static class BackgroundJobLockKeys
     public const long PriceChangeFollowers = 20261101_1015;
 
     public const long SearchRequestMatch = 20261101_1016;
+
+    public const long ReferralQualification = 20261101_1017;
 }

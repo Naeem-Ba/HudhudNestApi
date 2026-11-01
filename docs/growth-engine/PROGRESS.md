@@ -6,8 +6,9 @@
 - Last completed tasks: P1 (price history + saved-search fix), P2 (search requests + matching engine v1),
   P3 (saved-search alerts v2), API and app, tested locally, one PR per repository on branch
   `claude/project-thread-1oghdc` (later packages are added to the same PRs).
-- In progress: P4 growth event log.
-- Next task: P5 referral system.
+- Also built: P4 (growth event log + UTM on sign-up) and P5 (referrals), same branch.
+- In progress: none.
+- Next task: P6 area price statistics + statistical estimator.
 
 ## P1 — Price history and follower alerts
 
@@ -98,6 +99,31 @@ Tests run locally with P1 + P2 + P3 (GitHub Actions not used):
 - App: unit 1447/1447, `check:i18n` parity (2666 keys), `typecheck:strict` clean, production `ng build` OK.
 - One earlier run had a failure in `ClosedDealLifecyclePostgresTests` (existing test, capped batch ordered by
   `UpdatedAt` on a shared database); it passed in the clean run. Flaky, not caused by these packages.
+
+## P4 — Growth event log
+
+API: `GrowthEvents` table (append-only, unique idempotency key, no personal data, `UserId` FK set null),
+`IGrowthEventRecorder` (one `INSERT ... ON CONFLICT DO NOTHING`, never throws, called after the save).
+Writers: register (with first-touch UTM tags), first listing publication (MediatR handler on
+`PropertyPublishedEvent`), search request created, saved search created, favorite added, first contact,
+listing proposed, referral qualified. Decision D-10. Migration `AddGrowthEvents` (new table).
+App: the existing attribution store sends the first UTM touch with sign-up.
+
+## P5 — Referral system
+
+API: `ReferralCodes` + `Referrals` tables, `GET /api/referrals/me` (own code, counts and statuses only),
+`GET /api/admin/referrals`, `POST /api/admin/referrals/{id}/reject|rewarded` (admin, audited), code accepted at
+sign-up (`referralCode`, unknown codes ignored), hourly `ReferralQualificationHostedService` (advisory lock
+`ReferralQualification`), notification 69 `ReferralQualified`. Decision D-11. Migration `AddReferrals`.
+App: `?ref=` captured for 30 days and sent with sign-up, "Invite friends" page `/referrals` (code, link, copy,
+share, conditions, statuses), admin page `/admin/referrals`, menu links, i18n ar/en/de.
+
+Tests (local): API Application 1907, Architecture 208, Infrastructure 615, Auth 447, Integration see the PR;
+app unit 1456/1456, i18n parity (2703 keys), strict typecheck clean.
+
+Fixed on the way: `ClosedDealLifecyclePostgresTests` was flaky on the shared test database (the sweep takes
+the 20 oldest candidates; leftovers from other classes could keep the test's row out of reach). The test now
+runs the sweep until its row is reached; assertions unchanged.
 
 ## Blockers carried (see IMPLEMENTATION-ROADMAP.md)
 
