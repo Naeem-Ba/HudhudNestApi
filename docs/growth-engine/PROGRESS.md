@@ -1,14 +1,12 @@
 # Growth Engine — Progress
 
-## Current position (2026-11-01)
+## Current position (2026-11-01, end of the session)
 
-- Last completed phase: Phase 0 (audit) and planning documents.
-- Last completed tasks: P1 (price history + saved-search fix), P2 (search requests + matching engine v1),
-  P3 (saved-search alerts v2), API and app, tested locally, one PR per repository on branch
-  `claude/project-thread-1oghdc` (later packages are added to the same PRs).
-- Also built: P4 (growth event log + UTM on sign-up) and P5 (referrals), same branch.
-- In progress: none.
-- Next task: P6 area price statistics + statistical estimator.
+- Built and tested locally: P1, P2, P3, P4, P5, P6, P7 (tracking part), P8, P10, P11, API and app, on branch
+  `claude/project-thread-1oghdc` in both repositories (API PR #378, app PR #193, both drafts).
+- Not built, waiting on the owner: P7 automatic campaign grants (D-13), P9 verification (private document
+  storage, D-03), P12 social publishing (platform accounts), P13 AI listing assistant (provider + budget).
+- Nothing is deployed. Next step is the owner's review and the manual rollout in FINAL-REPORT.md.
 
 ## P1 — Price history and follower alerts
 
@@ -124,6 +122,42 @@ app unit 1456/1456, i18n parity (2703 keys), strict typecheck clean.
 Fixed on the way: `ClosedDealLifecyclePostgresTests` was flaky on the shared test database (the sweep takes
 the 20 oldest candidates; leftovers from other classes could keep the test's row out of reach). The test now
 runs the sweep until its row is reached; assertions unchanged.
+
+## P6 — Area price statistics + estimator
+
+API: `Domain/Pricing/AreaPriceStat.cs`, `Application/Pricing/AreaPriceStatistics.cs` (pure statistics),
+`Application/Pricing/PriceEstimates.cs` (queries, level fallback), `Infrastructure/Pricing/AreaPriceStatsHostedService.cs`
+(rebuild every 6 h, lock `AreaPriceStats`), `AreaPriceStatsReader.cs`, `PriceEstimatesController` (anonymous,
+`public-read`, own cache policy `price-estimates` varying by every query key). Migration `AddAreaPriceStats`.
+Method: PRICE-METHODOLOGY.md, decision D-12. App: `/price-estimate` page, link from `/valuation` and the mobile menu.
+Tests: unit (quantiles, outliers, duplicates, size range, one-owner rule, confidence, fallback, currency), integration
+`AreaPriceEstimateTests` (rebuild + endpoints + drafts and outliers excluded), app spec.
+
+## P7 + P10 — Campaign tracking and growth dashboard
+
+API: `Application/Growth/GrowthDashboard.cs`, `Infrastructure/Growth/GrowthDashboardReader.cs`,
+`UserActivityRollupHostedService.cs` (hourly, lock `UserActivityRollup`, one `user_active` event per account per
+day from refresh tokens), `AdminGrowthController` (`GET /api/admin/growth/overview`, admins only). No migration.
+Definitions: GROWTH-METRICS.md, decision D-13. App: `/admin/growth` (tiles, funnel, retention, campaigns, daily
+table, UTM link builder). Invite links now use the public site origin (bug found: inside the native app they
+pointed at `capacitor://localhost`). Tests: integration `GrowthDashboardTests` (rollup idempotent, funnel,
+campaign row, retention numbers, admin-only, 422), unit window tests, app spec.
+
+## P8 — Map + location privacy
+
+API: `Domain/Listings/LocationPrivacy.cs`, `Property.HideExactLocation`, `PropertyMapper.ToDto(..., revealExactLocation)`
+(only `/manage` and my-listings reveal), geo-search post-processing (approximate point, no street, distance
+rounded to 500 m), `Application/Listings/Map/PropertyMap.cs`, `Infrastructure/Listings/PropertyMapReader.cs`,
+`GET /api/properties/map`. Migration `AddListingLocationPrivacy` (default false: nothing changes until an owner
+ticks the box). Decision D-14. App: `/map` (Leaflet, server clusters, circles for hidden spots), checkbox in the
+listing form, note on the detail page, link from the list. Tests: unit (cell snapping, mapper public/owner),
+integration `PropertyMapTests` (points, clusters, detail, near-me, manage), app specs.
+
+## P11 — Expat journey
+
+App only: `/expats` with three goals, steps to existing pages, and service categories filtered by live
+availability (`/api/ServiceOfferings/categories/availability`, offeringCount > 0). `/services?category=` opens a
+category. Tests: app spec (goal steps, only available categories, nothing offered when availability fails).
 
 ## Blockers carried (see IMPLEMENTATION-ROADMAP.md)
 

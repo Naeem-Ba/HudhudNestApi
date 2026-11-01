@@ -42,3 +42,14 @@ App: `npm ci`, then karma with a throw-away config that launches ChromeHeadless 
 
 API PR merge → Migrator against Production (only if the package has a migration) → manual Render deploy →
 app PR merge → PR `main → release` → manual Netlify Publish. App before API is never safe.
+
+## Added by the growth engine (2026-11-01)
+
+- New background jobs and lock keys: `PriceChangeFollowers`, `SearchRequestMatch`, `ReferralQualification`,
+  `AreaPriceStats`, `UserActivityRollup` (19 keys in total now).
+- Growth events: add a name to `GrowthEventNames` (never rename one), record with `IGrowthEventRecorder` after
+  the action is saved; it never throws. Dashboard definitions live in GROWTH-METRICS.md: change both together.
+- Public location: always go through `PropertyMapper.ToDto(..., revealExactLocation)`; only owner/admin views
+  pass `true`. Any new public output of coordinates must apply `LocationPrivacy` when `HideExactLocation` is set.
+- Price statistics: thresholds in the `AreaPrices` settings section; methodology in PRICE-METHODOLOGY.md.
+- Final status, rollout steps and open decisions: FINAL-REPORT.md.
