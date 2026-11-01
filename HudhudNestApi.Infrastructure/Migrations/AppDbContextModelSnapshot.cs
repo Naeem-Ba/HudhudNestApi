@@ -3194,6 +3194,71 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.ToTable("PlanRequests", (string)null);
                 });
 
+            modelBuilder.Entity("HudhudNestApi.Domain.Pricing.AreaPriceStat", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("ComputedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Confidence")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("DistrictId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ExcludedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GovernorateId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("MedianPerSqmUsd")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("NewestListingAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("OldestListingAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<decimal>("P25PerSqmUsd")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("P75PerSqmUsd")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("PropertyTypeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SampleCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DistrictId");
+
+                    b.HasIndex("PropertyTypeId");
+
+                    b.HasIndex("GovernorateId", "Kind");
+
+                    b.ToTable("AreaPriceStats", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AreaPriceStats_Kind", "\"Kind\" IN (1, 2)");
+
+                            t.HasCheckConstraint("CK_AreaPriceStats_Quartiles", "\"P25PerSqmUsd\" <= \"MedianPerSqmUsd\" AND \"MedianPerSqmUsd\" <= \"P75PerSqmUsd\"");
+
+                            t.HasCheckConstraint("CK_AreaPriceStats_Sample", "\"SampleCount\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("HudhudNestApi.Domain.Referrals.Entities.Referral", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7022,6 +7087,25 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Pricing.AreaPriceStat", b =>
+                {
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.District", null)
+                        .WithMany()
+                        .HasForeignKey("DistrictId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.Governorate", null)
+                        .WithMany()
+                        .HasForeignKey("GovernorateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.PropertyType", null)
+                        .WithMany()
+                        .HasForeignKey("PropertyTypeId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.Referrals.Entities.Referral", b =>

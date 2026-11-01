@@ -54,4 +54,8 @@ public static class BackgroundJobLockKeys
     public const long SearchRequestMatch = 20261101_1016;
 
     public const long ReferralQualification = 20261101_1017;
+
+    public const long AreaPriceStats = 20261101_1018;
+
+    public const long UserActivityRollup = 20261101_1019;
 }

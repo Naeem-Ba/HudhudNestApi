@@ -6,6 +6,7 @@ namespace HudhudNestApi.Configuration;
 public static class OutputCacheRegistration
 {
     public const string MarketInsightsPolicy = "market-insights";
+    public const string PriceEstimatesPolicy = "price-estimates";
     public const string PublicPropertyListPolicy = "public-property-list";
     public const string PublicPropertyDetailsPolicy = "public-property-details";
     public const string PublicPropertyGeoSearchPolicy = "public-property-geo-search";
@@ -169,6 +170,15 @@ public static class OutputCacheRegistration
             policy => policy
                 .Expire(TimeSpan.FromMinutes(5))
                 .SetVaryByQuery("countryCode")
+                .Tag(AnalyticsTag));
+
+        // Area price statistics are rebuilt every few hours, so a short cache is safe. Every
+        // query key is part of the cache key: one estimate must never be served for another.
+        options.AddPolicy(
+            PriceEstimatesPolicy,
+            policy => policy
+                .Expire(TimeSpan.FromMinutes(10))
+                .SetVaryByQuery("kind", "governorateId", "districtId", "propertyTypeId", "area", "currency")
                 .Tag(AnalyticsTag));
 
         options.AddPolicy(

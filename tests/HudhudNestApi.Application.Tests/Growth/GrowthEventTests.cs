@@ -41,3 +41,25 @@ public sealed class GrowthEventTests
         });
     }
 }
+
+public sealed class GrowthOverviewWindowTests
+{
+    private static readonly DateTime Now = new(2026, 11, 1, 15, 30, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public void Default_is_the_last_30_days_up_to_the_end_of_today()
+    {
+        var (from, to) = HudhudNestApi.Application.Growth.GetGrowthOverviewQueryHandler.Window(null, null, Now);
+        Assert.Equal(new DateTime(2026, 11, 2, 0, 0, 0, DateTimeKind.Utc), to);
+        Assert.Equal(new DateTime(2026, 10, 3, 0, 0, 0, DateTimeKind.Utc), from);
+    }
+
+    [Fact]
+    public void The_future_and_overlong_windows_are_cut()
+    {
+        var (from, to) = HudhudNestApi.Application.Growth.GetGrowthOverviewQueryHandler.Window(
+            new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc), Now);
+        Assert.Equal(Now.Date.AddDays(1), to);
+        Assert.Equal(186, (to - from).TotalDays);
+    }
+}

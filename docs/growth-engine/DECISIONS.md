@@ -69,3 +69,20 @@ automatically**: an admin records "reward given" on a counted invitation (audite
 reward is a commercial promise and an incentive to game; the owner decides the reward (free featured days,
 plan month, cash) and its text (`Referrals:RewardDescriptionAr/En/De`, shown on the invite page). Until then
 the invite page says no reward is announced. The referrer never sees who signed up, only dates and statuses.
+
+## D-12 Price estimates are asking-price statistics, never a valuation (default, 2026-11-01)
+Method in `PRICE-METHODOLOGY.md`. Defaults: at least 8 listings from at least 3 owners after removing
+duplicates and Tukey outliers; range = P25..P75 per m² × area; confidence by sample size, lowered for a wide
+spread; rebuilt every 6 hours by a background job; public and anonymous because it holds no personal data.
+The old `GET /api/analytics/market` (G15.1: averages across mixed currencies, no minimum sample, 0 for "no
+data") is not used by the app and is left unchanged so no outside caller breaks; it is deprecated in favor of
+`/api/price-estimates/areas`. Remove it after a release if nothing calls it.
+
+## D-13 Campaigns are measured, not rewarded; no automatic campaign grants (default, 2026-11-01)
+P7 delivers campaign *tracking*: UTM links built in the admin page, sign-ups per source/medium/campaign and
+what those accounts did in their first 30 days, inside the growth dashboard (P10). It does **not** add an
+automatic grant ("first 100 agencies get a free month") on top of `Offer`: like referral rewards (D-11), that
+is a commercial promise and needs the owner's decision on what is granted, to whom, and how it is honored
+(there is no billing yet; `Offer` is a lead-capture promise handled by hand). The existing admin "Offers" tab
+keeps covering limited-seat offers. Retention uses a new `user_active` event per account per day, written by
+a background job from refresh tokens, so the sign-in path is unchanged. Definitions: `GROWTH-METRICS.md`.

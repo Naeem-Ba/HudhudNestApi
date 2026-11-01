@@ -98,10 +98,13 @@ public static class GrowthEventNames
     public const string ListingProposed = "listing_proposed";
     public const string ReferralQualified = "referral_qualified";
 
+    /// <summary>One row per account per UTC day with a sign-in or a session refresh (written by a background rollup).</summary>
+    public const string UserActive = "user_active";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         UserRegistered, ListingPublished, SearchRequestCreated, SavedSearchCreated,
-        FavoriteAdded, ContactStarted, ListingProposed, ReferralQualified,
+        FavoriteAdded, ContactStarted, ListingProposed, ReferralQualified, UserActive,
     };
 
     public static bool IsKnown(string? name) => name is not null && All.Contains(name);
