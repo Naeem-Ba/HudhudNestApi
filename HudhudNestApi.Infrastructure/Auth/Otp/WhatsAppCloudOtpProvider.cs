@@ -29,6 +29,13 @@ public sealed class WhatsAppCloudOptions
     /// <summary>Language code the template was approved in, for example "ar" or "en_US".</summary>
     public string TemplateLanguage { get; init; } = "ar";
 
+    /// <summary>
+    /// Optional: the approved template language per site language, for example <c>{ "en": "en_US", "de": "de" }</c>.
+    /// A language without an entry (or an unknown one) uses <see cref="TemplateLanguage"/>, exactly as before.
+    /// The template must exist and be approved in that language in the Meta account.
+    /// </summary>
+    public Dictionary<string, string> TemplateLanguages { get; init; } = new();
+
     public int TimeoutSeconds { get; init; } = 10;
 }
 
@@ -48,10 +55,12 @@ public sealed class WhatsAppCloudOtpProvider : IOtpProvider
     private readonly WhatsAppCloudOptions _options;
     private readonly TimeSpan _timeout;
     private readonly ILogger<WhatsAppCloudOtpProvider> _logger;
+    private readonly IOtpMessageLanguage? _language;
 
     public WhatsAppCloudOtpProvider(HttpClient httpClient, IOptions<WhatsAppCloudOptions> options,
-        ILogger<WhatsAppCloudOtpProvider> logger)
+        ILogger<WhatsAppCloudOtpProvider> logger, IOtpMessageLanguage? language = null)
     {
+        _language = language;
         _httpClient = httpClient;
         _options = options.Value;
         _timeout = TimeSpan.FromSeconds(Math.Clamp(_options.TimeoutSeconds, 1, 60));
@@ -59,6 +68,13 @@ public sealed class WhatsAppCloudOtpProvider : IOtpProvider
     }
 
     public OtpChannel Channel => OtpChannel.WhatsApp;
+
+    public string TemplateLanguageFor(string? siteLanguage) =>
+        siteLanguage is not null
+            && _options.TemplateLanguages.TryGetValue(siteLanguage, out var configured)
+            && !string.IsNullOrWhiteSpace(configured)
+                ? configured.Trim()
+                : _options.TemplateLanguage;
 
     public async Task<OtpSendResult> SendAsync(string phoneNumber, string code, CancellationToken ct)
     {
@@ -71,7 +87,7 @@ public sealed class WhatsAppCloudOtpProvider : IOtpProvider
             template = new
             {
                 name = _options.TemplateName,
-                language = new { code = _options.TemplateLanguage },
+                language = new { code = TemplateLanguageFor(_language?.Value) },
                 components = new object[]
                 {
                     new { type = "body", parameters = new[] { new { type = "text", text = code } } },

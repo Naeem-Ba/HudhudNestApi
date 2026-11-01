@@ -1,5 +1,4 @@
-﻿using System.Net;
-using FluentValidation;
+﻿using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Auth.Interfaces;
@@ -13,7 +12,8 @@ namespace HudhudNestApi.Application.Auth.Commands.ForgotPassword;
 public sealed record ForgotPasswordCommand(
     string Email,
     string? RequestScheme,
-    string? RequestHost)
+    string? RequestHost,
+    string? Language = null)
     : IRequest<ForgotPasswordResult>;
 
 public sealed record ForgotPasswordResult
@@ -53,6 +53,8 @@ public sealed class ForgotPasswordCommandHandler
 
     private readonly IPasswordResetUrlBuilder _urlBuilder;
 
+    private readonly ISecurityAlertLanguageResolver? _languageResolver;
+
     private readonly ILogger<ForgotPasswordCommandHandler>
         _logger;
 
@@ -61,8 +63,10 @@ public sealed class ForgotPasswordCommandHandler
         IUserAccountRepository userAccounts,
         IApplicationEmailSender emailSender,
         IPasswordResetUrlBuilder urlBuilder,
-        ILogger<ForgotPasswordCommandHandler> logger)
+        ILogger<ForgotPasswordCommandHandler> logger,
+        ISecurityAlertLanguageResolver? languageResolver = null)
     {
+        _languageResolver = languageResolver;
         _identity = identity;
         _userAccounts = userAccounts;
         _emailSender = emailSender;
@@ -115,15 +119,26 @@ public sealed class ForgotPasswordCommandHandler
             var displayName =
                 BuildDisplayName(account);
 
-            var emailBody =
-                BuildPasswordResetEmailBody(
-                    displayName,
-                    resetUrl);
+            // The language the account holder chose wins (anyone can request a reset for someone
+            // else's address, and the mail goes to the holder). Otherwise the site language the
+            // request came from; otherwise the original English wording.
+            var accountLanguage =
+                _languageResolver is null
+                    ? null
+                    : await _languageResolver
+                        .GetLanguageByEmailAsync(identity.Email, ct);
+
+            var language =
+                PasswordResetEmailTemplate.Resolve(
+                    accountLanguage ?? request.Language);
 
             await _emailSender.SendEmailAsync(
                 identity.Email,
-                "Reset your password",
-                emailBody);
+                PasswordResetEmailTemplate.SubjectFor(language),
+                PasswordResetEmailTemplate.BuildHtml(
+                    language,
+                    displayName,
+                    resetUrl));
 
             _logger.LogInformation(
                 "Password reset email sent for identity {IdentityId}.",
@@ -140,12 +155,12 @@ public sealed class ForgotPasswordCommandHandler
         return ForgotPasswordResult.Ok();
     }
 
-    private static string BuildDisplayName(
+    private static string? BuildDisplayName(
         UserAccount? account)
     {
         if (account is null)
         {
-            return "there";
+            return null;
         }
 
         if (!string.IsNullOrWhiteSpace(
@@ -159,24 +174,8 @@ public sealed class ForgotPasswordCommandHandler
                 .Trim();
 
         return string.IsNullOrWhiteSpace(name)
-            ? "there"
+            ? null
             : name;
-    }
-
-    private static string BuildPasswordResetEmailBody(
-        string displayName,
-        string resetUrl)
-    {
-        return $"""
-            <html>
-            <body style="font-family:Arial,sans-serif;line-height:1.6">
-                <p>Hello {WebUtility.HtmlEncode(displayName)},</p>
-                <p>We received a request to reset your HudhudNestApi password.</p>
-                <p><a href="{WebUtility.HtmlEncode(resetUrl)}">Reset your password</a></p>
-                <p>If you did not request this, you can safely ignore this email.</p>
-            </body>
-            </html>
-            """;
     }
 
     private static string NormalizeEmail(

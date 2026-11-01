@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using HudhudNestApi.Application.Auth.Interfaces;
+using HudhudNestApi.Application.Auth.Phone;
 using HudhudNestApi.Application.Common.Security;
 
 namespace HudhudNestApi.Infrastructure.Auth.Services;
@@ -22,9 +23,12 @@ public sealed class D7SmsService : ISmsService
     private readonly string _originator;
     private readonly TimeSpan _timeout;
     private readonly ILogger<D7SmsService> _logger;
+    private readonly IOtpMessageLanguage? _language;
 
-    public D7SmsService(HttpClient httpClient, IOptions<SmsProviderOptions> options, ILogger<D7SmsService> logger)
+    public D7SmsService(HttpClient httpClient, IOptions<SmsProviderOptions> options, ILogger<D7SmsService> logger,
+        IOtpMessageLanguage? language = null)
     {
+        _language = language;
         var value = options.Value;
         _httpClient = httpClient;
         _apiUrl = value.ResolveApiUrl();
@@ -44,7 +48,7 @@ public sealed class D7SmsService : ISmsService
                 {
                     originator = _originator,
                     recipients = new[] { phoneNumber },
-                    content = $"رمز التحقق: {otp} — صالح 5 دقائق",
+                    content = OtpMessageText.Sms(_language?.Value, otp),
                     msg_type = "text",
                     data_coding = "unicode"
                 }
