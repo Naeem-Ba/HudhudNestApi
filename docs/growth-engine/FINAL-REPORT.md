@@ -1,8 +1,10 @@
 # Growth Engine — Final report (2026-11-01)
 
 **Status: built and tested locally, not deployed.** Everything is on branch `claude/project-thread-1oghdc`:
-API PR #378 and app PR #193 (both drafts). GitHub Actions is still blocked by the budget, so CI did not run;
-all results below come from local runs in the session (real PostgreSQL 16 + PostGIS, Redis, headless Chromium).
+API PR #378 and app PR #193 (both drafts). GitHub Actions ran on the PRs this time: API CI and the Production
+Gate passed on the P1–P5 commit; the later commits were tested locally (real PostgreSQL 16 + PostGIS, Redis,
+headless Chromium) and their CI result is on the PRs. App CI caught one gap (new signed-in pages missing from
+the search-engine block list), fixed in the app PR.
 
 ## What was built
 
@@ -25,7 +27,7 @@ all results below come from local runs in the session (real PostgreSQL 16 + Post
 ## Tests (local)
 
 - API: build Release with 0 warnings; Application 1933/1933; Architecture 210/210; Infrastructure 615/615;
-  Auth 447/447; full Integration suite: see the PR description (last full run before P6–P8: 992/992); migration
+  Auth 447/447; full Integration suite 999/999 (P1–P8, fresh database, 15 min); migration
   risk gate passed for 93 migrations; `dotnet format` clean.
 - App: unit 1470/1470; i18n parity ar/en/de (2803 keys); `typecheck:strict` clean; frontend audit passed;
   production build: see the PR description.
