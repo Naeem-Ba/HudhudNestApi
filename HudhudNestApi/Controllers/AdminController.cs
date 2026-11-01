@@ -42,6 +42,20 @@ public sealed class AdminController : ControllerBase
         [FromQuery] string? accountStatus = null,
         CancellationToken ct = default)
     {
+        // Phase 14 (D10): an unknown filter value used to be ignored and returned every user.
+        if (!string.IsNullOrWhiteSpace(role)
+            && !RoleNames.All.Any(r => string.Equals(r, role.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            return BadRequest(new { message = "The requested role is invalid.", allowedRoles = RoleNames.All });
+        }
+
+        if (!string.IsNullOrWhiteSpace(accountStatus)
+            && !string.Equals(accountStatus.Trim(), "Active", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(accountStatus.Trim(), "Disabled", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { message = "accountStatus must be Active or Disabled." });
+        }
+
         var result = await _admin.GetUsersWithPaginationAsync(
             page,
             pageSize,
@@ -362,10 +376,35 @@ public sealed class AdminController : ControllerBase
         if (result.NotFound)
             return NotFound(new { message = result.Message });
 
+        if (result.Conflict)
+            return Conflict(new { message = result.Message });
+
         if (!result.Succeeded)
             return BadRequest(new { message = result.Message, errors = result.Errors });
 
         return NoContent();
+    }
+
+    // POST /api/admin/users/{id}/enable  { reason }   (phase 14, D03: undo of DELETE /users/{id})
+    [HttpPost("users/{id:guid}/enable")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> EnableUser(
+        Guid id,
+        [FromBody] EnableUserRequest request,
+        CancellationToken ct)
+    {
+        var actorId = GetCurrentUserId();
+        if (actorId is null)
+            return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(request.Reason))
+            return BadRequest(new { message = "A reason is required to re-enable an account." });
+
+        var result = await _admin.EnableUserAsync(id, request.Reason.Trim(), actorId.Value, GetClientIp(), ct);
+        return ToActionResult(result);
     }
 
     // ── Stage 8 — Valuation module Admin Dashboard ──────────────────────
@@ -483,6 +522,9 @@ public sealed record ActivateSubscriptionRequest(string Tier, int DurationDays, 
 public sealed record ExtendSubscriptionRequest(int Days, [AdminReason] string? Reason);
 
 public sealed record CancelSubscriptionRequest([AdminReason] string? Reason);
+
+/// <summary>The reason is required: re-enabling an account is as consequential as disabling it.</summary>
+public sealed record EnableUserRequest([AdminReason] string Reason);
 
 public sealed record FeatureListingRequest(int? Days, [AdminReason] string? Reason);
 

@@ -124,29 +124,66 @@ public sealed class LocationSuggestionService : ILocationSuggestionService
         )).ToList();
     }
 
+    private const int MaxReviewNotesLength = 500;
+
     public async Task<int> ApproveAsync(Guid suggestionId, Guid reviewedByUserId, string? notes, CancellationToken ct = default)
     {
+        // Phase 14 (D04): everything that can be refused is checked before any lookup row exists, and
+        // the row, the backfill and the decision commit together or not at all. A per-suggestion advisory
+        // lock makes parallel approvals of the same suggestion take turns, so only one creates anything.
+        notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        if (notes is not null && (notes.Length > MaxReviewNotesLength || notes.Contains('\0')))
+            throw new DomainException($"Review notes must be at most {MaxReviewNotesLength} characters.");
+
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+
+        if (_db.Database.IsNpgsql())
+        {
+            await _db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({"locsug:" + suggestionId:N}, 0))", ct);
+        }
+
         var suggestion = await _db.Set<LocationSuggestion>().FirstOrDefaultAsync(s => s.Id == suggestionId, ct)
             ?? throw new DomainException("Suggestion not found.");
 
+        if (suggestion.Status != LocationSuggestionStatus.Pending)
+            throw new DomainException("Only pending suggestions can be approved.");
+
+        var name = suggestion.Name;
+        var lowered = name.ToLower();
         int resultingId;
 
         if (suggestion.Type == LocationSuggestionType.District)
         {
-            var nextSortOrder = await _db.Districts
-                .Where(d => d.GovernorateId == suggestion.ParentId)
-                .Select(d => (int?)d.SortOrder)
-                .MaxAsync(ct) ?? 0;
+            // A district with this name already exists under the governorate: reuse it instead of
+            // creating a second, identical one.
+            var existing = await _db.Districts
+                .Where(d => d.GovernorateId == suggestion.ParentId
+                    && (d.NameAr.ToLower() == lowered || d.NameEn.ToLower() == lowered))
+                .Select(d => (int?)d.Id)
+                .FirstOrDefaultAsync(ct);
 
-            var district = District.Create(
-                governorateId: suggestion.ParentId,
-                nameAr: suggestion.Name,
-                nameEn: suggestion.Name,
-                sortOrder: nextSortOrder + 1);
+            if (existing is { } existingId)
+            {
+                resultingId = existingId;
+            }
+            else
+            {
+                var nextSortOrder = await _db.Districts
+                    .Where(d => d.GovernorateId == suggestion.ParentId)
+                    .Select(d => (int?)d.SortOrder)
+                    .MaxAsync(ct) ?? 0;
 
-            _db.Districts.Add(district);
-            await _db.SaveChangesAsync(ct);
-            resultingId = district.Id;
+                var district = District.Create(
+                    governorateId: suggestion.ParentId,
+                    nameAr: name,
+                    nameEn: name,
+                    sortOrder: nextSortOrder + 1);
+
+                _db.Districts.Add(district);
+                await _db.SaveChangesAsync(ct);
+                resultingId = district.Id;
+            }
 
             // Backfill: any property in this governorate that typed this exact
             // district name manually now points at the real row instead.
@@ -154,7 +191,7 @@ public sealed class LocationSuggestionService : ILocationSuggestionService
                 .Where(p => p.GovernorateId == suggestion.ParentId
                     && p.DistrictId == null
                     && p.DistrictText != null
-                    && p.DistrictText.ToLower() == suggestion.Name.ToLower())
+                    && p.DistrictText.ToLower() == lowered)
                 .ToListAsync(ct);
 
             foreach (var property in matchingProperties)
@@ -165,26 +202,39 @@ public sealed class LocationSuggestionService : ILocationSuggestionService
         }
         else
         {
-            var nextSortOrder = await _db.Neighborhoods
-                .Where(n => n.DistrictId == suggestion.ParentId)
-                .Select(n => (int?)n.SortOrder)
-                .MaxAsync(ct) ?? 0;
+            var existing = await _db.Neighborhoods
+                .Where(n => n.DistrictId == suggestion.ParentId
+                    && (n.NameAr.ToLower() == lowered || n.NameEn.ToLower() == lowered))
+                .Select(n => (int?)n.Id)
+                .FirstOrDefaultAsync(ct);
 
-            var neighborhood = Neighborhood.Create(
-                districtId: suggestion.ParentId,
-                nameAr: suggestion.Name,
-                nameEn: suggestion.Name,
-                sortOrder: nextSortOrder + 1);
+            if (existing is { } existingId)
+            {
+                resultingId = existingId;
+            }
+            else
+            {
+                var nextSortOrder = await _db.Neighborhoods
+                    .Where(n => n.DistrictId == suggestion.ParentId)
+                    .Select(n => (int?)n.SortOrder)
+                    .MaxAsync(ct) ?? 0;
 
-            _db.Neighborhoods.Add(neighborhood);
-            await _db.SaveChangesAsync(ct);
-            resultingId = neighborhood.Id;
+                var neighborhood = Neighborhood.Create(
+                    districtId: suggestion.ParentId,
+                    nameAr: name,
+                    nameEn: name,
+                    sortOrder: nextSortOrder + 1);
+
+                _db.Neighborhoods.Add(neighborhood);
+                await _db.SaveChangesAsync(ct);
+                resultingId = neighborhood.Id;
+            }
 
             var matchingProperties = await _db.Properties
                 .Where(p => p.DistrictId == suggestion.ParentId
                     && p.NeighborhoodId == null
                     && p.NeighborhoodText != null
-                    && p.NeighborhoodText.ToLower() == suggestion.Name.ToLower())
+                    && p.NeighborhoodText.ToLower() == lowered)
                 .ToListAsync(ct);
 
             foreach (var property in matchingProperties)
@@ -196,9 +246,10 @@ public sealed class LocationSuggestionService : ILocationSuggestionService
 
         suggestion.Approve(reviewedByUserId, resultingId, notes);
         await _db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         _logger.LogInformation(
-            "Approved {Type} suggestion {SuggestionId} ({Name}) → new entity {ResultingId}.",
+            "Approved {Type} suggestion {SuggestionId} ({Name}) → entity {ResultingId}.",
             suggestion.Type, suggestionId, suggestion.Name, resultingId);
 
         return resultingId;

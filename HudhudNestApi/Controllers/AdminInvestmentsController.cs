@@ -34,6 +34,7 @@ namespace HudhudNestApi.Controllers;
 /// Commands, never an arbitrary PUT of Status (Phase 1 spec §5/§14).
 /// </summary>
 [ApiController]
+[ServiceFilter(typeof(HudhudNestApi.Filters.AdminAuditFilter))]
 [Route("api/admin/investments")]
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class AdminInvestmentsController : ControllerBase

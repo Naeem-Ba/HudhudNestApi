@@ -35,6 +35,18 @@ public sealed class LoggingBehavior<TRequest, TResponse>
         {
             response = await next();
         }
+        catch (Exception ex) when (IsExpectedBusinessOutcome(ex))
+        {
+            // A refused request (conflict, validation, not found, forbidden, domain rule) is the system working,
+            // not a fault: logging it at Error filled the alerts with 409s (phase 14, D12).
+            sw.Stop();
+            _logger.LogWarning(
+                "[REFUSED] {RequestName} refused after {Elapsed}ms: {Reason}",
+                requestName,
+                sw.ElapsedMilliseconds,
+                ex.GetType().Name);
+            throw;
+        }
         catch (Exception ex)
         {
             sw.Stop();
@@ -66,5 +78,11 @@ public sealed class LoggingBehavior<TRequest, TResponse>
 
         return response;
     }
-}
 
+    private static bool IsExpectedBusinessOutcome(Exception ex)
+        => ex is Common.Exceptions.ConflictException
+            or Common.Exceptions.ValidationException
+            or Common.Exceptions.NotFoundException
+            or Common.Exceptions.ForbiddenException
+            or Domain.Common.Exceptions.DomainException;
+}

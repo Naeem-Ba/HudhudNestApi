@@ -175,6 +175,7 @@ internal static class AuthInfrastructureRegistration
 
         services.AddScoped<IIdentityRoleService, IdentityRoleService>();
         services.AddScoped<IAuditLogService, AuditLogService>();
+        services.AddScoped<HudhudNestApi.Application.Admin.Interfaces.IAdminAuditLogQuery, HudhudNestApi.Infrastructure.Audit.AdminAuditLogQuery>();
 
         // Off by default (AuditLogRetention:Enabled) until an operator explicitly sets a
         // retention window — see AuditLogRetentionHostedService's own doc comment.

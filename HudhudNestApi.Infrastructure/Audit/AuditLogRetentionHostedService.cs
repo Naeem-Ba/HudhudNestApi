@@ -12,7 +12,9 @@ namespace HudhudNestApi.Infrastructure.Audit;
 /// Enforces a configurable retention window for the <c>AuditLogs</c> table.
 ///
 /// <para>
-/// Off by default, and deliberately so — <c>docs/privacy/privacy-gaps.md</c> (P1) found
+/// Phase 14 (D07): the owner accepted the recommended policy, so <c>appsettings.json</c> now ships it
+/// enabled: 365 days for administrative and account events and 90 days for sign-in events
+/// (<c>AuditLogRetention:LoginRetentionDays</c>). Test hosts switch it off. It used to be off by default, and deliberately so — <c>docs/privacy/privacy-gaps.md</c> (P1) found
 /// this table had no retention or cleanup mechanism at all: every login, password change,
 /// and phone-verification event has been accumulating since 2026-06-24 with no way to age
 /// any of it out. Inventing a specific number of days here without the project owner's
@@ -45,6 +47,10 @@ public sealed class AuditLogRetentionHostedService : BackgroundService
     /// delete loop.
     /// </summary>
     private const int MaxRowsPerSweep = 5_000;
+
+    /// <summary>Sign-in rows (high volume, carry an IP) age out faster than administrative events.</summary>
+    internal static readonly string[] SignInActions =
+        { "Login", "PhoneLoginSucceeded", "PhoneLoginFailed" };
 
     private readonly IServiceScopeFactory _scopes;
     private readonly TimeProvider _clock;
@@ -144,6 +150,26 @@ public sealed class AuditLogRetentionHostedService : BackgroundService
 
                         if (deleted < BatchSize)
                             break;
+                    }
+
+                    // Sign-in events are kept for a shorter, separately configured window.
+                    var loginDays = _configuration.GetValue<int?>("AuditLogRetention:LoginRetentionDays");
+                    if (loginDays is > 0 && loginDays < retentionDays)
+                    {
+                        var loginCutoff = _clock.GetUtcNow().UtcDateTime.AddDays(-loginDays.Value);
+                        while (deletedTotal < MaxRowsPerSweep)
+                        {
+                            var deleted = await db.AuditLogs
+                                .Where(a => a.Timestamp < loginCutoff && SignInActions.Contains(a.Action))
+                                .OrderBy(a => a.Timestamp)
+                                .Take(BatchSize)
+                                .ExecuteDeleteAsync(ct);
+
+                            deletedTotal += deleted;
+
+                            if (deleted < BatchSize)
+                                break;
+                        }
                     }
 
                     if (deletedTotal > 0)

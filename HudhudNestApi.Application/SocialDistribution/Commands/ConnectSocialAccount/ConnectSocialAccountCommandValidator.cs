@@ -7,6 +7,7 @@ public sealed class ConnectSocialAccountCommandValidator : AbstractValidator<Con
     public ConnectSocialAccountCommandValidator()
     {
         RuleFor(x => x.AccountId).NotEmpty();
-        RuleFor(x => x.CredentialReference).MaximumLength(500).When(x => x.CredentialReference is not null);
+        // Phase 14 (D12): an account "connected" with no credential showed as Active but could never publish.
+        RuleFor(x => x.CredentialReference).NotEmpty().MaximumLength(500);
     }
 }

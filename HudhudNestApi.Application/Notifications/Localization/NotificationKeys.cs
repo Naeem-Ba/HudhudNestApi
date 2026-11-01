@@ -79,6 +79,9 @@ public static class NotificationKeys
     public const string ListingReportSubmitted = "msg.listing_report_submitted";
     public const string ListingReportSubmittedUrgent = "msg.listing_report_submitted_urgent";
     public const string ListingReportInfoRequested = "msg.listing_report_info_requested";
+    public const string ListingReportSubmittedWithDetails = "msg.listing_report_submitted_details";
+    public const string ListingReportSubmittedUrgentWithDetails = "msg.listing_report_submitted_urgent_details";
+    public const string ListingReportReporterResponded = "msg.listing_report_reporter_responded";
     public const string ListingReportClosedActionTaken = "msg.listing_report_closed_action";
     public const string ListingReportClosedNoViolation = "msg.listing_report_closed_no_violation";
 

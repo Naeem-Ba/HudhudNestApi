@@ -30,21 +30,26 @@ public sealed class DeletePropertyImageCommandHandler
         DeletePropertyImageCommand request,
         CancellationToken cancellationToken)
     {
-        try
+        // Phase 14 (D14): an administrator may remove a single offending photo without taking the
+        // whole listing down. The controller records it in the audit log.
+        if (!request.IsAdmin)
         {
-            await _ownership.EnsureOwnerAsync(
-                request.PropertyId,
-                request.UserId,
-                operation: "delete images from",
-                ct: cancellationToken);
-        }
-        catch (NotFoundException)
-        {
-            return PropertyImageMutationResult.NotFound();
-        }
-        catch (ForbiddenException)
-        {
-            return PropertyImageMutationResult.Forbidden();
+            try
+            {
+                await _ownership.EnsureOwnerAsync(
+                    request.PropertyId,
+                    request.UserId,
+                    operation: "delete images from",
+                    ct: cancellationToken);
+            }
+            catch (NotFoundException)
+            {
+                return PropertyImageMutationResult.NotFound();
+            }
+            catch (ForbiddenException)
+            {
+                return PropertyImageMutationResult.Forbidden();
+            }
         }
 
         var property = await _images.GetPropertyWithImagesAsync(request.PropertyId, cancellationToken);

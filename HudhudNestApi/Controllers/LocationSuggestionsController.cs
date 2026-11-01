@@ -14,6 +14,7 @@ namespace HudhudNestApi.Controllers;
 /// just type a name on property-form and it lands here automatically.
 /// </summary>
 [ApiController]
+[ServiceFilter(typeof(HudhudNestApi.Filters.AdminAuditFilter))]
 [Route("api/admin/location-suggestions")]
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class LocationSuggestionsController : ControllerBase

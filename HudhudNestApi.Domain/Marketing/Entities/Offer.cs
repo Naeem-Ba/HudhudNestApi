@@ -1,6 +1,7 @@
 using HudhudNestApi.Domain.Common.Entities;
 using HudhudNestApi.Domain.Common.Exceptions;
 using HudhudNestApi.Domain.Marketing.Enums;
+using HudhudNestApi.Domain.Plans.Constants;
 
 namespace HudhudNestApi.Domain.Marketing.Entities;
 
@@ -67,6 +68,8 @@ public sealed class Offer : BaseEntity
         if (discountType == OfferDiscountType.Percentage && discountValue > 100)
             throw new DomainException("نسبة الخصم لا يمكن أن تتجاوز 100%.");
 
+        ValidateTypeAndTier(discountType, discountValue, targetPlanTier);
+
         if (endsAtUtc.HasValue && endsAtUtc.Value <= startsAtUtc)
             throw new DomainException("تاريخ انتهاء العرض يجب أن يكون بعد تاريخ بدايته.");
 
@@ -91,6 +94,28 @@ public sealed class Offer : BaseEntity
         };
     }
 
+    /// <summary>Longest free period an offer may promise.</summary>
+    public const int MaxFreeMonths = 24;
+
+    private static readonly string[] KnownTiers =
+        { PlanTiers.Free, PlanTiers.Basic, PlanTiers.Premium, PlanTiers.Elite };
+
+    /// <summary>Phase 14 (D11): an unknown discount type, plan tier or an absurd free period was accepted.</summary>
+    private static void ValidateTypeAndTier(OfferDiscountType discountType, decimal discountValue, string? targetPlanTier)
+    {
+        if (!Enum.IsDefined(discountType))
+            throw new DomainException("نوع الخصم غير معروف.");
+
+        if (discountType == OfferDiscountType.FreeMonths && discountValue > MaxFreeMonths)
+            throw new DomainException($"مدة الاشتراك المجاني لا يمكن أن تتجاوز {MaxFreeMonths} شهرًا.");
+
+        if (!string.IsNullOrWhiteSpace(targetPlanTier)
+            && !KnownTiers.Contains(targetPlanTier.Trim().ToLowerInvariant()))
+        {
+            throw new DomainException("الباقة المستهدفة غير معروفة.");
+        }
+    }
+
     public void UpdateDetails(
         string name,
         OfferDiscountType discountType,
@@ -110,6 +135,8 @@ public sealed class Offer : BaseEntity
 
         if (discountType == OfferDiscountType.Percentage && discountValue > 100)
             throw new DomainException("نسبة الخصم لا يمكن أن تتجاوز 100%.");
+
+        ValidateTypeAndTier(discountType, discountValue, targetPlanTier);
 
         if (endsAtUtc.HasValue && endsAtUtc.Value <= startsAtUtc)
             throw new DomainException("تاريخ انتهاء العرض يجب أن يكون بعد تاريخ بدايته.");

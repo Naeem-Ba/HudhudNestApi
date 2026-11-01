@@ -27,6 +27,10 @@ public sealed class DisableAppReleaseCommandHandler : IRequestHandler<DisableApp
         var release = await _releases.GetByIdAsync(request.Id, ct)
             ?? throw new NotFoundException($"App release {request.Id} was not found.");
 
+        // Already off: nothing changed, so nothing is written to the audit log (phase 14, D09).
+        if (!release.IsEnabled)
+            return;
+
         release.Disable();
         await _uow.SaveChangesAsync(ct);
 

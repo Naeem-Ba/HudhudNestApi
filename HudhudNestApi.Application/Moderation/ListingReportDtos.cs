@@ -68,7 +68,8 @@ public sealed record AdminListingReportSummaryDto(
     Guid? AssignedAdminId,
     string? AssignedAdminName,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    string? DetailsPreview = null);
 
 public sealed record ListingReportPageDto<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 

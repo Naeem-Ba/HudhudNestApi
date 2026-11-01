@@ -41,6 +41,13 @@ public interface IAdminService
         string? ipAddress,
         CancellationToken ct = default);
 
+    Task<AdminOperationResult> EnableUserAsync(
+        Guid userId,
+        string reason,
+        Guid performedByUserId,
+        string? ipAddress,
+        CancellationToken ct = default);
+
     Task<AdminOperationResult> DisableUserAsync(
         Guid userId,
         Guid performedByUserId,
