@@ -53,7 +53,8 @@ public sealed class ListingQuotaGuard : IListingQuotaGuard
 
             throw new ConflictException(
                 $"بلغ مكتبكم الحدّ الأقصى المسموح به من الإعلانات النشطة ({limit} إعلاناً) وفق خطة مكتبكم. " +
-                "احذفوا إعلاناً قائماً أو رقّوا الخطة لإضافة إعلان جديد.");
+                "احذفوا إعلاناً قائماً أو رقّوا الخطة لإضافة إعلان جديد.",
+                ListingQuotaCodes.QuotaReached);
         }
 
         var activeListings = await _activeListingCounter.CountActiveListingsByOwnerAsync(ownerAccount.Id, ct);
@@ -69,6 +70,13 @@ public sealed class ListingQuotaGuard : IListingQuotaGuard
 
         throw new ConflictException(
             $"خطتكم الحالية تسمح بـ {limit} إعلاناً نشطاً كحد أقصى. لديكم حالياً {activeListings}. " +
-            "احذفوا إعلاناً قائماً أو رقّوا خطتكم لإضافة إعلان جديد.");
+            "احذفوا إعلاناً قائماً أو رقّوا خطتكم لإضافة إعلان جديد.",
+            ListingQuotaCodes.QuotaReached);
     }
+}
+
+/// <summary>Stable codes the client translates (the message itself is Arabic only).</summary>
+public static class ListingQuotaCodes
+{
+    public const string QuotaReached = "LISTING_QUOTA_REACHED";
 }

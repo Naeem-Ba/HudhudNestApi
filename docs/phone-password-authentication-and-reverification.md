@@ -137,6 +137,7 @@ The answer depends on configuration and the public calling code only, never on w
 | `TelegramGateway:BaseUrl` / `TimeoutSeconds` / `SenderUsername` | `https://gatewayapi.telegram.org/` / 10 / empty | transport settings; the optional verified sender channel |
 | `WhatsAppCloud:AccessToken` / `PhoneNumberId` / `TemplateName` | none | Graph API token (secret), sending number id, approved AUTHENTICATION template |
 | `WhatsAppCloud:TemplateLanguage` / `ApiVersion` / `BaseUrl` / `TimeoutSeconds` | `ar` / `v21.0` / `https://graph.facebook.com/` / 10 | transport settings |
+| `WhatsAppCloud:TemplateLanguages` | empty | optional map from the site language the client sent (`ar`/`en`/`de`) to the approved template language, e.g. `WhatsAppCloud__TemplateLanguages__en=en_US`. A language with no entry uses `TemplateLanguage`. The template must exist and be approved in that language in the Meta account. |
 
 Environment-variable form: `OtpChannels__Telegram__Enabled=true`, `TelegramGateway__ApiToken=...`. Secrets go in the platform's secret store or user-secrets, never in Git. A deployment with no Telegram/WhatsApp keys starts and behaves exactly as before; enabling a channel without its credentials makes **Production** refuse to start (validated at startup). In Development, Testing and CI an enabled channel uses a console stand-in that prints the code (like `ConsoleSmsService`); with Staging test support on, Telegram and WhatsApp are never registered, so the smoke suite cannot reach a real account. **To disable a provider without a deployment**, set its `Enabled` to `false` in the environment and restart/redeploy config; the picker then shows it as unavailable.
 
@@ -208,3 +209,7 @@ See [docs/audit/phone-login-verification-2026-09-23.md](audit/phone-login-verifi
 - The shared consent checkbox (`consent-checkbox`) shows hardcoded Arabic text on the phone register page in every language; it is legal copy and needs review before translation (audit F-14).
 - `TwilioSmsService` has no explicit timeout and no test seam; the HTTP adapter does (audit F-23).
 - No global SMS spend cap or alert exists; only per-IP and per-number limits plus the optional country list (audit F-15).
+
+## Language of the code message
+
+The send-otp request bodies accept an optional `language` (`ar`/`en`/`de`; regional forms such as `de-AT` are accepted). The controller stores it in the request-scoped `IOtpMessageLanguage`, and the D7 SMS text (`OtpMessageText.Sms`) and the WhatsApp template language follow it. Without it (an older client) the message is the original Arabic text. Unimatrix and Twilio keep their own fixed texts.

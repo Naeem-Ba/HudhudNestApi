@@ -221,7 +221,8 @@ public sealed class AuthController : ControllerBase
         var result = await _sender.Send(new ForgotPasswordCommand(
             Email: dto.Email,
             RequestScheme: Request.Scheme,
-            RequestHost: Request.Host.Value), ct);
+            RequestHost: Request.Host.Value,
+            Language: dto.Language), ct);
 
         if (!result.Success)
             return BadRequest(new { message = result.Message });
@@ -474,7 +475,8 @@ public sealed record RefreshRequest(
     string? RefreshToken = null);
 
 public sealed record ForgotPasswordRequest(
-    string Email);
+    string Email,
+    string? Language = null);
 
 public sealed record ResetPasswordRequest(
     string Email,

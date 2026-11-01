@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using HudhudNestApi.Application.Auth.Phone;
 using HudhudNestApi.Infrastructure.Auth.Services;
 
 namespace HudhudNestApi.Infrastructure.Tests.Auth;
@@ -43,6 +44,24 @@ public sealed class SmsProviderAdaptersTests
         Assert.Equal("unicode", message.GetProperty("data_coding").GetString());
         Assert.Equal("text", message.GetProperty("msg_type").GetString());
         Assert.Contains(Otp, message.GetProperty("content").GetString());
+    }
+
+    [Theory]
+    [InlineData(null, "رمز التحقق: 482913 — صالح 5 دقائق")]
+    [InlineData("ar", "رمز التحقق: 482913 — صالح 5 دقائق")]
+    [InlineData("en", "HudhudNest verification code: 482913 (valid for 5 minutes)")]
+    [InlineData("de", "HudhudNest Bestätigungscode: 482913 (5 Minuten gültig)")]
+    [InlineData("fr", "رمز التحقق: 482913 — صالح 5 دقائق")]
+    public async Task D7_TextFollowsTheSiteLanguage_AndKeepsTheArabicDefault(string? language, string expected)
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, "{}");
+        var service = new D7SmsService(new HttpClient(handler), Opts("D7"), NullLogger<D7SmsService>.Instance,
+            new OtpMessageLanguage { Value = language });
+
+        Assert.True(await service.SendOtpAsync(Phone, Otp));
+
+        using var body = JsonDocument.Parse(handler.Body);
+        Assert.Equal(expected, body.RootElement.GetProperty("messages")[0].GetProperty("content").GetString());
     }
 
     [Theory]

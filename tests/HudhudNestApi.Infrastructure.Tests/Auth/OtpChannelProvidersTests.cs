@@ -194,6 +194,31 @@ public sealed class OtpChannelProvidersTests
         Assert.Contains(Code, template.GetProperty("components").GetRawText());
     }
 
+    [Theory]
+    [InlineData(null, "ar")]
+    [InlineData("ar", "ar")]
+    [InlineData("en", "en_US")]
+    [InlineData("de", "ar")]      // no German template configured -> the original template language
+    public async Task WhatsApp_UsesTheTemplateLanguageConfiguredForTheSiteLanguage(string? site, string expected)
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, """{"messages":[{"id":"wamid.1"}]}""");
+        var options = Options.Create(new WhatsAppCloudOptions
+        {
+            AccessToken = Token,
+            PhoneNumberId = "1234567890",
+            TemplateName = "hudhud_otp",
+            TemplateLanguage = "ar",
+            TemplateLanguages = new() { ["en"] = "en_US" }
+        });
+        var provider = new WhatsAppCloudOtpProvider(new HttpClient(handler), options, NullLogger<WhatsAppCloudOtpProvider>.Instance,
+            new OtpMessageLanguage { Value = site });
+
+        await provider.SendAsync(Phone, Code, CancellationToken.None);
+
+        using var body = JsonDocument.Parse(handler.Body);
+        Assert.Equal(expected, body.RootElement.GetProperty("template").GetProperty("language").GetProperty("code").GetString());
+    }
+
     [Fact]
     public async Task WhatsApp_UndeliverableRecipient_IsUnreachable()
     {

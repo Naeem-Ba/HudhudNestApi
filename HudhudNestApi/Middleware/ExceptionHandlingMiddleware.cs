@@ -143,7 +143,9 @@ public sealed class ExceptionHandlingMiddleware
                 title = "Conflict",
                 status = StatusCodes.Status409Conflict,
                 message = "تم تعديل هذا العنصر من قبل مستخدم أو عملية أخرى في نفس اللحظة. " +
-                    "أعد تحميل البيانات وحاول مرة أخرى."
+                    "أعد تحميل البيانات وحاول مرة أخرى.",
+                // Stable code: the client shows this in the reader's language (the message is Arabic only).
+                code = "CONCURRENCY_CONFLICT"
             });
         }
         catch (AntiforgeryValidationException ex)

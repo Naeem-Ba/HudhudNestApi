@@ -572,6 +572,7 @@ internal static class AuthInfrastructureRegistration
     {
         services.AddOptions<OtpChannelOptions>()
             .Bind(configuration.GetSection(OtpChannelOptions.SectionName));
+        services.AddScoped<IOtpMessageLanguage, OtpMessageLanguage>();
         services.AddScoped<IOtpProvider, SmsOtpProvider>();
         services.AddScoped<IOtpChannelService, OtpChannelService>();
 
