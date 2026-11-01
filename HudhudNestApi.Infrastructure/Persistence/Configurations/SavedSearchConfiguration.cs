@@ -25,6 +25,9 @@ public sealed class SavedSearchConfiguration : IEntityTypeConfiguration<SavedSea
 
         builder.Property(s => s.ListingType).HasConversion<string>().HasMaxLength(20);
 
+        // Growth engine P3. Existing rows become "Instant" (the only behavior before) via the migration default.
+        builder.Property(s => s.Frequency).HasConversion<string>().HasMaxLength(10);
+
         builder.HasOne<HudhudNestApi.Domain.Users.Entities.UserAccount>()
             .WithMany()
             .HasForeignKey(s => s.UserId)

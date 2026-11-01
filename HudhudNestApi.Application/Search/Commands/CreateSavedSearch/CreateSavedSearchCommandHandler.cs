@@ -47,7 +47,11 @@ public sealed class CreateSavedSearchCommandHandler
             minRooms: request.MinRooms,
             maxRooms: request.MaxRooms,
             minArea: request.MinArea,
-            maxArea: request.MaxArea);
+            maxArea: request.MaxArea,
+            hasBalcony: request.HasBalcony,
+            hasElevator: request.HasElevator,
+            hasParkingSpace: request.HasParkingSpace,
+            frequency: request.Frequency ?? Domain.Search.Enums.SavedSearchFrequency.Instant);
 
         _repo.Add(savedSearch);
         await _uow.SaveChangesAsync(cancellationToken);

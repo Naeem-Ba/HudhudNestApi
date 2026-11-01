@@ -201,8 +201,8 @@ public sealed class SearchRequestFlowTests : IAsyncLifetime
     public async Task Lifecycle_And_Limits()
     {
         var buyer = await ClientAsync(_buyer);
-        Assert.Equal(HttpStatusCode.BadRequest, (await buyer.PostAsJsonAsync("/api/search-requests", RequestBody("اتصل على 0944 123 456"))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await buyer.PostAsJsonAsync("/api/search-requests", RequestBody("me@example.com"))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await buyer.PostAsJsonAsync("/api/search-requests", RequestBody("اتصل على 0944 123 456"))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await buyer.PostAsJsonAsync("/api/search-requests", RequestBody("me@example.com"))).StatusCode);
 
         var id = (await JsonOf(await buyer.PostAsJsonAsync("/api/search-requests", RequestBody()))).GetProperty("id").GetGuid();
         Assert.Equal("Paused", (await JsonOf(await buyer.PostAsync($"/api/search-requests/{id}/pause", null))).GetProperty("status").GetString());

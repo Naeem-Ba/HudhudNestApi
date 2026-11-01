@@ -67,6 +67,18 @@ public interface INotificationService
     /// Growth engine P2: tells an advertiser that <paramref name="requestCount"/> new search requests fit a
     /// listing. Never names a requester. <paramref name="dedupeKey"/> makes a retried sweep a no-op.
     /// </summary>
+    /// <summary>
+    /// Growth engine P3: one daily summary for a saved search set to "daily". Opens the saved-searches page.
+    /// Deduplicated per search per UTC day.
+    /// </summary>
+    Task NotifySavedSearchDigestAsync(
+        Guid recipientId,
+        Guid savedSearchId,
+        string? savedSearchName,
+        int listingCount,
+        DateTime nowUtc,
+        CancellationToken ct = default);
+
     Task NotifyListingDemandAsync(
         Guid recipientId,
         Guid propertyId,

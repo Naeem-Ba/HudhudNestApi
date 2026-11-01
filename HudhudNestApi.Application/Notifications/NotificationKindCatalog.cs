@@ -55,6 +55,7 @@ public static class NotificationKindCatalog
         [NotificationType.SearchRequestMatch] = new(SavedSearch, NotificationPriority.Normal, "property", false),
         [NotificationType.SearchRequestProposal] = new(SavedSearch, NotificationPriority.Normal, "property", false),
         [NotificationType.ListingDemandMatch] = new(Listings, NotificationPriority.Low, "listing-demand", false),
+        [NotificationType.SavedSearchDigest] = new(SavedSearch, NotificationPriority.Normal, "saved-searches", false),
 
         [NotificationType.VisitRequested] = new(Visits, NotificationPriority.Normal, "visit", false),
         [NotificationType.VisitConfirmed] = new(Visits, NotificationPriority.Normal, "visit", false),

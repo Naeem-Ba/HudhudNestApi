@@ -122,6 +122,10 @@ public static class NotificationCatalog
             "{count} طلب بحث جديد يناسب عقارك '{title}'. يمكنك اقتراحه على أصحابها دون معرفة هوياتهم.",
             "{count} new search request(s) fit your property '{title}'. You can suggest it without seeing who asked.",
             "{count} neue Suchauftrag/Suchaufträge passen zu Ihrer Immobilie '{title}'. Sie können sie vorschlagen, ohne die Suchenden zu sehen."),
+        ["msg.saved_search_digest"] = new(
+            "{count} عقار جديد يطابق '{search}' منذ آخر ملخص.",
+            "{count} new propert(y/ies) match '{search}' since the last summary.",
+            "{count} neue Immobilie(n) passen seit der letzten Zusammenfassung zu '{search}'."),
         ["msg.saved_search_match"] = new(
             "عقار جديد '{title}' يطابق '{search}'.",
             "A new property '{title}' matches '{search}'.",

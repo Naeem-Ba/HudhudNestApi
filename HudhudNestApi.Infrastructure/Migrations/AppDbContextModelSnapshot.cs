@@ -3275,13 +3275,33 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Property<int?>("DistrictId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
                     b.Property<int?>("GovernorateId")
                         .HasColumnType("integer");
+
+                    b.Property<bool?>("HasBalcony")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool?>("HasElevator")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool?>("HasParkingSpace")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsPaused")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime?>("LastMatchedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("LastNotifiedAt")
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("ListingType")
@@ -3311,6 +3331,9 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasColumnType("character varying(150)");
 
                     b.Property<int?>("NeighborhoodId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("NotifiedCount")
                         .HasColumnType("integer");
 
                     b.Property<int?>("PropertyTypeId")

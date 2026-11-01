@@ -33,3 +33,18 @@ tolerance) exclude; soft rules (district/neighborhood, rooms, area, features, pr
 ## D-06 Price-change alerts go to users who saved the listing (default, 2026-11-01)
 At most one notification per listing per sweep per user (the latest change wins), sent by a background
 sweep every 10 minutes, deduplicated by history row id. The owner keeps the existing confirmation.
+
+## D-07 Saved-search edits and resume start from "now" (default, 2026-11-01)
+Editing a saved search or resuming a paused one moves its cursor to the current time. Listings that were
+already on the market are not sent as "new" in one burst. The owner can still run the search by hand to see
+them. Location and property type are not editable in place (the app sends them unchanged); a new search is
+saved instead, which keeps the edit form small.
+
+## D-08 Daily summary instead of a per-listing push (default, 2026-11-01)
+A search set to "daily" gets at most one notification per 24 hours with the number of new listings
+(deduplicated per search per UTC day). "Instant" keeps the old behavior: one notification per listing, at most
+10 per sweep. No weekly option yet; add one only if users ask.
+
+## D-09 Delivery log as counters, not a table (default, 2026-11-01)
+Each saved search keeps `LastNotifiedAt` and `NotifiedCount`. The notifications themselves are the detailed
+log (already stored, deduplicated and visible in the inbox). A separate delivery table would duplicate them.

@@ -205,6 +205,29 @@ public sealed class NotificationService : INotificationService
             ct);
     }
 
+    public async Task NotifySavedSearchDigestAsync(
+        Guid recipientId,
+        Guid savedSearchId,
+        string? savedSearchName,
+        int listingCount,
+        DateTime nowUtc,
+        CancellationToken ct = default)
+    {
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(savedSearchId, "Saved search id is required.", nameof(savedSearchId));
+
+        var lang = await LanguageOfAsync(recipientId, ct);
+
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.SavedSearchDigest,
+                Say(lang, "msg.saved_search_digest",
+                    ("count", listingCount),
+                    ("search", NameOr(savedSearchName, "generic.saved_search"))),
+                relatedEntityId: savedSearchId,
+                dedupeKey: $"ssd:{savedSearchId:N}:{nowUtc:yyyyMMdd}"),
+            ct);
+    }
+
     public async Task NotifyListingDemandAsync(
         Guid recipientId,
         Guid propertyId,

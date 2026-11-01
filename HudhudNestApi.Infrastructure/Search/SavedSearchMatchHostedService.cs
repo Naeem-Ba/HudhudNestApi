@@ -6,6 +6,7 @@ using HudhudNestApi.Application.Notifications.Interfaces;
 using HudhudNestApi.Application.Properties.DTOs;
 using HudhudNestApi.Application.Search.Interfaces;
 using HudhudNestApi.Domain.Search.Entities;
+using HudhudNestApi.Domain.Search.Enums;
 using HudhudNestApi.Infrastructure.Persistence;
 using HudhudNestApi.Infrastructure.Repositories;
 
@@ -70,7 +71,9 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
     /// </summary>
     private const int MaxMatchesPerSearchPerRun = 10;
 
-    internal async Task RunOnceAsync(CancellationToken ct)
+    internal Task RunOnceAsync(CancellationToken ct) => RunOnceAsync(DateTime.UtcNow, ct);
+
+    internal async Task RunOnceAsync(DateTime nowUtc, CancellationToken ct)
     {
         using var scope = _scopeFactory.CreateScope();
         var savedSearches = scope.ServiceProvider.GetRequiredService<ISavedSearchRepository>();
@@ -88,7 +91,7 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
                 async () =>
                 {
                     var allSearches = await savedSearches.GetAllAsync(ct);
-                    var now = DateTime.UtcNow;
+                    var now = nowUtc;
                     var matchedCount = 0;
 
                     // One read of the rate table per sweep, shared by every search that prices in a currency.
@@ -96,6 +99,11 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
 
                     foreach (var savedSearch in allSearches)
                     {
+                        // Growth engine P3: paused searches are skipped; a daily search waits 24 hours after
+                        // its last summary (its cursor stays put, so nothing published meanwhile is lost).
+                        if (savedSearch.IsPaused || !savedSearch.IsDigestDue(now))
+                            continue;
+
                         // First run for a search only looks forward from its creation — never
                         // floods the owner with every pre-existing listing that already matched.
                         var since = savedSearch.LastMatchedAt ?? savedSearch.CreatedAt;
@@ -107,6 +115,24 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
                             // was created. A draft created before the cursor and published later used to be
                             // skipped forever. ApplyFilter already limits this to listings on the market.
                             .Where(p => (p.PublishedAt ?? p.CreatedAt) > since);
+
+                        if (savedSearch.Frequency == SavedSearchFrequency.Daily)
+                        {
+                            var newest = await query
+                                .OrderByDescending(p => p.PublishedAt ?? p.CreatedAt)
+                                .Select(p => (DateTime?)(p.PublishedAt ?? p.CreatedAt))
+                                .FirstOrDefaultAsync(ct);
+                            if (newest is null)
+                                continue;
+
+                            var count = await query.CountAsync(ct);
+                            await notifications.NotifySavedSearchDigestAsync(
+                                savedSearch.UserId, savedSearch.Id, savedSearch.Name, count, now, ct);
+                            savedSearch.MarkMatchedUpTo(newest.Value);
+                            savedSearch.RecordDelivery(count, now);
+                            matchedCount += count;
+                            continue;
+                        }
 
                         var matches = await query
                             // Oldest first: when more than the cap match, the rest are picked up by the next
@@ -125,7 +151,9 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
                                 savedSearch.UserId,
                                 property.Id,
                                 property.Title,
-                                savedSearch.Name ?? "بحث محفوظ",
+                                // Empty falls back to the recipient's own language ("saved search"); a fixed
+                                // Arabic fallback reached English and German users (growth engine P3).
+                                savedSearch.Name ?? string.Empty,
                                 ct);
                         }
 
@@ -134,6 +162,7 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
                         // by the single SaveChangesAsync call below — no explicit Update()
                         // call needed.
                         savedSearch.MarkMatchedUpTo(matches[^1].PublishedAt ?? matches[^1].CreatedAt);
+                        savedSearch.RecordDelivery(matches.Count, now);
                         matchedCount += matches.Count;
                     }
 
@@ -170,6 +199,9 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
         MinRooms = s.MinRooms,
         MaxRooms = s.MaxRooms,
         MinArea = s.MinArea,
-        MaxArea = s.MaxArea
+        MaxArea = s.MaxArea,
+        HasBalcony = s.HasBalcony,
+        HasElevator = s.HasElevator,
+        HasParkingSpace = s.HasParkingSpace,
     };
 }

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using HudhudNestApi.Application.Search.Commands.CreateSavedSearch;
 using HudhudNestApi.Application.Search.Commands.DeleteSavedSearch;
+using HudhudNestApi.Application.Search.Commands.UpdateSavedSearch;
 using HudhudNestApi.Application.Search.Queries.GetMySavedSearches;
 
 namespace HudhudNestApi.Controllers;
@@ -50,6 +51,47 @@ public sealed class SavedSearchController : ControllerBase
         var id = await _sender.Send(cmd, ct);
 
         return StatusCode(StatusCodes.Status201Created, new { id });
+    }
+
+    /// <summary>Edits criteria, name and frequency. Listings already on the market are not re-announced.</summary>
+    [HttpPut("{id:guid}")]
+    [EnableRateLimiting("user-write")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateSavedSearchCommand command, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        var success = await _sender.Send(command with { Id = id, UserId = userId.Value }, ct);
+        return success ? NoContent() : NotFound();
+    }
+
+    [HttpPost("{id:guid}/pause")]
+    [EnableRateLimiting("user-write")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public Task<IActionResult> Pause(Guid id, CancellationToken ct) => SetPausedAsync(id, true, ct);
+
+    [HttpPost("{id:guid}/resume")]
+    [EnableRateLimiting("user-write")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public Task<IActionResult> Resume(Guid id, CancellationToken ct) => SetPausedAsync(id, false, ct);
+
+    private async Task<IActionResult> SetPausedAsync(Guid id, bool paused, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        var success = await _sender.Send(new SetSavedSearchPausedCommand(id, userId.Value, paused), ct);
+        return success ? NoContent() : NotFound();
     }
 
     [HttpDelete("{id:guid}")]

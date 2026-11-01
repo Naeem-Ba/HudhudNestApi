@@ -252,4 +252,7 @@ public enum NotificationType
 
     /// <summary>Growth engine P2: new search requests fit one of the recipient's listings.</summary>
     ListingDemandMatch = 67,
+
+    /// <summary>Growth engine P3: daily summary of new listings for a saved search set to "daily".</summary>
+    SavedSearchDigest = 68,
 }

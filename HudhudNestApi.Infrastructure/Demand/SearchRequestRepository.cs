@@ -152,7 +152,8 @@ public sealed class SearchRequestRepository : ISearchRequestRepository
             .CountAsync(m => m.ProposedByUserId == userId && m.ProposedAt >= sinceUtc, ct);
 
     public Task<ListingFacts?> GetListingFactsAsync(Guid propertyId, DateTime nowUtc, CancellationToken ct = default)
-        => FactsQuery(_db, nowUtc).FirstOrDefaultAsync(f => f.PropertyId == propertyId, ct);
+        // Filter before the projection: EF cannot translate a filter on a constructor-built record.
+        => FactsQuery(_db, nowUtc, p => p.Id == propertyId).FirstOrDefaultAsync(ct);
 
     public Task<string?> GetListingTitleAsync(Guid propertyId, CancellationToken ct = default)
         => _db.Properties.AsNoTracking().Where(p => p.Id == propertyId).Select(p => p.Title).FirstOrDefaultAsync(ct);
@@ -164,14 +165,17 @@ public sealed class SearchRequestRepository : ISearchRequestRepository
         => PropertyRepository.LoadCurrencyRatesAsync(_db, ct);
 
     /// <summary>Listings on the market, projected to what the matcher reads. Shared with the background sweep.</summary>
-    internal static IQueryable<ListingFacts> FactsQuery(AppDbContext db, DateTime nowUtc)
-        => db.Properties
-            .AsNoTracking()
-            .Where(Property.OnMarket(nowUtc))
-            .Select(p => new ListingFacts(
+    internal static IQueryable<ListingFacts> FactsQuery(
+        AppDbContext db, DateTime nowUtc, System.Linq.Expressions.Expression<Func<Property, bool>>? filter = null)
+    {
+        var query = db.Properties.AsNoTracking().Where(Property.OnMarket(nowUtc));
+        if (filter is not null)
+            query = query.Where(filter);
+        return query.Select(p => new ListingFacts(
                 p.Id, p.OwnerId, p.ListingType, p.GovernorateId, p.DistrictId, p.NeighborhoodId, p.PropertyTypeId,
                 p.PurchasePrice,
                 p.WarmRent ?? p.ColdRent,
                 p.CurrencyCode.Trim(),
                 p.Rooms, p.Area, p.HasBalcony, p.HasElevator, p.HasParkingSpace, p.FurnishingStatus));
+    }
 }

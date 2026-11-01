@@ -40,5 +40,12 @@ public sealed class GetMySavedSearchesQueryHandler
         s.MinArea,
         s.MaxArea,
         s.CreatedAt,
-        s.LastMatchedAt);
+        s.LastMatchedAt,
+        s.HasBalcony,
+        s.HasElevator,
+        s.HasParkingSpace,
+        s.Frequency,
+        s.IsPaused,
+        s.LastNotifiedAt,
+        s.NotifiedCount);
 }

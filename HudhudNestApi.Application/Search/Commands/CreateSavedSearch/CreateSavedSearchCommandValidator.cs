@@ -2,15 +2,26 @@
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Common.Validation;
 using HudhudNestApi.Application.Listings.Currencies;
+using HudhudNestApi.Application.Search.Commands;
 
 namespace HudhudNestApi.Application.Search.Commands.CreateSavedSearch;
 
-public sealed class CreateSavedSearchCommandValidator : AbstractValidator<CreateSavedSearchCommand>
+public sealed class CreateSavedSearchCommandValidator : SavedSearchCriteriaValidator<CreateSavedSearchCommand>
+{
+    public CreateSavedSearchCommandValidator(ILocationHierarchyChecker locations, ICommonLookupService lookups)
+        : base(locations, lookups)
+    {
+    }
+}
+
+/// <summary>Rules shared by create and update (growth engine P3 added update).</summary>
+public abstract class SavedSearchCriteriaValidator<T> : AbstractValidator<T>
+    where T : ISavedSearchCriteria
 {
     /// <summary>Largest value a rooms filter can usefully take; listings are capped at 50 rooms.</summary>
     private const int MaxRooms = 50;
 
-    public CreateSavedSearchCommandValidator(ILocationHierarchyChecker locations, ICommonLookupService lookups)
+    protected SavedSearchCriteriaValidator(ILocationHierarchyChecker locations, ICommonLookupService lookups)
     {
         // A saved search with no criterion matches every new listing, so the background matcher
         // would notify its owner about each one (capped at 10 per run, but every run). A name or a
@@ -52,6 +63,7 @@ public sealed class CreateSavedSearchCommandValidator : AbstractValidator<Create
             .WithMessage("نوع العقار غير معروف.");
 
         RuleFor(x => x.ListingType).IsInEnum().When(x => x.ListingType.HasValue);
+        RuleFor(x => x.Frequency).IsInEnum().When(x => x.Frequency.HasValue);
 
         // A range that can never match anything (negative, or minimum above maximum) only makes the
         // background matcher scan for nothing (QA Phase 12, P12-D02).
@@ -76,7 +88,7 @@ public sealed class CreateSavedSearchCommandValidator : AbstractValidator<Create
             .WithMessage("الحد الأقصى للغرف يجب ألا يقل عن الحد الأدنى.");
     }
 
-    private static bool HasAtLeastOneCriterion(CreateSavedSearchCommand c) =>
+    private static bool HasAtLeastOneCriterion(T c) =>
         !string.IsNullOrWhiteSpace(c.CountryCode)
         || !string.IsNullOrWhiteSpace(c.City)
         || !string.IsNullOrWhiteSpace(c.Region)
@@ -90,5 +102,8 @@ public sealed class CreateSavedSearchCommandValidator : AbstractValidator<Create
         || c.MinRooms.HasValue
         || c.MaxRooms.HasValue
         || c.MinArea.HasValue
-        || c.MaxArea.HasValue;
+        || c.MaxArea.HasValue
+        || c.HasBalcony == true
+        || c.HasElevator == true
+        || c.HasParkingSpace == true;
 }

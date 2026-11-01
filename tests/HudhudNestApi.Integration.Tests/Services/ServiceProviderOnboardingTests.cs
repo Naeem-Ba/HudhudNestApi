@@ -502,6 +502,7 @@ public sealed class ServiceProviderOnboardingTests : IAsyncLifetime
         public Task NotifyPropertyUpdateAsync(Guid recipientId, Guid propertyId, string propertyTitle, NotificationType type, NotificationText detail, Guid? relatedEntityId = null, CancellationToken ct = default) => Boom();
         public Task NotifySearchRequestMatchAsync(Guid recipientId, Guid propertyId, string propertyTitle, Guid searchRequestId, bool proposed, CancellationToken ct = default) => Boom();
         public Task NotifyListingDemandAsync(Guid recipientId, Guid propertyId, string propertyTitle, int requestCount, string dedupeKey, CancellationToken ct = default) => Boom();
+        public Task NotifySavedSearchDigestAsync(Guid recipientId, Guid savedSearchId, string? savedSearchName, int listingCount, DateTime nowUtc, CancellationToken ct = default) => Boom();
         public Task NotifyFavoritePriceChangedAsync(Guid recipientId, Guid propertyId, string propertyTitle, NotificationText detail, Guid priceHistoryId, CancellationToken ct = default) => Boom();
         public Task NotifySavedSearchMatchAsync(Guid recipientId, Guid propertyId, string propertyTitle, string savedSearchName, CancellationToken ct = default) => Boom();
         public Task NotifyUserRatedAsync(Guid recipientId, Guid raterId, string raterName, double overallScore, CancellationToken ct = default) => Boom();
