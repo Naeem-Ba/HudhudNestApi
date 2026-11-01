@@ -96,7 +96,12 @@ public sealed class ClosedDealLifecyclePostgresTests : IAsyncLifetime
         var rented = await SeedAsync("rented", PropertyStatus.Rented, expiresAt: past);
         var available = await SeedAsync("available", PropertyStatus.Available, expiresAt: DateTime.UtcNow.AddDays(-1));
 
+        // The sweep expires the oldest due listings first, a capped number per run. On the shared test database
+        // other classes leave expired listings behind, so this one (due only yesterday) may need a few runs to be
+        // reached. Extra runs only make the sold/rented checks below stricter.
         await SweepAsync();
+        for (var run = 0; run < 15 && (await LoadAsync(available)).Status != PropertyStatus.Expired; run++)
+            await SweepAsync();
 
         foreach (var id in new[] { sold, rented })
         {
