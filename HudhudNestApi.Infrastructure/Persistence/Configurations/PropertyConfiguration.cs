@@ -193,6 +193,10 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
 
         // -- Indexes ------------------------------------------
         // Most common search patterns:
+        // Growth engine P8: map boxes filter on latitude first.
+        builder.HasIndex(p => new { p.Latitude, p.Longitude })
+            .HasDatabaseName("IX_Properties_Map_LatLng")
+            .HasFilter("\"Latitude\" IS NOT NULL AND \"Longitude\" IS NOT NULL AND \"IsPublished\" AND NOT \"IsDeleted\"");
         builder.HasIndex(p => p.City);
         builder.HasIndex(p => p.OwnerId);
         builder.HasIndex(p => p.ListingType);

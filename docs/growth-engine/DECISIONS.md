@@ -86,3 +86,12 @@ is a commercial promise and needs the owner's decision on what is granted, to wh
 (there is no billing yet; `Offer` is a lead-capture promise handled by hand). The existing admin "Offers" tab
 keeps covering limited-seat offers. Retention uses a new `user_active` event per account per day, written by
 a background job from refresh tokens, so the sign-in path is unchanged. Definitions: `GROWTH-METRICS.md`.
+
+## D-14 Map: server-side clusters; hiding the exact spot is the owner's opt-in (default, 2026-11-01)
+`GET /api/properties/map` returns up to 300 points for a box, or grid clusters (cell = a quarter of a map tile
+at that zoom) when there are more. New per-listing choice `HideExactLocation`: when on, every public output
+(detail, lists, near-me search, map) shows the centre of a fixed ~550 m grid cell instead of the pin, no street,
+and near-me distances rounded to 500 m; the owner and admins still see the exact pin. A fixed cell (not random
+jitter) is used so repeated requests reveal nothing more. **Default is off for existing and new listings**, so
+nothing changes for anyone who does not tick the box. Recommendation: make it the default for private
+(non-agency) owners; that is a product choice for the owner. Short-stay listings are not covered yet.

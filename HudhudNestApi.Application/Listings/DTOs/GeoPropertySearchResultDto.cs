@@ -14,6 +14,9 @@ public sealed class GeoPropertySearchResultDto
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
 
+    /// <summary>True when the point is approximate and Street is empty (owner hid the exact spot).</summary>
+    public bool IsLocationApproximate { get; set; }
+
     public string ListingType { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
 

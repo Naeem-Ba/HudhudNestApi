@@ -67,6 +67,7 @@ public sealed class PublicEndpointPolicyTests
             "PropertiesController.GetPriceHistory",
         "PriceEstimatesController.Estimate",
         "PriceEstimatesController.AreaPrices",
+        "PropertiesController.Map",
 
             // Social Sharing & Distribution: recording a successful share/copy-link event.
             // Most visitors sharing a listing are not logged in, so this cannot require

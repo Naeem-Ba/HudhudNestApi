@@ -22,6 +22,12 @@ public sealed class PropertyDto
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
 
+    /// <summary>True when Latitude/Longitude are approximate (owner hid the exact spot; Street is then empty).</summary>
+    public bool IsLocationApproximate { get; set; }
+
+    /// <summary>The owner's choice; filled only for the owner and admins (management views).</summary>
+    public bool? HideExactLocation { get; set; }
+
     // Structured location (Phase-0 follow-up). BUG FIX: these existed on the
     // Property entity but were never mapped into this DTO, so every response
     // silently dropped them — the property-form edit page could never restore

@@ -1,3 +1,4 @@
+using HudhudNestApi.Domain.Listings;
 // Property -> PropertyDto mapping.
 //
 // WHY IT LIVES HERE: it started life as an internal static method on a query handler, which
@@ -27,7 +28,26 @@ public static class PropertyMapper
     /// asOfUtc is injectable so the featured window can be evaluated at a fixed instant in
     /// tests, and so a whole page of results is mapped against one clock reading.
     /// </summary>
-    public static PropertyDto ToDto(Property p, DateTime? asOfUtc = null) => new()
+    /// <param name="revealExactLocation">True only for the owner's and admins' management views.</param>
+    public static PropertyDto ToDto(Property p, DateTime? asOfUtc = null, bool revealExactLocation = false)
+    {
+        var dto = Map(p, asOfUtc);
+        if (revealExactLocation)
+        {
+            dto.HideExactLocation = p.HideExactLocation;
+        }
+        else if (p.HideExactLocation)
+        {
+            dto.Latitude = LocationPrivacy.Approximate(p.Latitude);
+            dto.Longitude = LocationPrivacy.Approximate(p.Longitude);
+            dto.Street = string.Empty;
+            dto.IsLocationApproximate = true;
+        }
+
+        return dto;
+    }
+
+    private static PropertyDto Map(Property p, DateTime? asOfUtc) => new()
     {
         Id = p.Id,
         Title = p.Title,

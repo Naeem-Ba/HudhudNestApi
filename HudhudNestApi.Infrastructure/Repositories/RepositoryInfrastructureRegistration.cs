@@ -110,6 +110,8 @@ internal static class RepositoryInfrastructureRegistration
         // Growth engine P10: admin growth overview and the daily activity rollup used for retention.
         services.AddScoped<HudhudNestApi.Application.Growth.IGrowthDashboardReader, HudhudNestApi.Infrastructure.Growth.GrowthDashboardReader>();
         services.AddHostedService<HudhudNestApi.Infrastructure.Growth.UserActivityRollupHostedService>();
+        // Growth engine P8: map points and clusters.
+        services.AddScoped<HudhudNestApi.Application.Listings.Map.IPropertyMapReader, HudhudNestApi.Infrastructure.Listings.PropertyMapReader>();
         services.AddScoped<IListingFeeRepository, ListingFeeRepository>();
         services.AddScoped<IAgencyRepository, AgencyRepository>();
         services.AddScoped<IAgencyInvitationRepository, AgencyInvitationRepository>();

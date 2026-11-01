@@ -33,7 +33,7 @@ public sealed class GetPropertyForManagementQueryHandler
         if (!request.IsAdmin && property.OwnerId != request.RequestingUserId)
             throw new ForbiddenException("Only the property owner or an administrator can manage this property.");
 
-        var dto = PropertyMapper.ToDto(property);
+        var dto = PropertyMapper.ToDto(property, revealExactLocation: true);
         await _views.ApplyViewCountsAsync(new[] { dto }, cancellationToken);
         return dto;
     }

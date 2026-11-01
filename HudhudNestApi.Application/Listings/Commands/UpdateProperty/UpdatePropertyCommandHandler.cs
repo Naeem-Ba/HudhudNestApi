@@ -131,6 +131,7 @@ public sealed class UpdatePropertyCommandHandler
 
         if (request.Latitude.HasValue) property.Latitude = request.Latitude;
         if (request.Longitude.HasValue) property.Longitude = request.Longitude;
+        if (request.HideExactLocation.HasValue) property.HideExactLocation = request.HideExactLocation.Value;
         if (request.ColdRent.HasValue) property.ColdRent = request.ColdRent;
         if (request.WarmRent.HasValue) property.WarmRent = request.WarmRent;
         if (request.PurchasePrice.HasValue) property.PurchasePrice = request.PurchasePrice;

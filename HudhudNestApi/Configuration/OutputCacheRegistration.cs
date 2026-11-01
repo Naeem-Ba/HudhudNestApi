@@ -7,6 +7,7 @@ public static class OutputCacheRegistration
 {
     public const string MarketInsightsPolicy = "market-insights";
     public const string PriceEstimatesPolicy = "price-estimates";
+    public const string PublicPropertyMapPolicy = "public-property-map";
     public const string PublicPropertyListPolicy = "public-property-list";
     public const string PublicPropertyDetailsPolicy = "public-property-details";
     public const string PublicPropertyGeoSearchPolicy = "public-property-geo-search";
@@ -196,6 +197,14 @@ public static class OutputCacheRegistration
             policy => policy
                 .Expire(PublicPropertyListMaxAge)
                 .SetVaryByQuery(PublicPropertyGeoSearchVaryByQueryParams)
+                .Tag(OutputCacheTags.Properties));
+
+        // Growth engine P8: map boxes. Same TTL and tag as the list; every query key is part of the key.
+        options.AddPolicy(
+            PublicPropertyMapPolicy,
+            policy => policy
+                .Expire(PublicPropertyListMaxAge)
+                .SetVaryByQuery("minLat", "minLng", "maxLat", "maxLng", "zoom", "listingType", "propertyTypeId", "minRooms")
                 .Tag(OutputCacheTags.Properties));
 
         options.AddPolicy(

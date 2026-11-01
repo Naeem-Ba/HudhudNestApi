@@ -1438,6 +1438,9 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<bool>("HideExactLocation")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime?>("ImagesCompactedAt")
                         .HasColumnType("timestamp without time zone");
 
@@ -1671,6 +1674,10 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("TakenDownAt")
                         .HasDatabaseName("IX_Properties_TakenDownAt")
                         .HasFilter("\"TakenDownAt\" IS NOT NULL");
+
+                    b.HasIndex("Latitude", "Longitude")
+                        .HasDatabaseName("IX_Properties_Map_LatLng")
+                        .HasFilter("\"Latitude\" IS NOT NULL AND \"Longitude\" IS NOT NULL AND \"IsPublished\" AND NOT \"IsDeleted\"");
 
                     b.HasIndex("Status", "ExpiresAt")
                         .HasDatabaseName("IX_Properties_Status_ExpiresAt");

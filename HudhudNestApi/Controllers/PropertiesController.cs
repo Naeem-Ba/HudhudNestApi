@@ -92,6 +92,24 @@ public sealed class PropertiesController : ControllerBase
         return Ok(result);
     }
 
+    // ── GET /api/properties/map?minLat=&minLng=&maxLat=&maxLng=&zoom= ── (growth engine P8)
+    [HttpGet("map")]
+    [AllowAnonymous]
+    [EnableRateLimiting("geo-search")]
+    [OutputCache(PolicyName = OutputCacheRegistration.PublicPropertyMapPolicy)]
+    [ProducesResponseType(typeof(HudhudNestApi.Application.Listings.Map.MapResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> Map(
+        [FromQuery] decimal minLat, [FromQuery] decimal minLng, [FromQuery] decimal maxLat, [FromQuery] decimal maxLng,
+        [FromQuery] int zoom, [FromQuery] ListingType? listingType, [FromQuery] int? propertyTypeId, [FromQuery] int? minRooms,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(new HudhudNestApi.Application.Listings.Map.GetMapListingsQuery(
+            minLat, minLng, maxLat, maxLng, zoom, listingType, propertyTypeId, minRooms), ct);
+        SetPublicCacheControl(OutputCacheRegistration.PublicPropertyListMaxAge);
+        return Ok(result);
+    }
+
     // ── GET /api/properties/{id} ─────────────────────────────────
     [HttpGet("{id:guid}")]
     [AllowAnonymous]
