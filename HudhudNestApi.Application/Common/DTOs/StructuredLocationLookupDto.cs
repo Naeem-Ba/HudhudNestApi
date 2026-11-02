@@ -10,4 +10,5 @@ public sealed record StructuredLocationLookupDto(
     int Id,
     string NameAr,
     string NameEn,
-    int? ParentId = null);
+    int? ParentId = null,
+    string? NameDe = null);

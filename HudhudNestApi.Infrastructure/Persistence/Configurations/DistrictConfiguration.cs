@@ -17,6 +17,7 @@ public sealed class DistrictConfiguration : IEntityTypeConfiguration<District>
         builder.HasKey(d => d.Id);
 
         builder.Property(d => d.NameAr).IsRequired().HasMaxLength(200);
+        builder.Property(d => d.NameDe).HasMaxLength(200);
         builder.Property(d => d.NameEn).HasMaxLength(200);
 
         builder.HasIndex(d => d.GovernorateId);

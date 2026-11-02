@@ -17,6 +17,7 @@ public sealed class NeighborhoodConfiguration : IEntityTypeConfiguration<Neighbo
         builder.HasKey(n => n.Id);
 
         builder.Property(n => n.NameAr).IsRequired().HasMaxLength(200);
+        builder.Property(n => n.NameDe).HasMaxLength(200);
         builder.Property(n => n.NameEn).HasMaxLength(200);
 
         builder.HasIndex(n => n.DistrictId);

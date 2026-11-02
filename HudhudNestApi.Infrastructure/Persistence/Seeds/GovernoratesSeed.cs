@@ -28,20 +28,20 @@ public static class GovernoratesSeed
 
     public static async Task SeedAsync(AppDbContext context)
     {
-        var damascus = await EnsureGovernorateAsync(context, "دمشق", "Damascus", "SY", 1);
-        var rifDimashq = await EnsureGovernorateAsync(context, "ريف دمشق", "Rural Damascus", "SY", 2);
-        var aleppo = await EnsureGovernorateAsync(context, "حلب", "Aleppo", "SY", 3);
-        var homs = await EnsureGovernorateAsync(context, "حمص", "Homs", "SY", 4);
-        var hama = await EnsureGovernorateAsync(context, "حماة", "Hama", "SY", 5);
-        var latakia = await EnsureGovernorateAsync(context, "اللاذقية", "Latakia", "SY", 6);
-        var tartus = await EnsureGovernorateAsync(context, "طرطوس", "Tartus", "SY", 7);
-        var hasakah = await EnsureGovernorateAsync(context, "الحسكة", "Al-Hasakah", "SY", 8);
-        var deirEzZor = await EnsureGovernorateAsync(context, "دير الزور", "Deir ez-Zor", "SY", 9);
-        var raqqa = await EnsureGovernorateAsync(context, "الرقة", "Raqqa", "SY", 10);
-        var idlib = await EnsureGovernorateAsync(context, "إدلب", "Idlib", "SY", 11);
-        var daraa = await EnsureGovernorateAsync(context, "درعا", "Daraa", "SY", 12);
-        var quneitra = await EnsureGovernorateAsync(context, "القنيطرة", "Quneitra", "SY", 13);
-        var suwayda = await EnsureGovernorateAsync(context, "السويداء", "As-Suwayda", "SY", 14);
+        var damascus = await EnsureGovernorateAsync(context, "دمشق", "Damascus", "SY", 1, "Damaskus");
+        var rifDimashq = await EnsureGovernorateAsync(context, "ريف دمشق", "Rural Damascus", "SY", 2, "Umland von Damaskus");
+        var aleppo = await EnsureGovernorateAsync(context, "حلب", "Aleppo", "SY", 3, "Aleppo");
+        var homs = await EnsureGovernorateAsync(context, "حمص", "Homs", "SY", 4, "Homs");
+        var hama = await EnsureGovernorateAsync(context, "حماة", "Hama", "SY", 5, "Hama");
+        var latakia = await EnsureGovernorateAsync(context, "اللاذقية", "Latakia", "SY", 6, "Latakia");
+        var tartus = await EnsureGovernorateAsync(context, "طرطوس", "Tartus", "SY", 7, "Tartus");
+        var hasakah = await EnsureGovernorateAsync(context, "الحسكة", "Al-Hasakah", "SY", 8, "Hasaka");
+        var deirEzZor = await EnsureGovernorateAsync(context, "دير الزور", "Deir ez-Zor", "SY", 9, "Deir ez-Zor");
+        var raqqa = await EnsureGovernorateAsync(context, "الرقة", "Raqqa", "SY", 10, "Rakka");
+        var idlib = await EnsureGovernorateAsync(context, "إدلب", "Idlib", "SY", 11, "Idlib");
+        var daraa = await EnsureGovernorateAsync(context, "درعا", "Daraa", "SY", 12, "Daraa");
+        var quneitra = await EnsureGovernorateAsync(context, "القنيطرة", "Quneitra", "SY", 13, "Kuneitra");
+        var suwayda = await EnsureGovernorateAsync(context, "السويداء", "As-Suwayda", "SY", 14, "As-Suwaida");
 
         // Damascus governorate = the city itself; officially a single district.
         // City-quarter granularity lives under NeighborhoodsSeed, attached to
@@ -158,7 +158,8 @@ public static class GovernoratesSeed
         string nameAr,
         string nameEn,
         string countryCode,
-        int sortOrder)
+        int sortOrder,
+        string? nameDe = null)
     {
         var existingId = await context.Governorates
             .Where(g => g.NameAr == nameAr && g.CountryCode == countryCode)
@@ -172,7 +173,8 @@ public static class GovernoratesSeed
             nameAr: nameAr,
             nameEn: nameEn,
             countryCode: countryCode,
-            sortOrder: sortOrder);
+            sortOrder: sortOrder,
+            nameDe: nameDe);
 
         context.Governorates.Add(governorate);
 

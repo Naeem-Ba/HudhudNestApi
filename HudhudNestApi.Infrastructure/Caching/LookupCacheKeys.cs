@@ -14,7 +14,8 @@ public static class LookupCacheKeys
     // a single fixed cache key can't represent "all of them" — see
     // CommonLookupService.GetDistrictsAsync/GetNeighborhoodsAsync, which build a
     // parent-scoped key per call instead and are excluded from RefreshAllAsync.
-    public const string Governorates = "governorates";
+    // v2: the cached DTO gained NameDe; a new key keeps pre-deploy cache entries from hiding it.
+    public const string Governorates = "governorates-v2";
     public const string PropertyTypeCatalog = "property-type-catalog";
 
     public static readonly string[] All =

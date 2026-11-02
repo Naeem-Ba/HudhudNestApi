@@ -147,7 +147,7 @@ public sealed class CommonLookupService : ICommonLookupService
         var governorate = await _db.Governorates
             .AsNoTracking()
             .Where(g => g.Id == governorateId && g.IsActive)
-            .Select(g => new { g.NameAr, g.NameEn })
+            .Select(g => new { g.NameAr, g.NameEn, g.NameDe })
             .FirstOrDefaultAsync(ct);
 
         if (governorate is null)
@@ -164,8 +164,9 @@ public sealed class CommonLookupService : ICommonLookupService
         return stored
             .Append(governorate.NameAr)
             .Append(governorate.NameEn)
+            .Append(governorate.NameDe)
             .Where(city => !string.IsNullOrWhiteSpace(city))
-            .Select(city => city.Trim())
+            .Select(city => city!.Trim())
             .GroupBy(city => city, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
             .OrderBy(city => city, StringComparer.CurrentCulture)
@@ -197,7 +198,7 @@ public sealed class CommonLookupService : ICommonLookupService
                     .Where(g => g.IsActive && g.CountryCode == normalizedCountryCode)
                     .OrderBy(g => g.SortOrder)
                     .ThenBy(g => g.NameEn)
-                    .Select(g => new StructuredLocationLookupDto(g.Id, g.NameAr, g.NameEn, null))
+                    .Select(g => new StructuredLocationLookupDto(g.Id, g.NameAr, g.NameEn, null, g.NameDe))
                     .ToListAsync(token);
 
                 return (IReadOnlyList<StructuredLocationLookupDto>)items;
@@ -222,7 +223,7 @@ public sealed class CommonLookupService : ICommonLookupService
             .Where(d => d.IsActive && d.GovernorateId == governorateId)
             .OrderBy(d => d.SortOrder)
             .ThenBy(d => d.NameEn)
-            .Select(d => new StructuredLocationLookupDto(d.Id, d.NameAr, d.NameEn, d.GovernorateId))
+            .Select(d => new StructuredLocationLookupDto(d.Id, d.NameAr, d.NameEn, d.GovernorateId, d.NameDe))
             .ToListAsync(ct);
     }
 
@@ -236,7 +237,7 @@ public sealed class CommonLookupService : ICommonLookupService
             .Where(n => n.IsActive && n.DistrictId == districtId)
             .OrderBy(n => n.SortOrder)
             .ThenBy(n => n.NameEn)
-            .Select(n => new StructuredLocationLookupDto(n.Id, n.NameAr, n.NameEn, n.DistrictId))
+            .Select(n => new StructuredLocationLookupDto(n.Id, n.NameAr, n.NameEn, n.DistrictId, n.NameDe))
             .ToListAsync(ct);
     }
 

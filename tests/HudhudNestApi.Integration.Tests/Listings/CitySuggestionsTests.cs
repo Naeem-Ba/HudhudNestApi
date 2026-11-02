@@ -79,6 +79,30 @@ public sealed class CitySuggestionsTests : IAsyncLifetime
         Assert.Equal(all!.Length, zero!.Length);
     }
 
+    [Fact(DisplayName = "The governorate lookup carries the German name where one exists (null otherwise), and city suggestions include it")]
+    public async Task Governorates_CarryTheGermanName()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        Governorate german, plain;
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            german = Governorate.Create($"دمشق-{suffix}", $"Damascus-{suffix}", nameDe: $"Damaskus-{suffix}");
+            plain = Governorate.Create($"حلب-{suffix}", $"Aleppo-{suffix}");
+            db.Governorates.AddRange(german, plain);
+            await db.SaveChangesAsync();
+        }
+
+        using var client = _factory.CreateClient();
+        var list = await client.GetFromJsonAsync<StructuredLocationLookupDto[]>("/api/lookups/governorates?countryCode=SY");
+        Assert.Equal($"Damaskus-{suffix}", list!.Single(g => g.Id == german.Id).NameDe);
+        Assert.Null(list!.Single(g => g.Id == plain.Id).NameDe);
+
+        await using var check = _factory.Services.CreateAsyncScope();
+        var lookups = check.ServiceProvider.GetRequiredService<ICommonLookupService>();
+        Assert.Contains($"Damaskus-{suffix}", (await lookups.GetCitiesByGovernorateAsync(german.Id)).Select(c => c.Name));
+    }
+
     private async Task SeedAsync()
     {
         var owner = await _factory.SeedUserAsync($"{_marker}@test.local");
