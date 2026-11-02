@@ -1,6 +1,6 @@
 # Automatic listing translation
 
-Translates a listing's **title** and **description** (not structured data, not user messages) between
+Translates a listing's **title**, **description** and (sale/rent) **street** (not other structured data, not user messages) between
 Arabic, German and English, stores the result permanently in PostgreSQL and reuses it for every user.
 Covers sale/rent listings and short-stay listings.
 
@@ -18,6 +18,16 @@ detail endpoints are unchanged and never wait for a translation.
 Answer: `status` is `ready`, `pending` (another request is translating; ask again after
 `retryAfterSeconds`), `same_language` or `unavailable`; each field (`title`, `description`) has its own
 state. 404 when the listing is missing, deleted, unpublished, expired or taken down.
+
+## Street, city and district
+
+- **Street** is a third translated field (`Field = 3`, column `Properties.Street`), same hash/claim rules. It is
+  never read, sent to the provider or returned when the owner hid the exact location
+  (`HideExactLocation`), exactly like the detail endpoint blanks it. Short-stay listings have no street.
+- **City and district are not machine-translated.** The listing stores them as text in the owner's language;
+  the app re-resolves the stored governorate/district ids (or, for older listings, the stored text) against
+  the fixed Arabic/English names of the `Governorates`/`Districts` tables (`LocationNamesService`). German
+  uses the English name (no German column). Unknown places are shown as stored.
 
 ## Storage and validity
 
@@ -59,7 +69,7 @@ translates nothing. The app never holds a key.
 
 ## Rollout (manual)
 
-1. Run the Migrator (`AddListingTranslations`, then `ListingTranslationsShortStay`; both additive).
+1. Run the Migrator (`AddListingTranslations`, `ListingTranslationsShortStay`, `ListingTranslationStreetField`; all additive).
 2. Deploy the API.
 3. Set the provider variables; test on Staging with a real key (not yet done by anyone).
 4. Release the app (main -> release, Netlify publish; new Android build for the native app).

@@ -31,7 +31,7 @@ public sealed class ListingTranslationStore : IListingTranslationStore
                 .AsNoTracking()
                 .Where(p => p.Id == listing.Id)
                 .Where(Property.PubliclyViewable(nowUtc))
-                .Select(p => new ListingTextSource(p.Title, p.Description))
+                .Select(p => new ListingTextSource(p.Title, p.Description, p.HideExactLocation ? string.Empty : p.Street))
                 .FirstOrDefaultAsync(ct),
             ListingTranslationSubject.ShortStay => await _db.ShortStayListings
                 .AsNoTracking()
@@ -61,6 +61,7 @@ public sealed class ListingTranslationStore : IListingTranslationStore
     {
         ListingTranslationField.Title => "Title",
         ListingTranslationField.Description => "Description",
+        ListingTranslationField.Street => "Street",
         _ => throw new ArgumentOutOfRangeException(nameof(field))
     };
 
