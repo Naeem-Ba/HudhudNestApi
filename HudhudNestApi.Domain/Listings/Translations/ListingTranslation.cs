@@ -7,7 +7,9 @@ namespace HudhudNestApi.Domain.Listings.Translations;
 public enum ListingTranslationField
 {
     Title = 1,
-    Description = 2
+    Description = 2,
+    /// <summary>Street text of a sale/rent listing (a proper name; shown only while the exact location is public).</summary>
+    Street = 3
 }
 
 /// <summary>Which kind of listing a translation belongs to; each kind has its own foreign key so rows cascade with their listing.</summary>

@@ -86,6 +86,7 @@ public sealed class ListingTranslationService : IListingTranslationService
 
         Resolve(ListingTranslationField.Title, source.Title, dto.Title);
         Resolve(ListingTranslationField.Description, source.Description, dto.Description);
+        Resolve(ListingTranslationField.Street, source.Street, dto.Street);
 
         if (pendingWork.Count > 0)
         {
@@ -368,7 +369,7 @@ public sealed class ListingTranslationService : IListingTranslationService
 
     private static void Summarise(ListingTranslationDto dto)
     {
-        var fields = new[] { dto.Title, dto.Description }.Where(f => f.State != "empty").ToList();
+        var fields = new[] { dto.Title, dto.Description, dto.Street }.Where(f => f.State != "empty").ToList();
 
         if (fields.Count == 0 || fields.All(f => f.State == "same_language"))
         {
