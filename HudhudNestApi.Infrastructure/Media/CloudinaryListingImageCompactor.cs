@@ -60,6 +60,7 @@ public sealed class CloudinaryListingImageCompactor : IListingImageCompactor
             Transformation = new Transformation()
                 .Width(MaxSidePixels).Height(MaxSidePixels).Crop("limit")
                 .Quality(Quality)
+                .Flags("force_strip")
         };
 
         var result = await _cloudinary.UploadAsync(uploadParams, cancellationToken);

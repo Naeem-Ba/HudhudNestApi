@@ -77,7 +77,8 @@ public sealed class CloudinaryMediaStorageService : IMediaStorageService
             Folder = _folderPrefix is null ? folder : $"{_folderPrefix}/{folder}",
             UseFilename = false,
             UniqueFilename = true,
-            Overwrite = false
+            Overwrite = false,
+            Transformation = StripMetadataTransformation()
         };
 
         ImageUploadResult result;
@@ -110,6 +111,13 @@ public sealed class CloudinaryMediaStorageService : IMediaStorageService
             result.SecureUrl.AbsoluteUri,
             result.PublicId);
     }
+
+    /// <summary>
+    /// Incoming transformation applied while the file is stored: <c>fl_force_strip</c> clears EXIF, IPTC and XMP,
+    /// so the GPS position and device details of a phone photo never reach the public listing URL (QA phase 17,
+    /// P17-D02). The pixels are not resized or recompressed by this flag.
+    /// </summary>
+    internal static Transformation StripMetadataTransformation() => new Transformation().Flags("force_strip");
 
     /// <summary>Shown to the user when the image provider cannot be reached.</summary>
     public const string ProviderUnavailableMessage =

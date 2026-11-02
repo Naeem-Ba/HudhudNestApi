@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 namespace HudhudNestApi.Infrastructure.Auth.Services;
 
@@ -22,6 +23,24 @@ public sealed class SmsProviderOptions
     /// number. Empty means no restriction. Existing accounts are never blocked by this list.
     /// </summary>
     public string[] AllowedCountryCodes { get; init; } = [];
+
+    /// <summary>
+    /// Production only: an explicit "any country may receive a code" answer. Without it, an empty
+    /// <see cref="AllowedCountryCodes"/> stops Production from starting, because the empty default lets anyone
+    /// in the world make us pay for an SMS (QA phase 17, P17-D01).
+    /// </summary>
+    public bool AllowAnyCountry { get; init; }
+
+    /// <summary>
+    /// Most one-time codes the API will create in 24 hours for a NEW number (registration, number change),
+    /// across all callers. Stops a botnet using many IP addresses from running up the SMS bill; 0 turns the cap off.
+    /// Password reset and re-verification of existing accounts are never counted or blocked.
+    /// </summary>
+    public int DailySendLimit { get; init; } = 300;
+
+    /// <summary>True when the list has at least one entry, or any country was allowed explicitly.</summary>
+    public bool HasCountryRestriction =>
+        AllowAnyCountry || (AllowedCountryCodes ?? []).Any(x => !string.IsNullOrWhiteSpace(x));
 
     public bool IsProvider(string name) => string.Equals(Provider?.Trim(), name, StringComparison.OrdinalIgnoreCase);
 
@@ -55,6 +74,14 @@ public sealed class SmsProviderOptions
         if (!isProduction)
         {
             return;
+        }
+
+        if (!HasCountryRestriction)
+        {
+            throw new InvalidOperationException(
+                "SmsProvider:AllowedCountryCodes must list the calling codes a new number may have (for example " +
+                "SmsProvider__AllowedCountryCodes__0=+963), or SmsProvider:AllowAnyCountry must be true to accept any " +
+                "country on purpose. An empty list lets anyone in the world make the API send a paid SMS.");
         }
 
         if (!UsesSmsProviderKeys)

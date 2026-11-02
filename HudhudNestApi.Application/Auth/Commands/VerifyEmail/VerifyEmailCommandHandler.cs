@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Auth.Interfaces;
+using HudhudNestApi.Application.Common.Security;
 
 namespace HudhudNestApi.Application.Auth.Commands.VerifyEmail;
 
@@ -107,7 +108,7 @@ public sealed class VerifyEmailCommandHandler
 
         _logger.LogInformation(
             "VerifyEmail: Email {Email} confirmed for identity {IdentityId}.",
-            identity.Email,
+            PiiMasking.MaskEmail(identity.Email),
             identity.IdentityId);
 
         return VerifyEmailResult.Ok();

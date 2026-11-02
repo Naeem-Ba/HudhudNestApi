@@ -26,6 +26,12 @@ public sealed class SecurityAlertEmailService : ISecurityAlertService
         _languages = languages;
     }
 
+    /// <summary>
+    /// The alert body is sent as HTML, and the name is typed by the account owner, so a name such as
+    /// "&lt;a href=...&gt;" must not become markup in the mail (QA phase 17, P17-D09).
+    /// </summary>
+    public static string SafeName(string userName) => System.Net.WebUtility.HtmlEncode(userName);
+
     /// <summary>The account owner's language; English (the original wording) when unknown or on any lookup failure.</summary>
     private async Task<string> LanguageOfAsync(string userEmail, CancellationToken ct)
     {
@@ -57,7 +63,7 @@ public sealed class SecurityAlertEmailService : ISecurityAlertService
         ArgumentException.ThrowIfNullOrWhiteSpace(userName);
 
         var lang = await LanguageOfAsync(userEmail, ct);
-        var (subject, body) = SecurityAlertTemplates.FailedLogin(lang, userName, failedAttemptCount, ipAddress, attemptTimeUtc);
+        var (subject, body) = SecurityAlertTemplates.FailedLogin(lang, SafeName(userName), failedAttemptCount, ipAddress, attemptTimeUtc);
 
         try
         {
@@ -95,7 +101,7 @@ public sealed class SecurityAlertEmailService : ISecurityAlertService
         ArgumentException.ThrowIfNullOrWhiteSpace(passwordResetLink);
 
         var lang = await LanguageOfAsync(userEmail, ct);
-        var (subject, body) = SecurityAlertTemplates.PasswordChangeRequest(lang, userName, passwordResetLink, failedAttemptCount, ipAddress);
+        var (subject, body) = SecurityAlertTemplates.PasswordChangeRequest(lang, SafeName(userName), passwordResetLink, failedAttemptCount, ipAddress);
 
         try
         {
@@ -134,7 +140,7 @@ public sealed class SecurityAlertEmailService : ISecurityAlertService
             : 15;
 
         var lang = await LanguageOfAsync(userEmail, ct);
-        var (subject, body) = SecurityAlertTemplates.AccountLocked(lang, userName, lockoutEnd, ipAddress, minutesRemaining);
+        var (subject, body) = SecurityAlertTemplates.AccountLocked(lang, SafeName(userName), lockoutEnd, ipAddress, minutesRemaining);
 
         try
         {
@@ -167,7 +173,7 @@ public sealed class SecurityAlertEmailService : ISecurityAlertService
         ArgumentException.ThrowIfNullOrWhiteSpace(userName);
 
         var lang = await LanguageOfAsync(userEmail, ct);
-        var (subject, body) = SecurityAlertTemplates.PasswordChanged(lang, userName, DateTime.UtcNow);
+        var (subject, body) = SecurityAlertTemplates.PasswordChanged(lang, SafeName(userName), DateTime.UtcNow);
 
         try
         {

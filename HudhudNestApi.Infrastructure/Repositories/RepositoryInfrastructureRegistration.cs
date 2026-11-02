@@ -78,6 +78,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IAdminUserQueryRepository, AdminUserQueryRepository>();
         services.AddScoped<IAdminPaymentRequestQueryRepository, AdminPaymentRequestQueryRepository>();
         services.AddScoped<IAdminIdentityService, AdminIdentityService>();
+        services.AddScoped<IAdminActionNotifier, AdminActionEmailNotifier>();
         services.AddScoped<IPropertyGeoSearchRepository, PropertyGeoSearchRepository>();
         services.AddScoped<IAnalyticsReadRepository, AnalyticsReadRepository>();
         services.AddScoped<IPropertyReadRepository, PropertyReadRepository>();

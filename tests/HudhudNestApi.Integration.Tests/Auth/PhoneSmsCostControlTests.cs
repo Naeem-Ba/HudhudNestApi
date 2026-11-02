@@ -18,6 +18,7 @@ public sealed class PhoneSmsCostControlTests : IDisposable
 
     private readonly PhoneLoginAuditFactory _open = new();
     private readonly PhoneLoginAuditFactory _syriaOnly = new() { AllowedCountryCodes = ["+963"] };
+    private readonly PhoneLoginAuditFactory _capped = new() { DailySendLimit = 2 };
     private readonly PhoneLoginAuditFactory _syriaAndGermany = new() { AllowedCountryCodes = ["+963", "+49"] };
 
     private static string SyrianPhone() => $"+9639{Interlocked.Increment(ref _seed) % 100_000_000:D8}";
@@ -119,8 +120,45 @@ public sealed class PhoneSmsCostControlTests : IDisposable
         Assert.Equal("PHONE_COUNTRY_NOT_SUPPORTED", Code(second.Json));
     }
 
+    [Fact]
+    public async Task DailyCap_RefusesNewNumbersAfterTheLimit_AndSendsNoMoreSms()
+    {
+        // QA phase 17, P17-D01: many IPs (every Post uses a new one) must not get past a global ceiling.
+        await Prepare(_capped);
+
+        var first = await Post(_capped, "/api/auth/phone/registration/send-otp", new { phoneNumber = SyrianPhone() });
+        var second = await Post(_capped, "/api/auth/phone/registration/send-otp", new { phoneNumber = GermanPhone() });
+        var third = await Post(_capped, "/api/auth/phone/registration/send-otp", new { phoneNumber = SyrianPhone() });
+
+        Assert.Equal(HttpStatusCode.OK, first.Status);
+        Assert.Equal(HttpStatusCode.OK, second.Status);
+        Assert.Equal(HttpStatusCode.BadRequest, third.Status);
+        Assert.Equal("OTP_DAILY_LIMIT_REACHED", Code(third.Json));
+        Assert.Equal(2, _capped.Sms.SendCount);
+    }
+
+    [Fact]
+    public async Task DailyCap_NeverBlocksPasswordResetOfAnExistingAccount()
+    {
+        await Prepare(_capped);
+        var phone = SyrianPhone();
+        var send = await Post(_capped, "/api/auth/phone/registration/send-otp", new { phoneNumber = phone });
+        var challengeId = Guid.Parse(send.Json.GetProperty("challengeId").GetString()!);
+        var register = await Post(_capped, "/api/auth/phone/registration/verify",
+            new { challengeId, code = _capped.Sms.LastCodeFor(phone), password = Password, firstName = "Cap", lastName = "User" });
+        Assert.Equal(HttpStatusCode.OK, register.Status);
+        await Post(_capped, "/api/auth/phone/registration/send-otp", new { phoneNumber = SyrianPhone() }); // reaches the cap (2)
+        var blocked = await Post(_capped, "/api/auth/phone/registration/send-otp", new { phoneNumber = SyrianPhone() });
+        Assert.Equal("OTP_DAILY_LIMIT_REACHED", Code(blocked.Json));
+
+        var reset = await Post(_capped, "/api/auth/phone/password-reset/send-otp", new { phoneNumber = phone });
+
+        Assert.Equal(HttpStatusCode.OK, reset.Status);
+    }
+
     public void Dispose()
     {
+        _capped.Dispose();
         _open.Dispose();
         _syriaOnly.Dispose();
         _syriaAndGermany.Dispose();

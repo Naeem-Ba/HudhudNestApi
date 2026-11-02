@@ -59,6 +59,9 @@ public sealed class PublicEndpointPolicyTests
             "PhonePasswordAuthController.VerifyReset",
             "PhonePasswordAuthController.ConfirmReset",
             "CsrfController.GetCsrfToken",
+            // Browser CSP violation reports (QA phase 17, P17-D05): the browser sends them without credentials. Rate
+            // limited ("csp-report"), body capped at 8 KB, only whitelisted fields are logged, nothing is stored.
+            "CspReportController.Report",
 
             // Public catalogue: the listings a visitor browses before signing up.
             "PropertiesController.GetAll",

@@ -294,6 +294,7 @@ public sealed class TestApplication : WebApplicationFactory<Program>
             ["SmsProvider:ApiUrl"] = "https://sms-provider.example/api/send",
             ["SmsProvider:ApiKey"] = "test-api-key",
             ["SmsProvider:FromNumber"] = "+491234567890",
+            ["SmsProvider:AllowedCountryCodes:0"] = "+49",
             ["ForwardedHeaders:ForwardLimit"] = "1",
             ["ForwardedHeaders:KnownProxies:0"] = "203.0.113.1"
         };

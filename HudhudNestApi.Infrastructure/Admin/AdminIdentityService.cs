@@ -20,6 +20,7 @@ public sealed class AdminIdentityService : IAdminIdentityService
     private readonly IAuditLogService _auditLogs;
     private readonly ILogger<AdminIdentityService> _logger;
     private readonly IUserSecurityStampCacheInvalidator _stampCache;
+    private readonly IAdminActionNotifier? _notifier;
 
     /// <summary>Serialises every change that can lower the number of active administrators (phase 14, D01).</summary>
     private const long AdminRoleLockKey = 0x4C41_5354_4144_4D31;
@@ -29,8 +30,10 @@ public sealed class AdminIdentityService : IAdminIdentityService
         AppDbContext db,
         IAuditLogService auditLogs,
         ILogger<AdminIdentityService> logger,
-        IUserSecurityStampCacheInvalidator stampCache)
+        IUserSecurityStampCacheInvalidator stampCache,
+        IAdminActionNotifier? notifier = null)
     {
+        _notifier = notifier;
         _userManager = userManager;
         _db = db;
         _auditLogs = auditLogs;
@@ -98,6 +101,7 @@ public sealed class AdminIdentityService : IAdminIdentityService
             ct: ct);
 
         await transaction.CommitAsync(ct);
+        await NotifyAsync(AdminAccountAction.RoleChanged, userId, performedByUserId, $"roles: {string.Join(", ", new[] { role })}", ct);
 
         return AdminOperationResult.Ok($"Role updated to '{role}'.");
     }
@@ -138,6 +142,8 @@ public sealed class AdminIdentityService : IAdminIdentityService
             oldRoles: currentRoles,
             newRoles: newRoles,
             ct: ct);
+
+        await NotifyAsync(AdminAccountAction.RoleChanged, userId, performedByUserId, $"roles: {string.Join(", ", newRoles)}", ct);
 
         return AdminOperationResult.Ok($"Role '{role}' assigned.");
     }
@@ -215,6 +221,7 @@ public sealed class AdminIdentityService : IAdminIdentityService
             ct: ct);
 
         await transaction.CommitAsync(ct);
+        await NotifyAsync(AdminAccountAction.RoleChanged, userId, performedByUserId, $"roles: {string.Join(", ", newRoles)}", ct);
 
         return AdminOperationResult.Ok(fellBackToUser
             ? $"Role '{role}' removed; the user keeps the base 'User' role."
@@ -286,6 +293,7 @@ public sealed class AdminIdentityService : IAdminIdentityService
         // The JWT pipeline trusts a 5-minute cached stamp snapshot; without this the disabled
         // account keeps working until it expires (security audit 2026-10-03, F-03).
         await _stampCache.InvalidateAsync(user.Id, ct);
+        await NotifyAsync(AdminAccountAction.Disabled, userId, performedByUserId, null, ct);
 
         return AdminOperationResult.Ok("User disabled.");
     }
@@ -345,6 +353,7 @@ public sealed class AdminIdentityService : IAdminIdentityService
 
         await transaction.CommitAsync(ct);
         await _stampCache.InvalidateAsync(user.Id, ct);
+        await NotifyAsync(AdminAccountAction.Enabled, userId, performedByUserId, null, ct);
 
         return AdminOperationResult.Ok("User re-enabled.");
     }
@@ -445,6 +454,9 @@ public sealed class AdminIdentityService : IAdminIdentityService
 
         return AdminOperationResult.Ok("User updated.");
     }
+
+    private Task NotifyAsync(AdminAccountAction action, Guid targetUserId, Guid actorUserId, string? detail, CancellationToken ct)
+        => _notifier is null ? Task.CompletedTask : _notifier.NotifyAsync(action, targetUserId, actorUserId, detail, ct);
 
     private Task LogRoleChangeAsync(
         Guid performedByUserId,
