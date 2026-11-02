@@ -81,6 +81,7 @@ public static class PropertyMapper
         WarmRent = p.WarmRent,
         PurchasePrice = p.PurchasePrice,
         Deposit = p.Deposit,
+        IsPriceNegotiable = p.IsPriceNegotiable,
         CurrencyCode = p.CurrencyCode,
 
         // Details

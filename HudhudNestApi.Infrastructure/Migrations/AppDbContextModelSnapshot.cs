@@ -1454,6 +1454,11 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.Property<bool>("IsFeatured")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsPriceNegotiable")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsPublished")
                         .HasColumnType("boolean");
 

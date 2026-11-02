@@ -34,6 +34,8 @@ public sealed class GetPropertiesListQueryHandler
             .Select(property => PropertyMapper.ToDto(property, asOfUtc))
             .ToList();
         foreach (var item in items)
+            item.IsPriceNegotiable = null; // detail page only, never in list/card payloads
+        foreach (var item in items)
             item.ViewCount = viewCounts.TryGetValue(item.Id, out var views) ? views : 0;
 
         return new PagedResult<PropertyDto>

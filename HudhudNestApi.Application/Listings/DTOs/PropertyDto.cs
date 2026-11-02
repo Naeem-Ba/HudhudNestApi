@@ -54,6 +54,9 @@ public sealed class PropertyDto
     public decimal? Deposit { get; set; }
     public string CurrencyCode { get; set; } = string.Empty;
 
+    /// <summary>Owner is open to negotiating the price. Null in list/card payloads — detail and management views only.</summary>
+    public bool? IsPriceNegotiable { get; set; }
+
     // Details
     public int? Rooms { get; set; }
     public decimal? Area { get; set; }

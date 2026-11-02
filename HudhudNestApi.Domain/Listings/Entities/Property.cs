@@ -54,6 +54,9 @@ public class Property : AuditableEntity
     public decimal? AdditionalCosts { get; set; }   // Monthly additional costs (Nebenkosten)
     public decimal? Deposit { get; set; }   // Security deposit (Kaution)
 
+    /// <summary>The owner is open to negotiating the price (rent or sale). Shown on the listing detail page only.</summary>
+    public bool IsPriceNegotiable { get; set; }
+
     /// <summary>ISO 4217 currency code (e.g. "EUR", "USD", "SYP").</summary>
     public string CurrencyCode { get; set; } = "SYP";
 

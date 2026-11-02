@@ -161,6 +161,7 @@ public sealed class CreatePropertyCommandHandler
         property.Latitude = request.Latitude;
         property.Longitude = request.Longitude;
         property.HideExactLocation = request.HideExactLocation;
+        property.IsPriceNegotiable = request.IsPriceNegotiable;
         property.ColdRent = request.ColdRent;
         property.WarmRent = request.WarmRent;
         property.PurchasePrice = request.PurchasePrice;
