@@ -232,6 +232,11 @@ public sealed class CreateBookingCommandHandlerTests
     {
         public Task NotifyNewMessageAsync(Guid recipientId, Guid senderId, string senderName, Guid messageId, Guid propertyId, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifyPropertyUpdateAsync(Guid recipientId, Guid propertyId, string propertyTitle, NotificationType type, NotificationText detail, Guid? relatedEntityId = null, CancellationToken ct = default) => Task.CompletedTask;
+        public Task NotifySearchRequestMatchAsync(Guid recipientId, Guid propertyId, string propertyTitle, Guid searchRequestId, bool proposed, CancellationToken ct = default) => Task.CompletedTask;
+        public Task NotifyListingDemandAsync(Guid recipientId, Guid propertyId, string propertyTitle, int requestCount, string dedupeKey, CancellationToken ct = default) => Task.CompletedTask;
+        public Task NotifySavedSearchDigestAsync(Guid recipientId, Guid savedSearchId, string? savedSearchName, int listingCount, DateTime nowUtc, CancellationToken ct = default) => Task.CompletedTask;
+        public Task NotifyReferralQualifiedAsync(Guid recipientId, Guid referralId, CancellationToken ct = default) => Task.CompletedTask;
+        public Task NotifyFavoritePriceChangedAsync(Guid recipientId, Guid propertyId, string propertyTitle, NotificationText detail, Guid priceHistoryId, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifySavedSearchMatchAsync(Guid recipientId, Guid propertyId, string propertyTitle, string savedSearchName, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifyUserRatedAsync(Guid recipientId, Guid raterId, string raterName, double overallScore, CancellationToken ct = default) => Task.CompletedTask;
         public Task NotifyListingExpiringSoonAsync(Guid recipientId, Guid propertyId, string propertyTitle, int daysRemaining, CancellationToken ct = default) => Task.CompletedTask;

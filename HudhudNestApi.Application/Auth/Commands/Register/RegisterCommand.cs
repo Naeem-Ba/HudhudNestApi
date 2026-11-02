@@ -6,6 +6,8 @@ using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Application.Auth.Models;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Common.Security;
+using HudhudNestApi.Application.Growth;
+using HudhudNestApi.Domain.Growth.Entities;
 using HudhudNestApi.Application.Users.Interfaces;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Users.Constants;
@@ -33,7 +35,14 @@ public sealed record RegisterCommand(
     string? TermsVersion = null,
     // The site language the client was showing ("ar", "en", "de"). Only picks the language
     // of the confirmation mail; an older client omits it and gets the bilingual message.
-    string? Language = null)
+    string? Language = null,
+    // Growth engine P4: where the visitor came from (UTM tags kept by the app from the landing URL).
+    // Short tags only; anything that is not a plain tag is dropped, never stored.
+    string? AcquisitionSource = null,
+    string? AcquisitionMedium = null,
+    string? AcquisitionCampaign = null,
+    // Growth engine P5: an invitation code from a "?ref=" link. An unknown code is ignored, never an error.
+    string? ReferralCode = null)
     : IRequest<RegisterResult>;
 
 public sealed record RegisterResult
@@ -111,14 +120,22 @@ public sealed class RegisterCommandHandler
     private readonly ILogger<RegisterCommandHandler>
         _logger;
 
+    private readonly IGrowthEventRecorder _growth;
+
+    private readonly HudhudNestApi.Application.Referrals.IReferralStore? _referrals;
+
     public RegisterCommandHandler(
         IRegisterIdentityService identity,
         IUserAccountRepository accounts,
         IUnitOfWork unitOfWork,
         IEmailVerificationService emailVerification,
         IConsentRecordRepository consents,
-        ILogger<RegisterCommandHandler> logger)
+        ILogger<RegisterCommandHandler> logger,
+        IGrowthEventRecorder? growth = null,
+        HudhudNestApi.Application.Referrals.IReferralStore? referrals = null)
     {
+        _growth = growth ?? NullGrowthEventRecorder.Instance;
+        _referrals = referrals;
         _identity = identity;
         _accounts = accounts;
         _unitOfWork = unitOfWork;
@@ -303,6 +320,19 @@ public sealed class RegisterCommandHandler
             _logger.LogInformation(
                 "Identity {IdentityId} and UserAccount registered successfully.",
                 userId);
+
+            // After the commit: an analytics row must never be part of (or break) the registration.
+            await _growth.RecordAsync(
+                GrowthEventNames.UserRegistered,
+                $"user_registered:{userId:N}",
+                userId,
+                tags: new AcquisitionTags(request.AcquisitionSource, request.AcquisitionMedium, request.AcquisitionCampaign),
+                ct: CancellationToken.None);
+
+            if (_referrals is not null && !string.IsNullOrWhiteSpace(request.ReferralCode))
+            {
+                await _referrals.AttachAtRegistrationAsync(userId, request.ReferralCode, now, CancellationToken.None);
+            }
 
             /*
              * 5. Address confirmation.

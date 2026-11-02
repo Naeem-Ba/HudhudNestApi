@@ -240,4 +240,22 @@ public enum NotificationType
     /// admins when nobody is assigned); the message carries an excerpt of the answer. RelatedEntityId is the report id.
     /// </summary>
     ListingReportReporterResponded = 63,
+
+    /// <summary>Growth engine P1: the price of a listing the recipient saved changed.</summary>
+    FavoritePriceChanged = 64,
+
+    /// <summary>Growth engine P2: a listing fits the recipient's search request (found by the matcher).</summary>
+    SearchRequestMatch = 65,
+
+    /// <summary>Growth engine P2: an advertiser proposed a listing for the recipient's search request.</summary>
+    SearchRequestProposal = 66,
+
+    /// <summary>Growth engine P2: new search requests fit one of the recipient's listings.</summary>
+    ListingDemandMatch = 67,
+
+    /// <summary>Growth engine P3: daily summary of new listings for a saved search set to "daily".</summary>
+    SavedSearchDigest = 68,
+
+    /// <summary>Growth engine P5: someone the recipient invited did the qualifying activity.</summary>
+    ReferralQualified = 69,
 }

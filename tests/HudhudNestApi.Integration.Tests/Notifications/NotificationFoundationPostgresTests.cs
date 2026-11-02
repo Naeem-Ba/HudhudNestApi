@@ -135,6 +135,7 @@ public sealed class NotificationFoundationPostgresTests : IAsyncLifetime
                 var property = Property.Create($"{_marker} p{i}", "وصف كافٍ للإعلان", _bob, ListingType.ForSale);
                 property.CreatedAt = start.AddMinutes(10 + i);
                 db.Properties.Add(property);
+                db.Entry(property).Property(nameof(Property.PublishedAt)).CurrentValue = property.CreatedAt;
             }
 
             await db.SaveChangesAsync();
@@ -152,6 +153,49 @@ public sealed class NotificationFoundationPostgresTests : IAsyncLifetime
 
         await service.RunOnceAsync(CancellationToken.None);
         Assert.Equal(12, await CountMatchesAsync());
+    }
+
+    [Fact(DisplayName = "A draft created before the search's cursor and published later is still alerted (growth engine G3.1)")]
+    public async Task SavedSearch_AlertsADraftPublishedAfterTheCursor()
+    {
+        var start = DateTime.UtcNow.AddHours(-3);
+        Guid draftId;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var search = SavedSearch.Create(_alice, "all", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            search.CreatedAt = start;
+            db.SavedSearches.Add(search);
+
+            var draft = Property.Create($"{_marker} draft", "وصف كافٍ للإعلان", _bob, ListingType.ForSale, isPublished: false);
+            draft.CreatedAt = start.AddMinutes(5);
+            db.Properties.Add(draft);
+
+            var published = Property.Create($"{_marker} live", "وصف كافٍ للإعلان", _bob, ListingType.ForSale);
+            published.CreatedAt = start.AddMinutes(30);
+            db.Properties.Add(published);
+            db.Entry(published).Property(nameof(Property.PublishedAt)).CurrentValue = published.CreatedAt;
+            await db.SaveChangesAsync();
+            draftId = draft.Id;
+        }
+
+        var service = new SavedSearchMatchHostedService(
+            _factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            _factory.Services.GetRequiredService<ILogger<SavedSearchMatchHostedService>>());
+
+        await service.RunOnceAsync(CancellationToken.None);
+        Assert.Equal(1, await CountMatchesAsync()); // the live listing; cursor is now start+30min
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var draft = await db.Properties.SingleAsync(p => p.Id == draftId);
+            draft.Publish();
+            await db.SaveChangesAsync();
+        }
+
+        await service.RunOnceAsync(CancellationToken.None);
+        Assert.Equal(2, await CountMatchesAsync());
     }
 
     private async Task<int> CountMatchesAsync()

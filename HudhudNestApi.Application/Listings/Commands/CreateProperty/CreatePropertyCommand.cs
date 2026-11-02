@@ -65,6 +65,9 @@ public sealed record CreatePropertyCommand(
     RentalDurationType? RentalDurationType = null,
 
     // مفروش / غير مفروش — اختياري، غير مناسب للأراضي.
-    FurnishingStatus? FurnishingStatus = null
+    FurnishingStatus? FurnishingStatus = null,
+
+    // Growth engine P8: show only an approximate spot to the public.
+    bool HideExactLocation = false
 ) : IRequest<Guid>;
 

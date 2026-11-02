@@ -1,4 +1,6 @@
 ﻿using MediatR;
+using HudhudNestApi.Application.Growth;
+using HudhudNestApi.Domain.Growth.Entities;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Agencies.Interfaces;
@@ -24,6 +26,7 @@ public sealed class SendMessageCommandHandler
     private readonly INotificationService _notifications;
     private readonly IAgencyRepository _agencies;
     private readonly ILogger<SendMessageCommandHandler> _logger;
+    private readonly IGrowthEventRecorder _growth;
 
     public SendMessageCommandHandler(
         ICurrentUserService currentUser,
@@ -33,8 +36,10 @@ public sealed class SendMessageCommandHandler
         IUnitOfWork uow,
         INotificationService notifications,
         IAgencyRepository agencies,
-        ILogger<SendMessageCommandHandler> logger)
+        ILogger<SendMessageCommandHandler> logger,
+        IGrowthEventRecorder? growth = null)
     {
+        _growth = growth ?? NullGrowthEventRecorder.Instance;
         _currentUser = currentUser;
         _properties = properties;
         _userDirectory = userDirectory;
@@ -205,6 +210,17 @@ public sealed class SendMessageCommandHandler
 
         await _uow.SaveChangesAsync(
             cancellationToken);
+
+        // Growth engine P4: the first time a visitor writes to an advertiser about a listing.
+        if (senderId != property.OwnerId)
+        {
+            await _growth.RecordAsync(
+                GrowthEventNames.ContactStarted,
+                $"contact_started:{senderId:N}:{property.Id:N}",
+                senderId,
+                property.Id,
+                ct: cancellationToken);
+        }
 
         var sender =
             await _userDirectory.GetActiveByIdAsync(

@@ -82,6 +82,9 @@ public sealed record UpdatePropertyCommand(
     // Amenities (the "المرافق" checkboxes). null = leave the stored set alone; a list (even an empty
     // one) replaces it. The create path accepted these but the edit path silently dropped them, so
     // amenities picked while editing were never saved.
-    List<Guid>? AmenityIds = null
+    List<Guid>? AmenityIds = null,
+
+    // Growth engine P8: null = keep the stored choice.
+    bool? HideExactLocation = null
 ) : IRequest<bool>;
 

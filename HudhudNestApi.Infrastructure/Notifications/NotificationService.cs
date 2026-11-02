@@ -155,6 +155,117 @@ public sealed class NotificationService : INotificationService
             propertyId);
     }
 
+    public async Task NotifyFavoritePriceChangedAsync(
+        Guid recipientId,
+        Guid propertyId,
+        string propertyTitle,
+        NotificationText detail,
+        Guid priceHistoryId,
+        CancellationToken ct = default)
+    {
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(propertyId, "Property id is required.", nameof(propertyId));
+        RequireId(priceHistoryId, "Price history id is required.", nameof(priceHistoryId));
+
+        var lang = await LanguageOfAsync(recipientId, ct);
+
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.FavoritePriceChanged,
+                Say(lang, "msg.favorite_price_changed",
+                    ("title", NameOr(propertyTitle, "generic.property")),
+                    ("detail", detail ?? NotificationText.Empty)),
+                propertyId: propertyId,
+                relatedEntityId: priceHistoryId,
+                dedupeKey: $"fpc:{priceHistoryId:N}"),
+            ct);
+    }
+
+    public async Task NotifySearchRequestMatchAsync(
+        Guid recipientId,
+        Guid propertyId,
+        string propertyTitle,
+        Guid searchRequestId,
+        bool proposed,
+        CancellationToken ct = default)
+    {
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(propertyId, "Property id is required.", nameof(propertyId));
+        RequireId(searchRequestId, "Search request id is required.", nameof(searchRequestId));
+
+        var lang = await LanguageOfAsync(recipientId, ct);
+
+        await PersistAndPushAsync(
+            New(recipientId,
+                proposed ? NotificationType.SearchRequestProposal : NotificationType.SearchRequestMatch,
+                Say(lang, proposed ? "msg.search_request_proposal" : "msg.search_request_match",
+                    ("title", NameOr(propertyTitle, "generic.property"))),
+                propertyId: propertyId,
+                relatedEntityId: searchRequestId,
+                dedupeKey: $"srm:{searchRequestId:N}:{propertyId:N}"),
+            ct);
+    }
+
+    public async Task NotifySavedSearchDigestAsync(
+        Guid recipientId,
+        Guid savedSearchId,
+        string? savedSearchName,
+        int listingCount,
+        DateTime nowUtc,
+        CancellationToken ct = default)
+    {
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(savedSearchId, "Saved search id is required.", nameof(savedSearchId));
+
+        var lang = await LanguageOfAsync(recipientId, ct);
+
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.SavedSearchDigest,
+                Say(lang, "msg.saved_search_digest",
+                    ("count", listingCount),
+                    ("search", NameOr(savedSearchName, "generic.saved_search"))),
+                relatedEntityId: savedSearchId,
+                dedupeKey: $"ssd:{savedSearchId:N}:{nowUtc:yyyyMMdd}"),
+            ct);
+    }
+
+    public async Task NotifyReferralQualifiedAsync(Guid recipientId, Guid referralId, CancellationToken ct = default)
+    {
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(referralId, "Referral id is required.", nameof(referralId));
+
+        var lang = await LanguageOfAsync(recipientId, ct);
+
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.ReferralQualified,
+                Say(lang, "msg.referral_qualified"),
+                relatedEntityId: referralId,
+                dedupeKey: $"rq:{referralId:N}"),
+            ct);
+    }
+
+    public async Task NotifyListingDemandAsync(
+        Guid recipientId,
+        Guid propertyId,
+        string propertyTitle,
+        int requestCount,
+        string dedupeKey,
+        CancellationToken ct = default)
+    {
+        RequireId(recipientId, "Recipient id is required.", nameof(recipientId));
+        RequireId(propertyId, "Property id is required.", nameof(propertyId));
+
+        var lang = await LanguageOfAsync(recipientId, ct);
+
+        await PersistAndPushAsync(
+            New(recipientId, NotificationType.ListingDemandMatch,
+                Say(lang, "msg.listing_demand_match",
+                    ("title", NameOr(propertyTitle, "generic.property")),
+                    ("count", requestCount)),
+                propertyId: propertyId,
+                dedupeKey: dedupeKey),
+            ct);
+    }
+
     public async Task NotifyUserRatedAsync(
         Guid recipientId,
         Guid raterId,

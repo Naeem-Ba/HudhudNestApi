@@ -48,4 +48,14 @@ public static class BackgroundJobLockKeys
     public const long InvestmentScheduledPublish = 20261029_1013;
 
     public const long PlanExpiryNotice = 20261031_1014;
+
+    public const long PriceChangeFollowers = 20261101_1015;
+
+    public const long SearchRequestMatch = 20261101_1016;
+
+    public const long ReferralQualification = 20261101_1017;
+
+    public const long AreaPriceStats = 20261101_1018;
+
+    public const long UserActivityRollup = 20261101_1019;
 }

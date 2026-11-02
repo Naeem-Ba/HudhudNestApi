@@ -141,6 +141,7 @@ SELECT
         p."PostalCode",
         p."Latitude",
         p."Longitude",
+        p."HideExactLocation",
         p."ListingType",
         p."Status",
         p."ColdRent",
@@ -231,6 +232,8 @@ ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
                     DistanceMeters = Convert.ToDouble(reader["DistanceMeters"]),
                     CreatedAt = reader.GetDateTime(reader.GetOrdinal("CreatedAt"))
                 });
+                if (reader.GetBoolean(reader.GetOrdinal("HideExactLocation")))
+                    ApplyLocationPrivacy(items[^1]);
             }
         }
         catch (Exception ex)
@@ -287,6 +290,19 @@ ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
             stopwatch.Stop();
             RecordPerformanceDatabaseCommand(stopwatch.Elapsed);
         }
+    }
+
+    /// <summary>
+    /// Growth engine P8: the owner hid the exact spot. Approximate point, no street, and the distance rounded to
+    /// 500 m so that distances from several search points cannot locate the listing more precisely.
+    /// </summary>
+    internal static void ApplyLocationPrivacy(GeoPropertySearchResultDto item)
+    {
+        item.Latitude = LocationPrivacy.Approximate(item.Latitude);
+        item.Longitude = LocationPrivacy.Approximate(item.Longitude);
+        item.Street = string.Empty;
+        item.IsLocationApproximate = true;
+        item.DistanceMeters = Math.Max(500d, Math.Round(item.DistanceMeters / 500d) * 500d);
     }
 
     private static void AddParameters(

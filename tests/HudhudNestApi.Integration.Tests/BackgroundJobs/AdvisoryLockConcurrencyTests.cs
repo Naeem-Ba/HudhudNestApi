@@ -35,6 +35,11 @@ public sealed class AdvisoryLockConcurrencyTests
     [InlineData(BackgroundJobLockKeys.ListingViewRetention)]
     [InlineData(BackgroundJobLockKeys.InvestmentScheduledPublish)]
     [InlineData(BackgroundJobLockKeys.PlanExpiryNotice)]
+    [InlineData(BackgroundJobLockKeys.PriceChangeFollowers)]
+    [InlineData(BackgroundJobLockKeys.SearchRequestMatch)]
+    [InlineData(BackgroundJobLockKeys.ReferralQualification)]
+    [InlineData(BackgroundJobLockKeys.AreaPriceStats)]
+    [InlineData(BackgroundJobLockKeys.UserActivityRollup)]
     public async Task TryRunAsync_SkipsTheAction_WhenAnotherConnectionAlreadyHoldsTheKey(long key)
     {
         // Simulates a second application instance already mid-sweep: acquire the same key on

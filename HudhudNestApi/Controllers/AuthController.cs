@@ -64,7 +64,11 @@ public sealed class AuthController : ControllerBase
             ConsentSource: dto.ConsentSource,
             TermsAccepted: dto.TermsAccepted,
             TermsVersion: dto.TermsVersion,
-            Language: dto.Language), ct);
+            Language: dto.Language,
+            AcquisitionSource: dto.AcquisitionSource,
+            AcquisitionMedium: dto.AcquisitionMedium,
+            AcquisitionCampaign: dto.AcquisitionCampaign,
+            ReferralCode: dto.ReferralCode), ct);
 
         if (result.Conflict)
             return Conflict(new { message = result.Message, code = RegisterResult.EmailConflictCode });
@@ -449,7 +453,13 @@ public sealed record RegisterRequest(
     string? TermsVersion = null,
     // Site language the client is showing ("ar", "en", "de"); picks the language of the
     // confirmation mail. Optional: an older client omits it and gets the bilingual message.
-    string? Language = null);
+    string? Language = null,
+    // Growth engine P4: UTM tags the app kept from the landing URL (optional, tags only).
+    string? AcquisitionSource = null,
+    string? AcquisitionMedium = null,
+    string? AcquisitionCampaign = null,
+    // Growth engine P5: invitation code from a "?ref=" link (optional).
+    string? ReferralCode = null);
 
 public sealed record LoginRequest(
     string Email,

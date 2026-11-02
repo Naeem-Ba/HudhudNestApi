@@ -106,6 +106,30 @@ public static class NotificationCatalog
             "تحديث على العقار '{title}': {detail}",
             "Update on the property '{title}': {detail}",
             "Aktualisierung zur Immobilie '{title}': {detail}"),
+        ["msg.favorite_price_changed"] = new(
+            "تغيّر سعر عقار محفوظ لديك '{title}': {detail}",
+            "The price of a property you saved, '{title}', changed: {detail}",
+            "Der Preis einer gespeicherten Immobilie, '{title}', hat sich geändert: {detail}"),
+        ["msg.search_request_match"] = new(
+            "عقار '{title}' يناسب طلب البحث الخاص بك.",
+            "The property '{title}' fits your search request.",
+            "Die Immobilie '{title}' passt zu Ihrem Suchauftrag."),
+        ["msg.search_request_proposal"] = new(
+            "اقترح معلن العقار '{title}' لطلب البحث الخاص بك. بياناتك لم تُكشف له.",
+            "An advertiser suggested the property '{title}' for your search request. Your details were not shared.",
+            "Ein Anbieter hat die Immobilie '{title}' für Ihren Suchauftrag vorgeschlagen. Ihre Daten wurden nicht weitergegeben."),
+        ["msg.listing_demand_match"] = new(
+            "{count} طلب بحث جديد يناسب عقارك '{title}'. يمكنك اقتراحه على أصحابها دون معرفة هوياتهم.",
+            "{count} new search request(s) fit your property '{title}'. You can suggest it without seeing who asked.",
+            "{count} neue Suchauftrag/Suchaufträge passen zu Ihrer Immobilie '{title}'. Sie können sie vorschlagen, ohne die Suchenden zu sehen."),
+        ["msg.referral_qualified"] = new(
+            "أحد الأشخاص الذين دعوتهم أكمل شروط الدعوة. شكرًا لك!",
+            "Someone you invited has completed the invitation conditions. Thank you!",
+            "Eine von Ihnen eingeladene Person hat die Bedingungen der Einladung erfüllt. Danke!"),
+        ["msg.saved_search_digest"] = new(
+            "{count} عقار جديد يطابق '{search}' منذ آخر ملخص.",
+            "{count} new propert(y/ies) match '{search}' since the last summary.",
+            "{count} neue Immobilie(n) passen seit der letzten Zusammenfassung zu '{search}'."),
         ["msg.saved_search_match"] = new(
             "عقار جديد '{title}' يطابق '{search}'.",
             "A new property '{title}' matches '{search}'.",

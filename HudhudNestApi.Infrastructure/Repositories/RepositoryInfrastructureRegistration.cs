@@ -89,6 +89,29 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IPropertyPriceHistoryRepository, PropertyPriceHistoryRepository>();
         services.AddScoped<ISavedSearchRepository, SavedSearchRepository>();
         services.AddHostedService<SavedSearchMatchHostedService>();
+        services.AddHostedService<HudhudNestApi.Infrastructure.Listings.PriceChangeFollowerNotificationHostedService>();
+        // Growth engine P2: search requests and the matcher (weights in "SearchRequests:Matching").
+        services.AddOptions<HudhudNestApi.Application.Demand.Matching.SearchRequestMatchingOptions>()
+            .Bind(configuration.GetSection(HudhudNestApi.Application.Demand.Matching.SearchRequestMatchingOptions.SectionName));
+        services.AddScoped<HudhudNestApi.Application.Demand.Interfaces.ISearchRequestRepository, HudhudNestApi.Infrastructure.Demand.SearchRequestRepository>();
+        services.AddHostedService<HudhudNestApi.Infrastructure.Demand.SearchRequestMatchHostedService>();
+        // Growth engine P4: append-only growth event log.
+        services.AddScoped<HudhudNestApi.Application.Growth.IGrowthEventRecorder, HudhudNestApi.Infrastructure.Growth.GrowthEventRecorder>();
+        // Growth engine P5: referrals (rules in "Referrals").
+        services.AddOptions<HudhudNestApi.Application.Referrals.ReferralOptions>()
+            .Bind(configuration.GetSection(HudhudNestApi.Application.Referrals.ReferralOptions.SectionName));
+        services.AddScoped<HudhudNestApi.Application.Referrals.IReferralStore, HudhudNestApi.Infrastructure.Referrals.ReferralStore>();
+        services.AddHostedService<HudhudNestApi.Infrastructure.Referrals.ReferralQualificationHostedService>();
+        // Growth engine P6: area price statistics and the estimator (rules in "AreaPrices").
+        services.AddOptions<HudhudNestApi.Application.Pricing.AreaPriceOptions>()
+            .Bind(configuration.GetSection(HudhudNestApi.Application.Pricing.AreaPriceOptions.SectionName));
+        services.AddScoped<HudhudNestApi.Application.Pricing.IAreaPriceStatsReader, HudhudNestApi.Infrastructure.Pricing.AreaPriceStatsReader>();
+        services.AddHostedService<HudhudNestApi.Infrastructure.Pricing.AreaPriceStatsHostedService>();
+        // Growth engine P10: admin growth overview and the daily activity rollup used for retention.
+        services.AddScoped<HudhudNestApi.Application.Growth.IGrowthDashboardReader, HudhudNestApi.Infrastructure.Growth.GrowthDashboardReader>();
+        services.AddHostedService<HudhudNestApi.Infrastructure.Growth.UserActivityRollupHostedService>();
+        // Growth engine P8: map points and clusters.
+        services.AddScoped<HudhudNestApi.Application.Listings.Map.IPropertyMapReader, HudhudNestApi.Infrastructure.Listings.PropertyMapReader>();
         services.AddScoped<IListingFeeRepository, ListingFeeRepository>();
         services.AddScoped<IAgencyRepository, AgencyRepository>();
         services.AddScoped<IAgencyInvitationRepository, AgencyInvitationRepository>();

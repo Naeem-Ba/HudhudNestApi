@@ -1,4 +1,5 @@
 using HudhudNestApi.Domain.Enums;
+using HudhudNestApi.Domain.Search.Enums;
 
 namespace HudhudNestApi.Application.Search.DTOs;
 
@@ -21,4 +22,11 @@ public sealed record SavedSearchDto(
     decimal? MinArea,
     decimal? MaxArea,
     DateTime CreatedAt,
-    DateTime? LastMatchedAt);
+    DateTime? LastMatchedAt,
+    bool? HasBalcony = null,
+    bool? HasElevator = null,
+    bool? HasParkingSpace = null,
+    SavedSearchFrequency Frequency = SavedSearchFrequency.Instant,
+    bool IsPaused = false,
+    DateTime? LastNotifiedAt = null,
+    int NotifiedCount = 0);

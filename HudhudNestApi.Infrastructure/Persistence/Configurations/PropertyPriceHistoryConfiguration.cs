@@ -15,6 +15,8 @@ public sealed class PropertyPriceHistoryConfiguration : IEntityTypeConfiguration
         builder.Property(h => h.OldValue).HasColumnType("decimal(18,4)");
         builder.Property(h => h.NewValue).HasColumnType("decimal(18,4)");
         builder.Property(h => h.CurrencyCode).IsRequired().HasMaxLength(3).IsFixedLength();
+        builder.Property(h => h.OldCurrencyCode).HasMaxLength(3).IsFixedLength();
+        builder.Ignore(h => h.IsComparable);
 
         builder.HasOne(h => h.Property)
             .WithMany()
@@ -31,5 +33,10 @@ public sealed class PropertyPriceHistoryConfiguration : IEntityTypeConfiguration
 
         // Primary access pattern: "show the price timeline for this property, newest first".
         builder.HasIndex(h => new { h.PropertyId, h.ChangedAt });
+
+        // The follower-notification sweep only reads rows it has not handled yet (growth engine P1).
+        builder.HasIndex(h => h.ChangedAt)
+            .HasDatabaseName("IX_PropertyPriceHistories_FollowersPending")
+            .HasFilter("\"FollowersNotifiedAt\" IS NULL");
     }
 }

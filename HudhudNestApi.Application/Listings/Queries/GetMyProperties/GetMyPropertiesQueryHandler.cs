@@ -30,7 +30,7 @@ public sealed class GetMyPropertiesQueryHandler
         // straddle "now" are not judged against two different instants in one response.
         var asOfUtc = DateTime.UtcNow;
 
-        var dtos = properties.Select(property => PropertyMapper.ToDto(property, asOfUtc)).ToList();
+        var dtos = properties.Select(property => PropertyMapper.ToDto(property, asOfUtc, revealExactLocation: true)).ToList();
         await _views.ApplyViewCountsAsync(dtos, cancellationToken);
         return dtos;
     }

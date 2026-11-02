@@ -49,6 +49,15 @@ public static class NotificationKindCatalog
         [NotificationType.ReviewAdded] = new(Listings, NotificationPriority.Low, "property", false),
 
         [NotificationType.SavedSearchMatch] = new(SavedSearch, NotificationPriority.Normal, "property", false),
+        // Growth engine P1: an alert about a listing the user follows, so it shares the alerts switch.
+        [NotificationType.FavoritePriceChanged] = new(SavedSearch, NotificationPriority.Normal, "property", false),
+        // Growth engine P2: buyer side shares the alerts switch; the advertiser side is a listings notice.
+        [NotificationType.SearchRequestMatch] = new(SavedSearch, NotificationPriority.Normal, "property", false),
+        [NotificationType.SearchRequestProposal] = new(SavedSearch, NotificationPriority.Normal, "property", false),
+        [NotificationType.ListingDemandMatch] = new(Listings, NotificationPriority.Low, "listing-demand", false),
+        [NotificationType.SavedSearchDigest] = new(SavedSearch, NotificationPriority.Normal, "saved-searches", false),
+        // Account holds only mandatory kinds; this one is rare (capped per month) and about the user's own invitations.
+        [NotificationType.ReferralQualified] = new(Account, NotificationPriority.Normal, "referrals", true),
 
         [NotificationType.VisitRequested] = new(Visits, NotificationPriority.Normal, "visit", false),
         [NotificationType.VisitConfirmed] = new(Visits, NotificationPriority.Normal, "visit", false),
@@ -125,7 +134,7 @@ public static class NotificationKindCatalog
         {
             // The related id of a message notification is the message id: the thread is the property's.
             "messages" => new NotificationTarget(kind.TargetKind, null, propertyId),
-            "property" or "my-listings" => new NotificationTarget(kind.TargetKind, null, propertyId),
+            "property" or "my-listings" or "listing-demand" => new NotificationTarget(kind.TargetKind, null, propertyId),
             "phone-verify" or "notifications" => new NotificationTarget(kind.TargetKind, null, null),
             "profile" => new NotificationTarget(kind.TargetKind, relatedEntityId, null),
             _ => new NotificationTarget(kind.TargetKind, relatedEntityId, propertyId),

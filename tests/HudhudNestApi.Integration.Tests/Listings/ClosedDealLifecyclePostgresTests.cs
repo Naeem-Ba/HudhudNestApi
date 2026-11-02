@@ -96,7 +96,12 @@ public sealed class ClosedDealLifecyclePostgresTests : IAsyncLifetime
         var rented = await SeedAsync("rented", PropertyStatus.Rented, expiresAt: past);
         var available = await SeedAsync("available", PropertyStatus.Available, expiresAt: DateTime.UtcNow.AddDays(-1));
 
+        // The sweep expires the oldest due listings first, a capped number per run. On the shared test database
+        // other classes leave expired listings behind, so this one (due only yesterday) may need a few runs to be
+        // reached. Extra runs only make the sold/rented checks below stricter.
         await SweepAsync();
+        for (var run = 0; run < 15 && (await LoadAsync(available)).Status != PropertyStatus.Expired; run++)
+            await SweepAsync();
 
         foreach (var id in new[] { sold, rented })
         {
@@ -114,9 +119,16 @@ public sealed class ClosedDealLifecyclePostgresTests : IAsyncLifetime
     {
         var id = await SeedAsync("old-sold", PropertyStatus.Sold, closedAt: DateTime.UtcNow.AddDays(-15), images: 2);
 
-        await SweepAsync();
-
+        // The sweep takes the 20 oldest candidates per run. On the shared test database other classes leave
+        // old closed deals behind, so this row may need a few runs to be reached (each run moves the ones it
+        // touched to the back). The assertions below are unchanged.
         var row = await LoadAsync(id);
+        for (var run = 0; run < 15 && row.ImagesCompactedAt is null; run++)
+        {
+            await SweepAsync();
+            row = await LoadAsync(id);
+        }
+
         Assert.NotNull(row.ImagesCompactedAt);
         Assert.Equal(2, _compactor.Calls.Count(c => c.PublicId.StartsWith(_marker, StringComparison.Ordinal)));
         Assert.All(row.Images, image => Assert.EndsWith("?compact=1", image.Url));

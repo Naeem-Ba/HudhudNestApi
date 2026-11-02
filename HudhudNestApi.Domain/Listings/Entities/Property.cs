@@ -35,6 +35,13 @@ public class Property : AuditableEntity
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
 
+    /// <summary>
+    /// Growth engine P8: the owner asked to hide the exact spot. Public outputs (detail, lists, near-me search,
+    /// map) then show <see cref="LocationPrivacy.Approximate"/> coordinates and no street; the owner and admins
+    /// still see the exact pin.
+    /// </summary>
+    public bool HideExactLocation { get; set; }
+
     // -- Listing Type -------------------------------------------
     // Replaces two nullable booleans (ZumMieten / ZumKaufen)
     // Enum prevents the invalid state: ForRent=false & ForSale=false

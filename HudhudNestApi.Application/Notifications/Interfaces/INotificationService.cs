@@ -38,6 +38,58 @@ public interface INotificationService
     /// Notifies a user that another user rated them (new UserRating). Called
     /// by RateUserCommandHandler after the rating is persisted.
     /// </summary>
+    /// <summary>
+    /// Growth engine P1: tells a user who saved a listing that its price changed. One notification per
+    /// price-history row and recipient (<paramref name="priceHistoryId"/> is the dedupe key). Called by
+    /// PriceChangeFollowerNotificationHostedService, never inside the owner's edit request.
+    /// </summary>
+    Task NotifyFavoritePriceChangedAsync(
+        Guid recipientId,
+        Guid propertyId,
+        string propertyTitle,
+        NotificationText detail,
+        Guid priceHistoryId,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Growth engine P2: a listing fits the recipient's search request, found by the matcher or proposed by
+    /// an advertiser. Deduplicated per request and listing.
+    /// </summary>
+    Task NotifySearchRequestMatchAsync(
+        Guid recipientId,
+        Guid propertyId,
+        string propertyTitle,
+        Guid searchRequestId,
+        bool proposed,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Growth engine P2: tells an advertiser that <paramref name="requestCount"/> new search requests fit a
+    /// listing. Never names a requester. <paramref name="dedupeKey"/> makes a retried sweep a no-op.
+    /// </summary>
+    /// <summary>
+    /// Growth engine P3: one daily summary for a saved search set to "daily". Opens the saved-searches page.
+    /// Deduplicated per search per UTC day.
+    /// </summary>
+    Task NotifySavedSearchDigestAsync(
+        Guid recipientId,
+        Guid savedSearchId,
+        string? savedSearchName,
+        int listingCount,
+        DateTime nowUtc,
+        CancellationToken ct = default);
+
+    /// <summary>Growth engine P5: tells a referrer that one invitation qualified. Never names the invited person.</summary>
+    Task NotifyReferralQualifiedAsync(Guid recipientId, Guid referralId, CancellationToken ct = default);
+
+    Task NotifyListingDemandAsync(
+        Guid recipientId,
+        Guid propertyId,
+        string propertyTitle,
+        int requestCount,
+        string dedupeKey,
+        CancellationToken ct = default);
+
     Task NotifyUserRatedAsync(
         Guid recipientId,
         Guid raterId,

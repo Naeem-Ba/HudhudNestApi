@@ -1,5 +1,6 @@
 using MediatR;
 using HudhudNestApi.Domain.Enums;
+using HudhudNestApi.Domain.Search.Enums;
 
 namespace HudhudNestApi.Application.Search.Commands.CreateSavedSearch;
 
@@ -20,5 +21,9 @@ public sealed record CreateSavedSearchCommand(
     int? MinRooms,
     int? MaxRooms,
     decimal? MinArea,
-    decimal? MaxArea
-) : IRequest<Guid>;
+    decimal? MaxArea,
+    bool? HasBalcony = null,
+    bool? HasElevator = null,
+    bool? HasParkingSpace = null,
+    SavedSearchFrequency? Frequency = null
+) : IRequest<Guid>, ISavedSearchCriteria;
