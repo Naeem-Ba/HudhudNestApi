@@ -163,6 +163,8 @@ public sealed class SmsProviderRegistrationTests
 
     private static ServiceProvider Build(Dictionary<string, string?> settings)
     {
+        // Production refuses an empty country list (QA phase 17, P17-D01); these tests are about the provider rules.
+        settings.TryAdd("SmsProvider:AllowedCountryCodes:0", "+963");
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
         var services = new ServiceCollection();
         services.AddLogging();

@@ -67,7 +67,8 @@ public sealed class SmsHttpsOnlyTests
             Provider = "Http",
             ApiUrl = apiUrl,
             ApiKey = "test-api-key",
-            FromNumber = "+491234567890"
+            FromNumber = "+491234567890",
+            AllowedCountryCodes = ["+963"]
         };
     }
 }

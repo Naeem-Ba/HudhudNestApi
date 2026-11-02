@@ -227,22 +227,22 @@ public sealed class SmsProviderAdaptersTests
     [Fact]
     public void Production_D7AndUnimatrix_NeedOnlyAKey_TheUrlDefaultsAreHttps()
     {
-        new SmsProviderOptions { Provider = "D7", ApiKey = "k", FromNumber = "Hudhud" }.ValidateForEnvironment("Production");
-        new SmsProviderOptions { Provider = "Unimatrix", ApiKey = "k" }.ValidateForEnvironment("Production");
+        new SmsProviderOptions { Provider = "D7", AllowedCountryCodes = ["+963"], ApiKey = "k", FromNumber = "Hudhud" }.ValidateForEnvironment("Production");
+        new SmsProviderOptions { Provider = "Unimatrix", AllowedCountryCodes = ["+963"], ApiKey = "k" }.ValidateForEnvironment("Production");
     }
 
     [Fact]
     public void Production_D7_StillNeedsAKeyAndASenderId()
     {
-        Assert.Throws<InvalidOperationException>(() => new SmsProviderOptions { Provider = "D7", FromNumber = "Hudhud" }.ValidateForEnvironment("Production"));
-        Assert.Throws<InvalidOperationException>(() => new SmsProviderOptions { Provider = "D7", ApiKey = "k" }.ValidateForEnvironment("Production"));
+        Assert.Throws<InvalidOperationException>(() => new SmsProviderOptions { Provider = "D7", AllowedCountryCodes = ["+963"], FromNumber = "Hudhud" }.ValidateForEnvironment("Production"));
+        Assert.Throws<InvalidOperationException>(() => new SmsProviderOptions { Provider = "D7", AllowedCountryCodes = ["+963"], ApiKey = "k" }.ValidateForEnvironment("Production"));
     }
 
     [Fact]
     public void Production_ACustomUrlMustBeHttps()
     {
         Assert.Throws<InvalidOperationException>(() =>
-            new SmsProviderOptions { Provider = "D7", ApiKey = "k", FromNumber = "H", ApiUrl = "http://insecure.example.test" }.ValidateForEnvironment("Production"));
+            new SmsProviderOptions { Provider = "D7", AllowedCountryCodes = ["+963"], ApiKey = "k", FromNumber = "H", ApiUrl = "http://insecure.example.test" }.ValidateForEnvironment("Production"));
     }
 
     [Fact]
@@ -250,14 +250,14 @@ public sealed class SmsProviderAdaptersTests
     {
         // Twilio is configured through Twilio:AccountSid / AuthToken / FromNumber; it used to fail startup
         // unless SmsProvider:ApiUrl, ApiKey and FromNumber were also filled in with values it never uses.
-        new SmsProviderOptions { Provider = "Twilio" }.ValidateForEnvironment("Production");
+        new SmsProviderOptions { Provider = "Twilio", AllowedCountryCodes = ["+963"] }.ValidateForEnvironment("Production");
     }
 
     [Fact]
     public void Production_TheGenericHttpProvider_KeepsItsStrictRules()
     {
-        Assert.Throws<InvalidOperationException>(() => new SmsProviderOptions { Provider = "Http" }.ValidateForEnvironment("Production"));
-        new SmsProviderOptions { Provider = "Http", ApiUrl = "https://sms.example.test/send", ApiKey = "k", FromNumber = "H" }.ValidateForEnvironment("Production");
+        Assert.Throws<InvalidOperationException>(() => new SmsProviderOptions { Provider = "Http", AllowedCountryCodes = ["+963"] }.ValidateForEnvironment("Production"));
+        new SmsProviderOptions { Provider = "Http", AllowedCountryCodes = ["+963"], ApiUrl = "https://sms.example.test/send", ApiKey = "k", FromNumber = "H" }.ValidateForEnvironment("Production");
     }
 
     // ───────────── test doubles ─────────────

@@ -118,6 +118,18 @@ public static class RateLimitingRegistration
                         QueueLimit = 0
                     }));
 
+            // Browser CSP violation reports (QA phase 17, P17-D05): anonymous by nature, so small and bounded.
+            options.AddPolicy("csp-report", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetClientRateLimitPartitionKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 30,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
             options.AddPolicy("auth-login", httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
                     partitionKey: GetClientRateLimitPartitionKey(httpContext),

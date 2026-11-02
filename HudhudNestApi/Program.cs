@@ -18,6 +18,9 @@ using HudhudNestApi.Health;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// QA phase 17, P17-D09: do not announce the web server in a "Server: Kestrel" header.
+builder.WebHost.ConfigureKestrel(kestrel => kestrel.AddServerHeader = false);
+
 builder.AddHudhudNestApiObservability();
 StagingEnvironmentGuard.Validate(builder.Configuration, builder.Environment);
 ProductionEnvironmentGuard.Validate(builder.Configuration, builder.Environment);
@@ -324,6 +327,10 @@ app.UseWhen(
     branch => branch.UseMiddleware<ReadinessResponseCacheMiddleware>());
 app.MapOperationalHealthEndpoints();
 app.MapControllers();
+// QA phase 17, P17-D08 (open): CloseOnAuthenticationExpiration is deliberately NOT enabled yet. The web client only
+// reconnects after a connection LOSS, not after a clean server close, so closing at every 30-minute token expiry
+// would silently stop live notifications until the page is reloaded. Enable it together with a client that refreshes
+// the token and restarts the hub on close.
 app.MapHub<NotificationHub>("/notificationHub");
 
 app.Run();

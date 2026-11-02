@@ -40,6 +40,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     private readonly IUserSecurityStampCacheInvalidator _stampCache;
     private readonly SystemRoleGuarantee _roles;
     private readonly IPhoneNumberLookupHasher _lookupHasher;
+    private readonly int _dailySendLimit;
 
     public PhoneAuthenticationWorkflow(AppDbContext db, UserManager<ApplicationUser> users,
         SignInManager<ApplicationUser> signIn, IPhoneNumberNormalizer normalizer, IOtpService otp,
@@ -52,6 +53,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         _lookupHasher = lookupHasher;
         _stampCache = stampCache;
         _roles = roles;
+        _dailySendLimit = Math.Max(0, smsOptions.Value.DailySendLimit);
         _allowedCountryCodes = smsOptions.Value.AllowedCountryCodes
             .Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToArray();
         _db = db; _users = users; _signIn = signIn; _normalizer = normalizer; _otp = otp;
@@ -72,6 +74,26 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             _allowedCountryCodes.Length > 0 &&
             !_allowedCountryCodes.Any(prefix => phone.StartsWith(prefix, StringComparison.Ordinal)))
             return Fail("PHONE_COUNTRY_NOT_SUPPORTED");
+
+        // Global daily cap for NEW numbers (QA phase 17, P17-D01): per-IP limits do not stop a botnet that rotates
+        // addresses, and every code costs money. Counts registration and number-change challenges of the last 24 hours
+        // (a decoy for a taken number is counted too, which only makes the cap slightly stricter). Password reset and
+        // re-verification belong to existing accounts and are neither counted nor blocked.
+        if (_dailySendLimit > 0 && purpose is OtpPurpose.PhoneRegistration or OtpPurpose.PhoneNumberChange)
+        {
+            var since = _clock.GetUtcNow().AddHours(-24);
+            var sentToday = await _db.PhoneOtpChallenges.CountAsync(
+                x => x.CreatedAtUtc >= since &&
+                     (x.Purpose == OtpPurpose.PhoneRegistration || x.Purpose == OtpPurpose.PhoneNumberChange), ct);
+            if (sentToday >= _dailySendLimit)
+            {
+                ApplicationTelemetry.RecordOtpSend(channel.ToString(), "daily_cap");
+                _logger.LogCritical(
+                    "SMS daily cap reached: {Count} codes for new numbers in 24 hours (SmsProvider:DailySendLimit={Limit}). " +
+                    "New registrations are refused until the window moves; check for SMS pumping.", sentToday, _dailySendLimit);
+                return Fail("OTP_DAILY_LIMIT_REACHED");
+            }
+        }
 
         // A channel that is off, or does not work for this country, is refused before anything else. The answer
         // comes from configuration and the public calling code alone, so it says nothing about any account.

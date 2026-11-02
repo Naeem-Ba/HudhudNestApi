@@ -40,6 +40,9 @@ public sealed class PhoneLoginAuditFactory : WebApplicationFactory<Program>
     /// <summary>SmsProvider:AllowedCountryCodes for the host (empty = no restriction).</summary>
     public string[] AllowedCountryCodes { get; init; } = [];
 
+    /// <summary>SmsProvider:DailySendLimit for the host (null = the product default).</summary>
+    public int? DailySendLimit { get; init; }
+
     /// <summary>Fake Telegram / WhatsApp providers; a channel is only offered when its flag is on (OtpChannels:*:Enabled).</summary>
     public CapturingOtpProvider Telegram { get; } = new(OtpChannel.Telegram);
     public CapturingOtpProvider WhatsApp { get; } = new(OtpChannel.WhatsApp);
@@ -72,6 +75,7 @@ public sealed class PhoneLoginAuditFactory : WebApplicationFactory<Program>
             };
             for (var i = 0; i < AllowedCountryCodes.Length; i++)
                 settings[$"SmsProvider:AllowedCountryCodes:{i}"] = AllowedCountryCodes[i];
+            if (DailySendLimit.HasValue) settings["SmsProvider:DailySendLimit"] = DailySendLimit.Value.ToString();
             if (TelegramEnabled) settings["OtpChannels:Telegram:Enabled"] = "true";
             if (WhatsAppEnabled) settings["OtpChannels:WhatsApp:Enabled"] = "true";
             if (DefaultRecommended.Length > 0) settings["OtpChannels:DefaultRecommended"] = DefaultRecommended;

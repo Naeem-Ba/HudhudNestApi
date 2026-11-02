@@ -19,6 +19,8 @@ internal static class RedisRateLimitingDefaults
             ["surveys-submit"] = Policy(5, TimeSpan.FromHours(1)),
             // Marketing conversion-funnel events — higher cadence, one visit fires several.
             ["marketing-events"] = Policy(60, TimeSpan.FromMinutes(1)),
+            // Browser CSP violation reports (QA phase 17, P17-D05).
+            ["csp-report"] = Policy(30, TimeSpan.FromMinutes(1)),
             ["auth-login"] = Policy(10, TimeSpan.FromMinutes(1)),
             ["auth-register"] = Policy(5, TimeSpan.FromMinutes(10)),
             ["auth-refresh"] = Policy(20, TimeSpan.FromMinutes(5)),
