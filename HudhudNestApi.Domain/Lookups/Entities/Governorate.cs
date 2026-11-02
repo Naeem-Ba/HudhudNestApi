@@ -20,6 +20,9 @@ public class Governorate
     public string NameAr { get; private set; } = string.Empty;
     public string NameEn { get; private set; } = string.Empty;
 
+    /// <summary>German name; null where none was entered, in which case clients show <see cref="NameEn"/>.</summary>
+    public string? NameDe { get; private set; }
+
     /// <summary>ISO 3166-1 alpha-2 (سوريا = SY)</summary>
     public string CountryCode { get; private set; } = "SY";
 
@@ -33,12 +36,13 @@ public class Governorate
     private Governorate() { }
 
     public static Governorate Create(string nameAr, string nameEn,
-        string countryCode = "SY", int sortOrder = 0)
+        string countryCode = "SY", int sortOrder = 0, string? nameDe = null)
     {
         return new Governorate
         {
             NameAr = nameAr,
             NameEn = nameEn,
+            NameDe = nameDe,
             CountryCode = countryCode.ToUpperInvariant(),
             SortOrder = sortOrder
         };

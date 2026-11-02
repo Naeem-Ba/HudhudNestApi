@@ -17,6 +17,7 @@ public sealed class GovernorateConfiguration : IEntityTypeConfiguration<Governor
         builder.HasKey(g => g.Id);
 
         builder.Property(g => g.NameAr).IsRequired().HasMaxLength(200);
+        builder.Property(g => g.NameDe).HasMaxLength(200);
         builder.Property(g => g.NameEn).IsRequired().HasMaxLength(200);
         builder.Property(g => g.CountryCode).IsRequired().HasMaxLength(5);
 

@@ -2158,6 +2158,10 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("NameDe")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("NameEn")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -2193,6 +2197,10 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.Property<string>("NameAr")
                         .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("NameDe")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
@@ -2297,6 +2305,10 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                     b.Property<string>("NameAr")
                         .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("NameDe")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 

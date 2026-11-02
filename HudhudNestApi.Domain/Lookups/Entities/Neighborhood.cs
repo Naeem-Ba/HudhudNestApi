@@ -14,6 +14,9 @@ public class Neighborhood
     public int DistrictId { get; private set; }
     public string NameAr { get; private set; } = string.Empty;
     public string NameEn { get; private set; } = string.Empty;
+
+    /// <summary>German name; null where none was entered, in which case clients show <see cref="NameEn"/>.</summary>
+    public string? NameDe { get; private set; }
     public int SortOrder { get; private set; }
     public bool IsActive { get; private set; } = true;
 
