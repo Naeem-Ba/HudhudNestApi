@@ -10,7 +10,7 @@ public sealed class ListingTranslationConfiguration : IEntityTypeConfiguration<L
     {
         builder.ToTable("ListingTranslations", t =>
         {
-            t.HasCheckConstraint("CK_ListingTranslations_Field", "\"Field\" IN (1, 2)");
+            t.HasCheckConstraint("CK_ListingTranslations_Field", "\"Field\" IN (1, 2, 3)");
             t.HasCheckConstraint("CK_ListingTranslations_Status", "\"Status\" IN (1, 2, 3, 4)");
             t.HasCheckConstraint("CK_ListingTranslations_TargetLanguage", "\"TargetLanguage\" IN ('ar', 'de', 'en')");
             t.HasCheckConstraint(

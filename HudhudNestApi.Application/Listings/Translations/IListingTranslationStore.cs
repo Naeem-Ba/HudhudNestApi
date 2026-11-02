@@ -2,7 +2,7 @@ using HudhudNestApi.Domain.Listings.Translations;
 
 namespace HudhudNestApi.Application.Listings.Translations;
 
-public sealed record ListingTextSource(string Title, string Description);
+public sealed record ListingTextSource(string Title, string Description, string Street = "");
 
 public sealed record StoredListingTranslation(
     Guid Id,
