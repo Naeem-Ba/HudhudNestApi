@@ -4,7 +4,7 @@
 #
 # Build context is the repository root (matches HudhudNestApi/Dockerfile's convention and the
 # other two observability/render/* Dockerfiles).
-FROM otel/opentelemetry-collector-contrib:0.162.0
+FROM otel/opentelemetry-collector-contrib:0.164.0
 
 COPY observability/render/otel-collector/config.yaml /etc/otelcol-contrib/config.yaml
 
