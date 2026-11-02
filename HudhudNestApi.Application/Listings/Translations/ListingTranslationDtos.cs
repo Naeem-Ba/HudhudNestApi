@@ -22,6 +22,9 @@ public sealed class ListingTranslationDto
     public ListingTranslationFieldDto Title { get; set; } = new();
     public ListingTranslationFieldDto Description { get; set; } = new();
 
+    /// <summary>Sale/rent only; "empty" when the listing has no street or its exact location is hidden.</summary>
+    public ListingTranslationFieldDto Street { get; set; } = new();
+
     /// <summary>When "pending": how long to wait before asking again.</summary>
     public int? RetryAfterSeconds { get; set; }
 }

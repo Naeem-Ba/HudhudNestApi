@@ -2055,7 +2055,7 @@ namespace HudhudNestApi.Infrastructure.Migrations
 
                             t.HasCheckConstraint("CK_ListingTranslations_ExactlyOneListing", "(\"PropertyId\" IS NOT NULL AND \"ShortStayListingId\" IS NULL) OR (\"PropertyId\" IS NULL AND \"ShortStayListingId\" IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_ListingTranslations_Field", "\"Field\" IN (1, 2)");
+                            t.HasCheckConstraint("CK_ListingTranslations_Field", "\"Field\" IN (1, 2, 3)");
 
                             t.HasCheckConstraint("CK_ListingTranslations_SourceHash", "char_length(\"SourceHash\") = 64");
 

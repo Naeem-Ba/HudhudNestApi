@@ -451,6 +451,54 @@ public sealed class ListingTranslationPostgresTests : IAsyncLifetime
         Assert.Equal("ready", (await EnsureAsync(survivor, "en"))!.Status);
     }
 
+    // ── Street ───────────────────────────────────────────────────────────────────
+
+    [Fact(DisplayName = "A public street is translated and stored with the title and description in one provider call")]
+    public async Task Street_IsTranslatedWithTheOtherFields()
+    {
+        var id = await SeedAsync();
+        await EditAsync(id, p => p.Street = "شارع بغداد");
+
+        var dto = await EnsureAsync(id, "en");
+
+        Assert.Equal("ready", dto!.Status);
+        Assert.Equal("[en] شارع بغداد", dto.Street.Text);
+        Assert.Equal(1, _provider.Calls);
+        Assert.Equal(3, (await RowsAsync(id)).Count);
+
+        Assert.Equal("[en] شارع بغداد", (await EnsureAsync(id, "en"))!.Street.Text);
+        Assert.Equal(1, _provider.Calls);
+    }
+
+    [Fact(DisplayName = "A hidden exact location never exposes or translates the street")]
+    public async Task Street_IsNeverServedWhenTheLocationIsHidden()
+    {
+        var id = await SeedAsync();
+        await EditAsync(id, p => { p.Street = "شارع بغداد"; p.HideExactLocation = true; });
+
+        var dto = await EnsureAsync(id, "en");
+
+        Assert.Equal("empty", dto!.Street.State);
+        Assert.Null(dto.Street.Text);
+        Assert.DoesNotContain(_provider.Log, c => c.Texts.Contains("شارع بغداد"));
+        Assert.Equal(2, (await RowsAsync(id)).Count);
+    }
+
+    [Fact(DisplayName = "Editing the street invalidates only the street")]
+    public async Task Street_EditInvalidatesOnlyTheStreet()
+    {
+        var id = await SeedAsync();
+        await EditAsync(id, p => p.Street = "شارع بغداد");
+        await EnsureAsync(id, "en");
+        await EditAsync(id, p => p.Street = "شارع الحمرا");
+
+        var dto = await EnsureAsync(id, "en");
+
+        Assert.Equal("[en] شارع الحمرا", dto!.Street.Text);
+        Assert.Equal(2, _provider.Calls);
+        Assert.Equal(new[] { "شارع الحمرا" }, _provider.Log.Last().Texts);
+    }
+
     // ── Short-stay listings ──────────────────────────────────────────────────────
 
     [Fact(DisplayName = "Short-stay: translated once, stored in its own foreign key, reused, and kept apart from sale/rent listings")]
