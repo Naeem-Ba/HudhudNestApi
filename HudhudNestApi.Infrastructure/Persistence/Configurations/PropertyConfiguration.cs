@@ -125,6 +125,10 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
             .HasDatabaseName("IX_Properties_TakenDownAt")
             .HasFilter("\"TakenDownAt\" IS NOT NULL");
 
+        builder.Property(p => p.IsPriceNegotiable)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         // -- Physical -----------------------------------------
         builder.Property(p => p.Area)
             .HasColumnType("decimal(10,2)");

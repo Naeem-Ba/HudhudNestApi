@@ -85,6 +85,9 @@ public sealed record UpdatePropertyCommand(
     List<Guid>? AmenityIds = null,
 
     // Growth engine P8: null = keep the stored choice.
-    bool? HideExactLocation = null
+    bool? HideExactLocation = null,
+
+    // null = keep the stored choice.
+    bool? IsPriceNegotiable = null
 ) : IRequest<bool>;
 

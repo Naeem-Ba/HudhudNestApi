@@ -68,6 +68,9 @@ public sealed record CreatePropertyCommand(
     FurnishingStatus? FurnishingStatus = null,
 
     // Growth engine P8: show only an approximate spot to the public.
-    bool HideExactLocation = false
+    bool HideExactLocation = false,
+
+    // السعر قابل للتفاوض (بيع أو إيجار) — يُعرض في تفاصيل الإعلان فقط.
+    bool IsPriceNegotiable = false
 ) : IRequest<Guid>;
 
