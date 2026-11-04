@@ -104,13 +104,31 @@ public sealed class ReferenceDataSeedHostedService : BackgroundService
 
     private readonly IServiceProvider _services;
     private readonly ILogger<ReferenceDataSeedHostedService> _logger;
+    private readonly Func<IServiceProvider, CancellationToken, Task<bool>> _seedOnce;
+    private readonly TimeSpan[] _retryDelays;
+    private readonly TimeSpan _attemptTimeout;
 
     public ReferenceDataSeedHostedService(
         IServiceProvider services,
         ILogger<ReferenceDataSeedHostedService> logger)
+        : this(services, logger, DatabaseSeedingExtensions.SeedOnceAsync, RetryDelays, AttemptTimeout)
+    {
+    }
+
+    // Test seam: lets the retry, timeout and shutdown paths be exercised in milliseconds without a
+    // database. Not public, so the container keeps resolving the two-argument constructor.
+    internal ReferenceDataSeedHostedService(
+        IServiceProvider services,
+        ILogger<ReferenceDataSeedHostedService> logger,
+        Func<IServiceProvider, CancellationToken, Task<bool>> seedOnce,
+        TimeSpan[] retryDelays,
+        TimeSpan attemptTimeout)
     {
         _services = services;
         _logger = logger;
+        _seedOnce = seedOnce;
+        _retryDelays = retryDelays;
+        _attemptTimeout = attemptTimeout;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -118,14 +136,14 @@ public sealed class ReferenceDataSeedHostedService : BackgroundService
         // Let Kestrel bind and the first health probes be answered before any database work starts.
         await Task.Yield();
 
-        for (var attempt = 0; attempt <= RetryDelays.Length; attempt++)
+        for (var attempt = 0; attempt <= _retryDelays.Length; attempt++)
         {
             using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-            attemptCts.CancelAfter(AttemptTimeout);
+            attemptCts.CancelAfter(_attemptTimeout);
 
             try
             {
-                if (await DatabaseSeedingExtensions.SeedOnceAsync(_services, attemptCts.Token))
+                if (await _seedOnce(_services, attemptCts.Token))
                 {
                     return;
                 }
@@ -139,17 +157,17 @@ public sealed class ReferenceDataSeedHostedService : BackgroundService
                 _logger.LogError(
                     "Reference-data seeding attempt {Attempt} exceeded {Timeout}.",
                     attempt + 1,
-                    AttemptTimeout);
+                    _attemptTimeout);
             }
 
-            if (attempt == RetryDelays.Length)
+            if (attempt == _retryDelays.Length)
             {
                 break;
             }
 
             try
             {
-                await Task.Delay(RetryDelays[attempt], stoppingToken);
+                await Task.Delay(_retryDelays[attempt], stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -160,6 +178,6 @@ public sealed class ReferenceDataSeedHostedService : BackgroundService
         _logger.LogError(
             "Reference-data seeding gave up after {Attempts} attempts; the API keeps serving. " +
             "Restart the instance once the database is healthy.",
-            RetryDelays.Length + 1);
+            _retryDelays.Length + 1);
     }
 }
