@@ -206,8 +206,10 @@ public sealed class CreatePropertyCommandValidator : AbstractValidator<CreatePro
         RuleFor(x => x.AreaUnit)
             .IsInEnum();
 
+        // P18-D08: the floor was unbounded (int.MaxValue was stored). No building has more than a few
+        // hundred storeys; 200 leaves room for the tallest towers and basements are not negative here.
         RuleFor(x => x.Floor)
-            .GreaterThanOrEqualTo(0)
+            .InclusiveBetween(0, 200)
             .When(x => x.Floor.HasValue);
 
         // -- Ownership type (LegalStatus) ---------------------------

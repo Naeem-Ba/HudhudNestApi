@@ -95,3 +95,16 @@ public sealed class UpdateSearchRequestCommandValidator : AbstractValidator<Upda
     public UpdateSearchRequestCommandValidator(ILocationHierarchyChecker locations, ICommonLookupService lookups)
         => SearchRequestInputRules.Apply(this, locations, lookups);
 }
+
+/// <summary>
+/// P18-D01: معرّف العقار الفارغ (Guid.Empty) كان يصل إلى PropertyOwnershipService فيرمي
+/// ArgumentException → 500. الآن يُرفض في خط التحقق برسالة 422.
+/// </summary>
+public sealed class ProposeListingCommandValidator : AbstractValidator<ProposeListingCommand>
+{
+    public ProposeListingCommandValidator()
+    {
+        RuleFor(x => x.SearchRequestId).NotEmpty().WithMessage("معرّف طلب البحث مطلوب.");
+        RuleFor(x => x.PropertyId).NotEmpty().WithMessage("معرّف العقار المقترح مطلوب.");
+    }
+}

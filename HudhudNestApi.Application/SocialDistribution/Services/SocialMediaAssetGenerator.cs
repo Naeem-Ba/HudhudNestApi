@@ -64,7 +64,7 @@ public sealed class SocialMediaAssetGenerator : ISocialMediaAssetGenerator
         ArgumentNullException.ThrowIfNull(request);
 
         var property = await _properties.GetByIdWithDetailsAsync(request.PropertyId, ct)
-            ?? throw new SocialAssetGenerationException("العقار غير موجود، تعذّر توليد صورة اجتماعية له.", retryable: false);
+            ?? throw new SocialAssetGenerationException("العقار غير موجود، تعذّر توليد صورة اجتماعية له.", retryable: false, propertyNotFound: true);
 
         var assetType = request.AssetType ?? SocialAssetPresetCatalog.GetDefaultAssetType(request.Platform);
         var preset = SocialAssetPresetCatalog.TryGetPreset(request.Platform, assetType)

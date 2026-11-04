@@ -58,8 +58,16 @@ public sealed class LookupsController : ControllerBase
     [AllowAnonymous] // Public reference data.
     [EnableRateLimiting("public-read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetGovernorates([FromQuery] string countryCode, CancellationToken ct)
-        => Ok(await _lookups.GetGovernoratesAsync(string.IsNullOrWhiteSpace(countryCode) ? "SY" : countryCode, ct));
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> GetGovernorates([FromQuery] string? countryCode, CancellationToken ct)
+    {
+        // P18-D09: NUL/control characters never reach PostgreSQL (22021 → logged error + 422).
+        if (countryCode is { Length: > 8 } || (countryCode is not null && countryCode.Any(char.IsControl)))
+            throw new HudhudNestApi.Application.Common.Exceptions.ValidationException(
+                nameof(countryCode), "countryCode is invalid.", "INVALID_CHARACTER");
+
+        return Ok(await _lookups.GetGovernoratesAsync(string.IsNullOrWhiteSpace(countryCode) ? "SY" : countryCode, ct));
+    }
 
     [HttpGet("districts")]
     [AllowAnonymous] // Public reference data.

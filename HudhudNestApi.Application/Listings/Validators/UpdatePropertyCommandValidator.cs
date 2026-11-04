@@ -168,8 +168,9 @@ public sealed class UpdatePropertyCommandValidator
                               || command.RentalEndDate.Value > command.RentalStartDate.Value)
             .WithMessage("Rental end date must be after the start date.");
 
+        // P18-D08: bounded like the create validator (was unbounded).
         RuleFor(command => command.Floor)
-            .GreaterThanOrEqualTo(0)
+            .InclusiveBetween(0, 200)
             .When(command => command.Floor.HasValue);
 
         RuleFor(command => command.TotalFloors)

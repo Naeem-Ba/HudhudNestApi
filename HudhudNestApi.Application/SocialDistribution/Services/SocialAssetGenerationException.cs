@@ -13,6 +13,17 @@ public sealed class SocialAssetGenerationException : Exception
 {
     public bool Retryable { get; }
 
-    public SocialAssetGenerationException(string message, bool retryable, Exception? innerException = null)
-        : base(message, innerException) => Retryable = retryable;
+    /// <summary>
+    /// P18-D02: true when the failure is "the property does not exist" — a client error for the
+    /// direct admin endpoint (404), not a server fault (it used to surface as a 500).
+    /// </summary>
+    public bool PropertyNotFound { get; }
+
+    public SocialAssetGenerationException(
+        string message, bool retryable, Exception? innerException = null, bool propertyNotFound = false)
+        : base(message, innerException)
+    {
+        Retryable = retryable;
+        PropertyNotFound = propertyNotFound;
+    }
 }

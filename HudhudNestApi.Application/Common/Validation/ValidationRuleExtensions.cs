@@ -25,6 +25,16 @@ public static class ValidationRuleExtensions
             .WithMessage("{PropertyName} contains an invalid character.")
             .WithErrorCode("INVALID_CHARACTER");
 
+    /// <summary>
+    /// Rejects NUL and every other control character (P18-D09): for short identifiers coming from
+    /// public query strings (country codes and the like) no legitimate value contains any.
+    /// </summary>
+    public static IRuleBuilderOptions<T, string?> NoControlCharacters<T>(this IRuleBuilder<T, string?> rule)
+        => rule
+            .Must(value => value is null || !value.Any(char.IsControl))
+            .WithMessage("{PropertyName} contains an invalid character.")
+            .WithErrorCode("INVALID_CHARACTER");
+
     /// <summary>Area is numeric(10,2): 1e8 and above fails at the database.</summary>
     public const decimal MaxArea = 100_000_000m;
 

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Enums;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
@@ -37,19 +38,22 @@ public sealed class AddInvestmentDocumentCommandHandler : IRequestHandler<AddInv
     private readonly IMediaStorageService _storage;
     private readonly IMediaFolderBuilder _folderBuilder;
     private readonly IUnitOfWork _uow;
+    private readonly ILogger<AddInvestmentDocumentCommandHandler>? _logger;
 
     public AddInvestmentDocumentCommandHandler(
         IInvestmentProjectRepository projects,
         IInvestmentDocumentRepository documents,
         IMediaStorageService storage,
         IMediaFolderBuilder folderBuilder,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        ILogger<AddInvestmentDocumentCommandHandler>? logger = null)
     {
         _projects = projects;
         _documents = documents;
         _storage = storage;
         _folderBuilder = folderBuilder;
         _uow = uow;
+        _logger = logger;
     }
 
     public async Task<Guid> Handle(AddInvestmentDocumentCommand request, CancellationToken ct)
@@ -104,10 +108,32 @@ public sealed class AddInvestmentDocumentCommandHandler : IRequestHandler<AddInv
             hash,
             request.IsPublic);
 
-        _documents.Add(document);
-        await _uow.SaveChangesAsync(ct);
+        try
+        {
+            _documents.Add(document);
+            await _uow.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            // P18-D06: the file is already in the media store; without this it stayed there with no
+            // database row pointing at it (an orphan nobody could ever delete).
+            await DeleteUploadedAsync(uploadResult.PublicId!);
+            throw;
+        }
 
         return document.Id;
+    }
+
+    private async Task DeleteUploadedAsync(string publicId)
+    {
+        try
+        {
+            await _storage.DeleteImageAsync(publicId, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger?.LogWarning(ex, "Could not delete the uploaded investment document {PublicId} after the save failed.", publicId);
+        }
     }
 
     private static bool HasMatchingExtension(string fileName, string contentType) =>
