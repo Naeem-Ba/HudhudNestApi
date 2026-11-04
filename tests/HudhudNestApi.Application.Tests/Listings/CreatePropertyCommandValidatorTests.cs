@@ -1175,6 +1175,25 @@ public sealed class CreatePropertyCommandValidatorTests
         Floor = null
     };
 
+    // P18-D08: the floor number is bounded (it used to accept int.MaxValue).
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(2, true)]
+    [InlineData(200, true)]
+    [InlineData(201, false)]
+    [InlineData(int.MaxValue, false)]
+    [InlineData(-1, false)]
+    [Trait("Category", "PropertyValidator")]
+    public async Task Floor_IsBoundedBetweenZeroAnd200(int floor, bool valid)
+    {
+        var result = await _validator.TestValidateAsync(ValidCommand() with { Floor = floor });
+
+        if (valid)
+            result.ShouldNotHaveValidationErrorFor(x => x.Floor);
+        else
+            result.ShouldHaveValidationErrorFor(x => x.Floor);
+    }
+
     [Fact]
     [Trait("Category", "PropertyValidator")]
     public async Task Land_WithoutRooms_PassesValidation()

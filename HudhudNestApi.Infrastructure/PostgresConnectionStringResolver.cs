@@ -25,6 +25,11 @@ internal static class PostgresConnectionStringResolver
         return NormalizePostgresConnectionString(rawConnectionString, environment);
     }
 
+    /// <summary>Same normalisation and Production validation as <see cref="Resolve"/>, from an explicit string
+    /// (so a test does not have to touch the process-wide DATABASE_URL variable).</summary>
+    internal static string ResolveFromRaw(string rawConnectionString, IHostEnvironment environment)
+        => NormalizePostgresConnectionString(rawConnectionString, environment);
+
     private static string NormalizePostgresConnectionString(
         string rawConnectionString,
         IHostEnvironment environment)
@@ -209,10 +214,23 @@ internal static class PostgresConnectionStringResolver
                     "Invalid Supabase Pooler username. Expected '<db-user>.<project-ref>'.");
             }
 
-            if (builder.Port != 5432 && builder.Port != 6543)
+            // QA Phase 18, P18-D07. The Transaction pooler (6543) hands every statement to whichever backend is
+            // free, so what this API relies on breaks silently: the session-level advisory locks that keep
+            // two instances from running the same background job (acquired on one backend, released on
+            // another, or leaked), and Npgsql's prepared statements. Session mode (5432) keeps one backend
+            // per client connection and works. The runbook (database-host-migration-runbook.md) says 5432.
+            if (builder.Port == 6543)
             {
                 throw new InvalidOperationException(
-                    "Supabase Pooler port must be 5432 for Session mode or 6543 for Transaction mode.");
+                    "Supabase Pooler port 6543 (Transaction mode) is not supported in Production: it breaks the " +
+                    "session advisory locks used by the background jobs and prepared statements. Use port 5432 " +
+                    "(Session mode) or the direct connection.");
+            }
+
+            if (builder.Port != 5432)
+            {
+                throw new InvalidOperationException(
+                    "Supabase Pooler port must be 5432 (Session mode).");
             }
         }
 

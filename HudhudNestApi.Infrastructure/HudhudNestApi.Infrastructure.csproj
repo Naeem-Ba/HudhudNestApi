@@ -40,6 +40,7 @@
          instead of duplicating them or weakening their access modifier just for testability. -->
     <InternalsVisibleTo Include="HudhudNestApi.Auth.Tests" />
     <InternalsVisibleTo Include="HudhudNestApi.Integration.Tests" />
+    <InternalsVisibleTo Include="HudhudNestApi.Infrastructure.Tests" />
   </ItemGroup>
 
 </Project>

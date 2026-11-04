@@ -44,4 +44,15 @@ public sealed class SavedSearchRepository : ISavedSearchRepository
         // calls MarkMatched() on the results and expects SaveChangesAsync to persist it.
         return await _db.SavedSearches.ToListAsync(ct);
     }
+
+    public async Task<IReadOnlyList<SavedSearch>> GetBatchAsync(Guid? afterId, int batchSize, CancellationToken ct = default)
+    {
+        // Tracked on purpose (same reason as GetAllAsync). Keyset paging on Id: stable even while rows
+        // are updated by the sweep itself, unlike OFFSET.
+        var query = _db.SavedSearches.AsQueryable();
+        if (afterId is { } last)
+            query = query.Where(s => s.Id.CompareTo(last) > 0);
+
+        return await query.OrderBy(s => s.Id).Take(batchSize).ToListAsync(ct);
+    }
 }

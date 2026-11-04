@@ -204,6 +204,69 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.ToTable("AgencyInvitations", (string)null);
                 });
 
+            modelBuilder.Entity("HudhudNestApi.Domain.Agencies.Entities.AgencyRating", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AgencyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("OverallExperience")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Professionalism")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RaterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Reliability")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Service")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RaterId");
+
+                    b.HasIndex("AgencyId", "CreatedAt")
+                        .HasDatabaseName("IX_AgencyRatings_AgencyId_CreatedAt");
+
+                    b.HasIndex("AgencyId", "RaterId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_AgencyRatings_AgencyId_RaterId");
+
+                    b.ToTable("AgencyRatings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AgencyRatings_OverallExperience", "\"OverallExperience\" BETWEEN 1 AND 5");
+
+                            t.HasCheckConstraint("CK_AgencyRatings_Professionalism", "\"Professionalism\" BETWEEN 1 AND 5");
+
+                            t.HasCheckConstraint("CK_AgencyRatings_Reliability", "\"Reliability\" BETWEEN 1 AND 5");
+
+                            t.HasCheckConstraint("CK_AgencyRatings_Service", "\"Service\" BETWEEN 1 AND 5");
+                        });
+                });
+
             modelBuilder.Entity("HudhudNestApi.Domain.AppUpdates.Entities.AppRelease", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6624,6 +6687,25 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasForeignKey("TargetUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("HudhudNestApi.Domain.Agencies.Entities.AgencyRating", b =>
+                {
+                    b.HasOne("HudhudNestApi.Domain.Agencies.Entities.Agency", "Agency")
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HudhudNestApi.Domain.Users.Entities.UserAccount", "Rater")
+                        .WithMany()
+                        .HasForeignKey("RaterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Agency");
+
+                    b.Navigation("Rater");
                 });
 
             modelBuilder.Entity("HudhudNestApi.Domain.Audit.Entities.AuditLog", b =>

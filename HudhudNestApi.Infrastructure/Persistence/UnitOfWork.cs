@@ -59,6 +59,15 @@ public sealed class UnitOfWork : IUnitOfWork
             // own check hit this unique index; one is stored, the other must answer 409, not 500.
             ["IX_ServiceReviews_ServiceRequestId"] =
                 "تم تقييم هذا الطلب بالفعل.",
+
+            // QA Phase 18: two first-time ratings of one office by the same user racing past the handler's
+            // lookup hit the (agency, rater) unique index; one is stored, the other answers 409, not 500.
+            ["IX_AgencyRatings_AgencyId_RaterId"] =
+                "تم حفظ تقييمك لهذا المكتب للتو. أعد تحميل الصفحة لتعديله.",
+
+            // Same race on a member rating (UserRatings), which used to answer 500.
+            ["IX_UserRatings_RatedUserId_RaterId"] =
+                "تم حفظ تقييمك لهذا المستخدم للتو. أعد تحميل الصفحة لتعديله.",
         };
 
     private readonly AppDbContext _db;

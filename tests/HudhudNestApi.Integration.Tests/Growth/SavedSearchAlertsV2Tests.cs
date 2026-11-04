@@ -119,6 +119,43 @@ public sealed class SavedSearchAlertsV2Tests : IAsyncLifetime
         Assert.Equal(2, mine.GetProperty("minRooms").GetInt32());
     }
 
+    [Fact(DisplayName = "P18-D04: more saved searches than one batch are all processed once, across batches")]
+    public async Task Sweep_ProcessesEverySearchAcrossBatches_ExactlyOnce()
+    {
+        var count = SavedSearchMatchHostedService.SearchBatchSize * 2 + 37;
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            for (var i = 0; i < count; i++)
+            {
+                var search = SavedSearch.Create(_alice, $"s{i}", null, _marker, null, null, null, null, null, ListingType.ForRent,
+                    null, null, null, null, null, null, null, hasElevator: true, frequency: SavedSearchFrequency.Instant);
+                search.CreatedAt = DateTime.UtcNow.AddMinutes(-5);
+                db.SavedSearches.Add(search);
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        await PublishAsync("batched", elevator: true);
+
+        // The notification service de-duplicates one property per recipient, so the proof of "every search was
+        // processed" is each search's own delivery record, not the notification count.
+        await Sweeper().RunOnceAsync(CancellationToken.None);
+        Assert.Equal(count, await DeliveredSearchesAsync(expectedNotifiedCount: 1));
+
+        // The cursor of every search moved, so a second sweep delivers nothing more to any of them.
+        await Sweeper().RunOnceAsync(CancellationToken.None);
+        Assert.Equal(count, await DeliveredSearchesAsync(expectedNotifiedCount: 1));
+    }
+
+    private async Task<int> DeliveredSearchesAsync(int expectedNotifiedCount)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await db.SavedSearches.CountAsync(s => s.UserId == _alice && s.NotifiedCount == expectedNotifiedCount && s.LastMatchedAt != null);
+    }
+
     private async Task<Guid> SeedSearchAsync(SavedSearchFrequency frequency)
     {
         using var scope = _factory.Services.CreateScope();

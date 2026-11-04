@@ -71,6 +71,9 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
     /// </summary>
     private const int MaxMatchesPerSearchPerRun = 10;
 
+    /// <summary>P18-D04: saved searches are processed in batches of this size (bounded memory and tracker).</summary>
+    internal const int SearchBatchSize = 200;
+
     internal Task RunOnceAsync(CancellationToken ct) => RunOnceAsync(DateTime.UtcNow, ct);
 
     internal async Task RunOnceAsync(DateTime nowUtc, CancellationToken ct)
@@ -90,87 +93,103 @@ public sealed class SavedSearchMatchHostedService : BackgroundService
                 _logger,
                 async () =>
                 {
-                    var allSearches = await savedSearches.GetAllAsync(ct);
                     var now = nowUtc;
                     var matchedCount = 0;
+                    var searchCount = 0;
 
                     // One read of the rate table per sweep, shared by every search that prices in a currency.
                     var rates = await PropertyRepository.LoadCurrencyRatesAsync(db, ct);
 
-                    foreach (var savedSearch in allSearches)
+                    // P18-D04: the sweep used to load every saved search at once and keep them all tracked.
+                    // Now it walks them in Id-ordered batches, saves each batch and drops it from the tracker.
+                    Guid? afterId = null;
+                    while (true)
                     {
-                        // Growth engine P3: paused searches are skipped; a daily search waits 24 hours after
-                        // its last summary (its cursor stays put, so nothing published meanwhile is lost).
-                        if (savedSearch.IsPaused || !savedSearch.IsDigestDue(now))
-                            continue;
+                        var batch = await savedSearches.GetBatchAsync(afterId, SearchBatchSize, ct);
+                        if (batch.Count == 0)
+                            break;
+                        afterId = batch[^1].Id;
+                        searchCount += batch.Count;
 
-                        // First run for a search only looks forward from its creation — never
-                        // floods the owner with every pre-existing listing that already matched.
-                        var since = savedSearch.LastMatchedAt ?? savedSearch.CreatedAt;
-
-                        var filter = ToFilterDto(savedSearch);
-                        var query = PropertyRepository.ApplyFilter(db.Properties.AsNoTracking(), filter,
-                            await PropertyRepository.ResolveLocationFallbackAsync(db, filter, ct), rates)
-                            // Growth engine P1 (G3.1): the moment a listing went public, not when its draft
-                            // was created. A draft created before the cursor and published later used to be
-                            // skipped forever. ApplyFilter already limits this to listings on the market.
-                            .Where(p => (p.PublishedAt ?? p.CreatedAt) > since);
-
-                        if (savedSearch.Frequency == SavedSearchFrequency.Daily)
+                        foreach (var savedSearch in batch)
                         {
-                            var newest = await query
-                                .OrderByDescending(p => p.PublishedAt ?? p.CreatedAt)
-                                .Select(p => (DateTime?)(p.PublishedAt ?? p.CreatedAt))
-                                .FirstOrDefaultAsync(ct);
-                            if (newest is null)
+                            // Growth engine P3: paused searches are skipped; a daily search waits 24 hours after
+                            // its last summary (its cursor stays put, so nothing published meanwhile is lost).
+                            if (savedSearch.IsPaused || !savedSearch.IsDigestDue(now))
                                 continue;
 
-                            var count = await query.CountAsync(ct);
-                            await notifications.NotifySavedSearchDigestAsync(
-                                savedSearch.UserId, savedSearch.Id, savedSearch.Name, count, now, ct);
-                            savedSearch.MarkMatchedUpTo(newest.Value);
-                            savedSearch.RecordDelivery(count, now);
-                            matchedCount += count;
-                            continue;
+                            // First run for a search only looks forward from its creation — never
+                            // floods the owner with every pre-existing listing that already matched.
+                            var since = savedSearch.LastMatchedAt ?? savedSearch.CreatedAt;
+
+                            var filter = ToFilterDto(savedSearch);
+                            var query = PropertyRepository.ApplyFilter(db.Properties.AsNoTracking(), filter,
+                                await PropertyRepository.ResolveLocationFallbackAsync(db, filter, ct), rates)
+                                // Growth engine P1 (G3.1): the moment a listing went public, not when its draft
+                                // was created. A draft created before the cursor and published later used to be
+                                // skipped forever. ApplyFilter already limits this to listings on the market.
+                                .Where(p => (p.PublishedAt ?? p.CreatedAt) > since);
+
+                            if (savedSearch.Frequency == SavedSearchFrequency.Daily)
+                            {
+                                var newest = await query
+                                    .OrderByDescending(p => p.PublishedAt ?? p.CreatedAt)
+                                    .Select(p => (DateTime?)(p.PublishedAt ?? p.CreatedAt))
+                                    .FirstOrDefaultAsync(ct);
+                                if (newest is null)
+                                    continue;
+
+                                var count = await query.CountAsync(ct);
+                                await notifications.NotifySavedSearchDigestAsync(
+                                    savedSearch.UserId, savedSearch.Id, savedSearch.Name, count, now, ct);
+                                savedSearch.MarkMatchedUpTo(newest.Value);
+                                savedSearch.RecordDelivery(count, now);
+                                matchedCount += count;
+                                continue;
+                            }
+
+                            var matches = await query
+                                // Oldest first: when more than the cap match, the rest are picked up by the next
+                                // sweep (the cursor below only advances past what was actually handled).
+                                .OrderBy(p => p.PublishedAt ?? p.CreatedAt)
+                                .ThenBy(p => p.Id)
+                                .Take(MaxMatchesPerSearchPerRun) // Cap per run — an unusually broad saved search should not spam the user.
+                                .ToListAsync(ct);
+
+                            if (matches.Count == 0)
+                                continue;
+
+                            foreach (var property in matches)
+                            {
+                                await notifications.NotifySavedSearchMatchAsync(
+                                    savedSearch.UserId,
+                                    property.Id,
+                                    property.Title,
+                                    // Empty falls back to the recipient's own language ("saved search"); a fixed
+                                    // Arabic fallback reached English and German users (growth engine P3).
+                                    savedSearch.Name ?? string.Empty,
+                                    ct);
+                            }
+
+                            // savedSearch came from ISavedSearchRepository.GetBatchAsync(), which
+                            // returns tracked entities specifically so this mutation is picked up
+                            // by the single SaveChangesAsync call below — no explicit Update()
+                            // call needed.
+                            savedSearch.MarkMatchedUpTo(matches[^1].PublishedAt ?? matches[^1].CreatedAt);
+                            savedSearch.RecordDelivery(matches.Count, now);
+                            matchedCount += matches.Count;
                         }
 
-                        var matches = await query
-                            // Oldest first: when more than the cap match, the rest are picked up by the next
-                            // sweep (the cursor below only advances past what was actually handled).
-                            .OrderBy(p => p.PublishedAt ?? p.CreatedAt)
-                            .ThenBy(p => p.Id)
-                            .Take(MaxMatchesPerSearchPerRun) // Cap per run — an unusually broad saved search should not spam the user.
-                            .ToListAsync(ct);
+                        await db.SaveChangesAsync(ct);
+                        db.ChangeTracker.Clear();
 
-                        if (matches.Count == 0)
-                            continue;
-
-                        foreach (var property in matches)
-                        {
-                            await notifications.NotifySavedSearchMatchAsync(
-                                savedSearch.UserId,
-                                property.Id,
-                                property.Title,
-                                // Empty falls back to the recipient's own language ("saved search"); a fixed
-                                // Arabic fallback reached English and German users (growth engine P3).
-                                savedSearch.Name ?? string.Empty,
-                                ct);
-                        }
-
-                        // savedSearch came from ISavedSearchRepository.GetAllAsync(), which
-                        // returns tracked entities specifically so this mutation is picked up
-                        // by the single SaveChangesAsync call below — no explicit Update()
-                        // call needed.
-                        savedSearch.MarkMatchedUpTo(matches[^1].PublishedAt ?? matches[^1].CreatedAt);
-                        savedSearch.RecordDelivery(matches.Count, now);
-                        matchedCount += matches.Count;
+                        if (batch.Count < SearchBatchSize)
+                            break;
                     }
-
-                    await db.SaveChangesAsync(ct);
 
                     if (matchedCount > 0)
                     {
-                        _logger.LogInformation("Saved search run notified {Count} new matches across {SearchCount} searches.", matchedCount, allSearches.Count);
+                        _logger.LogInformation("Saved search run notified {Count} new matches across {SearchCount} searches.", matchedCount, searchCount);
                     }
                 },
                 ct);

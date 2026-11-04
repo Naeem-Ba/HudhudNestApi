@@ -246,6 +246,10 @@ public class Property : AuditableEntity
     public int? LivingRoomsCount { get; set; }
     public int? KitchenCount { get; set; }
     public int? ParkingCount { get; set; }
+    /// <remarks>
+    /// P18-D08: dead column - no command, DTO or query reads or writes it (the audit found it always
+    /// NULL). Not dropped on purpose: dropping is destructive, so it waits for an explicit decision.
+    /// </remarks>
     public int? YearBuilt { get; set; }
     public FurnishingStatus FurnishingStatus { get; set; } = FurnishingStatus.Unfurnished;
 
@@ -278,7 +282,16 @@ public class Property : AuditableEntity
 
     // ── الميتاداتا ─────────────────────────────────────────────────────
 
+    /// <remarks>
+    /// P18-D08: dead column since the dedicated view counter (ListingViewCounter/ListingViewEvent)
+    /// replaced it; always 0. Kept until an explicit decision to drop it (destructive migration).
+    /// </remarks>
     public int ViewsCount { get; set; }
+
+    /// <remarks>
+    /// P18-D08: dead column - favourites are counted from the Favorites table; this one is always 0.
+    /// Kept until an explicit decision to drop it (destructive migration).
+    /// </remarks>
     public int FavoritesCount { get; set; }
 
     /// <summary>تم التحقق من العقار بالمعاينة الفعلية؟</summary>

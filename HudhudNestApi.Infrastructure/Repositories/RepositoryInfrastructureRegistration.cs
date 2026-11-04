@@ -85,6 +85,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IVisitRepository, VisitRepository>();
         services.AddScoped<IPropertyReviewRepository, PropertyReviewRepository>();
         services.AddScoped<IUserRatingRepository, UserRatingRepository>();
+        services.AddScoped<HudhudNestApi.Application.Agencies.Interfaces.IAgencyRatingRepository, HudhudNestApi.Infrastructure.Agencies.AgencyRatingRepository>();
         services.AddScoped<IPropertyRepository, PropertyRepository>();
         services.AddScoped<ICurrencyRepository, CurrencyRepository>();
         services.AddScoped<IPropertyPriceHistoryRepository, PropertyPriceHistoryRepository>();

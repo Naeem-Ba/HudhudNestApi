@@ -112,6 +112,7 @@ public sealed class PublicEndpointPolicyTests
             // public seller profile below. Members are shown by display name and avatar
             // only — no contact details, no email addresses.
             "AgenciesController.GetBySlug",
+            "AgenciesController.GetRatings",
 
             // Public seller profile: "who am I about to contact?".
             "UsersController.GetProfile",

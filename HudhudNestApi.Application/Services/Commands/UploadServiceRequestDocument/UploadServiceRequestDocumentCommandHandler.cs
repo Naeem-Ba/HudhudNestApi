@@ -1,4 +1,5 @@
 using MediatR;
+using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Common.Enums;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
@@ -35,6 +36,7 @@ public sealed class UploadServiceRequestDocumentCommandHandler
     private readonly IMediaStorageService _storage;
     private readonly IMediaFolderBuilder _folderBuilder;
     private readonly IUnitOfWork _uow;
+    private readonly ILogger<UploadServiceRequestDocumentCommandHandler>? _logger;
 
     public UploadServiceRequestDocumentCommandHandler(
         IServiceRequestRepository requests,
@@ -42,7 +44,8 @@ public sealed class UploadServiceRequestDocumentCommandHandler
         IServiceRequestDocumentRepository documents,
         IMediaStorageService storage,
         IMediaFolderBuilder folderBuilder,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        ILogger<UploadServiceRequestDocumentCommandHandler>? logger = null)
     {
         _requests = requests;
         _providers = providers;
@@ -50,6 +53,7 @@ public sealed class UploadServiceRequestDocumentCommandHandler
         _storage = storage;
         _folderBuilder = folderBuilder;
         _uow = uow;
+        _logger = logger;
     }
 
     public async Task<ServiceRequestDocumentDto> Handle(
@@ -114,8 +118,28 @@ public sealed class UploadServiceRequestDocumentCommandHandler
             request.ActorUserId,
             DateTime.UtcNow);
 
-        await _documents.AddAsync(document, ct);
-        await _uow.SaveChangesAsync(ct);
+        try
+        {
+            await _documents.AddAsync(document, ct);
+            await _uow.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            // P18-D06: remove the already-uploaded file when the row could not be saved (no orphan).
+            if (!string.IsNullOrEmpty(uploadResult.PublicId))
+            {
+                try
+                {
+                    await _storage.DeleteImageAsync(uploadResult.PublicId, CancellationToken.None);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger?.LogWarning(ex, "Could not delete the uploaded service-request document {PublicId} after the save failed.", uploadResult.PublicId);
+                }
+            }
+
+            throw;
+        }
 
         return ServiceMapper.ToDto(document);
     }

@@ -16,6 +16,10 @@ using HudhudNestApi.Application.Agencies.Commands.SetAgencyLogo;
 using HudhudNestApi.Application.Agencies.Commands.TransferAgencyOwnership;
 using HudhudNestApi.Application.Agencies.Commands.UpdateAgency;
 using HudhudNestApi.Application.Agencies.DTOs;
+using HudhudNestApi.Application.Agencies.Ratings.Commands.RateAgency;
+using HudhudNestApi.Application.Agencies.Ratings.DTOs;
+using HudhudNestApi.Application.Agencies.Ratings.Queries.GetAgencyRatingEligibility;
+using HudhudNestApi.Application.Agencies.Ratings.Queries.GetAgencyRatings;
 using HudhudNestApi.Application.Agencies.Queries.GetAgencyBySlug;
 using HudhudNestApi.Application.Agencies.Queries.GetAgencySentInvitations;
 using HudhudNestApi.Application.Agencies.Queries.GetMyAgency;
@@ -60,6 +64,78 @@ public sealed class AgenciesController : ControllerBase
     {
         var agency = await _mediator.Send(new GetAgencyBySlugQuery(slug), ct);
         return Ok(agency);
+    }
+
+    // ── GET /api/agencies/{agencyId}/ratings?page=&pageSize= ─────────
+    // Public ratings of an office (averages are computed in the database). Anonymous by design, so it
+    // is in PublicEndpointPolicyTests.ApprovedAnonymousEndpoints and has the same rate limit as the
+    // office page. 404 for an unknown or deactivated office, exactly like GET /api/agencies/{slug}.
+    [HttpGet("{agencyId:guid}/ratings")]
+    [AllowAnonymous]
+    [EnableRateLimiting("agencies-public")]
+    [ProducesResponseType(typeof(AgencyRatingSummaryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetRatings(
+        Guid agencyId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(new GetAgencyRatingsQuery(agencyId, page, pageSize), ct);
+        return Ok(result);
+    }
+
+    // ── GET /api/agencies/{agencyId}/ratings/eligibility ─────────
+    // What the signed-in caller may do: the office owner and members never can; everyone else needs a
+    // completed visit or a message about one of the office's listings. Also returns their own rating, if
+    // any, so the form can open pre-filled.
+    [HttpGet("{agencyId:guid}/ratings/eligibility")]
+    [Authorize]
+    [EnableRateLimiting("user-write")]
+    [ProducesResponseType(typeof(AgencyRatingEligibilityDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetRatingEligibility(Guid agencyId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var result = await _mediator.Send(new GetAgencyRatingEligibilityQuery(agencyId, userId.Value), ct);
+        return Ok(result);
+    }
+
+    // ── POST /api/agencies/{agencyId}/ratings ────────────────────
+    // Creates the caller's rating of the office (201) or edits it in place (200). The rater is always
+    // the token's user; nothing in the body can name another one.
+    [HttpPost("{agencyId:guid}/ratings")]
+    [Authorize]
+    [EnableRateLimiting("user-write")]
+    [ProducesResponseType(typeof(AgencyRatingDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(AgencyRatingDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> RateAgency(
+        Guid agencyId,
+        [FromBody] RateAgencyRequest request,
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var result = await _mediator.Send(
+            new RateAgencyCommand(
+                AgencyId: agencyId,
+                RaterId: userId.Value,
+                Service: request.Service,
+                Professionalism: request.Professionalism,
+                Reliability: request.Reliability,
+                OverallExperience: request.OverallExperience,
+                Comment: request.Comment),
+            ct);
+
+        return StatusCode(result.Created ? StatusCodes.Status201Created : StatusCodes.Status200OK, result.Rating);
     }
 
     // ── GET /api/agencies/me ─────────────────────────────────────
@@ -451,6 +527,14 @@ public sealed class AgenciesController : ControllerBase
 /// Request body for agency registration. Separate from the command so the caller cannot
 /// supply RequestingUserId — that comes from the token, never from the body.
 /// </summary>
+/// <summary>Body of POST /api/agencies/{agencyId}/ratings. Scores are 1..5; a missing one reads as 0 and is rejected.</summary>
+public sealed record RateAgencyRequest(
+    int Service,
+    int Professionalism,
+    int Reliability,
+    int OverallExperience,
+    string? Comment);
+
 public sealed record CreateAgencyRequest(
     string Name,
     string Slug,

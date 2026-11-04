@@ -109,5 +109,10 @@ public sealed class SavedSearchCommandHandlerTests
 
         public Task<IReadOnlyList<SavedSearch>> GetAllAsync(CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<SavedSearch>>(Items.ToList());
+
+        public Task<IReadOnlyList<SavedSearch>> GetBatchAsync(Guid? afterId, int batchSize, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<SavedSearch>>(Items
+                .Where(s => afterId is null || s.Id.CompareTo(afterId.Value) > 0)
+                .OrderBy(s => s.Id).Take(batchSize).ToList());
     }
 }
