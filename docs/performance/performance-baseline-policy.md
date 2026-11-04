@@ -55,11 +55,21 @@ Warm-up is excluded from custom steady-state endpoint metrics. A suspected noisy
 same environment; the median determines the result. A security invariant, 5xx response, missing instance, missing
 artifact, or database-plan regression is never dismissed as an outlier.
 
-The query-plan capture applies that rule itself: `scripts/capture-query-plans.sh` executes every plan 3 times
-(`PERF_QUERY_PLAN_SAMPLES`) and keeps the median-execution-time run, so its plan, node types and buffer counts are what
-the comparison sees. Release run 35448089286 failed only on `property-list-deep-page` (5.249 ms -> 6.938 ms, +32%, delta
-1.7 ms) with an identical plan (same index scan, 17,848 buffer hits, 0 reads) while the same commit tree had passed
-minutes earlier; a single sample of a ~5 ms plan on a shared 2-vCPU runner is that noisy. Percentage limits are unchanged.
+The query-plan capture applies that rule itself: `scripts/capture-query-plans.sh` executes every plan 9 times
+(`PERF_QUERY_PLAN_SAMPLES`), in rounds over all plans with a 2 s pause between rounds
+(`PERF_QUERY_PLAN_SAMPLE_PAUSE_SECONDS`), and keeps the median-execution-time run, so its plan, node types and buffer counts
+are what the comparison sees. Two release runs failed only on query-plan execution time with an identical plan (same index
+scan, same buffer hits, 0 reads) while the same commit tree had passed minutes earlier:
+
+- run 35448089286: `property-list-deep-page` 5.249 ms -> 6.938 ms (+32%, delta 1.7 ms), 1 sample per plan;
+- manual Production Gate 41896748419 (2026-11-04, commit fd3a25c): `property-geo-radius` 8.344 -> 10.66 ms (+28%, delta 2.3 ms)
+  and `property-list-deep-page` 5.249 -> 6.905 ms (+32%, delta 1.7 ms), buffer-read regression 0% on all plans, and all five
+  plans slower by 24-54% at the same moment, i.e. most likely one burst of runner slowness (inferred: only the final medians are logged). The 3
+  back-to-back samples used until then run within a fraction of a second of each other, so one burst covers all of them
+  and the median cannot help. The same commit had passed on the push run 30 minutes earlier.
+
+A single sample of a ~5 ms plan on a shared 2-vCPU runner is that noisy, and back-to-back samples share the noise, hence
+the spread-out rounds. Percentage limits and `minimumDatabaseTimeDeltaMilliseconds` are unchanged.
 
 ## Updating the baseline
 
