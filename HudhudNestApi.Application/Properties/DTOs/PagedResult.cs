@@ -6,6 +6,12 @@ public sealed class PagedResult<T>
 {
     public IReadOnlyList<T> Items { get; set; } = new List<T>();
     public int TotalCount { get; set; }
+
+    /// <summary>
+    /// True when <see cref="TotalCount"/> was counted only up to a fixed cap and more matches exist (shown as "1000+").
+    /// False for every list that counts exactly.
+    /// </summary>
+    public bool IsTotalCapped { get; set; }
     public int Page { get; set; }
     public int PageSize { get; set; }
     public int TotalPages =>

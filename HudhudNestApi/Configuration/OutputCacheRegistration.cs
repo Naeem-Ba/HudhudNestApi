@@ -144,14 +144,58 @@ public static class OutputCacheRegistration
 
         services.AddStackExchangeRedisOutputCache(options =>
         {
-            options.Configuration = redisConnection;
+            options.ConfigurationOptions = BuildCacheRedisOptions(redisConnection);
             options.InstanceName =
                 $"HudhudNestApi:{environment.EnvironmentName}:v1:OutputCache:";
         });
 
         services.AddOutputCache(ConfigurePolicies);
 
+        // Fail open: a stopped Redis must cost the request nothing (see ResilientOutputCacheStore).
+        WrapStoreWithCircuitBreaker(services);
+
         return services;
+    }
+
+    /// <summary>
+    /// The cache connection, tuned to give up quickly. The general-purpose timeouts (5 s) are right for rate limiting,
+    /// which must not guess, but a cache miss is cheap: with Redis stopped they made every cached read wait about 11.5 s.
+    /// FailFast makes commands fail at once while the connection is down instead of queueing until the timeout.
+    /// </summary>
+    internal static StackExchange.Redis.ConfigurationOptions BuildCacheRedisOptions(string connectionString)
+    {
+        var options = HudhudNestApi.Security.RateLimiting.RedisConfigurationOptionsFactory.Build(connectionString);
+        options.AbortOnConnectFail = false;
+        options.ConnectRetry = 1;
+        options.ConnectTimeout = 1000;
+        options.SyncTimeout = 500;
+        options.AsyncTimeout = 500;
+        options.BacklogPolicy = StackExchange.Redis.BacklogPolicy.FailFast;
+        return options;
+    }
+
+    private static void WrapStoreWithCircuitBreaker(IServiceCollection services)
+    {
+        var registered = services.LastOrDefault(d => d.ServiceType == typeof(IOutputCacheStore))
+            ?? throw new InvalidOperationException("The Redis output cache store was not registered.");
+        services.Remove(registered);
+
+        // Resolve the original registration by its own shape, then decorate it.
+        services.AddSingleton<IOutputCacheStore>(provider =>
+        {
+            IOutputCacheStore inner = registered switch
+            {
+                { ImplementationInstance: IOutputCacheStore instance } => instance,
+                { ImplementationFactory: { } factory } => (IOutputCacheStore)factory(provider),
+                { ImplementationType: { } type } => (IOutputCacheStore)ActivatorUtilities.CreateInstance(provider, type),
+                _ => throw new InvalidOperationException("Unsupported output cache store registration.")
+            };
+
+            return new ResilientOutputCacheStore(
+                inner,
+                provider.GetRequiredService<ILogger<ResilientOutputCacheStore>>(),
+                provider.GetService<TimeProvider>());
+        });
     }
 
     private static void ConfigurePolicies(

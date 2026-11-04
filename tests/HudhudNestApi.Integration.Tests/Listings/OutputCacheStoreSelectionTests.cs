@@ -24,11 +24,26 @@ public sealed class OutputCacheStoreSelectionTests
         Assert.DoesNotContain("Redis", name, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact(DisplayName = "OutputCache:Store=Redis uses the Redis store")]
-    public void Redis_UsesRedisStore()
+    [Fact(DisplayName = "OutputCache:Store=Redis uses the Redis store, behind the fail-open circuit")]
+    public void Redis_UsesRedisStore_BehindTheCircuit()
     {
-        var name = ResolveStoreTypeName("Production", "Redis", redis: "redis.invalid:6379,abortConnect=false");
-        Assert.Contains("Redis", name, StringComparison.OrdinalIgnoreCase);
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddScaleOutOutputCaching(
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["OutputCache:Store"] = "Redis",
+                ["ConnectionStrings:Redis"] = "redis.invalid:6379,abortConnect=false"
+            }).Build(),
+            new TestHostEnvironment("Production"));
+
+        var store = services.BuildServiceProvider().GetRequiredService<IOutputCacheStore>();
+
+        Assert.IsType<ResilientOutputCacheStore>(store);
+        var inner = typeof(ResilientOutputCacheStore)
+            .GetField("_inner", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(store)!;
+        Assert.Contains("Redis", inner.GetType().Name, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact(DisplayName = "OutputCache:Store=Redis without a connection string fails at startup")]
