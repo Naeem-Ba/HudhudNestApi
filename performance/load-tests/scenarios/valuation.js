@@ -152,7 +152,7 @@ function createInquiry(governorateId) {
 
 function getStatus(inquiryId) {
   const response = http.get(
-    `${baseUrl}/api/ValuationInquiries/${inquiryId}/status`,
+    `${baseUrl}/api/ValuationInquiries/${inquiryId}`,
     requestParams({ endpoint: 'valuation-get-status' }));
 
   steadyRequests.add(1);
