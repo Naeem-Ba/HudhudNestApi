@@ -184,6 +184,9 @@ builder.Services.AddHudhudNestApiSwagger();
 // -- 9. Rate Limiting ------------------------------------------
 builder.Services.AddHudhudNestApiRateLimiting();
 
+// -- 9b. Reference-data seeding (background in Production/Staging) --
+builder.Services.AddReferenceDataSeeding(builder.Configuration, builder.Environment);
+
 var app = builder.Build();
 
 // useRedisRateLimiting above only decides what to register. Which limiter runs is decided from the
@@ -209,6 +212,9 @@ if (redisRateLimitingActive)
 }
 
 // -- 10. Reference-data seeding ---------------------------------
+// Inline only where background seeding is off (Development/Testing/CI). In Production/Staging the
+// ReferenceDataSeedHostedService seeds after Kestrel is listening, so a slow database can no
+// longer turn every restart into a 503 on /health/live.
 await app.SeedReferenceDataAsync();
 
 // -- 11. Middleware order --------------------------------------

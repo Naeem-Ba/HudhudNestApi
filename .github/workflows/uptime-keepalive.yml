@@ -1,0 +1,58 @@
+name: Uptime keepalive
+
+# Second, independent keepalive next to the cron-job.org job. cron-job.org disables a job by itself
+# after ~26 consecutive failures (it did on 2026-10-23, after /health/live answered 503 for ~4.5 h),
+# and from then on nothing keeps the Render instance warm. This one cannot be switched off by a
+# failing probe, retries long enough to ride out a cold start or a deploy, and fails the run (GitHub
+# e-mails the repository owner) only when the API is still down after the whole retry window.
+#
+# Repository is public, so the 5-minute schedule costs no Actions minutes. GitHub may delay or skip
+# scheduled runs under load; that is why cron-job.org stays enabled as the primary pinger.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: uptime-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      API_BASE_URL: https://api.hudhudnest.com
+    steps:
+      - name: Wake and check /health/live
+        shell: bash
+        run: |
+          set -u
+          # Render's free tier needs up to ~60 s to wake; a deploy can take a few minutes.
+          # 12 attempts x (<=20 s request + 25 s pause) covers ~9 minutes worst case; stop early on success.
+          attempts=12
+          for i in $(seq 1 "$attempts"); do
+            code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --max-time 20 "${API_BASE_URL}/health/live" || true)"
+            echo "attempt ${i}/${attempts}: HTTP ${code}"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 25
+          done
+          echo "::error::${API_BASE_URL}/health/live did not return 200 after ${attempts} attempts"
+          exit 1
+
+      - name: Report readiness (informational)
+        if: always()
+        shell: bash
+        run: |
+          code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --max-time 20 "${API_BASE_URL}/health/ready" || true)"
+          echo "/health/ready: HTTP ${code}"
+          if [ "$code" != "200" ]; then
+            echo "::warning::${API_BASE_URL}/health/ready returned HTTP ${code} (database or Redis dependency degraded)"
+          fi
