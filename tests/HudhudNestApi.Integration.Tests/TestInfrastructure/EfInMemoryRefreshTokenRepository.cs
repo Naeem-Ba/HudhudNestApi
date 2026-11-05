@@ -211,16 +211,47 @@ internal sealed class EfInMemoryRefreshTokenRepository
             }
         }
 
-        _db.RefreshTokens.Add(
-            new RefreshToken
-            {
-                TokenHash = newTokenHash,
-                UserId = userId,
-                ExpiresAt = now.AddDays(_jwtOptions.RefreshTokenDays),
-                CreatedByIp = createdByIp
-            });
+        var entity = new RefreshToken
+        {
+            TokenHash = newTokenHash,
+            UserId = userId,
+            ExpiresAt = now.AddDays(_jwtOptions.RefreshTokenDays),
+            CreatedByIp = createdByIp
+        };
+
+        _db.RefreshTokens.Add(entity);
 
         await _db.SaveChangesAsync(ct);
+
+        if (!endOtherSessions)
+        {
+            // Same rule as the real repository: a grace-window sibling must not push the live sessions past the limit.
+            var keepOthers = Math.Max(0, Math.Max(1, _jwtOptions.MaxActiveSessions) - 1);
+
+            var excess = (await _db.RefreshTokens
+                .IgnoreQueryFilters()
+                .Where(token =>
+                    token.UserId == userId &&
+                    !token.IsRevoked &&
+                    token.ExpiresAt > now &&
+                    token.Id != entity.Id)
+                .ToListAsync(ct))
+                .OrderByDescending(token => token.CreatedAt)
+                .Skip(keepOthers);
+
+            var ended = false;
+            foreach (var token in excess)
+            {
+                token.IsRevoked = true;
+                token.RevokedAt = now;
+                token.RevokedByIp = createdByIp;
+                token.ReplacedByTokenHash = RefreshTokenMarkers.Superseded;
+                ended = true;
+            }
+
+            if (ended)
+                await _db.SaveChangesAsync(ct);
+        }
     }
 
     private static string HashToken(string token)

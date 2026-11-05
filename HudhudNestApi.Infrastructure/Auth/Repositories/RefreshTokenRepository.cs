@@ -44,6 +44,33 @@ public sealed class RefreshTokenRepository
         // default of 5 a phone and a website stay signed in together; Jwt:MaxActiveSessions = 1 gives the
         // former "one device at a time" behaviour. Ended sessions are marked Superseded (not as a rotation) so a
         // later refresh from that device is answered "signed in elsewhere" and never read as token theft.
+        await EndSessionsBeyondLimitAsync(userId, createdByIp, now, excludeTokenId: null, ct);
+
+        await InsertAsync(userId, refreshToken, createdByIp, now, ct);
+    }
+
+    public async Task AddRotatedAsync(
+        Guid userId,
+        string refreshToken,
+        string? createdByIp,
+        CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        var inserted = await InsertAsync(userId, refreshToken, createdByIp, now, ct);
+
+        // A normal rotation replaces a token that was just ended, so the number of live sessions does not
+        // change and nothing is trimmed. A replay inside the grace window hands out a sibling token and does
+        // add one; without a bound, replaying one old token could mint any number of live sessions.
+        await EndSessionsBeyondLimitAsync(userId, createdByIp, now, excludeTokenId: inserted.Id, ct);
+    }
+
+    private async Task EndSessionsBeyondLimitAsync(
+        Guid userId,
+        string? createdByIp,
+        DateTime now,
+        Guid? excludeTokenId,
+        CancellationToken ct)
+    {
         var keepOthers = Math.Max(0, _jwtSettings.MaxActiveSessions - 1);
 
         var survivingIds =
@@ -53,7 +80,8 @@ public sealed class RefreshTokenRepository
                     token =>
                         token.UserId == userId &&
                         !token.IsRevoked &&
-                        token.ExpiresAt > now)
+                        token.ExpiresAt > now &&
+                        token.Id != excludeTokenId)
                 .OrderByDescending(token => token.CreatedAt)
                 .Select(token => token.Id)
                 .Take(keepOthers)
@@ -67,25 +95,16 @@ public sealed class RefreshTokenRepository
                         token.UserId == userId &&
                         !token.IsRevoked &&
                         token.ExpiresAt > now &&
+                        token.Id != excludeTokenId &&
                         !survivingIds.Contains(token.Id))
                 .ExecuteUpdateAsync(
                     setters =>
                         setters
+                            .SetProperty(token => token.IsRevoked, true)
+                            .SetProperty(token => token.RevokedAt, now)
+                            .SetProperty(token => token.RevokedByIp, createdByIp)
                             .SetProperty(
-                                token =>
-                                    token.IsRevoked,
-                                true)
-                            .SetProperty(
-                                token =>
-                                    token.RevokedAt,
-                                now)
-                            .SetProperty(
-                                token =>
-                                    token.RevokedByIp,
-                                createdByIp)
-                            .SetProperty(
-                                token =>
-                                    token.ReplacedByTokenHash,
+                                token => token.ReplacedByTokenHash,
                                 RefreshTokenMarkers.Superseded),
                     ct);
 
@@ -97,25 +116,16 @@ public sealed class RefreshTokenRepository
                 _jwtSettings.MaxActiveSessions,
                 userId);
         }
-
-        await InsertAsync(userId, refreshToken, createdByIp, now, ct);
     }
 
-    public async Task AddRotatedAsync(
-        Guid userId,
-        string refreshToken,
-        string? createdByIp,
-        CancellationToken ct = default)
-        => await InsertAsync(userId, refreshToken, createdByIp, DateTime.UtcNow, ct);
-
-    private async Task InsertAsync(
+    private async Task<RefreshToken> InsertAsync(
         Guid userId,
         string refreshToken,
         string? createdByIp,
         DateTime now,
         CancellationToken ct)
     {
-        _db.RefreshTokens.Add(
+        var entity =
             new RefreshToken
             {
                 TokenHash =
@@ -133,9 +143,13 @@ public sealed class RefreshTokenRepository
 
                 LastUsedAt =
                     null
-            });
+            };
+
+        _db.RefreshTokens.Add(entity);
 
         await _db.SaveChangesAsync(ct);
+
+        return entity;
     }
 
     public async Task<RefreshTokenRecord?>
