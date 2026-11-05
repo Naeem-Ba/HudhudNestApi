@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using HudhudNestApi.Application.Listings.Currencies;
+using HudhudNestApi.Application.Listings.DTOs;
 using HudhudNestApi.Application.Properties.DTOs;
 using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings;
@@ -302,6 +303,81 @@ public sealed class PropertySearchPhase7PostgresTests : IAsyncLifetime
         Assert.Equal(
             ["avail-eur", "avail-usd", "both", "reserved"],
             GeoTitles(await GeoAsync($"{center}&listingType=ForSale&currencyCode=USD&maxPrice=100000")));
+    }
+
+    private async Task SeedGeoClusterAsync(decimal lat, decimal lng)
+    {
+        // Five listings in the radius at slightly different distances, one about 100 km away.
+        for (var i = 0; i < 5; i++)
+            await AddAsync($"near-{i}", price: 80_000m, lat: lat + i * 0.001m, lng: lng);
+        await AddAsync("far", price: 80_000m, lat: lat + 1m, lng: lng);
+    }
+
+    [Fact(DisplayName = "geo-search counts exactly below the cap and says the total is not capped (Phase 18 D13)")]
+    public async Task Geo_CountBelowTheCap_IsExact()
+    {
+        const decimal lat = 35.6m, lng = 34.8m;     // sea off Latakia, away from the other tests' data
+        await SeedGeoClusterAsync(lat, lng);
+
+        var root = await GeoAsync($"latitude={lat}&longitude={lng}&radiusKm=5&pageSize=2&page=2");
+
+        Assert.Equal(5, root.GetProperty("totalCount").GetInt32());
+        Assert.False(root.GetProperty("isTotalCapped").GetBoolean());
+        Assert.Equal(3, root.GetProperty("totalPages").GetInt32());
+        Assert.Equal(2, root.GetProperty("items").GetArrayLength());
+    }
+
+    [Fact(DisplayName = "geo-search stops counting at the cap, reports the cap and flags it (Phase 18 D13)")]
+    public async Task Geo_CountAboveTheCap_IsBoundedAndFlagged()
+    {
+        const decimal lat = 35.7m, lng = 34.8m;
+        await SeedGeoClusterAsync(lat, lng);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var repository = new PropertyGeoSearchRepository(
+            scope.ServiceProvider.GetRequiredService<AppDbContext>(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<PropertyGeoSearchRepository>.Instance,
+            new Microsoft.AspNetCore.Http.HttpContextAccessor())
+        { CountCap = 3 };
+
+        var result = await repository.SearchNearbyAsync(new GeoPropertySearchRequestDto
+        {
+            Latitude = lat,
+            Longitude = lng,
+            RadiusKm = 5,
+            Page = 1,
+            PageSize = 2
+        });
+
+        Assert.Equal(3, result.TotalCount);
+        Assert.True(result.IsTotalCapped);
+        Assert.Equal(2, result.Items.Count);
+    }
+
+    [Fact(DisplayName = "A listing outside the radius is never counted, even when the cap leaves room (Phase 18 D13)")]
+    public async Task Geo_CountIgnoresListingsOutsideTheRadius()
+    {
+        const decimal lat = 35.8m, lng = 34.8m;
+        await SeedGeoClusterAsync(lat, lng);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var repository = new PropertyGeoSearchRepository(
+            scope.ServiceProvider.GetRequiredService<AppDbContext>(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<PropertyGeoSearchRepository>.Instance,
+            new Microsoft.AspNetCore.Http.HttpContextAccessor())
+        { CountCap = 50 };
+
+        var result = await repository.SearchNearbyAsync(new GeoPropertySearchRequestDto
+        {
+            Latitude = lat,
+            Longitude = lng,
+            RadiusKm = 5,
+            Page = 1,
+            PageSize = 20
+        });
+
+        Assert.Equal(5, result.TotalCount);
+        Assert.False(result.IsTotalCapped);
     }
 
     [Fact(DisplayName = "A LIKE wildcard or NUL typed into the geo-search city is literal or refused, never a 500 (P7-D03)")]

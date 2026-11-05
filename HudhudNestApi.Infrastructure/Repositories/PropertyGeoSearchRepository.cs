@@ -23,6 +23,16 @@ public sealed class PropertyGeoSearchRepository : IPropertyGeoSearchRepository
     private readonly ILogger<PropertyGeoSearchRepository> _logger;
     private readonly IHttpContextAccessor _httpContextAccessor;
 
+    /// <summary>
+    /// Most rows the total is ever counted to. Counting every listing inside the radius grew linearly with the
+    /// data (Phase 18 load test, 100,000 listings: the old COUNT(*) averaged 352 ms and took about 80% of all
+    /// database time). The count now walks the same nearest-first index scan the page query uses and stops at this
+    /// many rows, so its cost is bounded. Past the cap the response says so (<see cref="PagedResult{T}.IsTotalCapped"/>).
+    /// </summary>
+    public const int DefaultCountCap = 1000;
+
+    internal int CountCap { get; init; } = DefaultCountCap;
+
     public PropertyGeoSearchRepository(
         AppDbContext db,
         ILogger<PropertyGeoSearchRepository> logger,
@@ -98,12 +108,21 @@ END
           )
 """;
 
+        // Exact up to the cap, by construction: the nearest CountCap candidates come back ordered by distance, so the
+        // ones inside the radius are a prefix of them. The ORDER BY ... <-> LIMIT form lets PostGIS use the ordered
+        // GiST scan (touching about CountCap rows) instead of a bitmap scan over everything in the radius.
         var countSql = $"""
 SELECT COUNT(*)
-FROM "Properties" p
-WHERE {filters}
-  AND ST_DWithin(
-        p."GeoLocation",
+FROM (
+    SELECT p."GeoLocation"
+    FROM "Properties" p
+    WHERE {filters}
+    ORDER BY p."GeoLocation" <->
+             ST_SetSRID(ST_MakePoint(@lng, @lat), 4326)::geography
+    LIMIT @countCap
+) capped
+WHERE ST_DWithin(
+        capped."GeoLocation",
         ST_SetSRID(ST_MakePoint(@lng, @lat), 4326)::geography,
         @radiusMeters
       );
@@ -259,6 +278,7 @@ ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
         {
             Items = items.AsReadOnly(),
             TotalCount = totalCount,
+            IsTotalCapped = totalCount >= CountCap,
             Page = page,
             PageSize = pageSize
         };
@@ -305,7 +325,7 @@ ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
         item.DistanceMeters = Math.Max(500d, Math.Round(item.DistanceMeters / 500d) * 500d);
     }
 
-    private static void AddParameters(
+    private void AddParameters(
         IDbCommand command,
         GeoPropertySearchRequestDto filter,
         double latitude,
@@ -320,6 +340,7 @@ ORDER BY "DistanceMeters" ASC, p."CreatedAt" DESC;
         AddParameter(command, "radiusMeters", radiusMeters, DbType.Double);
         AddParameter(command, "pageSize", pageSize, DbType.Int32);
         AddParameter(command, "offset", offset, DbType.Int32);
+        AddParameter(command, "countCap", CountCap, DbType.Int32);
 
         AddParameter(command, "countryCode", NormalizeUpper(filter.CountryCode), DbType.String);
         AddParameter(command, "city", NormalizeLikeText(filter.City), DbType.String);
