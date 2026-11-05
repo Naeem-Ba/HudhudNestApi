@@ -204,7 +204,9 @@ export PERF_OTP_SECRET_KEY="${PERF_OTP_SECRET_KEY:-$(openssl rand -base64 48 | t
 export PERF_PHONE_HMAC_KEY="${PERF_PHONE_HMAC_KEY:-$(openssl rand -base64 32 | tr -d '\r\n')}"
 export PERF_FIXED_OTP="${PERF_FIXED_OTP:-$(printf '%06d' $((RANDOM % 1000000)))}"
 export PERF_TEST_PHONE_PREFIX="${PERF_TEST_PHONE_PREFIX:-+155590}"
-export PERF_TEST_PASSWORD="${PERF_TEST_PASSWORD:-Performance-$(openssl rand -hex 12)!}"
+# The generated password must not contain the fixture user name ("Performance") or race marker words:
+# PasswordPolicy rejects passwords that embed the account holder's name tokens (4+ chars).
+export PERF_TEST_PASSWORD="${PERF_TEST_PASSWORD:-Load-Gate-$(openssl rand -hex 12)!}"
 export PERF_CLEANUP_SECRET="${PERF_CLEANUP_SECRET:-$(openssl rand -base64 48 | tr -d '\r\n')}"
 export PERF_DATABASE_CONNECTION_STRING="Host=localhost;Port=55432;Database=hudhudnest_performance;Username=postgres;Password=${PERF_POSTGRES_PASSWORD};Pooling=true;Maximum Pool Size=20;Timeout=15;Command Timeout=60"
 export PERF_DATABASE_URL="postgresql://postgres:${PERF_POSTGRES_PASSWORD}@localhost:55432/hudhudnest_performance"
