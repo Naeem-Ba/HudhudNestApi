@@ -9,6 +9,7 @@ internal static class HealthInfrastructureRegistration
     {
         services.AddScoped<PostGisHealthCheck>();
         services.AddScoped<PendingMigrationsHealthCheck>();
+        services.AddScoped<RowLevelSecurityHealthCheck>();
         services.AddHostedService<ProductionStartupValidator>();
 
         services.AddHealthChecks()
@@ -17,6 +18,9 @@ internal static class HealthInfrastructureRegistration
                 tags: ["ready", "db"])
             .AddCheck<PendingMigrationsHealthCheck>(
                 "pending-migrations",
+                tags: ["ready", "db"])
+            .AddCheck<RowLevelSecurityHealthCheck>(
+                "row-level-security",
                 tags: ["ready", "db"])
             .AddCheck<DistributedCacheHealthCheck>(
                 "redis",

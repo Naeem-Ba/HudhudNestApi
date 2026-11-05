@@ -94,6 +94,29 @@ try
             "Database schema migration completed successfully.");
     }
 
+    // Runs on every execution, with or without pending migrations: a table created by an earlier
+    // migration (or by hand) must never stay open to the Supabase Data API. A failure here fails the
+    // deploy step instead of waiting for a Supabase advisory email.
+    var stillUnprotected =
+        await RowLevelSecurityEnforcer.EnforceAsync(
+            db.Database);
+
+    if (stillUnprotected.Count > 0)
+    {
+        logger.LogError(
+            "Row-level security could not be enabled on {Count} public table(s): {Tables}. " +
+            "They are open to the Supabase Data API; enable it as the table owner.",
+            stillUnprotected.Count,
+            string.Join(
+                ", ",
+                stillUnprotected));
+
+        return 1;
+    }
+
+    logger.LogInformation(
+        "Row-level security is enabled on every public table.");
+
     if (runPhoneLookupHashBackfill)
     {
         logger.LogInformation(
