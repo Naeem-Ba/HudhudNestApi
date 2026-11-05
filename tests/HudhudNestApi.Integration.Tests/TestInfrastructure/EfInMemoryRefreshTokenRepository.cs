@@ -34,7 +34,21 @@ internal sealed class EfInMemoryRefreshTokenRepository
             userId,
             refreshToken,
             createdByIp,
-            setReplacementHash: true,
+            endOtherSessions: true,
+            ct);
+    }
+
+    public async Task AddRotatedAsync(
+        Guid userId,
+        string refreshToken,
+        string? createdByIp,
+        CancellationToken ct = default)
+    {
+        await AddCoreAsync(
+            userId,
+            refreshToken,
+            createdByIp,
+            endOtherSessions: false,
             ct);
     }
 
@@ -62,7 +76,9 @@ internal sealed class EfInMemoryRefreshTokenRepository
             token.Id,
             token.UserId,
             token.ExpiresAt,
-            token.IsRevoked);
+            token.IsRevoked,
+            token.RevokedAt,
+            token.ReplacedByTokenHash);
     }
 
     public async Task<bool> RevokeIfActiveAsync(
@@ -162,7 +178,7 @@ internal sealed class EfInMemoryRefreshTokenRepository
         Guid userId,
         string refreshToken,
         string? createdByIp,
-        bool setReplacementHash,
+        bool endOtherSessions,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(refreshToken))
@@ -171,23 +187,27 @@ internal sealed class EfInMemoryRefreshTokenRepository
         var now = DateTime.UtcNow;
         var newTokenHash = HashToken(refreshToken);
 
-        var activeTokens = await _db.RefreshTokens
-            .IgnoreQueryFilters()
-            .Where(token =>
-                token.UserId == userId &&
-                !token.IsRevoked &&
-                token.ExpiresAt > now)
-            .ToListAsync(ct);
-
-        foreach (var token in activeTokens)
+        if (endOtherSessions)
         {
-            token.IsRevoked = true;
-            token.RevokedAt = now;
-            token.RevokedByIp = createdByIp;
+            // Same rule as the real repository: keep the newest (max - 1) other sessions.
+            var keepOthers = Math.Max(0, Math.Max(1, _jwtOptions.MaxActiveSessions) - 1);
 
-            if (setReplacementHash)
+            var activeTokens = (await _db.RefreshTokens
+                .IgnoreQueryFilters()
+                .Where(token =>
+                    token.UserId == userId &&
+                    !token.IsRevoked &&
+                    token.ExpiresAt > now)
+                .ToListAsync(ct))
+                .OrderByDescending(token => token.CreatedAt)
+                .Skip(keepOthers);
+
+            foreach (var token in activeTokens)
             {
-                token.ReplacedByTokenHash = newTokenHash;
+                token.IsRevoked = true;
+                token.RevokedAt = now;
+                token.RevokedByIp = createdByIp;
+                token.ReplacedByTokenHash = RefreshTokenMarkers.Superseded;
             }
         }
 

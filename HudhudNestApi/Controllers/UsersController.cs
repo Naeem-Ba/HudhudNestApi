@@ -319,7 +319,7 @@ public sealed class UsersController : ControllerBase
             return Unauthorized();
 
         if (!result.Success)
-            return BadRequest(new { errors = result.Errors });
+            return BadRequest(new { errors = result.Errors, errorCodes = result.ErrorCodes });
 
         return NoContent();
     }

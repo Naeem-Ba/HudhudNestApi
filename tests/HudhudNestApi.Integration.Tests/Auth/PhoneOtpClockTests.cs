@@ -10,7 +10,7 @@ namespace HudhudNestApi.Integration.Tests.Auth;
 /// </summary>
 public sealed class PhoneOtpClockTests : IClassFixture<PhoneOtpClockTests.ClockFactoryHolder>, IAsyncLifetime
 {
-    private const string Password = "SecurePass9";
+    private const string Password = "SecurePass9!";
     private static int _seed = Environment.TickCount & 0xFFFFFF;
 
     /// <summary>xUnit needs a fixture type; this one owns the factory and its clock.</summary>

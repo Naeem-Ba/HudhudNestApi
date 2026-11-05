@@ -62,6 +62,18 @@ public static class RefreshTokenErrorCodes
     public const string Expired = "REFRESH_TOKEN_EXPIRED";
     public const string ReuseDetected = "REFRESH_TOKEN_REUSE_DETECTED";
     public const string RotationConflict = "REFRESH_TOKEN_ROTATION_CONFLICT";
+
+    /// <summary>
+    /// The session was ended by design, not by theft: the user signed in on more devices than allowed, so the
+    /// oldest one was dropped. The client shows "signed in on another device" and nothing else is revoked.
+    /// </summary>
+    public const string Superseded = "REFRESH_TOKEN_SUPERSEDED";
+
+    /// <summary>
+    /// The token was ended by a logout, a password change/reset or an account action. It is dead, but replaying it
+    /// proves nothing about theft, so it neither revokes other sessions nor rotates the security stamp.
+    /// </summary>
+    public const string Revoked = "REFRESH_TOKEN_REVOKED";
 }
 
 public sealed class RefreshTokenCommandHandler
@@ -114,6 +126,17 @@ public sealed class RefreshTokenCommandHandler
             logger;
     }
 
+    private bool IsWithinReuseGrace(
+        RefreshTokenRecord stored,
+        DateTime now)
+    {
+        var grace = _jwtSettings.RefreshReuseGraceSeconds;
+
+        return grace > 0 &&
+               stored.RevokedAt is { } revokedAt &&
+               now - revokedAt <= TimeSpan.FromSeconds(grace);
+    }
+
     public async Task<RefreshTokenResult> Handle(
         RefreshTokenCommand request,
         CancellationToken ct)
@@ -142,17 +165,46 @@ public sealed class RefreshTokenCommandHandler
                                 RefreshTokenErrorCodes.Expired);
                     }
 
+                    // A token that was ended on purpose is simply dead; only a token that was ROTATED away
+                    // and is presented again looks like theft. Treating every revoked token as theft signed the
+                    // user out of all devices after a password change, a logout elsewhere, or a sign-in on a
+                    // further device (the old device refreshing with its ended token revoked the new one too).
+                    var replayOfRotatedToken = false;
+
                     if (stored.IsRevoked)
                     {
-                        await _reuseHandler.HandleAsync(
-                            stored,
-                            request.IpAddress,
-                            tokenCt);
+                        if (stored.ReplacedByTokenHash == RefreshTokenMarkers.Superseded)
+                        {
+                            return RefreshTokenResult
+                                .Unauthorized(
+                                    "This session ended because you signed in on another device.",
+                                    RefreshTokenErrorCodes.Superseded);
+                        }
 
-                        return RefreshTokenResult
-                            .Unauthorized(
-                                "Refresh token reuse detected. All active sessions were revoked.",
-                                RefreshTokenErrorCodes.ReuseDetected);
+                        if (string.IsNullOrEmpty(stored.ReplacedByTokenHash))
+                        {
+                            return RefreshTokenResult
+                                .Unauthorized(
+                                    "This session has ended.",
+                                    RefreshTokenErrorCodes.Revoked);
+                        }
+
+                        if (!IsWithinReuseGrace(stored, now))
+                        {
+                            await _reuseHandler.HandleAsync(
+                                stored,
+                                request.IpAddress,
+                                tokenCt);
+
+                            return RefreshTokenResult
+                                .Unauthorized(
+                                    "Refresh token reuse detected. All active sessions were revoked.",
+                                    RefreshTokenErrorCodes.ReuseDetected);
+                        }
+
+                        // Rotated moments ago: the client most likely never received the answer (dropped
+                        // connection, app suspended mid-request) or two requests raced. Answer it again.
+                        replayOfRotatedToken = true;
                     }
 
                     /*
@@ -184,25 +236,46 @@ public sealed class RefreshTokenCommandHandler
                         _tokenService
                             .GenerateRefreshToken();
 
-                    var revoked =
-                        await _refreshTokens
-                            .RevokeIfActiveAsync(
-                                stored.Id,
-                                now,
-                                request.IpAddress,
-                                replacedByRefreshToken:
-                                    newRefreshToken,
-                                tokenCt);
-
-                    if (!revoked)
+                    if (!replayOfRotatedToken)
                     {
-                        return RefreshTokenResult
-                            .Unauthorized(
-                                "Refresh token was already rotated by another request.",
-                                RefreshTokenErrorCodes.RotationConflict);
+                        var revoked =
+                            await _refreshTokens
+                                .RevokeIfActiveAsync(
+                                    stored.Id,
+                                    now,
+                                    request.IpAddress,
+                                    replacedByRefreshToken:
+                                        newRefreshToken,
+                                    tokenCt);
+
+                        if (!revoked)
+                        {
+                            // Lost a race against another refresh of the very same token (two tabs, or a
+                            // retry overlapping the original). The winner already rotated it; with the grace
+                            // window on, this caller gets its own fresh token instead of an error that would
+                            // sign it out. With the window off (0) the former conflict answer is kept.
+                            if (_jwtSettings.RefreshReuseGraceSeconds <= 0)
+                            {
+                                return RefreshTokenResult
+                                    .Unauthorized(
+                                        "Refresh token was already rotated by another request.",
+                                        RefreshTokenErrorCodes.RotationConflict);
+                            }
+
+                            replayOfRotatedToken = true;
+                        }
                     }
 
-                    await _refreshTokens.AddAsync(
+                    if (replayOfRotatedToken)
+                    {
+                        _logger.LogInformation(
+                            "Refresh token for user {UserId} was presented again within the {Grace}s grace window; issuing a new token.",
+                            stored.UserId,
+                            _jwtSettings.RefreshReuseGraceSeconds);
+                    }
+
+                    // A refresh ends no other session: the phone refreshing must not sign the website out.
+                    await _refreshTokens.AddRotatedAsync(
                         stored.UserId,
                         newRefreshToken,
                         request.IpAddress,

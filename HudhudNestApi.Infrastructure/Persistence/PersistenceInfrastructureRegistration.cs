@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Infrastructure.Identity.Entities;
+using HudhudNestApi.Infrastructure.Identity.Services;
 using HudhudNestApi.Infrastructure.Performance;
 using InfrastructureApplicationRole = HudhudNestApi.Infrastructure.Identity.Entities.ApplicationRole;
 
@@ -65,6 +66,7 @@ internal static class PersistenceInfrastructureRegistration
             options.Lockout.AllowedForNewUsers = true;
         })
         .AddEntityFrameworkStores<AppDbContext>()
+        .AddPasswordValidator<PasswordPolicyIdentityValidator>()
         .AddDefaultTokenProviders();
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();

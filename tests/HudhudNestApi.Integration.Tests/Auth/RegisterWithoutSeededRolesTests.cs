@@ -203,7 +203,7 @@ public sealed class PhoneRegisterWithoutSeededRolesTests : IClassFixture<PhoneAu
         {
             challengeId,
             code = DeterministicOtpService.ValidOtp,
-            password = "SecurePass9",
+            password = "SecurePass9!",
             firstName = "Naeem",
             lastName = "Test"
         });

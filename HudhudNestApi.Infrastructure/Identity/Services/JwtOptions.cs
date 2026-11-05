@@ -16,4 +16,10 @@ public sealed class JwtOptions
 
     public int AccessTokenMinutes { get; init; } = 30;
     public int RefreshTokenDays { get; init; } = 30;
+
+    /// <summary>See IJwtTokenSettings.RefreshReuseGraceSeconds. Default 60.</summary>
+    public int RefreshReuseGraceSeconds { get; init; } = 60;
+
+    /// <summary>See IJwtTokenSettings.MaxActiveSessions. Default 5; 1 = single session.</summary>
+    public int MaxActiveSessions { get; init; } = 5;
 }

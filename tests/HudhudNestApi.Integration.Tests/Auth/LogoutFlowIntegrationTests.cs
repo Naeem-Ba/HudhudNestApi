@@ -35,12 +35,12 @@ public sealed class LogoutFlowIntegrationTests : IClassFixture<PhoneAuthWebAppli
         {
             challengeId,
             code = DeterministicOtpService.ValidOtp,
-            password = "SecurePass9",
+            password = "SecurePass9!",
             firstName = "Naeem",
             lastName = "Bazzazeh"
         });
         Assert.Equal(HttpStatusCode.OK, registration.StatusCode);
-        var login = await _client.PostAsJsonAsync("/api/auth/phone/login", new { phoneNumber = phone, password = "SecurePass9" });
+        var login = await _client.PostAsJsonAsync("/api/auth/phone/login", new { phoneNumber = phone, password = "SecurePass9!" });
         var access = (await Json(login)).GetProperty("accessToken").GetString()!;
         var refresh = login.Headers.GetValues("Set-Cookie")
             .First(c => c.StartsWith("refresh_token=", StringComparison.Ordinal))
@@ -118,12 +118,12 @@ public sealed class LogoutWithCsrfIntegrationTests : IClassFixture<PhoneAuthWebA
         {
             challengeId,
             code = DeterministicOtpService.ValidOtp,
-            password = "SecurePass9",
+            password = "SecurePass9!",
             firstName = "N",
             lastName = "B"
         });
         Assert.Equal(HttpStatusCode.OK, registration.StatusCode);
-        var login = await client.PostAsJsonAsync("/api/auth/phone/login", new { phoneNumber = phone, password = "SecurePass9" });
+        var login = await client.PostAsJsonAsync("/api/auth/phone/login", new { phoneNumber = phone, password = "SecurePass9!" });
         var access = JsonDocument.Parse(await login.Content.ReadAsStringAsync()).RootElement.GetProperty("accessToken").GetString()!;
         var refreshCookie = login.Headers.GetValues("Set-Cookie")
             .First(c => c.StartsWith("refresh_token=", StringComparison.Ordinal)).Split(';')[0];

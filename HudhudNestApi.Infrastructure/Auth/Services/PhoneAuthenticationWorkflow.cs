@@ -41,6 +41,7 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     private readonly SystemRoleGuarantee _roles;
     private readonly IPhoneNumberLookupHasher _lookupHasher;
     private readonly int _dailySendLimit;
+    private readonly IPasswordSecurityService _passwordSecurity;
 
     public PhoneAuthenticationWorkflow(AppDbContext db, UserManager<ApplicationUser> users,
         SignInManager<ApplicationUser> signIn, IPhoneNumberNormalizer normalizer, IOtpService otp,
@@ -48,8 +49,9 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         IPhoneVerificationPolicy policy, TimeProvider clock, IAuditLogService audit,
         IOptions<SmsProviderOptions> smsOptions, ILogger<PhoneAuthenticationWorkflow> logger,
         IUserSecurityStampCacheInvalidator stampCache, SystemRoleGuarantee roles,
-        IPhoneNumberLookupHasher lookupHasher)
+        IPhoneNumberLookupHasher lookupHasher, IPasswordSecurityService passwordSecurity)
     {
+        _passwordSecurity = passwordSecurity;
         _lookupHasher = lookupHasher;
         _stampCache = stampCache;
         _roles = roles;
@@ -217,6 +219,22 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             }
             // The code just proved control of the number, which an unconfirmed claim never did.
             foreach (var claimant in holders) await ReleaseUnconfirmedClaimAsync(claimant, now, ipAddress, ct);
+            // The same rules as e-mail registration (complexity, common words, runs, breach screening) plus
+            // "no name or phone digits in the password". A refused password gives the code back so the person can
+            // retry with the same SMS code.
+            var passwordCheck = await _passwordSecurity.ValidatePasswordAsync(
+                password,
+                new PasswordCheckContext(
+                    FirstName: firstName,
+                    LastName: lastName,
+                    PhoneNumber: challenge.NormalizedPhoneNumber),
+                ct);
+            if (!passwordCheck.IsValid)
+            {
+                await transaction.RollbackAsync(ct);
+                await ReleaseAsync(challenge.Id, ct);
+                return PasswordFail(passwordCheck.Errors);
+            }
             var id = Guid.NewGuid();
             var user = NewVerifiedUser(id, challenge.NormalizedPhoneNumber, now);
             var created = await _users.CreateAsync(user, password);
@@ -322,6 +340,19 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
         var user = await _users.Users.SingleOrDefaultAsync(
             PhoneIdentity.Holds(_lookupHasher.Compute(normalized.Value!), normalized.Value!), ct);
         if (user is not { PhoneNumberConfirmed: true }) return Fail("PASSWORD_RESET_INVALID");
+        // Breach screening only once the token has proven the caller owns the number: the answer is about
+        // the password, so it must not be available to someone who merely knows the phone number. Personal
+        // details (the account's own name) are compared by the Identity validator after the same token check.
+        var tokenValid = await _users.VerifyUserTokenAsync(
+            user,
+            _users.Options.Tokens.PasswordResetTokenProvider,
+            UserManager<ApplicationUser>.ResetPasswordTokenPurpose,
+            confirmationToken);
+        if (tokenValid)
+        {
+            var breachCheck = await _passwordSecurity.ValidatePasswordAsync(newPassword, PasswordCheckContext.None, ct);
+            if (!breachCheck.IsValid) return PasswordFail(breachCheck.Errors);
+        }
         var reset = await _users.ResetPasswordAsync(user, confirmationToken, newPassword);
         if (!reset.Succeeded) return IdentityFail(reset, "PASSWORD_RESET_INVALID");
         // Proving control of the number by OTP is stronger than the failed guesses that locked the
@@ -619,7 +650,21 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
     }
 
     private static PhoneWorkflowResult Fail(string code) => new(false, code, "The request could not be completed.");
-    private static PhoneWorkflowResult IdentityFail(IdentityResult result, string fallback) =>
-        new(false, result.Errors.Any(e => e.Code.StartsWith("Password", StringComparison.Ordinal)) ? "PASSWORD_POLICY_FAILED" : fallback,
-            "The request could not be completed.");
+    private static PhoneWorkflowResult IdentityFail(IdentityResult result, string fallback)
+    {
+        // Identity's own codes are "PasswordTooShort"...; the policy validator's are "PASSWORD_...".
+        if (!result.Errors.Any(e => e.Code.StartsWith("Password", StringComparison.OrdinalIgnoreCase)))
+        {
+            return new(false, fallback, "The request could not be completed.");
+        }
+
+        var reasons = result.Errors
+            .Where(e => e.Code.StartsWith("PASSWORD_", StringComparison.Ordinal))
+            .Select(e => new PasswordValidationError(e.Code, e.Description))
+            .ToArray();
+        return new(false, "PASSWORD_POLICY_FAILED", "The request could not be completed.", PasswordErrors: reasons);
+    }
+
+    private static PhoneWorkflowResult PasswordFail(IEnumerable<PasswordValidationError> errors) =>
+        new(false, "PASSWORD_POLICY_FAILED", "The request could not be completed.", PasswordErrors: errors.ToArray());
 }

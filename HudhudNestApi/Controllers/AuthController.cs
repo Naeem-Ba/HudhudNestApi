@@ -259,7 +259,7 @@ public sealed class AuthController : ControllerBase
         if (!result.Success)
         {
             if (result.Errors.Count > 0)
-                return BadRequest(new { errors = result.Errors });
+                return BadRequest(new { errors = result.Errors, errorCodes = result.ErrorCodes });
 
             return BadRequest(new { message = result.Message });
         }

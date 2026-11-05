@@ -14,6 +14,30 @@ public interface IPasswordSecurityService
     Task<PasswordValidationResult> ValidatePasswordAsync(
         string password,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Same checks, plus the rule that the password must not contain the account holder's own
+    /// name, the name part of their e-mail address or a run of their phone number. Pass only
+    /// what is reliably known; a null member is simply not checked.
+    /// </summary>
+    Task<PasswordValidationResult> ValidatePasswordAsync(
+        string password,
+        PasswordCheckContext context,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// The personal details a password is compared against (see <c>PasswordPolicy</c>). There is no date of
+/// birth in the account model, so none is carried here.
+/// </summary>
+public sealed record PasswordCheckContext(
+    string? FirstName = null,
+    string? LastName = null,
+    string? Email = null,
+    string? PhoneNumber = null,
+    string? UserName = null)
+{
+    public static PasswordCheckContext None { get; } = new();
 }
 
 /// <summary>
@@ -39,6 +63,9 @@ public static class PasswordErrorCodes
     public const string CommonWord = "PASSWORD_COMMON_WORD";
     public const string LongRun = "PASSWORD_LONG_RUN";
     public const string Breached = "PASSWORD_BREACHED";
+
+    /// <summary>The password contains the holder's name, e-mail name part or phone digits.</summary>
+    public const string PersonalInfo = "PASSWORD_CONTAINS_PERSONAL_INFO";
 }
 
 /// <summary>

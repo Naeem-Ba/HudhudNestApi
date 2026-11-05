@@ -13,6 +13,7 @@ public sealed record ChangePasswordResult
     public bool Success { get; init; }
     public bool NotFound { get; init; }
     public IReadOnlyList<string> Errors { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ErrorCodes { get; init; } = Array.Empty<string>();
 
     public static ChangePasswordResult Ok() => new()
     {
@@ -25,9 +26,10 @@ public sealed record ChangePasswordResult
         NotFound = true
     };
 
-    public static ChangePasswordResult Fail(IEnumerable<string> errors) => new()
+    public static ChangePasswordResult Fail(IEnumerable<string> errors, IEnumerable<string>? errorCodes = null) => new()
     {
         Success = false,
-        Errors = errors.ToArray()
+        Errors = errors.ToArray(),
+        ErrorCodes = errorCodes?.ToArray() ?? Array.Empty<string>()
     };
 }

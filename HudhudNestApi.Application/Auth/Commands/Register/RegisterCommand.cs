@@ -483,25 +483,28 @@ public sealed class RegisterCommandValidator
     {
         _passwordSecurityService = passwordSecurityService;
 
+        // Stable codes (not FluentValidation's validator class names) so a localised client can say
+        // which field is wrong and why, next to that field (see AuthValidationCodes).
         RuleFor(x => x.FirstName)
-            .NotEmpty()
-            .MaximumLength(100);
+            .NotEmpty().WithErrorCode(AuthValidationCodes.FirstNameRequired)
+            .MaximumLength(100).WithErrorCode(AuthValidationCodes.FirstNameTooLong);
 
         RuleFor(x => x.LastName)
-            .NotEmpty()
-            .MaximumLength(100);
+            .NotEmpty().WithErrorCode(AuthValidationCodes.LastNameRequired)
+            .MaximumLength(100).WithErrorCode(AuthValidationCodes.LastNameTooLong);
 
         RuleFor(x => x.Email)
-            .NotEmpty()
-            .MaximumLength(320)
-            .EmailAddress()
+            .NotEmpty().WithErrorCode(AuthValidationCodes.EmailRequired)
+            .MaximumLength(320).WithErrorCode(AuthValidationCodes.EmailTooLong)
+            .EmailAddress().WithErrorCode(AuthValidationCodes.EmailInvalid)
             .Must(
                 email =>
                     email != null &&
                     !email.Any(
                         char.IsWhiteSpace))
             .WithMessage(
-                "Email must not contain whitespace.");
+                "Email must not contain whitespace.")
+            .WithErrorCode(AuthValidationCodes.EmailHasWhitespace);
 
         // Consent is enforced on the server, not only in the form (P5-D04): without these
         // rules POST /api/auth/register created accounts with no ConsentRecord whenever the
@@ -531,8 +534,10 @@ public sealed class RegisterCommandValidator
         RuleFor(x => x.Password)
             .NotEmpty()
             .WithMessage("Password is required.")
+            .WithErrorCode(PasswordErrorCodes.Required)
             .MinimumLength(8)
             .WithMessage("Password must be at least 8 characters long.")
+            .WithErrorCode(PasswordErrorCodes.TooShort)
             .CustomAsync(ValidatePasswordSecurityAsync);
     }
 
@@ -560,8 +565,13 @@ public sealed class RegisterCommandValidator
             return;
         }
 
+        // The account holder's own details are known here, so the password is also checked against them.
         var result = await _passwordSecurityService.ValidatePasswordAsync(
             password,
+            new PasswordCheckContext(
+                FirstName: context.InstanceToValidate.FirstName,
+                LastName: context.InstanceToValidate.LastName,
+                Email: context.InstanceToValidate.Email),
             cancellationToken);
 
         if (result.IsValid)

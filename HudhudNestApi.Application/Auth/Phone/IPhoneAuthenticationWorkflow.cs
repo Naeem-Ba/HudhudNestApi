@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Domain.Enums;
 
 namespace HudhudNestApi.Application.Auth.Phone;
@@ -14,7 +16,8 @@ public sealed record PhoneWorkflowResult(
     PhoneVerificationState? VerificationState = null,
     DateTimeOffset? DueAtUtc = null,
     DateTimeOffset? GraceEndsAtUtc = null,
-    OtpChannel? Channel = null);
+    OtpChannel? Channel = null,
+    [property: JsonIgnore] IReadOnlyList<PasswordValidationError>? PasswordErrors = null);
 
 /// <remarks>
 /// The trailing <c>channel</c> parameters are optional so existing callers keep working: a send without one uses

@@ -70,7 +70,22 @@ public sealed class PhonePasswordAuthController : ControllerBase
     private IActionResult Result(PhoneWorkflowResult r)
     {
         if (!r.Succeeded)
+        {
+            // A rejected password also carries the reasons in the same shape as the e-mail forms' 422
+            // (errors / errorCodes keyed by "Password"), so one client routine translates both.
+            if (r.PasswordErrors is { Count: > 0 } passwordErrors)
+            {
+                return new BadRequestObjectResult(new
+                {
+                    code = r.ErrorCode,
+                    message = r.Message,
+                    errors = new Dictionary<string, string[]> { ["Password"] = passwordErrors.Select(e => e.Message).ToArray() },
+                    errorCodes = new Dictionary<string, string[]> { ["Password"] = passwordErrors.Select(e => e.Code).ToArray() }
+                });
+            }
+
             return new BadRequestObjectResult(new { code = r.ErrorCode, message = r.Message });
+        }
 
         if (r.RefreshToken is { } refreshToken)
         {

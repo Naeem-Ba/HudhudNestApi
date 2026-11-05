@@ -783,7 +783,7 @@ public sealed class NotificationIntegrationTests
         var result =
             await userManager.CreateAsync(
                 user,
-                "Password123");
+                "Zq7!rLm2Xw");
 
         Assert.True(
             result.Succeeded,

@@ -12,7 +12,7 @@ namespace HudhudNestApi.Integration.Tests.Security;
 /// </summary>
 public sealed class AccountCredentialChangeSecurityTests : IClassFixture<PhoneAuthWebApplicationFactory>
 {
-    private const string Password = "SecurePass9";
+    private const string Password = "SecurePass9!";
     private const string NewPassword = "Zx9!kPq2#LmVb7";
 
     private readonly HttpClient _client;

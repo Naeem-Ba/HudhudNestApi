@@ -16,7 +16,7 @@ namespace HudhudNestApi.Integration.Tests.Auth;
 /// </summary>
 public sealed class PhoneConcurrencyTests : IClassFixture<PhoneLoginAuditFactory>, IAsyncLifetime
 {
-    private const string Password = "SecurePass9";
+    private const string Password = "SecurePass9!";
     private static int _seed = Environment.TickCount & 0xFFFFFF;
     private readonly PhoneLoginAuditFactory _factory;
 
@@ -135,7 +135,7 @@ public sealed class PhoneConcurrencyTests : IClassFixture<PhoneLoginAuditFactory
         var token = verify.Str("confirmationToken")!;
 
         var replies = await Task.WhenAll(Enumerable.Range(0, 8).Select(i => Post("/api/auth/phone/password-reset/confirm",
-            new { phoneNumber = phone, confirmationToken = token, newPassword = $"BrandNew{i}Pass" })));
+            new { phoneNumber = phone, confirmationToken = token, newPassword = $"BrandNew{i}Pass!" })));
 
         AssertNoServerErrors(replies);
         Assert.Equal(1, replies.Count(r => r.Status == HttpStatusCode.OK));

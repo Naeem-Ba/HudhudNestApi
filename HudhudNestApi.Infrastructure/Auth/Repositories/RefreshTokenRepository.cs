@@ -15,6 +15,7 @@ public sealed class RefreshTokenRepository
 {
     private readonly AppDbContext _db;
     private readonly JwtOptions _jwtOptions;
+    private readonly JwtTokenSettings _jwtSettings;
 
     private readonly ILogger<RefreshTokenRepository>
         _logger;
@@ -26,6 +27,7 @@ public sealed class RefreshTokenRepository
     {
         _db = db;
         _jwtOptions = jwtOptions.Value;
+        _jwtSettings = new JwtTokenSettings(jwtOptions);
         _logger = logger;
     }
 
@@ -38,8 +40,24 @@ public sealed class RefreshTokenRepository
         var now =
             DateTime.UtcNow;
 
-        var newTokenHash =
-            HashToken(refreshToken);
+        // A new sign-in keeps the (max - 1) most recent other sessions and ends the rest. With the
+        // default of 5 a phone and a website stay signed in together; Jwt:MaxActiveSessions = 1 gives the
+        // former "one device at a time" behaviour. Ended sessions are marked Superseded (not as a rotation) so a
+        // later refresh from that device is answered "signed in elsewhere" and never read as token theft.
+        var keepOthers = Math.Max(0, _jwtSettings.MaxActiveSessions - 1);
+
+        var survivingIds =
+            await _db.RefreshTokens
+                .IgnoreQueryFilters()
+                .Where(
+                    token =>
+                        token.UserId == userId &&
+                        !token.IsRevoked &&
+                        token.ExpiresAt > now)
+                .OrderByDescending(token => token.CreatedAt)
+                .Select(token => token.Id)
+                .Take(keepOthers)
+                .ToListAsync(ct);
 
         var revokedOldTokens =
             await _db.RefreshTokens
@@ -48,7 +66,8 @@ public sealed class RefreshTokenRepository
                     token =>
                         token.UserId == userId &&
                         !token.IsRevoked &&
-                        token.ExpiresAt > now)
+                        token.ExpiresAt > now &&
+                        !survivingIds.Contains(token.Id))
                 .ExecuteUpdateAsync(
                     setters =>
                         setters
@@ -67,22 +86,40 @@ public sealed class RefreshTokenRepository
                             .SetProperty(
                                 token =>
                                     token.ReplacedByTokenHash,
-                                newTokenHash),
+                                RefreshTokenMarkers.Superseded),
                     ct);
 
         if (revokedOldTokens > 0)
         {
             _logger.LogInformation(
-                "Revoked {Count} active refresh token(s) before issuing a new token for user {UserId}.",
+                "Ended {Count} refresh token(s) beyond the allowed {Max} session(s) for user {UserId}.",
                 revokedOldTokens,
+                _jwtSettings.MaxActiveSessions,
                 userId);
         }
 
+        await InsertAsync(userId, refreshToken, createdByIp, now, ct);
+    }
+
+    public async Task AddRotatedAsync(
+        Guid userId,
+        string refreshToken,
+        string? createdByIp,
+        CancellationToken ct = default)
+        => await InsertAsync(userId, refreshToken, createdByIp, DateTime.UtcNow, ct);
+
+    private async Task InsertAsync(
+        Guid userId,
+        string refreshToken,
+        string? createdByIp,
+        DateTime now,
+        CancellationToken ct)
+    {
         _db.RefreshTokens.Add(
             new RefreshToken
             {
                 TokenHash =
-                    newTokenHash,
+                    HashToken(refreshToken),
 
                 UserId =
                     userId,
@@ -132,7 +169,9 @@ public sealed class RefreshTokenRepository
                             candidate.Id,
                             candidate.UserId,
                             candidate.ExpiresAt,
-                            candidate.IsRevoked))
+                            candidate.IsRevoked,
+                            candidate.RevokedAt,
+                            candidate.ReplacedByTokenHash))
                 .SingleOrDefaultAsync(ct);
 
         if (token is null)

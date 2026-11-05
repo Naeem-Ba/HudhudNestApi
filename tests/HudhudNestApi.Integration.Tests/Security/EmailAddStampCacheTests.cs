@@ -17,7 +17,7 @@ namespace HudhudNestApi.Integration.Tests.Security;
 /// </summary>
 public sealed class EmailAddStampCacheTests : IClassFixture<PhoneAuthWebApplicationFactory>
 {
-    private const string Password = "SecurePass9";
+    private const string Password = "SecurePass9!";
 
     private readonly HttpClient _client;
 
