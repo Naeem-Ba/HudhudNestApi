@@ -510,7 +510,7 @@
           "MediatR": "[12.5.0, )",
           "Microsoft.AspNetCore.DataProtection.EntityFrameworkCore": "[10.0.14, )",
           "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.0.14, )",
-          "Microsoft.Bcl.Memory": "[10.0.13, )",
+          "Microsoft.Bcl.Memory": "[10.0.14, )",
           "Microsoft.EntityFrameworkCore": "[10.0.14, )",
           "Microsoft.Extensions.Caching.StackExchangeRedis": "[10.0.14, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )",
@@ -627,9 +627,9 @@
       },
       "Microsoft.Bcl.Memory": {
         "type": "CentralTransitive",
-        "requested": "[10.0.13, )",
-        "resolved": "10.0.13",
-        "contentHash": "AOGTKbd+0Xzi/ZsU1n6TwHJqcZqVVRg1iLLNh+D2mQ3++lIRGcuSfH+TYosuqCo3259s0giL+mFJ2rxAf+xDSQ=="
+        "requested": "[10.0.14, )",
+        "resolved": "10.0.14",
+        "contentHash": "jo1HIWeMOhYoyGrFVIGYdLEDsioD+djIXSqtzIpv3bp4bk/d/K58vYdJGlWBh9AqFaTPUUMtTdl2a9mcf/wduA=="
       },
       "Microsoft.EntityFrameworkCore": {
         "type": "CentralTransitive",
