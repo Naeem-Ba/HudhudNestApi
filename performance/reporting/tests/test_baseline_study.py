@@ -113,6 +113,31 @@ class CompareTests(unittest.TestCase):
         self.assertFalse(bs.legacy_rule(418.59, 5.0))  # a 100x regression from 5 ms stays invisible
 
 
+class PairedJobTests(unittest.TestCase):
+    @staticmethod
+    def runs(order, a, b):
+        return [{"arm": arm, "p95": (a if arm == "A" else b) * f}
+                for arm, f in zip(order, [1.0, 1.01, 0.99, 1.005, 0.995, 1.0, 1.01, 0.99])]
+
+    def test_same_job_regression_is_found_with_abba_order(self):
+        result = bs.paired_job(self.runs("ABBAABBA", 120.0, 135.0))
+        self.assertEqual(result["verdict"], "REGRESSION")
+        self.assertTrue(result["armsBalancedAgainstLinearDrift"])
+        self.assertNotIn("driftWarning", result)
+
+    def test_same_job_without_change_is_not_flagged(self):
+        self.assertEqual(bs.paired_job(self.runs("ABBAABBA", 120.0, 120.0))["verdict"], "NO_SIGNIFICANT_CHANGE")
+
+    def test_unbalanced_order_with_drift_gets_a_warning(self):
+        drifting = [{"arm": arm, "p95": 100.0 * (1.04 ** i)} for i, arm in enumerate("AAABBB")]
+        result = bs.paired_job(drifting)
+        self.assertFalse(result["armsBalancedAgainstLinearDrift"])
+        self.assertIn("driftWarning", result)
+
+    def test_too_few_runs_is_inconclusive(self):
+        self.assertEqual(bs.paired_job([{"arm": "A", "p95": 1.0}, {"arm": "B", "p95": 1.0}])["verdict"], "INCONCLUSIVE")
+
+
 class SimulationTests(unittest.TestCase):
     def test_false_positive_rate_without_regression_is_bounded(self):
         rng = random.Random(3)

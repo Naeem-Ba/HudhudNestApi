@@ -316,21 +316,21 @@ run_and_record "warm-cache browse workload" \
     -e PERF_CACHE_MODE=warm -e PERF_VIRTUAL_USERS="${PERF_BROWSE_VIRTUAL_USERS}" \
     k6 run scenarios/browse.js
 
-# Baseline-reconstruction study (advisory, NOT part of the gate): present only on a study branch
-# that carries performance/study/ENABLED. Runs the unique-cache-key browse workload once, after
-# the gate's own browse runs, and writes its result to artifacts/performance/study/ (outside
-# k6/, so aggregate.py and compare.py never read it). A failure here cannot fail the gate.
-if [ -f performance/study/ENABLED ]; then
+# Advisory database-path workload (NOT part of the gate). Off by default; set
+# PERF_ADVISORY_DIVERSE_REPEATS=N (e.g. 3) to run browse-diverse.js N times after the gate's own
+# browse runs. It uses unique cache keys, so it measures the PostgreSQL path that browse.js no longer
+# reaches (output cache). Results go to artifacts/performance/study/, outside k6/, so aggregate.py and
+# compare.py never read them, and a failure here cannot fail the gate. See
+# docs/performance/http-baseline-reconstruction-2026-11.md.
+if [ "${PERF_ADVISORY_DIVERSE_REPEATS:-0}" -gt 0 ] 2>/dev/null; then
   mkdir -p "${artifacts}/study"
   chmod 0777 "${artifacts}/study"
-  # Three back-to-back repetitions inside one job measure within-job repeatability, i.e. whether
-  # an A/B comparison inside a single runner can cancel the runner-to-runner variance.
-  for study_repeat in 1 2 3; do
+  for advisory_repeat in $(seq 1 "${PERF_ADVISORY_DIVERSE_REPEATS}"); do
     docker compose -f "${compose_file}" exec -T redis redis-cli FLUSHDB >/dev/null || true
     docker compose -f "${compose_file}" --profile load run --rm \
       -e PERF_VIRTUAL_USERS="${PERF_BROWSE_VIRTUAL_USERS}" \
-      -e PERF_RUN_ID="${PERF_RUN_ID}-rep${study_repeat}" \
-      k6 run scenarios/browse-diverse.js || echo "STUDY: browse-diverse repetition ${study_repeat} failed (ignored)"
+      -e PERF_RUN_ID="${PERF_RUN_ID}-rep${advisory_repeat}" \
+      k6 run scenarios/browse-diverse.js || echo "ADVISORY: browse-diverse repetition ${advisory_repeat} failed (ignored)"
   done
   for study_file in "${artifacts}"/study/*.json; do
     if [ -f "${study_file}" ]; then echo "STUDY_FILE $(basename "${study_file}") $(tr -d '\n ' < "${study_file}")"; fi

@@ -319,6 +319,34 @@ def compare_runs(baseline_p95, current_p95, alpha=0.05, power=0.80, min_effect=0
     return out
 
 
+def paired_job(runs, **kwargs):
+    """Same-job A/B: `runs` = [{"arm": "A"|"B", "p95": float}, ...] in EXECUTION order (ABBA ordering is
+    recommended). Both arms ran on one runner, so runner-to-runner variance cancels; only the
+    within-job noise (measured at roughly 1-5% CV on GitHub-hosted runners) remains. Returns the
+    compare_runs verdict (A = baseline commit, B = candidate) plus a drift estimate: a steady
+    slowdown/speed-up across execution order that an unbalanced order would attribute to one arm."""
+    a = [r["p95"] for r in runs if r["arm"] == "A"]
+    b = [r["p95"] for r in runs if r["arm"] == "B"]
+    if len(a) < 3 or len(b) < 1:
+        return {"verdict": "INCONCLUSIVE", "reason": "need at least 3 runs of arm A and 1 of arm B"}
+    result = compare_runs(a, b, **kwargs)
+    xs = list(range(len(runs)))
+    ys = [math.log(r["p95"]) for r in runs]
+    mx, my = statistics.fmean(xs), statistics.fmean(ys)
+    denom = sum((x - mx) ** 2 for x in xs)
+    slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / denom if denom else 0.0
+    drift_total = math.exp(slope * (len(runs) - 1)) - 1
+    index_a = [i for i, r in enumerate(runs) if r["arm"] == "A"]
+    index_b = [i for i, r in enumerate(runs) if r["arm"] == "B"]
+    balanced = abs(statistics.fmean(index_a) - statistics.fmean(index_b)) < 1e-9
+    result["driftOverWholeJob"] = drift_total
+    result["armsBalancedAgainstLinearDrift"] = balanced
+    if not balanced and abs(drift_total) > result.get("minimumDetectableRegression", 0) / 2:
+        result["driftWarning"] = ("execution order is not balanced (use ABBA) and the job drifted by "
+                                  f"{drift_total:+.1%}; the verdict may be an order effect")
+    return result
+
+
 def legacy_rule(baseline_value, current_value, p95_percent=15.0):
     """The current Production Gate rule (performance/reporting/compare.py): one current p95 against
     one approved value; fails when the increase exceeds p95Percent."""
@@ -382,6 +410,10 @@ def main(argv=None):
     c.add_argument("--current-p95", nargs="+", type=float, required=True)
     c.add_argument("--min-effect", type=float, default=0.03)
 
+    j = sub.add_parser("paired", help="same-job A/B verdict from run summaries in execution order")
+    j.add_argument("runs_json", help='JSON list: [{"arm": "A", "p95": 120.1}, {"arm": "B", ...}, ...]')
+    j.add_argument("--min-effect", type=float, default=0.03)
+
     m = sub.add_parser("sensitivity")
     m.add_argument("--pool", nargs="+", type=float, required=True, help="real run-level p95 values")
     m.add_argument("--base-runs", type=int, default=3)
@@ -398,6 +430,9 @@ def main(argv=None):
         _dump(build_candidate(summaries, args.scenario, meta), args.output)
     elif args.command == "compare":
         _dump(compare_runs(args.baseline_p95, args.current_p95, min_effect=args.min_effect))
+    elif args.command == "paired":
+        _dump(paired_job(json.loads(pathlib.Path(args.runs_json).read_text(encoding="utf-8")),
+                         min_effect=args.min_effect))
     elif args.command == "sensitivity":
         _dump(simulate(args.pool, args.deltas, args.base_runs, args.current_runs, args.reps))
     return 0
