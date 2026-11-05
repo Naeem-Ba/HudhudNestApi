@@ -316,6 +316,22 @@ run_and_record "warm-cache browse workload" \
     -e PERF_CACHE_MODE=warm -e PERF_VIRTUAL_USERS="${PERF_BROWSE_VIRTUAL_USERS}" \
     k6 run scenarios/browse.js
 
+# Baseline-reconstruction study (advisory, NOT part of the gate): present only on a study branch
+# that carries performance/study/ENABLED. Runs the unique-cache-key browse workload once, after
+# the gate's own browse runs, and writes its result to artifacts/performance/study/ (outside
+# k6/, so aggregate.py and compare.py never read it). A failure here cannot fail the gate.
+if [ -f performance/study/ENABLED ]; then
+  mkdir -p "${artifacts}/study"
+  chmod 0777 "${artifacts}/study"
+  docker compose -f "${compose_file}" exec -T redis redis-cli FLUSHDB >/dev/null || true
+  docker compose -f "${compose_file}" --profile load run --rm \
+    -e PERF_VIRTUAL_USERS="${PERF_BROWSE_VIRTUAL_USERS}" \
+    k6 run scenarios/browse-diverse.js || echo "STUDY: browse-diverse run failed (ignored)"
+  for study_file in "${artifacts}"/study/*.json; do
+    if [ -f "${study_file}" ]; then echo "STUDY_FILE $(basename "${study_file}") $(tr -d '\n ' < "${study_file}")"; fi
+  done
+fi
+
 race_counter=0
 for race_kind in refresh otp; do
   for concurrency in 2 5 10; do
