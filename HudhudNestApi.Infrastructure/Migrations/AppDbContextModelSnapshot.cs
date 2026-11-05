@@ -1756,6 +1756,11 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("CountryCode", "City", "Status", "IsPublished", "IsDeleted")
                         .HasDatabaseName("IX_Properties_Search");
 
+                    b.HasIndex(new[] { "ExpiresAt" }, "IX_Properties_PublicList_Count")
+                        .HasFilter("NOT \"IsDeleted\" AND \"IsPublished\" AND \"Status\" IN ('Available', 'Reserved')");
+
+                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex(new[] { "ExpiresAt" }, "IX_Properties_PublicList_Count"), new[] { "IsFeatured", "FeaturedUntil" });
+
                     b.HasIndex(new[] { "ExpiresAt" }, "IX_Properties_Visible_ExpiresAt")
                         .HasFilter("NOT \"IsDeleted\" AND \"IsPublished\"");
 
@@ -5973,6 +5978,9 @@ namespace HudhudNestApi.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int?>("HomeGovernorateId")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
@@ -6060,6 +6068,8 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasIndex("DeletionScheduledFor")
                         .HasDatabaseName("IX_UserAccounts_DeletionScheduledFor_Pending")
                         .HasFilter("\"DeletionScheduledFor\" IS NOT NULL");
+
+                    b.HasIndex("HomeGovernorateId");
 
                     b.HasIndex("IsDeleted");
 
@@ -7858,6 +7868,11 @@ namespace HudhudNestApi.Infrastructure.Migrations
                     b.HasOne("HudhudNestApi.Domain.Agencies.Entities.Agency", null)
                         .WithMany()
                         .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("HudhudNestApi.Domain.Lookups.Entities.Governorate", null)
+                        .WithMany()
+                        .HasForeignKey("HomeGovernorateId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("HudhudNestApi.Infrastructure.Identity.Entities.ApplicationUser", null)

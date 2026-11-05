@@ -28,6 +28,9 @@ public sealed class UserDto
     public bool HasChosenCurrency { get; set; }
     public string? CountryCode { get; set; }
 
+    /// <summary>The governorate the user chose in Settings as where they live; null if none.</summary>
+    public int? HomeGovernorateId { get; set; }
+
     public string? Bio { get; set; }
     public string? ContactInfo { get; set; }
 

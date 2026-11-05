@@ -42,6 +42,7 @@ public sealed class AccountDataExportProfile
     public string PreferredLanguage { get; init; } = string.Empty;
     public string PreferredCurrency { get; init; } = string.Empty;
     public string? CountryCode { get; init; }
+    public int? HomeGovernorateId { get; init; }
     public string? PlanTier { get; init; }
     public IReadOnlyList<string> Roles { get; init; } = Array.Empty<string>();
     public DateTime CreatedAt { get; init; }

@@ -324,6 +324,20 @@ public sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
         builder.HasIndex(p => p.ExpiresAt, "IX_Properties_Visible_ExpiresAt")
             .HasFilter("NOT \"IsDeleted\" AND \"IsPublished\"");
 
+        // The same index-only count, again. IX_Properties_Visible_ExpiresAt above stopped serving
+        // it when "on the market" began to require Status IN (Available, Reserved) (2026-10-14):
+        // Status is not in that index, so the count went back to reading the whole table
+        // (112 MB at 100,000 listings: 30 to 40 ms alone, over 200 ms with 20 requests at once,
+        // QA Phase 18 D16 follow-up). This one carries the whole predicate: the filter holds the
+        // fixed part of the rule, ExpiresAt is the key for the "not expired" part, and the two
+        // featured columns are included so the list can count featured listings in the same
+        // pass. 3.1 MB at 100,000 rows; 10 to 14 ms alone (index-only scan).
+        // The list count and the featured count are the only readers; filtered counts (city,
+        // rooms, ...) still read the table.
+        builder.HasIndex(p => p.ExpiresAt, "IX_Properties_PublicList_Count")
+            .IncludeProperties(p => new { p.IsFeatured, p.FeaturedUntil })
+            .HasFilter("NOT \"IsDeleted\" AND \"IsPublished\" AND \"Status\" IN ('Available', 'Reserved')");
+
         // Keyword search column (QA Phase 7, P7-D05): the title, description and place names with
         // Arabic spelling variants folded together, maintained by PostgreSQL so no write path can
         // forget it. SearchTextNormalizer.ToSqlExpression and SearchTextNormalizer.Normalize are

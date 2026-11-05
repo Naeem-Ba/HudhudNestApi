@@ -67,6 +67,7 @@ public static class OutputCacheRegistration
         "amenityIds",
         "ownerId",
         "agencyId",
+        "interestGovernorateIds",
         "sortBy",
         "sortDescending"
     ];

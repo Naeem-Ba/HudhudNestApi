@@ -177,7 +177,8 @@ public sealed class UsersController : ControllerBase
             PreferredCurrency: null,
             CountryCode: null,
             Bio: dto.Bio,
-            ContactInfo: dto.ContactInfo
+            ContactInfo: dto.ContactInfo,
+            HomeGovernorateId: dto.HomeGovernorateId
         ), ct);
 
         return result is null ? NotFound() : NoContent();
@@ -485,7 +486,8 @@ public sealed record UpdateProfileRequest(
     string? DisplayName,
     string? PhoneNumber,
     string? Bio = null,
-    string? ContactInfo = null);
+    string? ContactInfo = null,
+    int? HomeGovernorateId = null);
 
 /// <summary>Null leaves the stored value unchanged.</summary>
 public sealed record UpdatePreferencesRequest(
