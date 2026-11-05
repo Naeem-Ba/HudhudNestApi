@@ -323,10 +323,15 @@ run_and_record "warm-cache browse workload" \
 if [ -f performance/study/ENABLED ]; then
   mkdir -p "${artifacts}/study"
   chmod 0777 "${artifacts}/study"
-  docker compose -f "${compose_file}" exec -T redis redis-cli FLUSHDB >/dev/null || true
-  docker compose -f "${compose_file}" --profile load run --rm \
-    -e PERF_VIRTUAL_USERS="${PERF_BROWSE_VIRTUAL_USERS}" \
-    k6 run scenarios/browse-diverse.js || echo "STUDY: browse-diverse run failed (ignored)"
+  # Three back-to-back repetitions inside one job measure within-job repeatability, i.e. whether
+  # an A/B comparison inside a single runner can cancel the runner-to-runner variance.
+  for study_repeat in 1 2 3; do
+    docker compose -f "${compose_file}" exec -T redis redis-cli FLUSHDB >/dev/null || true
+    docker compose -f "${compose_file}" --profile load run --rm \
+      -e PERF_VIRTUAL_USERS="${PERF_BROWSE_VIRTUAL_USERS}" \
+      -e PERF_RUN_ID="${PERF_RUN_ID}-rep${study_repeat}" \
+      k6 run scenarios/browse-diverse.js || echo "STUDY: browse-diverse repetition ${study_repeat} failed (ignored)"
+  done
   for study_file in "${artifacts}"/study/*.json; do
     if [ -f "${study_file}" ]; then echo "STUDY_FILE $(basename "${study_file}") $(tr -d '\n ' < "${study_file}")"; fi
   done
