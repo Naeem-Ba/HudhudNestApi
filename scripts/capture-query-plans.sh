@@ -17,23 +17,37 @@ output="${PERF_ARTIFACTS_DIR:-artifacts/performance}/query-plans"
 mkdir -p "${output}"
 
 command -v jq >/dev/null || { echo "ERROR: jq is required." >&2; exit 1; }
-plan_samples="${PERF_QUERY_PLAN_SAMPLES:-3}"
+plan_samples="${PERF_QUERY_PLAN_SAMPLES:-9}"
+sample_pause="${PERF_QUERY_PLAN_SAMPLE_PAUSE_SECONDS:-2}"
 
 # Each plan is executed plan_samples times and the run with the median execution time is kept
 # (docs/performance/performance-baseline-policy.md, "Variance and reruns": a suspected noisy result is
-# rerun three times and the median decides). A single EXPLAIN ANALYZE of a ~5 ms plan on a shared
-# 2-vCPU runner swung +32% between identical commits (property-list-deep-page: identical plan, node
-# types and 17,848 buffer hits, 0 reads) and failed an otherwise clean gate. The regression limits
-# themselves are untouched, and the buffer/sequential-scan/temp-block/index checks still see the
-# real plan of the selected run.
-for sql_file in performance/sql/plans/*.sql; do
-  plan_name="$(basename "${sql_file}" .sql)"
-  samples=()
-  for sample in $(seq 1 "${plan_samples}"); do
+# rerun and the median decides). A single EXPLAIN ANALYZE of a ~5 ms plan on a shared 2-vCPU runner swung
+# +32% between identical commits (property-list-deep-page: identical plan, node types and 17,848 buffer
+# hits, 0 reads) and failed an otherwise clean gate; with 3 back-to-back samples it happened again on a
+# manual Production Gate (geo-radius +28%, deep-page +32%, all five plans slower at the same moment),
+# because back-to-back samples share one burst of runner slowness. So the samples are taken in rounds over
+# all plans, with a pause between rounds, which spreads them over ~plan_samples x sample_pause seconds.
+# The regression limits themselves are untouched, and the buffer/sequential-scan/temp-block/index checks
+# still see the real plan of the selected run.
+plan_files=(performance/sql/plans/*.sql)
+for sample in $(seq 1 "${plan_samples}"); do
+  if [ "${sample}" -gt 1 ]; then
+    sleep "${sample_pause}"
+  fi
+  for sql_file in "${plan_files[@]}"; do
+    plan_name="$(basename "${sql_file}" .sql)"
     sample_file="${output}/${plan_name}.sample-${sample}.json"
     psql "${PERF_DATABASE_URL}" -X -qAt -v ON_ERROR_STOP=1 -f "${sql_file}" > "${sample_file}"
     "${PYTHON_BIN}" -m json.tool "${sample_file}" >/dev/null
-    samples+=("${sample_file}")
+  done
+done
+
+for sql_file in "${plan_files[@]}"; do
+  plan_name="$(basename "${sql_file}" .sql)"
+  samples=()
+  for sample in $(seq 1 "${plan_samples}"); do
+    samples+=("${output}/${plan_name}.sample-${sample}.json")
   done
   jq -s 'sort_by(.[0]["Execution Time"]) | .[(length - 1) / 2 | floor]' "${samples[@]}" \
     > "${output}/${plan_name}.json"
