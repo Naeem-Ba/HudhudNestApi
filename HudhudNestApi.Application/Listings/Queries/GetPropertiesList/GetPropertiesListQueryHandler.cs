@@ -35,6 +35,12 @@ public sealed class GetPropertiesListQueryHandler
             .ToList();
         foreach (var item in items)
             item.IsPriceNegotiable = null; // detail page only, never in list/card payloads
+        var interest = request.Filter.ParseInterestGovernorateIds();
+        if (interest.Count > 0)
+        {
+            foreach (var item in items)
+                item.MatchesInterestArea = item.IsFeatured && item.GovernorateId is { } g && interest.Contains(g);
+        }
         foreach (var item in items)
             item.ViewCount = viewCounts.TryGetValue(item.Id, out var views) ? views : 0;
 

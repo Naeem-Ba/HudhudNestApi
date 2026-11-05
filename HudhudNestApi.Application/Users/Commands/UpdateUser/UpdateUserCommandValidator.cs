@@ -48,6 +48,10 @@ public sealed class UpdateUserCommandValidator : AbstractValidator<UpdateUserCom
             .Length(2)
             .When(x => x.CountryCode is not null && x.CountryCode.Length > 0);
 
+        RuleFor(x => x.HomeGovernorateId)
+            .GreaterThanOrEqualTo(0)
+            .When(x => x.HomeGovernorateId is not null);
+
         RuleFor(x => x.Bio)
             .MaximumLength(2000)
             .When(x => x.Bio is not null);

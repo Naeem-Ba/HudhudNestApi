@@ -115,6 +115,13 @@ public sealed class PropertyDto
     public bool IsFeatured { get; set; }
     public DateTime? FeaturedUntil { get; set; }
 
+    /// <summary>
+    /// True on a featured listing whose governorate is one the caller asked to be favoured
+    /// (the <c>interestGovernorateIds</c> list parameter). Drives the "in your area" badge.
+    /// Always false when the parameter is absent and on every non-list payload.
+    /// </summary>
+    public bool MatchesInterestArea { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

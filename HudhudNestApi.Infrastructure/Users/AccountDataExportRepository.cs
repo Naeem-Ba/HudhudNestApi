@@ -59,6 +59,7 @@ public sealed class AccountDataExportRepository : IAccountDataExportRepository
             PreferredLanguage = account.PreferredLanguage,
             PreferredCurrency = account.PreferredCurrency,
             CountryCode = account.CountryCode,
+            HomeGovernorateId = account.HomeGovernorateId,
             PlanTier = planTier,
             Roles = roles,
             CreatedAt = account.CreatedAt

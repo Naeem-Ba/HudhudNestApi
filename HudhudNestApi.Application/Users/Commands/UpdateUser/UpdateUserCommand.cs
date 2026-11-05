@@ -18,6 +18,9 @@ public sealed record UpdateUserCommand(
     string? PreferredCurrency,
     string? CountryCode,
     string? Bio = null,
-    string? ContactInfo = null
+    string? ContactInfo = null,
+    // Null leaves the stored governorate unchanged; 0 clears it; a positive id sets it
+    // (checked against the Governorates lookup by the handler).
+    int? HomeGovernorateId = null
 ) : IRequest<UserDto?>;
 

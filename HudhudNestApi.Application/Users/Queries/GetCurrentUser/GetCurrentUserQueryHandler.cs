@@ -88,6 +88,7 @@ public sealed class GetCurrentUserQueryHandler
             HasChosenLanguage = account.PreferredLanguageSetAt is not null,
             HasChosenCurrency = account.PreferredCurrencySetAt is not null,
             CountryCode = account.CountryCode,
+            HomeGovernorateId = account.HomeGovernorateId,
             // The profile form is filled from this response and saves everything it shows. Leaving
             // these out showed an empty bio and contact line and made the next save clear both
             // (the app sends an empty string for a field it holds as empty).
