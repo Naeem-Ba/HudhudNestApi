@@ -105,4 +105,46 @@ public sealed class UserProfilePersistenceTests : IAsyncLifetime
             Assert.Equal("changed bio", reloaded.Bio);
         });
     }
+    [Fact(DisplayName = "PUT /api/Users/me stores the home governorate, GET returns it, 0 clears it and an unknown id is a 422")]
+    public async Task HomeGovernorate_IsStoredReturnedClearedAndValidated()
+    {
+        var user = await _factory.SeedUserAsync("profile-home-governorate");
+        await _factory.InScopeAsync(async services =>
+            await HudhudNestApi.Infrastructure.Persistence.Seeds.GovernoratesSeed.SeedAsync(
+                services.GetRequiredService<AppDbContext>()));
+        using var client = _factory.AuthedClient(user.AccessToken);
+
+        async Task<HttpStatusCode> PutAsync(int? governorateId)
+            => (await client.PutAsJsonAsync("/api/Users/me", new { homeGovernorateId = governorateId })).StatusCode;
+
+        async Task<int?> ReadAsync()
+        {
+            var me = await client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/Users/me");
+            return me.TryGetProperty("homeGovernorateId", out var value) && value.ValueKind == System.Text.Json.JsonValueKind.Number
+                ? value.GetInt32()
+                : null;
+        }
+
+        Assert.Null(await ReadAsync());
+
+        Assert.Equal(HttpStatusCode.NoContent, await PutAsync(3));
+        Assert.Equal(3, await ReadAsync());
+
+        // Leaving the field out (any other profile edit) never touches it.
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PutAsJsonAsync("/api/Users/me", new { bio = "x" })).StatusCode);
+        Assert.Equal(3, await ReadAsync());
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, await PutAsync(9999));
+        Assert.Equal(3, await ReadAsync());                         // a rejected change changes nothing
+
+        Assert.Equal(HttpStatusCode.NoContent, await PutAsync(0));
+        Assert.Null(await ReadAsync());
+
+        await _factory.InScopeAsync(async services =>
+        {
+            var db = services.GetRequiredService<AppDbContext>();
+            var stored = await db.UserAccounts.AsNoTracking().SingleAsync(a => a.Id == user.Id);
+            Assert.Null(stored.HomeGovernorateId);
+        });
+    }
 }

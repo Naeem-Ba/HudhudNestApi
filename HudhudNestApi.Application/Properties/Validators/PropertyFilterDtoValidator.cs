@@ -41,6 +41,11 @@ public sealed class PropertyFilterDtoValidator
             .WithMessage($"Page is beyond the first {MaxResultDepth} results; narrow the search instead.")
             .When(filter => filter.Page >= 1 && filter.PageSize is >= 1 and <= 100);
 
+        RuleFor(filter => filter.InterestGovernorateIds)
+            .Must(raw => PropertyFilterDto.TryParseInterestGovernorateIds(raw, out _))
+            .WithMessage($"InterestGovernorateIds must be at most {PropertyFilterDto.MaxInterestGovernorates} positive whole numbers separated by commas.")
+            .When(filter => !string.IsNullOrWhiteSpace(filter.InterestGovernorateIds));
+
         RuleFor(filter => filter.SearchTerm)
             .MaximumLength(200)
             .When(filter =>

@@ -57,6 +57,13 @@ public sealed class UserAccount
 
     public string? CountryCode { get; private set; }
 
+    /// <summary>
+    /// The governorate the user says they live in, chosen in Settings. Null for every account
+    /// until they pick one. Used only to rank the public listing list (featured ads of this area
+    /// first); it is never shown to other users and never leaves the account owner's own profile.
+    /// </summary>
+    public int? HomeGovernorateId { get; private set; }
+
     /// <summary>نبذة تعريفية يكتبها صاحب الحساب عن نفسه/عمله — تُعرض بالملف الشخصي العام.</summary>
     public string? Bio { get; private set; }
 
@@ -307,6 +314,13 @@ public sealed class UserAccount
 
         UpdatedAt =
             utcNow;
+    }
+
+    /// <summary>Sets or clears (null or a non-positive id) the governorate the user lives in.</summary>
+    public void SetHomeGovernorate(int? governorateId, DateTime utcNow)
+    {
+        HomeGovernorateId = governorateId is > 0 ? governorateId : null;
+        UpdatedAt = utcNow;
     }
 
     /// <summary>

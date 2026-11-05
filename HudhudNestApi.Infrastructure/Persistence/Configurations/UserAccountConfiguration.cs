@@ -84,6 +84,14 @@ public sealed class UserAccountConfiguration
 
         builder.HasIndex(x => x.CountryCode);
 
+        // The governorate the user says they live in (Settings). Nullable; SetNull so a
+        // retired governorate never blocks the lookup table. Nothing queries accounts by it;
+        // the index EF adds for the foreign key only keeps that SET NULL cheap.
+        builder.HasOne<HudhudNestApi.Domain.Lookups.Entities.Governorate>()
+            .WithMany()
+            .HasForeignKey(x => x.HomeGovernorateId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         // Set only by UserAccount.Anonymize() (account deletion). Deliberately NOT a
         // HasQueryFilter here -- see UserAccount.IsDeleted's own doc comment and
         // docs/DATABASE-PRODUCTION-READINESS.md Finding F2 for the required-navigation/INNER

@@ -60,6 +60,48 @@ public sealed class PropertyFilterDto
     // anonymous "this agency's other listings" filter, not an authorization boundary.
     public Guid? AgencyId { get; set; }
 
+    /// <summary>
+    /// The governorates the caller is interested in, as one comma-separated list of at most
+    /// <see cref="MaxInterestGovernorates"/> ids ("3,7"). The client builds it from the user's
+    /// own profile area and their last searched areas; the server stores nothing about it.
+    /// It only changes the order of the default (newest-first) list: featured ads whose
+    /// governorate is in this set come before other featured ads. A single string so that the
+    /// cache key is one stable value (see <see cref="ParseInterestGovernorateIds"/>).
+    /// </summary>
+    public string? InterestGovernorateIds { get; set; }
+
+    public const int MaxInterestGovernorates = 3;
+
+    /// <summary>
+    /// The distinct, positive ids in <see cref="InterestGovernorateIds"/>, sorted ascending so
+    /// that "7,3" and "3,7" are one set. Empty when the value is absent or malformed (the
+    /// validator rejects malformed values before this is ever used for a query).
+    /// </summary>
+    public IReadOnlyList<int> ParseInterestGovernorateIds()
+        => TryParseInterestGovernorateIds(InterestGovernorateIds, out var ids) ? ids : [];
+
+    public static bool TryParseInterestGovernorateIds(string? raw, out IReadOnlyList<int> ids)
+    {
+        ids = [];
+        if (string.IsNullOrWhiteSpace(raw))
+            return true;
+
+        var parsed = new SortedSet<int>();
+        foreach (var part in raw.Split(',', StringSplitOptions.TrimEntries))
+        {
+            if (!int.TryParse(part, System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out var id) || id <= 0)
+                return false;
+            parsed.Add(id);
+        }
+
+        if (parsed.Count > MaxInterestGovernorates)
+            return false;
+
+        ids = parsed.ToArray();
+        return true;
+    }
+
     // Sort
     public string SortBy { get; set; } = "CreatedAt";
     public bool SortDescending { get; set; } = true;

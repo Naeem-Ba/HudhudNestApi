@@ -9,16 +9,20 @@ using HudhudNestApi.Domain.Enums;
 using HudhudNestApi.Domain.Listings;
 using HudhudNestApi.Domain.Listings.Enums;
 using HudhudNestApi.Application.Common.Paging;
+using HudhudNestApi.Application.Properties.Ranking;
+using Microsoft.Extensions.Options;
 
 namespace HudhudNestApi.Infrastructure.Repositories;
 
 public sealed class PropertyRepository : IPropertyRepository
 {
     private readonly AppDbContext _db;
+    private readonly int _maxFeaturedPerPage;
 
-    public PropertyRepository(AppDbContext db)
+    public PropertyRepository(AppDbContext db, IOptions<ListingRankingOptions>? ranking = null)
     {
         _db = db;
+        _maxFeaturedPerPage = ranking?.Value.MaxFeaturedPerPage ?? FeaturedPageLayout.DefaultMaxFeaturedPerPage;
     }
 
     public async Task AddAsync(Property property, CancellationToken ct = default)
@@ -85,35 +89,47 @@ public sealed class PropertyRepository : IPropertyRepository
 
         query = ApplyFilter(query, filter, await ResolveLocationFallbackAsync(_db, filter, ct), rates);
 
-        // -- Count (before pagination) -------------------------
-        var totalCount = await query.CountAsync(ct);
-
-        // -- Sort + paginate on ids only -----------------------
-        // The sort key is a computed expression (featured-first, then CreatedAt), so no index
-        // can serve it and PostgreSQL has to read and sort every matching row. Sorting whole
-        // entities (~4.7 KB per row, Description included) made that several times slower than
-        // sorting just the ids, so the page window is chosen on ids and the entities are
-        // loaded afterwards. Measured on 25,000 rows: 46 ms to 11 ms (page 1), 78 ms to 30 ms
-        // (offset 10,000). Sorting by Id last keeps pages stable when sort keys tie.
         var page = Math.Max(filter.Page, 1);
         var pageSize = Math.Clamp(filter.PageSize, 1, 100);
-        // The view totals ride on this same statement (a correlated lookup on the page window only)
-        // rather than a fourth command: the list endpoint's query-count budget is 3.
-        var pageRows = await ApplySort(query, filter, DateTime.UtcNow, rates)
-            .ThenBy(p => p.Id)
-            .SkipPage(page, pageSize)
-            .Take(pageSize)
-            .Select(p => new
-            {
-                p.Id,
-                Views = _db.ListingViewCounters
-                    .Where(c => c.Kind == ListingKind.Property && c.ListingId == p.Id)
-                    .Select(c => (long?)c.ViewCount)
-                    .FirstOrDefault()
-            })
-            .ToListAsync(ct);
+
+        int totalCount;
+        List<(Guid Id, long Views)> pageRows;
+        if (UsesTieredDefaultOrder(filter))
+        {
+            (totalCount, pageRows) = await GetTieredPageAsync(query, filter, page, pageSize, ct);
+        }
+        else
+        {
+            // -- Count (before pagination) -------------------------
+            totalCount = await query.CountAsync(ct);
+
+            // -- Sort + paginate on ids only -----------------------
+            // An explicit sort (price, area, oldest first) is a computed or column order, so
+            // PostgreSQL reads and sorts every matching row. Sorting whole entities (~4.7 KB per
+            // row, Description included) made that several times slower than sorting just the
+            // ids, so the page window is chosen on ids and the entities are loaded afterwards.
+            // Sorting by Id last keeps pages stable when sort keys tie. The view totals ride on
+            // this same statement (a correlated lookup on the page window only) rather than a
+            // fourth command: the list endpoint's query-count budget is 3.
+            pageRows = (await ApplySort(query, filter, DateTime.UtcNow, rates)
+                .ThenBy(p => p.Id)
+                .SkipPage(page, pageSize)
+                .Take(pageSize)
+                .Select(p => new
+                {
+                    p.Id,
+                    Views = _db.ListingViewCounters
+                        .Where(c => c.Kind == ListingKind.Property && c.ListingId == p.Id)
+                        .Select(c => (long?)c.ViewCount)
+                        .FirstOrDefault()
+                })
+                .ToListAsync(ct))
+                .Select(r => (r.Id, r.Views ?? 0L))
+                .ToList();
+        }
+
         var pageIds = pageRows.Select(r => r.Id).ToList();
-        var viewCounts = pageRows.ToDictionary(r => r.Id, r => r.Views ?? 0L);
+        var viewCounts = pageRows.ToDictionary(r => r.Id, r => r.Views);
 
         var items = new List<Property>(pageIds.Count);
         if (pageIds.Count > 0)
@@ -140,6 +156,114 @@ public sealed class PropertyRepository : IPropertyRepository
             Page = page,
             PageSize = pageSize
         }, viewCounts);
+    }
+
+    /// <summary>
+    /// The default list: newest first, with the currently featured listings first. Explicit
+    /// sorts (price, area, oldest first) keep <see cref="ApplySort"/>; this is the order the
+    /// home page and the plain /properties list use. Mirrors the branches of ApplySort that end
+    /// in "featured first, then newest".
+    /// </summary>
+    public static bool UsesTieredDefaultOrder(PropertyFilterDto filter)
+    {
+        if (string.Equals(filter.SortBy, PriceSortKey, StringComparison.OrdinalIgnoreCase) &&
+            filter.ListingType is ListingType.ForSale or ListingType.ForRent)
+            return false;
+
+        return filter.SortBy?.ToLowerInvariant() switch
+        {
+            "purchaseprice" or "coldrent" or "area" => false,
+            "createdat" => filter.SortDescending,
+            _ => true
+        };
+    }
+
+    private sealed class RankedRow
+    {
+        public Guid Id { get; set; }
+        public int Rank { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    /// <summary>
+    /// Three tiers, never a sort of the whole table: (0) featured listings in one of the caller's
+    /// interest governorates, (1) the other featured listings, (2) everything else; newest first
+    /// inside each. A page takes a few featured listings (<see cref="FeaturedPageLayout"/>) and
+    /// fills the rest with ordinary ones, so each side is read as "skip, take" on its own
+    /// newest-first order. The featured side is a small set and the ordinary side walks
+    /// IX_Properties_CreatedAt, so the cost follows the page, not the table (the old single
+    /// ORDER BY on a featured-now expression read and sorted every row: QA Phase 18, D16).
+    ///
+    /// Commands: one aggregate (total and featured count), one for the page ids with their view
+    /// totals, and the caller's entity load: still the endpoint's budget of three.
+    /// </summary>
+    private async Task<(int TotalCount, List<(Guid Id, long Views)> Rows)> GetTieredPageAsync(
+        IQueryable<Property> query,
+        PropertyFilterDto filter,
+        int page,
+        int pageSize,
+        CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var currentlyFeatured = Property.CurrentlyFeatured(now);
+
+        var counts = await query
+            .GroupBy(_ => 1)
+            .Select(g => new { Total = g.Count(), Featured = g.Count(p => p.IsFeatured && p.FeaturedUntil != null && p.FeaturedUntil > now) })
+            .FirstOrDefaultAsync(ct);
+        var total = counts?.Total ?? 0;
+        var featuredCount = counts?.Featured ?? 0;
+        if (total == 0)
+            return (0, []);
+
+        var slice = FeaturedPageLayout.Plan(page, pageSize, featuredCount, total - featuredCount, _maxFeaturedPerPage);
+        var interest = filter.ParseInterestGovernorateIds().ToArray();
+
+        // Both legs are always part of the statement, even when one takes nothing (LIMIT 0 costs
+        // nothing): the view-count lookup then sits in the outer SELECT over the union, so it
+        // runs for the page's rows only. Left inside a single leg it ran for every row the
+        // OFFSET skips (2,821 lookups for page 141).
+        var featuredLeg = query.Where(currentlyFeatured)
+            .OrderBy(p => p.GovernorateId != null && interest.Contains(p.GovernorateId.Value) ? 0 : 1)
+            .ThenByDescending(p => p.CreatedAt)
+            .ThenBy(p => p.Id)
+            .Skip(slice.FeaturedSkip)
+            .Take(slice.FeaturedTake)
+            .Select(p => new RankedRow
+            {
+                Id = p.Id,
+                Rank = p.GovernorateId != null && interest.Contains(p.GovernorateId.Value) ? 0 : 1,
+                CreatedAt = p.CreatedAt
+            });
+
+        var ordinaryLeg = query.Where(p => !(p.IsFeatured && p.FeaturedUntil != null && p.FeaturedUntil > now))
+            .OrderByDescending(p => p.CreatedAt)
+            .ThenBy(p => p.Id)
+            .Skip(slice.OrdinarySkip)
+            .Take(slice.OrdinaryTake)
+            .Select(p => new RankedRow { Id = p.Id, Rank = 2, CreatedAt = p.CreatedAt });
+
+        var legs = featuredLeg.Concat(ordinaryLeg);
+
+        var rows = await legs
+            .Select(r => new
+            {
+                r.Id,
+                r.Rank,
+                r.CreatedAt,
+                Views = _db.ListingViewCounters
+                    .Where(c => c.Kind == ListingKind.Property && c.ListingId == r.Id)
+                    .Select(c => (long?)c.ViewCount)
+                    .FirstOrDefault()
+            })
+            .ToListAsync(ct);
+
+        return (total, rows
+            .OrderBy(r => r.Rank)
+            .ThenByDescending(r => r.CreatedAt)
+            .ThenBy(r => r.Id)
+            .Select(r => (r.Id, r.Views ?? 0L))
+            .ToList());
     }
 
     public async Task<IReadOnlyList<Property>> GetByOwnerAsync(

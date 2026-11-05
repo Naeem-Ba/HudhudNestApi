@@ -4,6 +4,7 @@ using HudhudNestApi.Application.Auth.Interfaces;
 using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Plans.Interfaces;
+using HudhudNestApi.Application.Services.Interfaces;
 using HudhudNestApi.Application.Users.DTOs;
 using HudhudNestApi.Application.Users.Interfaces;
 using HudhudNestApi.Domain.Users.Constants;
@@ -16,6 +17,7 @@ public sealed class UpdateUserCommandHandler
     private readonly IUpdateUserIdentityService _identity;
     private readonly IUserAccountRepository _accounts;
     private readonly IPlanRepository _plans;
+    private readonly IGovernorateLookup _governorates;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<UpdateUserCommandHandler> _logger;
 
@@ -23,12 +25,14 @@ public sealed class UpdateUserCommandHandler
         IUpdateUserIdentityService identity,
         IUserAccountRepository accounts,
         IPlanRepository plans,
+        IGovernorateLookup governorates,
         IUnitOfWork unitOfWork,
         ILogger<UpdateUserCommandHandler> logger)
     {
         _identity = identity;
         _accounts = accounts;
         _plans = plans;
+        _governorates = governorates;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -91,6 +95,16 @@ public sealed class UpdateUserCommandHandler
             throw new ValidationException(
                 nameof(UpdateUserCommand.PhoneNumber),
                 "PhoneNumber is required for agents.");
+        }
+
+        // Checked before the transaction opens: an unknown id would otherwise surface as a
+        // foreign-key violation (a 500) instead of a 422 naming the field.
+        if (request.HomeGovernorateId is > 0 &&
+            (await _governorates.GetKnownIdsAsync([request.HomeGovernorateId.Value], cancellationToken)).Count == 0)
+        {
+            throw new ValidationException(
+                nameof(UpdateUserCommand.HomeGovernorateId),
+                "Unknown governorate.");
         }
 
         var now =
@@ -233,6 +247,11 @@ public sealed class UpdateUserCommandHandler
                 effectiveContactInfo,
                 now);
 
+            if (request.HomeGovernorateId is not null)
+            {
+                account.SetHomeGovernorate(request.HomeGovernorateId, now);
+            }
+
             await _unitOfWork.SaveChangesAsync(
                 cancellationToken);
 
@@ -305,6 +324,9 @@ public sealed class UpdateUserCommandHandler
 
             CountryCode =
                 account.CountryCode,
+
+            HomeGovernorateId =
+                account.HomeGovernorateId,
 
             Bio =
                 account.Bio,

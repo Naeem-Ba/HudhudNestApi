@@ -65,6 +65,7 @@ internal static class RepositoryInfrastructureRegistration
         services.AddScoped<IDeviceTokenService, DeviceTokenService>();
         services.AddScoped<IPushNotificationDispatcher, PushNotificationDispatcher>();
         services.Configure<PushOptions>(configuration.GetSection(PushOptions.SectionName));
+        services.Configure<ListingRankingOptions>(configuration.GetSection(ListingRankingOptions.SectionName));
         services.AddHttpClient(FcmPushSender.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(4));
         // Singleton: the sender caches its OAuth access token. Without FCM credentials the
         // no-op sender is used and only the in-app (SignalR) notification is delivered.
