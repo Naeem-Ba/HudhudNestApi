@@ -2,9 +2,11 @@ version: 2
 updates:
   - package-ecosystem: nuget
     directory: /
+    # Monthly, not weekly: version updates are routine maintenance and a weekly cadence left a standing queue
+    # of open PRs (each needing its own lock-file refresh). SECURITY updates are a separate Dependabot feature
+    # (Settings > Code security > Dependabot security updates) and are not delayed by these schedules.
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "06:00"
     groups:
       dotnet-8-runtime-stack:
@@ -66,8 +68,7 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "06:30"
     groups:
       github-actions:
@@ -88,8 +89,7 @@ updates:
       - /observability/render/prometheus
       - /observability/render/tempo
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "07:00"
     groups:
       docker-base-images:
