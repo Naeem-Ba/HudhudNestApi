@@ -28,7 +28,9 @@ internal static class IdentityAdapterMapping
     public static IdentityOperationResult Result(IdentityResult result) =>
         result.Succeeded
             ? IdentityOperationResult.Success()
-            : IdentityOperationResult.Failed(result.Errors.Select(error => error.Description));
+            : IdentityOperationResult.Failed(result.Errors.Select(error => error.Description))
+                with
+            { ErrorCodes = result.Errors.Select(error => error.Code).ToArray() };
 
     public static async Task<ApplicationUser> RequireAsync(
         UserManager<ApplicationUser> users,

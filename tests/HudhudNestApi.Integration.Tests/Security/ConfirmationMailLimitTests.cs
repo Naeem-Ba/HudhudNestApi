@@ -15,7 +15,7 @@ namespace HudhudNestApi.Integration.Tests.Security;
 /// </summary>
 public sealed class ConfirmationMailLimitTests : IClassFixture<PhoneAuthWebApplicationFactory>
 {
-    private const string Password = "SecurePass9";
+    private const string Password = "SecurePass9!";
     private const int MaxSends = 3;
 
     private readonly HttpClient _client;

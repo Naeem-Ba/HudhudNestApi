@@ -19,7 +19,7 @@ namespace HudhudNestApi.Integration.Tests.Favorites;
 /// </summary>
 public sealed class FavoritesCurrencyIntegrationTests : IClassFixture<PhoneLoginAuditFactory>, IAsyncLifetime
 {
-    private const string Password = "SecurePass9";
+    private const string Password = "SecurePass9!";
     private static int _seed = Environment.TickCount & 0xFFFFFF;
     private readonly PhoneLoginAuditFactory _factory;
 

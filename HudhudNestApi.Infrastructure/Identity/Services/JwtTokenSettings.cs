@@ -12,4 +12,6 @@ public sealed class JwtTokenSettings : IJwtTokenSettings
 
     public int AccessTokenMinutes => _options.AccessTokenMinutes;
     public int RefreshTokenDays => _options.RefreshTokenDays;
+    public int RefreshReuseGraceSeconds => Math.Clamp(_options.RefreshReuseGraceSeconds, 0, 600);
+    public int MaxActiveSessions => Math.Max(1, _options.MaxActiveSessions);
 }

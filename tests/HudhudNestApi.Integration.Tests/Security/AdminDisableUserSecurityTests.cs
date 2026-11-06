@@ -19,7 +19,7 @@ namespace HudhudNestApi.Integration.Tests.Security;
 /// </summary>
 public sealed class AdminDisableUserSecurityTests : IClassFixture<PhoneAuthWebApplicationFactory>
 {
-    private const string Password = "SecurePass9";
+    private const string Password = "SecurePass9!";
 
     private readonly PhoneAuthWebApplicationFactory _factory;
     private readonly HttpClient _client;

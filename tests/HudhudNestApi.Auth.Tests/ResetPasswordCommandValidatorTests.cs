@@ -22,6 +22,7 @@ public sealed class ResetPasswordCommandValidatorTests
         _passwordSecurityServiceMock
             .Setup(x => x.ValidatePasswordAsync(
                 It.IsAny<string>(),
+                It.IsAny<PasswordCheckContext>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(PasswordValidationResult.Success());
 
@@ -38,7 +39,7 @@ public sealed class ResetPasswordCommandValidatorTests
             ConfirmPassword: "Password123!");
 
         _passwordSecurityServiceMock
-            .Setup(x => x.ValidatePasswordAsync("Password123!", default))
+            .Setup(x => x.ValidatePasswordAsync("Password123!", It.IsAny<PasswordCheckContext>(), default))
             .ReturnsAsync(PasswordValidationResult.Failure(new PasswordValidationError(
                 PasswordErrorCodes.Breached,
                 "This password has been exposed in known data breaches. " +
@@ -59,7 +60,7 @@ public sealed class ResetPasswordCommandValidatorTests
             ConfirmPassword: "Password123!");
 
         _passwordSecurityServiceMock
-            .Setup(x => x.ValidatePasswordAsync("Password123!", default))
+            .Setup(x => x.ValidatePasswordAsync("Password123!", It.IsAny<PasswordCheckContext>(), default))
             .ReturnsAsync(PasswordValidationResult.Failure(new PasswordValidationError(
                 PasswordErrorCodes.Breached,
                 "This password has been exposed in known data breaches. " +
@@ -84,7 +85,7 @@ public sealed class ResetPasswordCommandValidatorTests
             ConfirmPassword: "password123!");
 
         _passwordSecurityServiceMock
-            .Setup(x => x.ValidatePasswordAsync("password123!", default))
+            .Setup(x => x.ValidatePasswordAsync("password123!", It.IsAny<PasswordCheckContext>(), default))
             .ReturnsAsync(PasswordValidationResult.Failure(new PasswordValidationError(
                 PasswordErrorCodes.NoUppercase,
                 "Password must contain at least one uppercase letter (A-Z).")));
@@ -104,7 +105,7 @@ public sealed class ResetPasswordCommandValidatorTests
             ConfirmPassword: "SecurePass123!");
 
         _passwordSecurityServiceMock
-            .Setup(x => x.ValidatePasswordAsync("SecurePass123!", default))
+            .Setup(x => x.ValidatePasswordAsync("SecurePass123!", It.IsAny<PasswordCheckContext>(), default))
             .ReturnsAsync(PasswordValidationResult.Success());
 
         var result = await _validator.TestValidateAsync(command);
@@ -122,7 +123,7 @@ public sealed class ResetPasswordCommandValidatorTests
             ConfirmPassword: "Different123!");
 
         _passwordSecurityServiceMock
-            .Setup(x => x.ValidatePasswordAsync("SecurePass123!", default))
+            .Setup(x => x.ValidatePasswordAsync("SecurePass123!", It.IsAny<PasswordCheckContext>(), default))
             .ReturnsAsync(PasswordValidationResult.Success());
 
         var result = await _validator.TestValidateAsync(command);

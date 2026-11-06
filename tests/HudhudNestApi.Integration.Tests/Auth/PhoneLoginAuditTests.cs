@@ -20,7 +20,7 @@ namespace HudhudNestApi.Integration.Tests.Auth;
 /// </summary>
 public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>, IAsyncLifetime
 {
-    private const string Password = "SecurePass9";
+    private const string Password = "SecurePass9!";
     private static int _seed = Environment.TickCount & 0xFFFFFF;
     private readonly PhoneLoginAuditFactory _factory;
     private readonly ITestOutputHelper _output;
@@ -220,7 +220,7 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
         Assert.Equal(HttpStatusCode.OK, (await Login(phone, Password)).Status);
         // the reset token must still work for a compliant password
         var good = await Post("/api/auth/phone/password-reset/confirm",
-            new { phoneNumber = phone, confirmationToken = verify.Str("confirmationToken"), newPassword = "BrandNew9Pass" });
+            new { phoneNumber = phone, confirmationToken = verify.Str("confirmationToken"), newPassword = "BrandNew9Pass!" });
         Assert.Equal(HttpStatusCode.OK, good.Status);
     }
 
@@ -258,12 +258,12 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
             new { challengeId, code, password = Password, firstName = "A", lastName = "B" });
         Assert.Equal(HttpStatusCode.OK, first.Status);
         var replay = await Post("/api/auth/phone/registration/verify",
-            new { challengeId, code, password = "Another9Pass", firstName = "A", lastName = "B" });
+            new { challengeId, code, password = "Another9Pass!", firstName = "A", lastName = "B" });
         Assert.Equal(HttpStatusCode.BadRequest, replay.Status);
         Assert.Equal("OTP_ALREADY_USED", replay.Code);
         // the second password must NOT have replaced the first
         Assert.Equal(HttpStatusCode.OK, (await Login(phone, Password)).Status);
-        Assert.Equal(HttpStatusCode.BadRequest, (await Login(phone, "Another9Pass")).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Login(phone, "Another9Pass!")).Status);
     }
 
     [Fact]
@@ -521,15 +521,15 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
         Assert.Equal(HttpStatusCode.OK, verify.Status);
         var token = verify.Str("confirmationToken")!;
 
-        var confirm = await Post("/api/auth/phone/password-reset/confirm", new { phoneNumber = phone, confirmationToken = token, newPassword = "BrandNew9Pass" });
+        var confirm = await Post("/api/auth/phone/password-reset/confirm", new { phoneNumber = phone, confirmationToken = token, newPassword = "BrandNew9Pass!" });
         Assert.Equal(HttpStatusCode.OK, confirm.Status);
 
         Assert.Equal(HttpStatusCode.BadRequest, (await Login(phone, Password)).Status);
-        Assert.Equal(HttpStatusCode.OK, (await Login(phone, "BrandNew9Pass")).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Login(phone, "BrandNew9Pass!")).Status);
         Assert.Equal(HttpStatusCode.Unauthorized, (await Post("/api/auth/refresh", new { }, cookie: refreshCookie)).Status);
         Assert.Equal(HttpStatusCode.Unauthorized, (await Get("/api/auth/phone/reverification/status", access)).Status);
 
-        var reuse = await Post("/api/auth/phone/password-reset/confirm", new { phoneNumber = phone, confirmationToken = token, newPassword = "Yet0therPass" });
+        var reuse = await Post("/api/auth/phone/password-reset/confirm", new { phoneNumber = phone, confirmationToken = token, newPassword = "Yet0therPass!" });
         Assert.Equal(HttpStatusCode.BadRequest, reuse.Status);
     }
 
@@ -542,8 +542,8 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
         var verify = await Post("/api/auth/phone/password-reset/verify",
             new { challengeId = Guid.Parse(send.Str("challengeId")!), code = _factory.Sms.LastCodeFor(phone) });
         await Post("/api/auth/phone/password-reset/confirm",
-            new { phoneNumber = phone, confirmationToken = verify.Str("confirmationToken"), newPassword = "BrandNew9Pass" });
-        var login = await Login(phone, "BrandNew9Pass");
+            new { phoneNumber = phone, confirmationToken = verify.Str("confirmationToken"), newPassword = "BrandNew9Pass!" });
+        var login = await Login(phone, "BrandNew9Pass!");
         Assert.Equal(HttpStatusCode.OK, login.Status);
     }
 
@@ -556,7 +556,7 @@ public sealed class PhoneLoginAuditTests : IClassFixture<PhoneLoginAuditFactory>
         var verify = await Post("/api/auth/phone/password-reset/verify",
             new { challengeId = Guid.Parse(send.Str("challengeId")!), code = _factory.Sms.LastCodeFor(a) });
         var attack = await Post("/api/auth/phone/password-reset/confirm",
-            new { phoneNumber = b, confirmationToken = verify.Str("confirmationToken"), newPassword = "Hijacked9Pass" });
+            new { phoneNumber = b, confirmationToken = verify.Str("confirmationToken"), newPassword = "Hijacked9Pass!" });
         Assert.Equal(HttpStatusCode.BadRequest, attack.Status);
         Assert.Equal(HttpStatusCode.OK, (await Login(b, Password)).Status);
     }

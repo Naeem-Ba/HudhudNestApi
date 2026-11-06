@@ -21,7 +21,7 @@ namespace HudhudNestApi.Integration.Tests.Security;
 /// </summary>
 public sealed class PhoneProofBeatsClaimTests : IClassFixture<PhoneAuthWebApplicationFactory>
 {
-    private const string PhonePassword = "SecurePass9";
+    private const string PhonePassword = "SecurePass9!";
     private const string EmailAccountPassword = "SecurePass9!";
 
     private readonly HttpClient _client;

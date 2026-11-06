@@ -72,7 +72,7 @@ public sealed class StagingSmokeRateLimitExemptionTests
             {
                 challengeId,
                 code = "000000",
-                password = "SecurePass9",
+                password = "SecurePass9!",
                 firstName = "E2E",
                 lastName = "RateLimit"
             });
@@ -99,7 +99,7 @@ public sealed class StagingSmokeRateLimitExemptionTests
                 {
                     challengeId,
                     code = "000000",
-                    password = "SecurePass9",
+                    password = "SecurePass9!",
                     firstName = "E2E",
                     lastName = "RateLimit"
                 })

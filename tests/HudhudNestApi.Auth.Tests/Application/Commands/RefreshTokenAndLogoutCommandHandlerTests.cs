@@ -61,7 +61,7 @@ public sealed class RefreshTokenCommandHandlerTests
             .ReturnsAsync(true);
 
         refreshTokens
-            .Setup(x => x.AddAsync(
+            .Setup(x => x.AddRotatedAsync(
                 userId,
                 NewRefreshToken,
                 IpAddress,
@@ -148,7 +148,7 @@ public sealed class RefreshTokenCommandHandlerTests
             It.IsAny<CancellationToken>()),
             Times.Once);
 
-        refreshTokens.Verify(x => x.AddAsync(
+        refreshTokens.Verify(x => x.AddRotatedAsync(
             userId,
             NewRefreshToken,
             IpAddress,
@@ -186,12 +186,15 @@ public sealed class RefreshTokenCommandHandlerTests
         var userId =
             Guid.NewGuid();
 
+        // A token that was ROTATED away (it names its successor) and is presented again is the theft signal.
         var stored =
             new RefreshTokenRecord(
                 Guid.NewGuid(),
                 userId,
                 DateTime.UtcNow.AddHours(1),
-                IsRevoked: true);
+                IsRevoked: true,
+                RevokedAt: DateTime.UtcNow.AddHours(-1),
+                ReplacedByTokenHash: "successor-hash");
 
         var refreshTokens =
             CreateTransactionalRefreshTokenRepository();

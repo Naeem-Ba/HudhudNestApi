@@ -13,29 +13,6 @@ namespace HudhudNestApi.Application.Auth.Services;
 /// </summary>
 public sealed class PasswordSecurityService : IPasswordSecurityService
 {
-    private const int MinimumLength = 8;
-    private const string SpecialCharacters = "!@#$%^&*()_+-=[]{}|;:',.<>?/~`";
-
-    /// <summary>
-    /// Base words that make a password guessable no matter how the character-class
-    /// rules are satisfied. Matched against the password's *core* -- the value with
-    /// leading and trailing non-letters stripped -- so "Password1!" and "Qwerty123!"
-    /// are rejected while "MyPassword123!" and "SecurePass123!" are not: prepending a
-    /// real word is what moves a password out of the top of every cracking dictionary.
-    /// </summary>
-    private static readonly HashSet<string> CommonBaseWords =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            "password", "passwort", "passw0rd", "pass", "qwerty", "qwertz", "azerty",
-            "asdfgh", "zxcvbn", "qazwsx", "welcome", "admin", "administrator", "root",
-            "login", "letmein", "changeme", "secret", "default", "guest", "test",
-            "monkey", "dragon", "sunshine", "princess", "shadow", "master", "superman",
-            "batman", "football", "baseball", "iloveyou", "trustno", "whatever",
-            "freedom", "starwars", "computer", "internet", "abcdef", "abc"
-        };
-
-    private const int MaximumRunLength = 4;
-
     private readonly HttpClient _httpClient;
     private readonly ILogger<PasswordSecurityService> _logger;
     private readonly PwnedPasswordsCircuitBreaker _circuitBreaker;
@@ -50,171 +27,35 @@ public sealed class PasswordSecurityService : IPasswordSecurityService
         _circuitBreaker = circuitBreaker;
     }
 
-    public async Task<PasswordValidationResult> ValidatePasswordAsync(
+    public Task<PasswordValidationResult> ValidatePasswordAsync(
         string password,
         CancellationToken cancellationToken = default)
+        => ValidatePasswordAsync(password, PasswordCheckContext.None, cancellationToken);
+
+    public async Task<PasswordValidationResult> ValidatePasswordAsync(
+        string password,
+        PasswordCheckContext context,
+        CancellationToken cancellationToken = default)
     {
-        var errors = new List<PasswordValidationError>();
-
-        // 1. Check basic requirements
-        var basicErrors = ValidateBasicRequirements(password);
-        if (basicErrors.Any())
-        {
-            errors.AddRange(basicErrors);
-        }
-
-        // If basic requirements fail, return early without checking breach database
-        if (errors.Any())
-        {
-            return PasswordValidationResult.Failure(errors);
-        }
-
-        // 2. Reject guessable patterns locally.
+        // 1 + 2. Every rule that needs no network: complexity, common base words, long runs
+        // and the account holder's own name / e-mail / phone digits (PasswordPolicy).
         //
         // This runs before the breach lookup on purpose. CheckBreachedPasswordAsync
         // fails open, so without a local rule the only thing stopping "Password1!" was
         // an external service being reachable. These checks need no network and cannot
-        // fail open.
-        var patternErrors = ValidateCommonPatterns(password);
-        if (patternErrors.Any())
+        // fail open. If the basic requirements fail the breach database is not asked.
+        var localErrors = PasswordPolicy.Evaluate(password, context);
+        if (localErrors.Count > 0)
         {
-            return PasswordValidationResult.Failure(patternErrors);
+            return PasswordValidationResult.Failure(localErrors);
         }
 
         // 3. Check against breach database
         var breachError = await CheckBreachedPasswordAsync(password, cancellationToken);
-        if (breachError is not null)
-        {
-            errors.Add(breachError);
-        }
 
-        return errors.Any()
-            ? PasswordValidationResult.Failure(errors)
+        return breachError is not null
+            ? PasswordValidationResult.Failure(breachError)
             : PasswordValidationResult.Success();
-    }
-
-    /// <summary>
-    /// Validates basic password complexity requirements.
-    /// </summary>
-    private static List<PasswordValidationError> ValidateBasicRequirements(string password)
-    {
-        var errors = new List<PasswordValidationError>();
-
-        if (string.IsNullOrEmpty(password))
-        {
-            errors.Add(new PasswordValidationError(
-                PasswordErrorCodes.Required,
-                "Password is required."));
-            return errors;
-        }
-
-        // Length check
-        if (password.Length < MinimumLength)
-        {
-            errors.Add(new PasswordValidationError(
-                PasswordErrorCodes.TooShort,
-                $"Password must be at least {MinimumLength} characters long."));
-        }
-
-        // Uppercase check
-        if (!password.Any(char.IsUpper))
-        {
-            errors.Add(new PasswordValidationError(
-                PasswordErrorCodes.NoUppercase,
-                "Password must contain at least one uppercase letter (A-Z)."));
-        }
-
-        // Lowercase check
-        if (!password.Any(char.IsLower))
-        {
-            errors.Add(new PasswordValidationError(
-                PasswordErrorCodes.NoLowercase,
-                "Password must contain at least one lowercase letter (a-z)."));
-        }
-
-        // Digit check
-        if (!password.Any(char.IsDigit))
-        {
-            errors.Add(new PasswordValidationError(
-                PasswordErrorCodes.NoDigit,
-                "Password must contain at least one digit (0-9)."));
-        }
-
-        // Special character check
-        if (!password.Any(c => SpecialCharacters.Contains(c)))
-        {
-            errors.Add(new PasswordValidationError(
-                PasswordErrorCodes.NoSpecialCharacter,
-                $"Password must contain at least one special character: {SpecialCharacters}"));
-        }
-
-        return errors;
-    }
-
-    /// <summary>
-    /// Locally detectable weakness: a password that is a common base word dressed up
-    /// with digits and punctuation, or one carrying a long sequential/repeated run.
-    /// </summary>
-    private static readonly char[] DecorationCharacters =
-        ("0123456789" + SpecialCharacters).ToCharArray();
-
-    private static List<PasswordValidationError> ValidateCommonPatterns(string password)
-    {
-        var errors = new List<PasswordValidationError>();
-
-        // One combined trim, not digits-then-symbols: trimming in two passes leaves
-        // "Password1!" as "Password1", because the trailing '!' shields the '1' from
-        // the digit pass and the '1' is then no longer at the end for the symbol pass.
-        var core = password.Trim(DecorationCharacters);
-
-        if (CommonBaseWords.Contains(core))
-        {
-            errors.Add(new PasswordValidationError(
-                PasswordErrorCodes.CommonWord,
-                "Password is based on a commonly used word. Adding digits or symbols to " +
-                "it does not make it harder to guess."));
-        }
-
-        if (HasLongRun(password))
-        {
-            errors.Add(new PasswordValidationError(
-                PasswordErrorCodes.LongRun,
-                $"Password contains a run of more than {MaximumRunLength} sequential or " +
-                "repeated characters."));
-        }
-
-        return errors;
-    }
-
-    /// <summary>
-    /// True when the password contains more than <see cref="MaximumRunLength"/>
-    /// consecutive characters that ascend ("123456"), descend ("54321"), or repeat
-    /// ("aaaaa"). The threshold is deliberately above the length of a year or a short
-    /// numeric suffix, so "MyPassword123!" is unaffected while "Aa123456!" is not.
-    /// </summary>
-    private static bool HasLongRun(string password)
-    {
-        var ascending = 1;
-        var descending = 1;
-        var repeating = 1;
-
-        for (var i = 1; i < password.Length; i++)
-        {
-            var delta = password[i] - password[i - 1];
-
-            ascending = delta == 1 ? ascending + 1 : 1;
-            descending = delta == -1 ? descending + 1 : 1;
-            repeating = delta == 0 ? repeating + 1 : 1;
-
-            if (ascending > MaximumRunLength ||
-                descending > MaximumRunLength ||
-                repeating > MaximumRunLength)
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /// <summary>

@@ -23,7 +23,7 @@ public sealed class PhoneAuthFlowIntegrationTests : IClassFixture<PhoneAuthWebAp
         {
             challengeId,
             code = DeterministicOtpService.ValidOtp,
-            password = "SecurePass9",
+            password = "SecurePass9!",
             firstName = "Naeem",
             lastName = "Bazzazeh"
         });
@@ -40,7 +40,7 @@ public sealed class PhoneAuthFlowIntegrationTests : IClassFixture<PhoneAuthWebAp
         // because the real deployed frontend/backend are different registrable domains.
         Assert.True(RefreshTokenCookieIsPartitioned(registration), "refresh_token cookie is missing the Partitioned attribute.");
 
-        var login = await _client.PostAsJsonAsync("/api/auth/phone/login", new { phoneNumber = phone, password = "SecurePass9" });
+        var login = await _client.PostAsJsonAsync("/api/auth/phone/login", new { phoneNumber = phone, password = "SecurePass9!" });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         Assert.True(HasRefreshTokenCookie(login), "Login did not set the refresh_token cookie.");
         Assert.False(string.IsNullOrWhiteSpace(await Property<string>(login, "accessToken")));

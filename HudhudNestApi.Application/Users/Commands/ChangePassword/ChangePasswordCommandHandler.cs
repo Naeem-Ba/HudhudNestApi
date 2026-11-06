@@ -70,7 +70,8 @@ public sealed class ChangePasswordCommandHandler
                     result.Errors));
 
             return ChangePasswordResult.Fail(
-                result.Errors);
+                result.Errors,
+                result.ErrorCodes);
         }
 
         var changedAtUtc =

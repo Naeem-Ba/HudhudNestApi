@@ -34,8 +34,21 @@ export const options = {
   },
   thresholds: {
     race_requests: [`count==${concurrency}`],
-    race_successes: [raceKind === 'otp-invalid' ? 'count==0' : 'count==1'],
-    race_rejections: [raceKind === 'otp-invalid' ? `count==${concurrency}` : `count==${concurrency - 1}`],
+    // Refresh tokens are rotated with a short replay grace window (Jwt:RefreshReuseGraceSeconds):
+    // concurrent replays of the same token receive a sibling session instead of revoking the
+    // whole family, so more than one request may legitimately succeed. The invariants that
+    // remain are: no 5xx, every response deterministic, at least one winner, and a bounded
+    // number of live sessions (checked against the database in capture-auth-integrity.sql).
+    race_successes: [
+      raceKind === 'otp-invalid' ? 'count==0'
+        : raceKind === 'refresh' ? 'count>=1'
+        : 'count==1'
+    ],
+    race_rejections: [
+      raceKind === 'otp-invalid' ? `count==${concurrency}`
+        : raceKind === 'refresh' ? `count<=${concurrency - 1}`
+        : `count==${concurrency - 1}`
+    ],
     security_invariant_failures: ['count==0'],
     server_errors: ['rate==0'],
     instance_api_1: ['count>0'],

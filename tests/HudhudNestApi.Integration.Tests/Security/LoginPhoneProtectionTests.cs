@@ -23,7 +23,7 @@ namespace HudhudNestApi.Integration.Tests.Security;
 /// </summary>
 public sealed class LoginPhoneProtectionTests : IClassFixture<PhoneAuthWebApplicationFactory>
 {
-    private const string Password = "SecurePass9";
+    private const string Password = "SecurePass9!";
     private const string EmailAccountPassword = "SecurePass9!";
 
     // One phone-registered account for the whole class: registration spends from the send-otp (3) and

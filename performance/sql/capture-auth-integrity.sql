@@ -29,7 +29,7 @@ FROM (
       WHEN :'race_kind' = 'refresh' THEN
         (SELECT count(*) FROM target_users) = 1
         AND (SELECT count(*) FROM "RefreshTokens" WHERE "UserId" IN (SELECT "Id" FROM target_users)
-          AND NOT "IsRevoked" AND "ExpiresAt" > now()) <= 1
+          AND NOT "IsRevoked" AND "ExpiresAt" > now()) <= 5 -- Jwt:MaxActiveSessions; replay grace may mint sibling sessions
       WHEN :'race_kind' = 'otp-invalid' THEN
         (SELECT count(*) FROM target_users) = 0
         AND (SELECT count(*) FROM target_otp WHERE "ConsumedAtUtc" IS NOT NULL) = 0

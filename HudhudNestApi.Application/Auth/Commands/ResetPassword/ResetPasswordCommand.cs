@@ -26,6 +26,10 @@ public sealed record ResetPasswordResult
     public IReadOnlyList<string> Errors { get; init; } =
         Array.Empty<string>();
 
+    /// <summary>Stable code per entry of <see cref="Errors"/> (see IdentityOperationResult.ErrorCodes).</summary>
+    public IReadOnlyList<string> ErrorCodes { get; init; } =
+        Array.Empty<string>();
+
     public static ResetPasswordResult Ok()
         => new()
         {
@@ -52,11 +56,13 @@ public sealed record ResetPasswordResult
         };
 
     public static ResetPasswordResult Fail(
-        IEnumerable<string> errors)
+        IEnumerable<string> errors,
+        IEnumerable<string>? errorCodes = null)
         => new()
         {
             Success = false,
-            Errors = errors.ToArray()
+            Errors = errors.ToArray(),
+            ErrorCodes = errorCodes?.ToArray() ?? Array.Empty<string>()
         };
 }
 
@@ -67,6 +73,9 @@ public sealed class ResetPasswordCommandHandler
 {
     // Same text Identity reports for a rejected token, so the unknown-address answer matches it.
     private const string InvalidTokenError = "Invalid token.";
+
+    // ... and the code Identity gives it, so the two bodies stay byte-identical.
+    private const string InvalidTokenCode = "InvalidToken";
 
     private readonly IResetPasswordIdentityService _identity;
 
@@ -123,7 +132,8 @@ public sealed class ResetPasswordCommandHandler
             identity.IsDeleted)
         {
             return ResetPasswordResult.Fail(
-                new[] { InvalidTokenError });
+                new[] { InvalidTokenError },
+                new[] { InvalidTokenCode });
         }
 
         // Deliberately no "new password equals the current one" check here: it ran before the
@@ -151,7 +161,8 @@ public sealed class ResetPasswordCommandHandler
                     result.Errors));
 
             return ResetPasswordResult.Fail(
-                result.Errors);
+                result.Errors,
+                result.ErrorCodes);
         }
 
         /*
@@ -255,8 +266,12 @@ public sealed class ResetPasswordCommandValidator
             return;
         }
 
+        // Only what the caller sent is compared (the e-mail address). This endpoint is anonymous, so it
+        // must not look the account up and say "contains your name" for a stranger's guess; the
+        // name check runs inside Identity after the reset token has proven control of the mailbox.
         var result = await _passwordSecurityService.ValidatePasswordAsync(
             password,
+            new PasswordCheckContext(Email: context.InstanceToValidate.Email),
             cancellationToken);
 
         if (result.IsValid)

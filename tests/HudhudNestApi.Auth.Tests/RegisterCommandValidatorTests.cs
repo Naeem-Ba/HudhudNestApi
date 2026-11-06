@@ -29,11 +29,59 @@ public sealed class RegisterCommandValidatorTests
         _passwordSecurityServiceMock
             .Setup(x => x.ValidatePasswordAsync(
                 It.IsAny<string>(),
+                It.IsAny<PasswordCheckContext>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(PasswordValidationResult.Success());
 
         _validator = new RegisterCommandValidator(_passwordSecurityServiceMock.Object);
     }
+
+    #region Stable field codes / personal details
+
+    [Fact]
+    public async Task Validate_CarriesStableCodesPerField()
+    {
+        var command = new RegisterCommand(
+            FirstName: string.Empty,
+            LastName: string.Empty,
+            Email: "not-an-email",
+            Password: "ValidPass1!");
+
+        var result = await _validator.TestValidateAsync(command);
+
+        result.ShouldHaveValidationErrorFor(x => x.FirstName).WithErrorCode("FIRST_NAME_REQUIRED");
+        result.ShouldHaveValidationErrorFor(x => x.LastName).WithErrorCode("LAST_NAME_REQUIRED");
+        result.ShouldHaveValidationErrorFor(x => x.Email).WithErrorCode("EMAIL_INVALID");
+    }
+
+    [Fact]
+    public async Task Validate_PassesTheHoldersNameAndEmailToThePasswordCheck()
+    {
+        PasswordCheckContext? seen = null;
+        _passwordSecurityServiceMock
+            .Setup(x => x.ValidatePasswordAsync(
+                "ValidPass1!",
+                It.IsAny<PasswordCheckContext>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, PasswordCheckContext, CancellationToken>((_, ctx, _) => seen = ctx)
+            .ReturnsAsync(PasswordValidationResult.Failure(
+                new PasswordValidationError(PasswordErrorCodes.PersonalInfo, "contains personal information")));
+
+        var command = new RegisterCommand(
+            FirstName: "Mohammad",
+            LastName: "Khatib",
+            Email: "m@example.com",
+            Password: "ValidPass1!");
+
+        var result = await _validator.TestValidateAsync(command);
+
+        result.ShouldHaveValidationErrorFor(x => x.Password).WithErrorCode(PasswordErrorCodes.PersonalInfo);
+        Assert.Equal("Mohammad", seen?.FirstName);
+        Assert.Equal("Khatib", seen?.LastName);
+        Assert.Equal("m@example.com", seen?.Email);
+    }
+
+    #endregion
 
     #region First Name Tests
 
@@ -202,7 +250,7 @@ public sealed class RegisterCommandValidatorTests
             Password: "password123!");
 
         _passwordSecurityServiceMock
-            .Setup(x => x.ValidatePasswordAsync("password123!", default))
+            .Setup(x => x.ValidatePasswordAsync("password123!", It.IsAny<PasswordCheckContext>(), default))
             .ReturnsAsync(PasswordValidationResult.Failure(new PasswordValidationError(
                 PasswordErrorCodes.NoUppercase,
                 "Password must contain at least one uppercase letter (A-Z).")));
@@ -225,7 +273,7 @@ public sealed class RegisterCommandValidatorTests
             Password: "ValidPass1!");
 
         _passwordSecurityServiceMock
-            .Setup(x => x.ValidatePasswordAsync("ValidPass1!", default))
+            .Setup(x => x.ValidatePasswordAsync("ValidPass1!", It.IsAny<PasswordCheckContext>(), default))
             .ReturnsAsync(PasswordValidationResult.Success());
 
         // Act
@@ -246,7 +294,7 @@ public sealed class RegisterCommandValidatorTests
             Password: "Password123!");
 
         _passwordSecurityServiceMock
-            .Setup(x => x.ValidatePasswordAsync("Password123!", default))
+            .Setup(x => x.ValidatePasswordAsync("Password123!", It.IsAny<PasswordCheckContext>(), default))
             .ReturnsAsync(PasswordValidationResult.Failure(new PasswordValidationError(
                 PasswordErrorCodes.Breached,
                 "This password has been exposed in known data breaches. " +
@@ -277,7 +325,7 @@ public sealed class RegisterCommandValidatorTests
             Password: "Password123!");
 
         _passwordSecurityServiceMock
-            .Setup(x => x.ValidatePasswordAsync("Password123!", default))
+            .Setup(x => x.ValidatePasswordAsync("Password123!", It.IsAny<PasswordCheckContext>(), default))
             .ReturnsAsync(PasswordValidationResult.Failure(new PasswordValidationError(
                 PasswordErrorCodes.Breached,
                 "This password has been exposed in known data breaches. " +
@@ -305,7 +353,7 @@ public sealed class RegisterCommandValidatorTests
             Password: "weak");
 
         _passwordSecurityServiceMock
-            .Setup(x => x.ValidatePasswordAsync("weak", default))
+            .Setup(x => x.ValidatePasswordAsync("weak", It.IsAny<PasswordCheckContext>(), default))
             .ReturnsAsync(PasswordValidationResult.Failure(
                 new PasswordValidationError(
                     PasswordErrorCodes.TooShort,
@@ -346,7 +394,7 @@ public sealed class RegisterCommandValidatorTests
             TermsVersion: "2026-10-01");
 
         _passwordSecurityServiceMock
-            .Setup(x => x.ValidatePasswordAsync("SecurePass123!", default))
+            .Setup(x => x.ValidatePasswordAsync("SecurePass123!", It.IsAny<PasswordCheckContext>(), default))
             .ReturnsAsync(PasswordValidationResult.Success());
 
         // Act
@@ -445,7 +493,7 @@ public sealed class RegisterCommandValidatorTests
             Password: "weak");
 
         _passwordSecurityServiceMock
-            .Setup(x => x.ValidatePasswordAsync("weak", default))
+            .Setup(x => x.ValidatePasswordAsync("weak", It.IsAny<PasswordCheckContext>(), default))
             .ReturnsAsync(PasswordValidationResult.Failure(
                 new PasswordValidationError(
                     PasswordErrorCodes.TooShort,
