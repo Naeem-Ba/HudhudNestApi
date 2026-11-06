@@ -300,12 +300,10 @@ public sealed class StagingSmokeJourneyTests
             Expect(refresh != previous, "Refresh-token rotation did not issue a new token.");
             _owner = _owner with { AccessToken = access, RefreshToken = refresh };
 
-            // The rotated access token must work *before* the replay probe below: replaying a
-            // rotated refresh token is treated as theft and (RefreshTokenReuseHandler) revokes
-            // every active refresh token of the user and rotates the security stamp, which
-            // deliberately invalidates the access token that was just issued. Probing first and
-            // using the new token afterwards (the old order) made this journey fail on correct
-            // behaviour.
+            // The rotated access token must work *before* the replay probes below: once the grace window has
+            // passed, replaying a rotated refresh token is treated as theft and (RefreshTokenReuseHandler) revokes
+            // every active refresh token of the user and rotates the security stamp, which deliberately
+            // invalidates the access token that was just issued.
             var protectedResponse = await SendAsync(
                 HttpMethod.Get, "/api/users/me", token: _owner.AccessToken);
             Expect(protectedResponse.StatusCode == HttpStatusCode.OK,
@@ -316,10 +314,46 @@ public sealed class StagingSmokeJourneyTests
             Expect(invalid.StatusCode == HttpStatusCode.Unauthorized,
                 "Invalid refresh token was accepted.");
 
-            var reuse = await SendJsonAsync(HttpMethod.Post, "/api/auth/refresh",
+            // Replay of the rotated token. Since API #398 a replay inside Jwt:RefreshReuseGraceSeconds (default
+            // 60) is NOT theft: the client most likely never received the answer (dropped connection, app
+            // suspended) or two requests raced, so it gets a fresh sibling token and nothing is revoked. Only a
+            // replay after the window is reuse: 401 and the whole session family is ended. Both halves are
+            // checked; a deployment with the window switched off (0) answers 401 immediately and skips the first.
+            var replay = await SendJsonAsync(HttpMethod.Post, "/api/auth/refresh",
                 new { RefreshToken = previous });
-            Expect(reuse.StatusCode == HttpStatusCode.Unauthorized,
-                "Rotated refresh token was reusable.");
+            var reuseDetected = replay.StatusCode == HttpStatusCode.Unauthorized;
+
+            if (!reuseDetected)
+            {
+                Expect(replay.StatusCode == HttpStatusCode.OK,
+                    $"Replay of a just-rotated refresh token expected HTTP 200 (grace window) or 401, got {(int)replay.StatusCode}.");
+                using var replayBody = await ReadJsonAsync(replay);
+                var sibling = RequiredCookie(replay, RefreshTokenCookieName);
+                Expect(sibling != previous && sibling != refresh,
+                    "A replay inside the grace window must receive a new token, not an old one.");
+                var siblingAccess = RequiredText(replayBody.RootElement, "accessToken");
+
+                var duringGrace = await SendAsync(HttpMethod.Get, "/api/users/me", token: siblingAccess);
+                Expect(duringGrace.StatusCode == HttpStatusCode.OK,
+                    "A replay inside the grace window must not end the session.");
+                var stillValid = await SendAsync(HttpMethod.Get, "/api/users/me", token: _owner.AccessToken);
+                Expect(stillValid.StatusCode == HttpStatusCode.OK,
+                    "A replay inside the grace window revoked the session it should have left alone.");
+
+                // Keep presenting the old token until the window has passed; that must be refused as reuse.
+                var deadline = DateTime.UtcNow.AddSeconds(150);
+                while (!reuseDetected && DateTime.UtcNow < deadline)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(10));
+                    var again = await SendJsonAsync(HttpMethod.Post, "/api/auth/refresh",
+                        new { RefreshToken = previous });
+                    reuseDetected = again.StatusCode == HttpStatusCode.Unauthorized;
+                    Expect(reuseDetected || again.StatusCode == HttpStatusCode.OK,
+                        $"Replay of a rotated refresh token expected HTTP 200 or 401, got {(int)again.StatusCode}.");
+                }
+            }
+
+            Expect(reuseDetected, "Rotated refresh token stayed reusable after the grace window.");
 
             // Reuse detection must have killed the whole session family, including the token
             // issued by the legitimate rotation.
