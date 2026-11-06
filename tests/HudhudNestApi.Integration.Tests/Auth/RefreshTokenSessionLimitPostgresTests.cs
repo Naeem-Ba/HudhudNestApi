@@ -95,4 +95,89 @@ public sealed class RefreshTokenSessionLimitPostgresTests : IAsyncLifetime
             .FirstAsync();
         Assert.False(newest.IsRevoked);
     }
+
+    [Fact(DisplayName = "Refresh grace: concurrent replays of one rotated token never exceed Jwt:MaxActiveSessions")]
+    public async Task ConcurrentReplaysOfOneToken_NeverExceedTheSessionLimit()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(_scratchConnectionString).Options;
+
+        await using (var setup = new AppDbContext(options))
+        {
+            await setup.GetInfrastructure().GetRequiredService<IMigrator>().MigrateAsync();
+        }
+
+        var jwt = Options.Create(new JwtOptions { MaxActiveSessions = 5, RefreshReuseGraceSeconds = 60 });
+        var userId = Guid.NewGuid();
+
+        // Same shape as RefreshTokenCommandHandler: one transaction per request that reads the token, tries
+        // to rotate it and hands out its own new token (the winner rotates, the losers get a grace sibling).
+        async Task SeedAsync()
+        {
+            await using var context = new AppDbContext(options);
+            await context.Database.OpenConnectionAsync();
+            await context.Database.ExecuteSqlRawAsync("SET session_replication_role = replica;");
+            var repository = new RefreshTokenRepository(context, jwt, NullLogger<RefreshTokenRepository>.Instance);
+            await repository.AddAsync(userId, "shared-token", "198.51.100.1");
+        }
+
+        async Task RefreshAsync(int caller)
+        {
+            await using var context = new AppDbContext(options);
+            await context.Database.OpenConnectionAsync();
+            await context.Database.ExecuteSqlRawAsync("SET session_replication_role = replica;");
+            var repository = new RefreshTokenRepository(context, jwt, NullLogger<RefreshTokenRepository>.Instance);
+
+            await repository.ExecuteInTransactionAsync(async ct =>
+            {
+                var stored = await repository.GetByRefreshTokenAsync("shared-token", ct);
+                Assert.NotNull(stored);
+
+                // A caller that arrives after the winner committed sees the token already rotated and, inside
+                // the grace window, skips straight to handing out its own sibling.
+                if (!stored!.IsRevoked)
+                {
+                    await repository.RevokeIfActiveAsync(
+                        stored.Id, DateTime.UtcNow, "198.51.100.1", $"sibling-{caller}", ct);
+                }
+
+                await repository.AddRotatedAsync(userId, $"sibling-{caller}", "198.51.100.1", ct);
+                return true;
+            });
+        }
+
+        const int concurrency = 10;
+
+        for (var round = 0; round < 5; round++)
+        {
+            await using (var reset = new AppDbContext(options))
+            {
+                await reset.Database.ExecuteSqlRawAsync("DELETE FROM \"RefreshTokens\";");
+            }
+
+            await SeedAsync();
+
+            // The winner rotates first; the rest then replay the already rotated token at the same time.
+            await RefreshAsync(-1);
+
+            using var start = new ManualResetEventSlim(false);
+            var callers = Enumerable.Range(0, concurrency)
+                .Select(i => Task.Run(async () =>
+                {
+                    start.Wait();
+                    await RefreshAsync(i);
+                }))
+                .ToArray();
+
+            start.Set();
+            await Task.WhenAll(callers);
+
+            await using var verify = new AppDbContext(options);
+            var now = DateTime.UtcNow;
+            var live = await verify.RefreshTokens.IgnoreQueryFilters()
+                .Where(t => t.UserId == userId && !t.IsRevoked && t.ExpiresAt > now)
+                .CountAsync();
+
+            Assert.True(live <= 5, $"round {round}: {live} live sessions after {concurrency} concurrent refreshes of one token.");
+        }
+    }
 }
