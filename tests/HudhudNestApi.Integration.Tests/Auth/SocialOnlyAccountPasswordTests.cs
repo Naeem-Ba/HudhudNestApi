@@ -91,8 +91,10 @@ public sealed class SocialOnlyAccountPasswordTests
         var forgot = await client.PostAsJsonAsync("/api/auth/forgot-password", new { email });
         Assert.Equal(HttpStatusCode.OK, forgot.StatusCode);
 
+        // The account never chose a language, so the reset mail uses the default (Arabic) subject.
+        var resetSubject = HudhudNestApi.Application.Auth.Commands.ForgotPassword.PasswordResetEmailTemplate.SubjectFor(null);
         var message = Assert.Single(mail.Sent, m => string.Equals(m.To, email, StringComparison.OrdinalIgnoreCase)
-            && m.Subject.Contains("password", StringComparison.OrdinalIgnoreCase));
+            && m.Subject == resetSubject);
         var link = System.Net.WebUtility.HtmlDecode(
             Regex.Match(message.Text ?? message.Html, @"https?://[^""'<>\s]+").Value);
         var query = new Uri(link).Query.TrimStart('?')
