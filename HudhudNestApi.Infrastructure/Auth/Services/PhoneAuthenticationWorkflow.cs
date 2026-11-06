@@ -315,7 +315,8 @@ public sealed class PhoneAuthenticationWorkflow : IPhoneAuthenticationWorkflow
             return Fail("ACCOUNT_UNAVAILABLE");
         }
         user.LastLoginAt = _clock.GetUtcNow().UtcDateTime;
-        await _users.UpdateAsync(user);
+        // Bookkeeping only: a sign-in from another device at the same instant must not fail this one.
+        await BestEffortUserUpdate.UpdateAsync(_users, _db, user);
         await _audit.LogAsync(user.Id, AuditActions.PhoneLoginSucceeded, ipAddress,
             newValue: "{\"outcome\":\"succeeded\"}", ct: ct);
         return await IssueSessionAsync(user, ipAddress, ct);

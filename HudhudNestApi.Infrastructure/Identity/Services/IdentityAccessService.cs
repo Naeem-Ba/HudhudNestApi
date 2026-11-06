@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using HudhudNestApi.Application.Auth.Models;
 using HudhudNestApi.Infrastructure.Identity.Entities;
+using HudhudNestApi.Infrastructure.Persistence;
 
 namespace HudhudNestApi.Infrastructure.Identity.Services;
 
@@ -12,11 +13,13 @@ public sealed class IdentityAccessService
 {
     private readonly UserManager<ApplicationUser> _users;
     private readonly SystemRoleGuarantee _roles;
+    private readonly AppDbContext _db;
 
-    public IdentityAccessService(UserManager<ApplicationUser> users, SystemRoleGuarantee roles)
+    public IdentityAccessService(UserManager<ApplicationUser> users, SystemRoleGuarantee roles, AppDbContext db)
     {
         _users = users;
         _roles = roles;
+        _db = db;
     }
 
     /// <summary>
@@ -89,7 +92,11 @@ public sealed class IdentityAccessService
             // Reset failed attempts on successful password verification
             if (user.AccessFailedCount > 0)
             {
-                await _users.ResetAccessFailedCountAsync(user);
+                var reset = await _users.ResetAccessFailedCountAsync(user);
+                if (!reset.Succeeded)
+                {
+                    BestEffortUserUpdate.DiscardPendingChange(_db, user);
+                }
             }
             return LoginPasswordVerificationResult.Success;
         }
@@ -98,6 +105,7 @@ public sealed class IdentityAccessService
         var result = await _users.AccessFailedAsync(user);
         if (!result.Succeeded)
         {
+            BestEffortUserUpdate.DiscardPendingChange(_db, user);
             // Log but don't fail the password check; the count update failed but we should still reject
             return LoginPasswordVerificationResult.InvalidPassword;
         }
@@ -166,6 +174,6 @@ public sealed class IdentityAccessService
         var user = await IdentityAdapterMapping.RequireAsync(_users, id, ct);
         user.LastLoginAt = loginAtUtc;
         user.UpdatedAt = loginAtUtc;
-        return IdentityAdapterMapping.Result(await _users.UpdateAsync(user));
+        return IdentityAdapterMapping.Result(await BestEffortUserUpdate.UpdateAsync(_users, _db, user));
     }
 }
