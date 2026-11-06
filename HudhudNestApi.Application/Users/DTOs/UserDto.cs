@@ -15,7 +15,7 @@ public sealed class UserDto
     public string? PhoneNumber { get; set; }
     public string? ProfileImageUrl { get; set; }
 
-    public string PreferredLanguage { get; set; } = "en";
+    public string PreferredLanguage { get; set; } = "ar";
     public string PreferredCurrency { get; set; } = "EUR";
 
     /// <summary>

@@ -20,6 +20,12 @@ public sealed class UserPreferencesTests
     }
 
     [Fact]
+    public void ANewAccount_StartsInArabic_TheDefaultDisplayLanguage()
+    {
+        Assert.Equal("ar", NewAccount().PreferredLanguage);
+    }
+
+    [Fact]
     public void ChoosingOnlyTheLanguage_DoesNotMarkTheCurrencyAsChosen_AndViceVersa()
     {
         var account = NewAccount();

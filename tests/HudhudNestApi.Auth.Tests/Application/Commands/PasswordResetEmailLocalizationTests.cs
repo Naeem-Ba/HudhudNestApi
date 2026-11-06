@@ -36,10 +36,10 @@ public sealed class PasswordResetEmailLocalizationTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("fr")]
-    public void UnknownLanguage_KeepsTheOriginalEnglishWording(string? lang)
+    public void UnknownLanguage_FallsBackToArabic_TheDefaultDisplayLanguage(string? lang)
     {
-        Assert.Equal("Reset your password", PasswordResetEmailTemplate.SubjectFor(lang));
-        Assert.Contains("lang=\"en\"", PasswordResetEmailTemplate.BuildHtml(lang, null, Url));
+        Assert.Equal("إعادة تعيين كلمة المرور في هدهد نيست", PasswordResetEmailTemplate.SubjectFor(lang));
+        Assert.Contains("lang=\"ar\"", PasswordResetEmailTemplate.BuildHtml(lang, null, Url));
     }
 
     [Fact]
@@ -78,8 +78,8 @@ public sealed class PasswordResetEmailLocalizationTests
     [Theory]
     [InlineData("de", "en", "HudhudNest: Passwort zurücksetzen")]   // the account's own choice wins
     [InlineData(null, "de", "HudhudNest: Passwort zurücksetzen")]    // else the site language of the request
-    [InlineData(null, null, "Reset your password")]                  // else the original wording
-    public async Task Handler_PicksTheLanguage_AccountFirst_ThenRequest_ThenEnglish(string? account, string? request, string subject)
+    [InlineData(null, null, "إعادة تعيين كلمة المرور في هدهد نيست")] // else Arabic, the default display language
+    public async Task Handler_PicksTheLanguage_AccountFirst_ThenRequest_ThenArabic(string? account, string? request, string subject)
     {
         var (handler, sender) = Build(account);
 

@@ -4,14 +4,14 @@ using HudhudNestApi.Domain.Users.Constants;
 namespace HudhudNestApi.Application.Auth.Commands.ForgotPassword;
 
 /// <summary>
-/// The password-reset message in the reader's language (ar / en / de). English is the original
-/// wording and what an unknown language receives. The product is called HudhudNest (the message
+/// The password-reset message in the reader's language (ar / en / de). An unknown or missing
+/// language receives Arabic, the product's default display language. The product is called HudhudNest (the message
 /// used to say "HudhudNestApi", the repository name).
 /// </summary>
 public static class PasswordResetEmailTemplate
 {
     public static string Resolve(string? language) =>
-        SupportedPreferences.NormalizeLanguage(language) ?? SupportedPreferences.English;
+        SupportedPreferences.NormalizeLanguage(language) ?? SupportedPreferences.FallbackLanguage;
 
     public static string SubjectFor(string? language) => Resolve(language) switch
     {

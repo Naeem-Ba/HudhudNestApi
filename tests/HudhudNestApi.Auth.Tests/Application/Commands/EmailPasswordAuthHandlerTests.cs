@@ -973,11 +973,12 @@ public sealed class ForgotPasswordCommandHandlerTests
         emailSender.Verify(
             x => x.SendEmailAsync(
                 "naeem@example.com",
-                "Reset your password",
+                // No account or request language: Arabic, the default display language.
+                "إعادة تعيين كلمة المرور في هدهد نيست",
                 It.Is<string>(
                     body =>
                         body.Contains(
-                            "Reset your password"))),
+                            "إعادة تعيين كلمة المرور"))),
             Times.Once);
     }
 }

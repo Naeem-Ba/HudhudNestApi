@@ -14,11 +14,11 @@ public static class SecurityAlertTemplates
     private const string Rule = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     private const string ShortRule = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
 
-    /// <summary>The language a security email uses when the account has not chosen one.</summary>
-    public const string LegacyLanguage = SupportedPreferences.English;
+    /// <summary>The language a security email uses when the account has not chosen one: Arabic, the default display language.</summary>
+    public const string DefaultLanguage = SupportedPreferences.FallbackLanguage;
 
     public static string Resolve(string? language) =>
-        SupportedPreferences.NormalizeLanguage(language) ?? LegacyLanguage;
+        SupportedPreferences.NormalizeLanguage(language) ?? DefaultLanguage;
 
     private static string Stamp(DateTime utc, string lang) =>
         lang == SupportedPreferences.English

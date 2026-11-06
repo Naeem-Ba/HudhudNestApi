@@ -6,7 +6,7 @@ using HudhudNestApi.Infrastructure.Email;
 
 namespace HudhudNestApi.Auth.Tests.Infrastructure.Email;
 
-/// <summary>Security emails are written in the account owner's language; unknown or unchosen stays English.</summary>
+/// <summary>Security emails are written in the account owner's language; unknown or unchosen falls back to Arabic, the default display language.</summary>
 public sealed class SecurityAlertLocalizationTests
 {
     private static (SecurityAlertEmailService Service, List<(string Subject, string Body)> Sent) Create(
@@ -45,7 +45,7 @@ public sealed class SecurityAlertLocalizationTests
     }
 
     [Fact]
-    public async Task AnAccountThatNeverChose_OrWithNoResolver_KeepsTheEnglishWording()
+    public async Task AnAccountThatNeverChose_OrWithNoResolver_GetsTheArabicWording()
     {
         var (withNull, sentNull) = Create(_ => null);
         var (withoutResolver, sentNone) = Create(null);
@@ -53,18 +53,19 @@ public sealed class SecurityAlertLocalizationTests
         await withNull.SendAccountLockedAlertAsync("u@example.com", "U", DateTime.UtcNow.AddMinutes(15), "1.2.3.4");
         await withoutResolver.SendAccountLockedAlertAsync("u@example.com", "U", DateTime.UtcNow.AddMinutes(15), "1.2.3.4");
 
-        Assert.Equal("🔴 CRITICAL: Your Account Has Been Locked", sentNull.Single().Subject);
-        Assert.Equal("🔴 CRITICAL: Your Account Has Been Locked", sentNone.Single().Subject);
+        var arabic = SecurityAlertTemplates.AccountLocked("ar", "U", null, null, 15).Subject;
+        Assert.Equal(arabic, sentNull.Single().Subject);
+        Assert.Equal(arabic, sentNone.Single().Subject);
     }
 
     [Fact]
-    public async Task ALookupFailure_FallsBackToEnglish_AndStillSendsTheAlert()
+    public async Task ALookupFailure_FallsBackToArabic_AndStillSendsTheAlert()
     {
         var (service, sent) = Create(_ => throw new InvalidOperationException("db down"));
 
         await service.SendPasswordChangedConfirmationAsync("u@example.com", "U");
 
-        Assert.Equal("✅ Password Changed Successfully", sent.Single().Subject);
+        Assert.Equal("✅ تم تغيير كلمة المرور بنجاح", sent.Single().Subject);
     }
 
     [Theory]
@@ -125,8 +126,8 @@ public sealed class SecurityAlertLocalizationTests
     [InlineData(null)]
     [InlineData("fr")]
     [InlineData("")]
-    public void AnUnsupportedLanguage_ResolvesToEnglish(string? language)
+    public void AnUnsupportedLanguage_ResolvesToArabic(string? language)
     {
-        Assert.Equal("en", SecurityAlertTemplates.Resolve(language));
+        Assert.Equal("ar", SecurityAlertTemplates.Resolve(language));
     }
 }

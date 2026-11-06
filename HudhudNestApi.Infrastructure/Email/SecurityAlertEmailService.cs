@@ -32,12 +32,12 @@ public sealed class SecurityAlertEmailService : ISecurityAlertService
     /// </summary>
     public static string SafeName(string userName) => System.Net.WebUtility.HtmlEncode(userName);
 
-    /// <summary>The account owner's language; English (the original wording) when unknown or on any lookup failure.</summary>
+    /// <summary>The account owner's language; Arabic (the default display language) when unknown or on any lookup failure.</summary>
     private async Task<string> LanguageOfAsync(string userEmail, CancellationToken ct)
     {
         if (_languages is null)
         {
-            return SecurityAlertTemplates.LegacyLanguage;
+            return SecurityAlertTemplates.DefaultLanguage;
         }
 
         try
@@ -46,8 +46,8 @@ public sealed class SecurityAlertEmailService : ISecurityAlertService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex, "Security alert language lookup failed; using English.");
-            return SecurityAlertTemplates.LegacyLanguage;
+            _logger.LogWarning(ex, "Security alert language lookup failed; using Arabic.");
+            return SecurityAlertTemplates.DefaultLanguage;
         }
     }
 

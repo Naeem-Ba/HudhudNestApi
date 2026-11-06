@@ -32,7 +32,7 @@ public sealed class RecipientLanguageResolver : IRecipientLanguageResolver
 
         if (row is null || row.PreferredLanguageSetAt is null)
         {
-            // Never chose: the stored "en" is only the column default (see SupportedPreferences).
+            // Never chose: the stored value is only the initial default ("en" on older accounts, "ar" on newer ones).
             return SupportedPreferences.FallbackLanguage;
         }
 
