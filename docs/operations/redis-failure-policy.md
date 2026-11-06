@@ -15,6 +15,26 @@ Status: repository-side policy defined. Production readiness remains failed unti
 | SignalR backplane | cross-instance realtime fanout | low to medium | medium | HTTP API stays up; same-instance behavior may continue; cross-instance delivery may degrade | degraded | client reconnect guidance; no durable message guarantee | managed failover window | websocket reconnect/degraded realtime | cross-instance message delivery resumes |
 | Redis readiness | dependency signal | operational | medium | expose degraded dependency without restarting app | degraded | liveness remains independent | outage duration | `/health/live=200`; readiness/dependency state reflects Redis | readiness recovers without process restart |
 
+## Observed behaviour during a Redis outage (load test 2026-11-04, finding D15)
+
+Measured with the Redis store stopped (`OutputCache` fail-open already fixed in D12):
+
+| Traffic | Rate-limit policy backend | Result during the outage | Matches the table above |
+| --- | --- | --- | --- |
+| Public reads (search, geo-search, public agency pages, lookups) | in process (`PublicReadPolicy`, launch audit A6-002) | normal responses, `429` only past the per-instance limit | yes (public expensive search, bounded fail open) |
+| Login, OTP, password reset, register, refresh, logout | Redis | `503` ("rate limiter backend is unavailable") | yes (auth and OTP rate limiting: `503` when protection cannot be guaranteed) |
+| Every other Redis-limited write (`user-write`, `visits`, `reviews`, `service-requests`, `contact`, ...) | Redis | `503` | **not stated in the table**: it is the same fail-closed behaviour as auth, applied to ordinary writes |
+| `/health/live` | none | `200` | yes |
+| `/health/ready` | Redis dependency check | `503` while Redis is down | partly: readiness reflects Redis and liveness does not, but the table calls the Redis readiness mode "degraded"; `503` on `/health/ready` takes the instance out of rotation, so confirm that is wanted |
+
+The first, second and `/health/live` rows are the intended policy. Two points are **decisions still open**. Writes (third row): an ordinary
+signed-in write (a favourite, a profile edit) is refused for the whole outage although a per-instance limiter could
+bound it. Moving a policy to a per-instance fallback is a one-line change in `RedisRateLimitingDefaults` (`InProcess`
+or a bounded fallback) but weakens the abuse limit during the outage, so it is not done without an explicit decision.
+Options for writes: (a) keep fail closed for all writes (current, simplest, longest user-visible outage); (b) bounded per-instance
+fallback for low-risk writes only (favourites, profile, notifications), auth/OTP/destructive stay fail closed; (c) per-instance
+fallback for every write except auth/OTP.
+
 ## Non-Negotiable Security Rules
 
 - Authentication and OTP endpoints must never become unlimited because Redis is down.

@@ -292,6 +292,29 @@ public sealed class ExceptionHandlingMiddleware
                 message = "إحدى القيم المرسلة غير مقبولة (رقم كبير جداً أو نص يحوي رموزاً غير صالحة)."
             });
         }
+        catch (Exception ex) when (!context.RequestAborted.IsCancellationRequested && IsDatabaseUnavailable(ex))
+        {
+            // Load-test finding D14. The database could not be reached or refused the connection (it is restarting,
+            // failing over, or out of connections). That is a temporary condition of the service, not a bug in the
+            // request, so it is a 503 with Retry-After - the answer clients, load balancers and uptime checks know to
+            // retry - rather than a 500, which they count as a defect. Details stay in the log only.
+            _logger.LogError(
+                ex,
+                "Database unavailable for {Method} {Path}",
+                context.Request.Method,
+                context.Request.Path);
+
+            context.Response.Headers.RetryAfter = DatabaseUnavailableRetryAfterSeconds.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+
+            await WriteJson(context, StatusCodes.Status503ServiceUnavailable, new
+            {
+                title = "Service Unavailable",
+                status = StatusCodes.Status503ServiceUnavailable,
+                message = "الخدمة غير متاحة مؤقتاً. أعد المحاولة بعد قليل.",
+                code = "SERVICE_UNAVAILABLE"
+            });
+        }
         catch (Exception ex)
         {
             _logger.LogError(
@@ -326,6 +349,46 @@ public sealed class ExceptionHandlingMiddleware
             await WriteJson(context, StatusCodes.Status500InternalServerError, body);
         }
     }
+
+    /// <summary>Seconds a client is asked to wait before retrying after a database outage.</summary>
+    internal const int DatabaseUnavailableRetryAfterSeconds = 5;
+
+    /// <summary>
+    /// True when the failure (or something it wraps) means the database cannot be used right now: a connection that
+    /// could not be opened or broke (Npgsql reports those as transient, non-server errors: socket, I/O, timeout, pool
+    /// exhausted) or a server answer that says it is shutting down, starting up, or full. Query errors, constraint
+    /// violations and bad input are not in this set.
+    /// </summary>
+    internal static bool IsDatabaseUnavailable(Exception ex)
+    {
+        for (var current = ex; current is not null; current = current.InnerException)
+        {
+            switch (current)
+            {
+                case PostgresException postgres:
+                    if (IsUnavailableSqlState(postgres.SqlState))
+                    {
+                        return true;
+                    }
+
+                    break;
+                case NpgsqlException { IsTransient: true }:
+                    return true;
+                case AggregateException aggregate when aggregate.InnerExceptions.Any(IsDatabaseUnavailable):
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsUnavailableSqlState(string? sqlState) =>
+        sqlState is not null &&
+        (sqlState.StartsWith("08", StringComparison.Ordinal) // connection exception class
+         || sqlState is PostgresErrorCodes.TooManyConnections // 53300
+             or PostgresErrorCodes.AdminShutdown // 57P01
+             or PostgresErrorCodes.CrashShutdown // 57P02
+             or PostgresErrorCodes.CannotConnectNow); // 57P03
 
     private static bool IsRejectedInputValue(Exception ex, out string? sqlState)
     {
