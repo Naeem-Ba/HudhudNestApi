@@ -84,9 +84,9 @@ public sealed class AdminActionEmailNotifier : IAdminActionNotifier
 
     private async Task<string> LanguageAsync(string email, CancellationToken ct)
     {
-        if (_languages is null) return SecurityAlertTemplates.LegacyLanguage;
+        if (_languages is null) return SecurityAlertTemplates.DefaultLanguage;
         try { return SecurityAlertTemplates.Resolve(await _languages.GetLanguageByEmailAsync(email, ct)); }
-        catch (Exception ex) when (ex is not OperationCanceledException) { return SecurityAlertTemplates.LegacyLanguage; }
+        catch (Exception ex) when (ex is not OperationCanceledException) { return SecurityAlertTemplates.DefaultLanguage; }
     }
 
     private static string Label(ApplicationUser? user, bool mask)

@@ -121,7 +121,7 @@ public sealed class ForgotPasswordCommandHandler
 
             // The language the account holder chose wins (anyone can request a reset for someone
             // else's address, and the mail goes to the holder). Otherwise the site language the
-            // request came from; otherwise the original English wording.
+            // request came from; otherwise Arabic (the default display language).
             var accountLanguage =
                 _languageResolver is null
                     ? null

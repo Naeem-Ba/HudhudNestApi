@@ -36,10 +36,10 @@ public sealed class AdminActionEmailTests
     }
 
     [Fact]
-    public void UnknownLanguage_FallsBackToEnglish()
+    public void UnknownLanguage_FallsBackToArabic()
     {
         var (subject, _) = AdminActionEmailNotifier.Compose("fr", AdminAccountAction.Disabled, true, "a", "b", null);
-        Assert.Contains("Security notice", subject);
+        Assert.Contains("تنبيه أمني", subject);
     }
 
     [Fact]

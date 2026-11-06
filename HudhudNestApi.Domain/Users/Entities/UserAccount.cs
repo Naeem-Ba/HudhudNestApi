@@ -39,8 +39,10 @@ public sealed class UserAccount
 
     public string? WhatsAppNumber { get; private set; }
 
+    // New accounts start in Arabic, the product's default display language. Accounts created
+    // before this default carry "en" here without having chosen it (PreferredLanguageSetAt is null).
     public string PreferredLanguage { get; private set; } =
-        "en";
+        SupportedPreferences.FallbackLanguage;
 
     public string PreferredCurrency { get; private set; } =
         "EUR";
