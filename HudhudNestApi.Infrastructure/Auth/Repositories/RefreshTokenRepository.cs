@@ -193,6 +193,18 @@ public sealed class RefreshTokenRepository
             return null;
         }
 
+        // Refreshes of one account run one after another. A replay inside the grace window adds a sibling
+        // session and then trims to Jwt:MaxActiveSessions; two such transactions at once cannot see each
+        // other's uncommitted sibling, so each trims against a stale view and together they leave more live
+        // sessions than allowed. The lock is taken first in the transaction (before any row is locked) so it
+        // cannot deadlock with the row locks taken later, and it is released at commit.
+        if (_db.Database.CurrentTransaction is not null && _db.Database.IsNpgsql())
+        {
+            await _db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({"refresh-sessions:" + token.UserId.ToString("N")}, 0))",
+                ct);
+        }
+
         if (!token.IsRevoked &&
             token.ExpiresAt > now)
         {
