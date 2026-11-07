@@ -22,5 +22,14 @@ public sealed class RedisFixedWindowRateLimitPolicyOptions
     /// </summary>
     public bool? InProcess { get; set; }
 
+    /// <summary>
+    /// What happens when Redis cannot count a request. <c>true</c>: count it in this process's memory with
+    /// the same limit and keep serving (ordinary writes). <c>false</c>: answer 503 (login, OTP, password
+    /// reset, refresh and the like, which must never become unlimited). Left unset in configuration, a
+    /// policy keeps the default from RedisRateLimitingDefaults. Decision of 2026-11-07, see
+    /// docs/operations/redis-failure-policy.md.
+    /// </summary>
+    public bool? FallbackWhenUnavailable { get; set; }
+
     public TimeSpan Window => TimeSpan.FromSeconds(WindowSeconds);
 }

@@ -5,13 +5,13 @@ internal static class RedisRateLimitingDefaults
     public static IReadOnlyDictionary<string, RedisFixedWindowRateLimitPolicyOptions> Policies { get; }
         = new Dictionary<string, RedisFixedWindowRateLimitPolicyOptions>(StringComparer.OrdinalIgnoreCase)
         {
-            ["send-otp"] = Policy(3, TimeSpan.FromMinutes(15)),
-            ["verify-otp"] = Policy(5, TimeSpan.FromMinutes(15)),
-            ["auth-password-reset"] = Policy(3, TimeSpan.FromHours(1)),
+            ["send-otp"] = FailClosedPolicy(3, TimeSpan.FromMinutes(15)),
+            ["verify-otp"] = FailClosedPolicy(5, TimeSpan.FromMinutes(15)),
+            ["auth-password-reset"] = FailClosedPolicy(3, TimeSpan.FromHours(1)),
             // Own buckets so confirming/resending a confirmation link no longer drains the
             // forgot-password budget (see RateLimitingRegistration.cs).
-            ["email-verify"] = Policy(20, TimeSpan.FromHours(1)),
-            ["email-confirmation-resend"] = Policy(5, TimeSpan.FromHours(1)),
+            ["email-verify"] = FailClosedPolicy(20, TimeSpan.FromHours(1)),
+            ["email-confirmation-resend"] = FailClosedPolicy(5, TimeSpan.FromHours(1)),
             ["contact"] = Policy(5, TimeSpan.FromHours(1)),
             // Landing-page waitlist / lead capture — same cadence as "contact".
             ["leads-submit"] = Policy(5, TimeSpan.FromHours(1)),
@@ -21,8 +21,11 @@ internal static class RedisRateLimitingDefaults
             ["marketing-events"] = Policy(60, TimeSpan.FromMinutes(1)),
             // Browser CSP violation reports (QA phase 17, P17-D05).
             ["csp-report"] = Policy(30, TimeSpan.FromMinutes(1)),
-            ["auth-login"] = Policy(10, TimeSpan.FromMinutes(1)),
-            ["auth-register"] = Policy(5, TimeSpan.FromMinutes(10)),
+            ["auth-login"] = FailClosedPolicy(10, TimeSpan.FromMinutes(1)),
+            ["auth-register"] = FailClosedPolicy(5, TimeSpan.FromMinutes(10)),
+            // Refresh and logout fall back to a per-instance count like ordinary writes (owner's decision of
+            // 2026-11-07): a refresh token is 256 random bits, so this limit bounds load, not guessing, and
+            // failing it closed would sign every user out of a working app once the access token expires.
             ["auth-refresh"] = Policy(20, TimeSpan.FromMinutes(5)),
             ["auth-logout"] = Policy(20, TimeSpan.FromMinutes(5)),
             ["public-search"] = PublicReadPolicy(120, TimeSpan.FromMinutes(1)),
@@ -63,7 +66,7 @@ internal static class RedisRateLimitingDefaults
             // Security audit 2026-10-03 (F-06, F-02) — see RateLimitingRegistration's in-memory
             // fallback policies for the full rationale.
             ["user-write"] = Policy(60, TimeSpan.FromMinutes(1)),
-            ["auth-password-change"] = Policy(5, TimeSpan.FromHours(1)),
+            ["auth-password-change"] = FailClosedPolicy(5, TimeSpan.FromHours(1)),
             // Agency invite by e-mail/phone — see RateLimitingRegistration's in-memory fallback.
             ["agency-invite"] = Policy(20, TimeSpan.FromHours(1)),
             // Social Sharing / UTM attribution / Social Distribution — see
@@ -89,6 +92,23 @@ internal static class RedisRateLimitingDefaults
         return policy;
     }
 
+    /// <summary>
+    /// Sign-in, OTP, registration, password reset/change and e-mail confirmation: when Redis cannot count the
+    /// request the answer is 503, never "unlimited" (docs/operations/redis-failure-policy.md, security rules).
+    /// </summary>
+    private static RedisFixedWindowRateLimitPolicyOptions FailClosedPolicy(
+        int permitLimit,
+        TimeSpan window)
+    {
+        var policy = Policy(permitLimit, window);
+        policy.FallbackWhenUnavailable = false;
+        return policy;
+    }
+
+    /// <summary>
+    /// Every other policy counts in process memory with the same limit while Redis is unavailable, so ordinary
+    /// writes keep working through an outage (decision of 2026-11-07, option c of finding D15).
+    /// </summary>
     private static RedisFixedWindowRateLimitPolicyOptions Policy(
         int permitLimit,
         TimeSpan window,
@@ -97,6 +117,7 @@ internal static class RedisRateLimitingDefaults
         {
             PermitLimit = permitLimit,
             WindowSeconds = checked((int)window.TotalSeconds),
-            QueueLimit = queueLimit
+            QueueLimit = queueLimit,
+            FallbackWhenUnavailable = true
         };
 }

@@ -128,7 +128,7 @@ HudhudNestApi هي الواجهة الخلفية الوحيدة لمنصّة ع�
 | **الأمان** | JWT + Refresh مدوَّر بكشف إعادة الاستخدام، CSRF مزدوج، رؤوس أمان، HSTS (Production **وStaging**)، تحديد معدل Redis لكل نقطة حساسة، HIBP، توقيع ثنائي للصور، حواجز فصل البيئات | `Program.cs`، `PasswordSecurityService.cs`، `ProductionEnvironmentGuard.cs`، `StagingEnvironmentGuard.cs` |
 | **الأداء** | SLO: 95% ≤ 500ms؛ **Output Cache عبر Redis بسياسات مسمّاة**؛ **ضغط Brotli/Gzip حتى على HTTPS**؛ كاش Security Stamp | `OutputCacheRegistration.cs`، `Program.cs:126` |
 | **التوسّع** | بلا حالة على مستوى العملية؛ SignalR backplane وOutput Cache وتحديد المعدل موزَّعة عبر Redis؛ **أقفال استشارية (Advisory Locks)** للحصص وحدّ إرسال OTP؛ **`BackgroundJobLock`** لكل عامل خلفي | `ListingQuotaLock`، `BackgroundJobLockKeys.cs` |
-| **الموثوقية/التعافي** | RPO ≤ 60 دقيقة، RTO ≤ 120 دقيقة (سير عمل تعافٍ آلي)؛ **النسخ الاحتياطي يعمل مرة يوميًا** (#236) — راجع تنبيه القسم 6.5؛ Redis HA بـ Sentinel مُختبَر في CI؛ **فشل دورة عامل خلفي لا يوقف المضيف** (#204) | `database-backup.yml`، `redis-ha-failover.yml` |
+| **الموثوقية/التعافي** | RPO ≤ 24 ساعة (قرار المالك 2026-09-28، النسخ الاحتياطي يومي، تفشل الأتمتة عند 25 ساعة)، RTO ≤ 120 دقيقة (سير عمل تعافٍ آلي) — المرجع الوحيد `docs/operations/rpo-rto.md`؛ Redis HA بـ Sentinel مُختبَر في CI؛ **فشل دورة عامل خلفي لا يوقف المضيف** (#204) | `database-backup.yml`، `redis-ha-failover.yml` |
 | **القابلية للصيانة** | فصل طبقات مفروض آليًا (133 اختبار معماري)؛ CQRS موحّد | `tests/HudhudNestApi.Architecture.Tests` |
 | **القابلية للنشر** | صورة `chiseled` متعددة المراحل؛ `production-gate.yml`؛ **نشر Production يدوي فقط**؛ Rollback مؤتمت | `Dockerfile`، `rollback-production.yml` |
 | **إمكانية المراقبة** | OpenTelemetry من أول سطر؛ مقاييس `hudhudnest_*`؛ **عدّادات النشر الاجتماعي وOTP** وتنبيهات؛ تنقيح (Redaction) في الـ Collector | `observability/` |
@@ -484,7 +484,7 @@ HudhudNestApi.Infrastructure ──implements──▶ Application ; ──▶ D
 
 | الهدف | القيمة | آلية القياس |
 |---|---:|---|
-| **RPO** | ≤ 60 دقيقة (التصميم) | **تنبيه:** النسخ الاحتياطي صار **يوميًا** (#236)؛ يجب مطابقة RPO المعتمد مع هذا الجدول **[مراجعة مطلوبة]** |
+| **RPO** | ≤ 24 ساعة | نسخ يومي (#236)؛ المرجع `docs/operations/rpo-rto.md`؛ مراقب dead-man خارجي ينذر عند 26 ساعة |
 | **RTO** | ≤ 120 دقيقة | سير تعافٍ آلي يُخرج `restore-drill-evidence.json` |
 | بوابة الإصدار | إلزامية | `production-gate.yml` |
 | Rollback | موثَّق | `rollback-production.yml` + `application-rollback-runbook.md`؛ لا downgrade لترحيلات EF (إضافية فقط) |

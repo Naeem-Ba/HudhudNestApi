@@ -22,18 +22,30 @@ Measured with the Redis store stopped (`OutputCache` fail-open already fixed in 
 | Traffic | Rate-limit policy backend | Result during the outage | Matches the table above |
 | --- | --- | --- | --- |
 | Public reads (search, geo-search, public agency pages, lookups) | in process (`PublicReadPolicy`, launch audit A6-002) | normal responses, `429` only past the per-instance limit | yes (public expensive search, bounded fail open) |
-| Login, OTP, password reset, register, refresh, logout | Redis | `503` ("rate limiter backend is unavailable") | yes (auth and OTP rate limiting: `503` when protection cannot be guaranteed) |
-| Every other Redis-limited write (`user-write`, `visits`, `reviews`, `service-requests`, `contact`, ...) | Redis | `503` | **not stated in the table**: it is the same fail-closed behaviour as auth, applied to ordinary writes |
+| Login, OTP, password reset/change, register, e-mail confirmation | Redis | `503` ("rate limiter backend is unavailable") | yes (auth and OTP rate limiting: `503` when protection cannot be guaranteed) |
+| Token refresh, logout | Redis, with a per-instance fallback | `200`/`429` on an in-process count (decision of 2026-11-07, see below) | yes (refresh tokens are 256 random bits; the limit bounds load, not guessing) |
+| Every other Redis-limited write (`user-write`, `visits`, `reviews`, `service-requests`, `contact`, ...) | Redis, with a per-instance fallback | **`200`/`429` on a count in this process's memory with the same limit** (decision of 2026-11-07, option c below) | yes |
 | `/health/live` | none | `200` | yes |
 | `/health/ready` | Redis dependency check | `503` while Redis is down | partly: readiness reflects Redis and liveness does not, but the table calls the Redis readiness mode "degraded"; `503` on `/health/ready` takes the instance out of rotation, so confirm that is wanted |
 
-The first, second and `/health/live` rows are the intended policy. Two points are **decisions still open**. Writes (third row): an ordinary
-signed-in write (a favourite, a profile edit) is refused for the whole outage although a per-instance limiter could
-bound it. Moving a policy to a per-instance fallback is a one-line change in `RedisRateLimitingDefaults` (`InProcess`
-or a bounded fallback) but weakens the abuse limit during the outage, so it is not done without an explicit decision.
-Options for writes: (a) keep fail closed for all writes (current, simplest, longest user-visible outage); (b) bounded per-instance
-fallback for low-risk writes only (favourites, profile, notifications), auth/OTP/destructive stay fail closed; (c) per-instance
-fallback for every write except auth/OTP.
+The first, second and `/health/live` rows are the intended policy.
+
+**Decision 1, ordinary writes (taken 2026-11-07, option c).** Every Redis-limited write policy except the authentication family
+counts in this process's memory while Redis cannot answer, with the limit it has on Redis (`FallbackWhenUnavailable` on the policy,
+default `true`). A favourite, a profile edit, a visit request or a review keeps working through an outage. With one API instance the count
+is exact; with several each instance counts on its own, so the effective limit is multiplied by the instance count for the duration of
+the outage. A warning line is logged at most every 30 s while the fallback is active. The fail-closed set (`FallbackWhenUnavailable = false`,
+answers `503`) is exactly: `send-otp`, `verify-otp`, `auth-password-reset`, `email-verify`, `email-confirmation-resend`, `auth-login`,
+`auth-register`, `auth-password-change`. `auth-refresh` and `auth-logout` fall back too (owner's decision, 2026-11-07): a refresh token is
+256 random bits, so its limit bounds load rather than guessing, and failing it closed would sign every user out of a working app as soon as
+the access token expires during the outage. A test pins that list, so adding a policy to it or removing one is a
+visible change. The other options that were considered: (a) keep fail closed for all writes (simplest, longest visible outage);
+(b) fallback for low-risk writes only (favourites, profile, notifications), destructive ones stay closed.
+
+**Decision 2, `/health/ready` (2026-11-07).** It stays honest and answers `503` while Redis is down; the production gate asserts that on
+purpose. The platform health check must therefore not use it: Render's Health Check Path was `/health/ready`, which on a single instance
+turns a Redis outage into a fully unavailable site although public reads and ordinary writes still work. The owner changed it to `/health/live`
+in the Render dashboard on 2026-11-07 (Settings > Health Check Path); `/health/ready` is for monitoring and alerts only.
 
 ## Non-Negotiable Security Rules
 

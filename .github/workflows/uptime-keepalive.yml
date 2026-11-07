@@ -6,8 +6,10 @@ name: Uptime keepalive
 # failing probe, retries long enough to ride out a cold start or a deploy, and fails the run (GitHub
 # e-mails the repository owner) only when the API is still down after the whole retry window.
 #
-# Repository is public, so the 5-minute schedule costs no Actions minutes. GitHub may delay or skip
-# scheduled runs under load; that is why cron-job.org stays enabled as the primary pinger.
+# QA phase 19 (P19-D09): despite the 5-minute cron, GitHub ran this workflow only about 4-6 times a day
+# (10 scheduled runs in the first 3 weeks), so it is a best-effort second pinger, not an independent
+# guarantee. cron-job.org stays the primary pinger. If the repository is private, each run also bills
+# Actions minutes (one per run, rounded up).
 
 on:
   schedule:

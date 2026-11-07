@@ -77,7 +77,7 @@ report does not have credentials to close (see §13); and (2) `PropertyReview.Ra
 range, deliberately left unconstrained at the database level pending an explicit owner decision
 on what range to allow, per instruction.
 
-Backup/restore engineering is extensive and a local drill passed with RPO 1.72 min / RTO
+Backup/restore engineering is extensive and a local drill passed with backup age 1.72 min / RTO
 4.57 min, but the project's own checklist still lists the production-storage drill, protected
 GitHub environments, and the Render deploy-gate wiring as open — this report does not
 override that; see §13.
@@ -923,7 +923,7 @@ session):
   retention (48 hourly / 30 daily / 12 weekly / 12 monthly) — **implemented**, per
   `current-recovery-capability-assessment.md`.
 - A **local** end-to-end drill (`run-local-restore-drill.sh`) passed 2026-07-28 with measured
-  RPO 1.72 min and RTO 4.57 min — both well inside the declared 60 min / 120 min objectives.
+  backup age 1.72 min and RTO 4.57 min — both well inside the declared 24 h / 120 min objectives.
 - The project's own `production-recovery-readiness-checklist.md` lists several items still
   unchecked as of this audit: the hourly schedule and missed-run monitor proven *in production*,
   private durable object storage *proven* (vs. implemented), a drill against real production

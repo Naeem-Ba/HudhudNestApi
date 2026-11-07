@@ -31,8 +31,15 @@ jobs:
       BACKUP_REQUIRE_REMOTE_UPLOAD: "true"
       APPLICATION_COMMIT_SHA: ${{ github.sha }}
       BACKUP_OUTPUT_DIR: /workspace/artifacts/database-backup
+      # Dead-man heartbeat (Healthchecks.io or any compatible service). Optional until the owner creates the
+      # check; the external monitor, not GitHub, raises the alarm when no success ping arrives in time.
+      HEALTHCHECKS_PING_URL: ${{ secrets.HEALTHCHECKS_PING_URL }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Heartbeat start
+        shell: bash
+        run: bash scripts/database/ping-heartbeat.sh start
 
       - name: Require production backup configuration
         shell: bash
@@ -91,6 +98,10 @@ jobs:
             hudhudnest-database-recovery:local \
             bash /workspace/scripts/database/apply-retention.sh
             
+      - name: Heartbeat success
+        shell: bash
+        run: bash scripts/database/ping-heartbeat.sh success
+
       - name: Publish non-sensitive backup evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -102,6 +113,11 @@ jobs:
             artifacts/database-backup/*.manifest.json
             artifacts/database-backup/*result.json
             artifacts/database-backup/*verification.json
+
+      - name: Heartbeat failure
+        if: failure()
+        shell: bash
+        run: bash scripts/database/ping-heartbeat.sh fail
 
       - name: Alert on failure
         if: failure()

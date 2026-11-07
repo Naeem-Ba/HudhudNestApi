@@ -76,7 +76,7 @@ docker compose -f "${COMPOSE_FILE}" run --rm --no-deps \
   -e BACKUP_ID="${BACKUP_ID}" \
   -e DRILL_STARTED_EPOCH="${DRILL_STARTED_EPOCH}" \
   -e APPLICATION_SMOKE_DURATION_SECONDS="${APPLICATION_SMOKE_DURATION_SECONDS}" \
-  -e RPO_TARGET_SECONDS="${RPO_TARGET_SECONDS:-3600}" \
+  -e RPO_TARGET_SECONDS="${RPO_TARGET_SECONDS:-90000}" \
   -e RTO_TARGET_SECONDS="${RTO_TARGET_SECONDS:-7200}" \
   recovery-toolbox bash scripts/database/create-recovery-report.sh
 docker compose -f "${COMPOSE_FILE}" down -v --remove-orphans

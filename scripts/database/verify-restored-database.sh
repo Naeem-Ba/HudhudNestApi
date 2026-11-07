@@ -168,7 +168,7 @@ jq -n \
   --arg spatialDistanceMeters "${SPATIAL_DISTANCE//[[:space:]]/}" \
   --argjson durationSeconds "${DURATION_SECONDS}" \
   --argjson backupAgeSeconds "${BACKUP_AGE_SECONDS}" \
-  --argjson rpoTargetSeconds "${RPO_TARGET_SECONDS:-3600}" \
+  --argjson rpoTargetSeconds "${RPO_TARGET_SECONDS:-90000}" \
   --argjson rtoTargetSeconds "${RTO_TARGET_SECONDS:-7200}" \
   --argjson primaryKeyCount "${PRIMARY_KEY_COUNT}" \
   --argjson foreignKeyCount "${FOREIGN_KEY_COUNT}" \
