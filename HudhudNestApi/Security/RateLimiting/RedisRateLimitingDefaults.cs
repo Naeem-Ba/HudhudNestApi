@@ -23,8 +23,11 @@ internal static class RedisRateLimitingDefaults
             ["csp-report"] = Policy(30, TimeSpan.FromMinutes(1)),
             ["auth-login"] = FailClosedPolicy(10, TimeSpan.FromMinutes(1)),
             ["auth-register"] = FailClosedPolicy(5, TimeSpan.FromMinutes(10)),
-            ["auth-refresh"] = FailClosedPolicy(20, TimeSpan.FromMinutes(5)),
-            ["auth-logout"] = FailClosedPolicy(20, TimeSpan.FromMinutes(5)),
+            // Refresh and logout fall back to a per-instance count like ordinary writes (owner's decision of
+            // 2026-11-07): a refresh token is 256 random bits, so this limit bounds load, not guessing, and
+            // failing it closed would sign every user out of a working app once the access token expires.
+            ["auth-refresh"] = Policy(20, TimeSpan.FromMinutes(5)),
+            ["auth-logout"] = Policy(20, TimeSpan.FromMinutes(5)),
             ["public-search"] = PublicReadPolicy(120, TimeSpan.FromMinutes(1)),
             ["geo-search"] = PublicReadPolicy(60, TimeSpan.FromMinutes(1)),
             // RELEASE-BLOCKERS-AR.md B-7: GET /api/agencies/{slug} was anonymous with no
@@ -90,7 +93,7 @@ internal static class RedisRateLimitingDefaults
     }
 
     /// <summary>
-    /// Authentication, OTP, password reset, e-mail confirmation and token refresh: when Redis cannot count the
+    /// Sign-in, OTP, registration, password reset/change and e-mail confirmation: when Redis cannot count the
     /// request the answer is 503, never "unlimited" (docs/operations/redis-failure-policy.md, security rules).
     /// </summary>
     private static RedisFixedWindowRateLimitPolicyOptions FailClosedPolicy(

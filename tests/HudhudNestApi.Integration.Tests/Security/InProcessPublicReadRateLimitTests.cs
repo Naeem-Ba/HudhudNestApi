@@ -101,13 +101,13 @@ public sealed class InProcessPublicReadRateLimitTests
         Assert.Equal(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
     }
 
-    // Decision of 2026-11-07 (finding D15, option c): everything that is not authentication or OTP keeps working
+    // Decision of 2026-11-07 (finding D15, option c): everything that is not sign-in or OTP keeps working
     // through a Redis outage on a per-instance count. This list is the whole fail-closed set; a new policy that
     // belongs in it has to be added here on purpose.
     private static readonly string[] FailClosedPolicies =
     [
         "send-otp", "verify-otp", "auth-password-reset", "email-verify", "email-confirmation-resend",
-        "auth-login", "auth-register", "auth-refresh", "auth-logout", "auth-password-change"
+        "auth-login", "auth-register", "auth-password-change"
     ];
 
     [Fact(DisplayName = "Only authentication and OTP policies fail closed when Redis is down; every other policy falls back")]
@@ -174,6 +174,13 @@ public sealed class InProcessPublicReadRateLimitTests
         Assert.Equal(50, options.Policies["visits"].PermitLimit);
         Assert.True(options.Policies["visits"].FallbackWhenUnavailable);
         Assert.False(options.Policies["auth-login"].FallbackWhenUnavailable);
+    }
+
+    [Fact(DisplayName = "Token refresh and logout fall back to a per-instance count, so sessions survive a Redis outage")]
+    public void Defaults_RefreshAndLogoutFallBack()
+    {
+        Assert.True(RedisRateLimitingDefaults.Policies["auth-refresh"].FallbackWhenUnavailable);
+        Assert.True(RedisRateLimitingDefaults.Policies["auth-logout"].FallbackWhenUnavailable);
     }
 
     [Fact(DisplayName = "The counter starts again in a new window")]
