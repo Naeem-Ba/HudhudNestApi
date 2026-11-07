@@ -1,4 +1,5 @@
 using MediatR;
+using HudhudNestApi.Application.Common;
 using HudhudNestApi.Application.Agencies.DTOs;
 using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Agencies.Mapping;
@@ -35,6 +36,19 @@ public sealed class GetMyAgencyQueryHandler
 
         var members = await _agencies.GetMembersAsync(agency.Id, cancellationToken);
 
-        return AgencyMapper.ToDto(agency, members, members.Count);
+        var dto = AgencyMapper.ToDto(agency, members, members.Count);
+
+        // The owner is a member of the agency; fall back to a lookup only if the list lacks them.
+        var owner = members.FirstOrDefault(member => member.Id == agency.OwnerUserId)
+            ?? await _agencies.GetUserAccountAsync(agency.OwnerUserId, cancellationToken);
+
+        if (owner is null)
+            return dto;
+
+        return dto with
+        {
+            OwnerPlanStatus = owner.GetEffectivePlanStatus(DateTime.UtcNow).ToString(),
+            OwnerPlanExpiresAt = owner.PlanExpiresAt.AsUtc()
+        };
     }
 }

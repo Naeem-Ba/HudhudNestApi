@@ -34,7 +34,16 @@ public sealed record AgencyDto(
     /// </summary>
     int? GovernorateId = null,
     int? DistrictId = null,
-    int? NeighborhoodId = null);
+    int? NeighborhoodId = null,
+
+    /// <summary>
+    /// The owner's plan as it is right now ("NoPlan", "Active", "Expired" or "Cancelled") and when it
+    /// ends. Filled only for the caller's own office (GET /api/agencies/me), never on the public
+    /// page. It lets the client keep the office visible, with a renewal notice, for the grace period
+    /// after the owner's plan ends, for the owner and for every member alike.
+    /// </summary>
+    string? OwnerPlanStatus = null,
+    DateTime? OwnerPlanExpiresAt = null);
 
 /// <summary>
 /// A member of an agency. Deliberately thin: name, avatar, and whether they own the
