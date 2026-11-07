@@ -122,7 +122,23 @@ public sealed class AgencyPlanSuspensionTests : IAsyncLifetime
         Assert.False(hidden.Member);
         Assert.Equal("Spam", hidden.OtherReason);
 
-        // Renewed -> exactly the sweep's take-downs are lifted, the moderated one stays down.
+        // Renewed by an administrator -> back at once, with no sweep in between; the moderated one stays down.
+        var renew = await _factory.AuthedClient(_admin.AccessToken).PostAsJsonAsync(
+            $"/api/admin/users/{_owner.Id}/subscription/activate", new { tier = "basic", durationDays = 30 });
+        Assert.Equal(HttpStatusCode.OK, renew.StatusCode);
+        var back = await StateAsync();
+        Assert.True(back.Owner);
+        Assert.True(back.Member);
+        Assert.Equal("Spam", back.OtherReason);
+    }
+
+    [Fact]
+    public async Task TheDailySweepAlsoLiftsTheHiding_WhenTheEndDateIsMovedForward()
+    {
+        await SetPlanEndAsync(DateTime.UtcNow.AddDays(-31));
+        await SweepAsync();
+        Assert.False((await StateAsync()).Owner);
+
         await SetPlanEndAsync(DateTime.UtcNow.AddDays(30));
         await SweepAsync();
         var back = await StateAsync();

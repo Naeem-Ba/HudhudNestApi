@@ -15,15 +15,16 @@ namespace HudhudNestApi.Infrastructure.Plans;
 /// lifted. A listing an administrator took down for another reason is never touched, and nothing is deleted.
 ///
 /// During the grace period itself nothing is hidden: the office cannot add listings (ListingQuotaPolicy) but keeps receiving
-/// messages, enquiries and appointments. The sweep is idempotent and guarded by an advisory lock; a renewal shows up within one
-/// interval.
+/// messages, enquiries and appointments. The hiding sweep runs once every 24 hours (idempotent, advisory lock). A renewal does not
+/// wait for it: the admin plan operations call <see cref="IAgencyListingVisibility"/> at once; this sweep's restore phase is only
+/// the safety net.
 /// </summary>
 public sealed class AgencyPlanSuspensionHostedService : BackgroundService
 {
     /// <summary>Days an office stays visible after its owner's plan ends. Keep in step with the app's AGENCY_GRACE_DAYS.</summary>
     public static readonly TimeSpan GracePeriod = TimeSpan.FromDays(30);
 
-    private static readonly TimeSpan SweepInterval = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan SweepInterval = TimeSpan.FromHours(24);
     private const int MaxListingsPerPhase = 500;
 
     private readonly IServiceScopeFactory _scopeFactory;
