@@ -101,6 +101,81 @@ public sealed class InProcessPublicReadRateLimitTests
         Assert.Equal(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
     }
 
+    // Decision of 2026-11-07 (finding D15, option c): everything that is not authentication or OTP keeps working
+    // through a Redis outage on a per-instance count. This list is the whole fail-closed set; a new policy that
+    // belongs in it has to be added here on purpose.
+    private static readonly string[] FailClosedPolicies =
+    [
+        "send-otp", "verify-otp", "auth-password-reset", "email-verify", "email-confirmation-resend",
+        "auth-login", "auth-register", "auth-refresh", "auth-logout", "auth-password-change"
+    ];
+
+    [Fact(DisplayName = "Only authentication and OTP policies fail closed when Redis is down; every other policy falls back")]
+    public void Defaults_FailClosedSetIsExactlyTheAuthFamily()
+    {
+        var failClosed = RedisRateLimitingDefaults.Policies
+            .Where(pair => pair.Value.FallbackWhenUnavailable != true && pair.Value.InProcess != true)
+            .Select(pair => pair.Key)
+            .Order()
+            .ToArray();
+
+        Assert.Equal(FailClosedPolicies.Order().ToArray(), failClosed);
+    }
+
+    [Fact(DisplayName = "An ordinary write keeps working on a per-instance count when Redis is unavailable, then answers 429")]
+    public async Task WritePolicy_WithoutRedis_FallsBackToInProcessCount()
+    {
+        var nextCalls = 0;
+        var middleware = CreateMiddleware(_ => { nextCalls++; return Task.CompletedTask; }, new InProcessFixedWindowCounter());
+
+        for (var i = 0; i < 2; i++)
+        {
+            var ok = CreateHttpContext("visits", "203.0.113.20");
+            await middleware.InvokeAsync(ok);
+            Assert.Equal(StatusCodes.Status200OK, ok.Response.StatusCode);
+        }
+
+        var rejected = CreateHttpContext("visits", "203.0.113.20");
+        await middleware.InvokeAsync(rejected);
+
+        Assert.Equal(2, nextCalls);
+        Assert.Equal(StatusCodes.Status429TooManyRequests, rejected.Response.StatusCode);
+
+        // Another client has its own budget, and an authentication policy is still refused outright.
+        var other = CreateHttpContext("visits", "203.0.113.21");
+        await middleware.InvokeAsync(other);
+        Assert.Equal(3, nextCalls);
+
+        var login = CreateHttpContext("auth-login", "203.0.113.20");
+        await middleware.InvokeAsync(login);
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, login.Response.StatusCode);
+        Assert.Equal(3, nextCalls);
+    }
+
+    [Fact(DisplayName = "Overriding only the limit of a write policy keeps its Redis-outage fallback")]
+    public void ConfiguredLimitOverride_KeepsFallbackDefault()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["RateLimiting:Redis:Enabled"] = "true",
+                ["RateLimiting:Redis:ConnectionString"] = "redis.invalid:6379,abortConnect=false",
+                ["RateLimiting:Redis:Policies:visits:PermitLimit"] = "50",
+                ["RateLimiting:Redis:Policies:auth-login:PermitLimit"] = "50"
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddHudhudNestApiRedisRateLimiting(configuration, new TestHostEnvironment());
+        var options = services.BuildServiceProvider()
+            .GetRequiredService<Microsoft.Extensions.Options.IOptions<RedisRateLimitingOptions>>().Value;
+
+        Assert.Equal(50, options.Policies["visits"].PermitLimit);
+        Assert.True(options.Policies["visits"].FallbackWhenUnavailable);
+        Assert.False(options.Policies["auth-login"].FallbackWhenUnavailable);
+    }
+
     [Fact(DisplayName = "The counter starts again in a new window")]
     public void Counter_NewWindow_StartsAtOne()
     {
@@ -148,7 +223,8 @@ public sealed class InProcessPublicReadRateLimitTests
             Policies = new Dictionary<string, RedisFixedWindowRateLimitPolicyOptions>(StringComparer.OrdinalIgnoreCase)
             {
                 ["public-search"] = new() { PermitLimit = 3, WindowSeconds = 3600, InProcess = true },
-                ["auth-login"] = new() { PermitLimit = 10, WindowSeconds = 60 }
+                ["auth-login"] = new() { PermitLimit = 10, WindowSeconds = 60, FallbackWhenUnavailable = false },
+                ["visits"] = new() { PermitLimit = 2, WindowSeconds = 3600, FallbackWhenUnavailable = true }
             }
         };
 

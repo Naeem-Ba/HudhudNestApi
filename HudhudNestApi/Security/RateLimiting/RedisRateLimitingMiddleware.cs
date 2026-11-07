@@ -127,13 +127,7 @@ return current
         {
             _logger.LogError(ex, "Redis rate limiter could not resolve IConnectionMultiplexer.");
 
-            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-            await context.Response.WriteAsJsonAsync(new
-            {
-                title = "Rate limiter backend is unavailable.",
-                status = StatusCodes.Status503ServiceUnavailable
-            }, context.RequestAborted);
-
+            await HandleBackendUnavailableAsync(context, policyName, policy, partitionKey, redisKey, bucket, windowMs, now, retryAfter);
             return;
         }
 
@@ -143,13 +137,7 @@ return current
                 "Redis rate limiter is enabled but Redis is not connected. Policy={PolicyName}",
                 policyName);
 
-            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-            await context.Response.WriteAsJsonAsync(new
-            {
-                title = "Rate limiter backend is unavailable.",
-                status = StatusCodes.Status503ServiceUnavailable
-            }, context.RequestAborted);
-
+            await HandleBackendUnavailableAsync(context, policyName, policy, partitionKey, redisKey, bucket, windowMs, now, retryAfter);
             return;
         }
 
@@ -171,13 +159,7 @@ return current
                 "Redis rate limiter failed while evaluating policy {PolicyName}.",
                 policyName);
 
-            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-            await context.Response.WriteAsJsonAsync(new
-            {
-                title = "Rate limiter backend is unavailable.",
-                status = StatusCodes.Status503ServiceUnavailable
-            }, context.RequestAborted);
-
+            await HandleBackendUnavailableAsync(context, policyName, policy, partitionKey, redisKey, bucket, windowMs, now, retryAfter);
             return;
         }
 
@@ -188,6 +170,67 @@ return current
         }
 
         await RejectAsync(context, policyName, partitionKey, count, policy.PermitLimit, retryAfter);
+    }
+
+    /// <summary>
+    /// Redis cannot count this request. Authentication and OTP policies stay fail closed (503): an attacker
+    /// must not get unlimited guesses because the counter store is down. Every other write policy falls back
+    /// to a count in this process's memory with the same limit (exact with one instance, per instance with
+    /// several), so a favourite or a profile edit keeps working through an outage; abuse is still bounded.
+    /// </summary>
+    private async Task HandleBackendUnavailableAsync(
+        HttpContext context,
+        string policyName,
+        RedisFixedWindowRateLimitPolicyOptions policy,
+        string partitionKey,
+        RedisKey redisKey,
+        long bucket,
+        long windowMs,
+        DateTimeOffset now,
+        TimeSpan retryAfter)
+    {
+        if (policy.FallbackWhenUnavailable == true)
+        {
+            LogFallbackOnce(policyName);
+
+            var nowMs = now.ToUnixTimeMilliseconds();
+            var localCount = _serviceProvider.GetRequiredService<InProcessFixedWindowCounter>()
+                .Increment(redisKey.ToString(), bucket, (bucket + 1) * windowMs, nowMs);
+
+            if (localCount <= policy.PermitLimit)
+            {
+                await _next(context);
+                return;
+            }
+
+            await RejectAsync(context, policyName, partitionKey, localCount, policy.PermitLimit, retryAfter);
+            return;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            title = "Rate limiter backend is unavailable.",
+            status = StatusCodes.Status503ServiceUnavailable
+        }, context.RequestAborted);
+    }
+
+    // One line per 30 s instead of one per request while the outage lasts.
+    private static long _lastFallbackLogTicks;
+
+    private void LogFallbackOnce(string policyName)
+    {
+        var nowTicks = Environment.TickCount64;
+        var last = Interlocked.Read(ref _lastFallbackLogTicks);
+        if (nowTicks - last < 30_000 && last != 0)
+            return;
+
+        if (Interlocked.CompareExchange(ref _lastFallbackLogTicks, nowTicks, last) == last)
+        {
+            _logger.LogWarning(
+                "Redis rate limiter unavailable; counting policy {PolicyName} (and other write policies) in process memory until Redis returns.",
+                policyName);
+        }
     }
 
     private async Task RejectAsync(

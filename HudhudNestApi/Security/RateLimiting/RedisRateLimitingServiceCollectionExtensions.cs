@@ -45,6 +45,7 @@ public static class RedisRateLimitingServiceCollectionExtensions
                         if (configured.PermitLimit == 0) configured.PermitLimit = policy.Value.PermitLimit;
                         if (configured.WindowSeconds == 0) configured.WindowSeconds = policy.Value.WindowSeconds;
                         configured.InProcess ??= policy.Value.InProcess;
+                        configured.FallbackWhenUnavailable ??= policy.Value.FallbackWhenUnavailable;
                     }
                 }
             })
