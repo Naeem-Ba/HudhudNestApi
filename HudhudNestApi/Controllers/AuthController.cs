@@ -185,6 +185,13 @@ public sealed class AuthController : ControllerBase
                 ErrorCode = LoginErrorCodes.InvalidRequest
             });
         }
+        catch (Exception ex) when (HudhudNestApi.Middleware.ExceptionHandlingMiddleware.IsDatabaseUnavailable(ex))
+        {
+            // QA phase 19 (P19-D07): a database outage is not a login bug. Let the exception handling
+            // middleware answer 503 + Retry-After, as it does for every other endpoint, instead of the
+            // generic 500 "contact support" below.
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during login.");

@@ -131,7 +131,7 @@ jobs:
         # failed outright whenever no backup had ever been uploaded via that
         # path. Checking github.event_name first avoids relying on `inputs` at
         # all for the one trigger that never populates it.
-        if: ${{ github.event_name == 'schedule' || inputs.fresh_backup != false }}
+        if: ${{ github.event_name != 'schedule' && inputs.fresh_backup != false }}
         shell: bash
         env:
           DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL || secrets.DATABASE_URL }}
@@ -153,11 +153,12 @@ jobs:
           echo "BACKUP_ID=${BACKUP_ID}" >> "${GITHUB_ENV}"
 
       - name: Download latest encrypted backup
-        # Mirrors the fix above: only take this branch for an explicit
-        # workflow_dispatch/workflow_call request with fresh_backup: false.
-        # A `schedule` run must never land here (see the comment on "Create
-        # fresh encrypted backup").
-        if: ${{ github.event_name != 'schedule' && inputs.fresh_backup == false }}
+        # QA phase 19 (BKP-004): the weekly scheduled drill restores the newest backup that the daily
+        # job stored in the bucket (download, decrypt, restore, verify), so it proves the backup that
+        # would really be used in a disaster, and the RPO check measures its real age. A fresh backup
+        # is made only for the explicit dispatch/call default (the production gate's pre-deploy backup).
+        # github.event_name is tested first because `inputs` is null on a schedule trigger.
+        if: ${{ github.event_name == 'schedule' || inputs.fresh_backup == false }}
         shell: bash
         run: |
           set -euo pipefail

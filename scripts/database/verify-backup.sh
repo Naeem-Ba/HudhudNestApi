@@ -48,8 +48,8 @@ created = dt.datetime.fromisoformat(sys.argv[1].replace("Z", "+00:00"))
 print(max(0, int((dt.datetime.now(dt.timezone.utc) - created).total_seconds())))
 PY
 )"
-if [ "${ENFORCE_BACKUP_AGE:-true}" = "true" ] && [ "${BACKUP_AGE_SECONDS}" -gt "${RPO_TARGET_SECONDS:-3600}" ]; then
-  fail "Backup age ${BACKUP_AGE_SECONDS}s exceeds RPO ${RPO_TARGET_SECONDS:-3600}s."
+if [ "${ENFORCE_BACKUP_AGE:-true}" = "true" ] && [ "${BACKUP_AGE_SECONDS}" -gt "${RPO_TARGET_SECONDS:-90000}" ]; then
+  fail "Backup age ${BACKUP_AGE_SECONDS}s exceeds RPO ${RPO_TARGET_SECONDS:-90000}s."
 fi
 
 RESULT_FILE="${BACKUP_VERIFY_RESULT_FILE:-$(dirname "${MANIFEST_FILE}")/backup-verification.json}"

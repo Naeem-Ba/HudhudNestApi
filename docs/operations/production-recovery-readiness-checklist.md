@@ -24,7 +24,7 @@ A checked repository-control item is not proof that its external configuration o
 - [x] EF pending-migration/application DbContext verification passed in the local drill.
 - [x] API readiness and read-only property smoke passed in the local drill.
 - [x] Disposable target cleanup passed in the local drill.
-- [x] Measured local RPO <= 60 minutes (1.72 minutes).
+- [x] Measured local backup age 1.72 minutes (the objective is 24 hours, see rpo-rto.md).
 - [x] Measured local total RTO <= 120 minutes (4.57 minutes).
 
 ## Deployment and migration recovery

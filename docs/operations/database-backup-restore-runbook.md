@@ -121,3 +121,19 @@ Respond immediately to missing/empty backup, checksum/TOC failure, upload failur
 - Row/constraint mismatch: stop; do not route traffic. Compare manifest counts and restore logs.
 - GPG failure: verify the secret version and backup key rotation record. Never print the key.
 - Object upload/retention failure: keep local encrypted files only on the secured operator host until upload succeeds, then securely remove them.
+
+## External dead-man monitor (BKP-003)
+
+GitHub can delay or block scheduled runs (the Actions budget has stopped the daily backup for up to 144 hours without any alert). The backup job therefore pings an external monitor at start, on success and on failure (`scripts/database/ping-heartbeat.sh`). The monitor, not GitHub, sends the alarm when the success ping does not arrive.
+
+One-time setup (owner, free account at healthchecks.io or a compatible service):
+1. Create a check named `hudhudnest-db-backup`: period 1 day, grace time 4 hours. Add your e-mail as the alert channel.
+2. Copy its ping URL (it contains the check's id; treat it as a secret).
+3. GitHub, environment `production-recovery`, add the secret `HEALTHCHECKS_PING_URL`.
+4. Run `Database Backup` once by hand and confirm the check turns green in the monitor.
+
+Until step 3 is done the job prints a warning on every run ("HEALTHCHECKS_PING_URL is not configured") and no external monitor is watching the backup. A monitor outage never fails the backup (the script always exits 0).
+
+## Weekly restore drill uses the stored backup (BKP-004)
+
+The scheduled `Database Restore Drill` downloads the newest backup from the bucket, decrypts it, restores it and verifies it, so it proves the archive that would be used in a disaster and measures its real age against the 25-hour threshold. The production gate's recovery job still makes a fresh pre-deploy backup. To rehearse the stored-backup path by hand: run `Database Restore Drill` with `fresh_backup` unticked.
