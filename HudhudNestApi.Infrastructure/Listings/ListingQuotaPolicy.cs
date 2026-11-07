@@ -3,6 +3,7 @@ using HudhudNestApi.Application.Common.Exceptions;
 using HudhudNestApi.Application.Listings.Interfaces;
 using HudhudNestApi.Application.Plans.Interfaces;
 using HudhudNestApi.Domain.Users.Entities;
+using HudhudNestApi.Domain.Users.Enums;
 
 using HudhudNestApi.Domain.Plans.Constants;
 
@@ -19,6 +20,9 @@ namespace HudhudNestApi.Infrastructure.Listings;
 /// </summary>
 internal sealed class ListingQuotaPolicy : IListingQuotaPolicy
 {
+    /// <summary>Stable code the client translates: the agency owner's paid plan has expired.</summary>
+    public const string AgencyPlanExpiredCode = "AGENCY_PLAN_EXPIRED";
+
     private readonly IPlanRepository _plans;
     private readonly IAgencyRepository _agencies;
 
@@ -61,6 +65,18 @@ internal sealed class ListingQuotaPolicy : IListingQuotaPolicy
         var owner = await _agencies.GetUserAccountAsync(agency.OwnerUserId, ct)
             ?? throw new ConflictException(
                 "تعذّر تحديد حصة الإعلانات لمكتبكم — تعذّر العثور على حساب مالك المكتب.");
+
+        // The owner's paid plan has ended (product decision 2026-11-07): the office is suspended,
+        // reversibly. Nobody in it can add a listing until the plan is renewed; existing listings,
+        // messages, enquiries and appointments are untouched. Without this the office would fall back
+        // to the free tier's limit and keep publishing while the grace period runs unpaid.
+        if (owner.GetEffectivePlanStatus(DateTime.UtcNow) == EffectivePlanStatus.Expired)
+        {
+            throw new ForbiddenException(
+                "انتهت الخطة المدفوعة لمالك المكتب، فلا يمكن إضافة إعلانات جديدة حتى تُجدَّد الخطة. " +
+                "تبقى إعلاناتكم القائمة ورسائلكم واستفساراتكم ومواعيدكم كما هي.",
+                AgencyPlanExpiredCode);
+        }
 
         return await ResolvePlanLimitAsync(
             owner,

@@ -244,6 +244,28 @@ public sealed class ListingQuotaPolicyTests
     }
 
     [Fact]
+    public async Task AgencyMember_WhenTheAgencyOwnersPlanExpired_IsForbiddenFromAddingListings()
+    {
+        var ownerId = Guid.NewGuid();
+        var agencyId = Guid.NewGuid();
+
+        var ownerAccount = UserAccount.Create(ownerId, "Owner", "Expired", DateTime.UtcNow);
+        ownerAccount.ActivatePlanByAdmin(Guid.NewGuid(), DateTime.UtcNow.AddSeconds(-1), Guid.NewGuid(), DateTime.UtcNow.AddMinutes(-1));
+        var member = BuildAccountInAgency(Guid.NewGuid(), agencyId, out _);
+
+        var agency = Agency.Create("Test Agency", "test-agency-expired", ownerId, "SY", DateTime.UtcNow);
+
+        var agencies = new Mock<IAgencyRepository>();
+        agencies.Setup(x => x.GetByIdAsync(agencyId, It.IsAny<CancellationToken>())).ReturnsAsync(agency);
+        agencies.Setup(x => x.GetUserAccountAsync(ownerId, It.IsAny<CancellationToken>())).ReturnsAsync(ownerAccount);
+
+        var policy = new ListingQuotaPolicy(Mock.Of<IPlanRepository>(), agencies.Object);
+
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() => policy.GetActiveListingLimitAsync(member));
+        Assert.Equal("AGENCY_PLAN_EXPIRED", ex.Code);
+    }
+
+    [Fact]
     public async Task AgencyMember_WhenTheAgencyCannotBeFound_ThrowsRatherThanBypassing()
     {
         var agencyId = Guid.NewGuid();

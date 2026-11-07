@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using HudhudNestApi.Application.Admin.DTOs;
 using HudhudNestApi.Application.Admin.Interfaces;
+using HudhudNestApi.Application.Agencies.Interfaces;
 using HudhudNestApi.Application.Common.Interfaces;
 using HudhudNestApi.Application.Plans.Interfaces;
 using HudhudNestApi.Application.Plans.Services;
@@ -33,6 +34,7 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
     private readonly IAuditLogService _auditLogs;
     private readonly BillingNotifier _billing;
     private readonly ILogger<AdminSubscriptionService> _logger;
+    private readonly IAgencyListingVisibility? _agencyVisibility;
 
     public AdminSubscriptionService(
         IUserAccountRepository accounts,
@@ -41,7 +43,8 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
         IUnitOfWork unitOfWork,
         IAuditLogService auditLogs,
         BillingNotifier billing,
-        ILogger<AdminSubscriptionService> logger)
+        ILogger<AdminSubscriptionService> logger,
+        IAgencyListingVisibility? agencyVisibility = null)
     {
         _accounts = accounts;
         _plans = plans;
@@ -50,6 +53,23 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
         _auditLogs = auditLogs;
         _billing = billing;
         _logger = logger;
+        _agencyVisibility = agencyVisibility;
+    }
+
+    /// <summary>A renewal brings back an office's listings at once (they were hidden after the grace period). Best-effort: the daily sweep is the safety net.</summary>
+    private async Task RestoreOfficeListingsAsync(Guid userId, CancellationToken ct)
+    {
+        if (_agencyVisibility is null)
+            return;
+
+        try
+        {
+            await _agencyVisibility.RestoreForRenewedOwnerAsync(userId, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Restoring office listings after a plan renewal failed. UserId={UserId}", userId);
+        }
     }
 
     public async Task<AdminOperationResult> ActivatePlanAsync(
@@ -118,6 +138,8 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
             "Plan activated by admin. UserId={UserId}, Tier={Tier}, ExpiresAt={ExpiresAt}, ActivatedBy={ActivatedBy}",
             userId, tier, expiresAt, performedByUserId);
 
+        await RestoreOfficeListingsAsync(userId, ct);
+
         return AdminOperationResult.Ok($"Plan '{tier}' activated until {expiresAt:O}.");
     }
 
@@ -177,6 +199,8 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
         _logger.LogInformation(
             "Subscription extended by admin. UserId={UserId}, Days={Days}, NewExpiresAt={ExpiresAt}, ExtendedBy={ExtendedBy}",
             userId, days, account.PlanExpiresAt, performedByUserId);
+
+        await RestoreOfficeListingsAsync(userId, ct);
 
         return AdminOperationResult.Ok($"Subscription extended to {account.PlanExpiresAt:O}.");
     }
@@ -324,6 +348,7 @@ public sealed class AdminSubscriptionService : IAdminSubscriptionService
             requestId, account.Id, plan.Tier, expiresAt, performedByUserId);
 
         await _billing.PlanRequestApprovedAsync(account.Id, requestId, plan.Tier, expiresAt, ct);
+        await RestoreOfficeListingsAsync(account.Id, ct);
 
         return AdminOperationResult.Ok($"Plan '{plan.Tier}' activated until {expiresAt:O}.");
     }

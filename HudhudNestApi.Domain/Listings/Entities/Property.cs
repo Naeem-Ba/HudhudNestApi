@@ -131,6 +131,13 @@ public class Property : AuditableEntity
     /// </summary>
     public const string AccountDisabledTakeDownReason = "ACCOUNT_DISABLED";
 
+    /// <summary>
+    /// The fixed take-down reason the office plan sweep writes once an agency owner's plan has been expired for longer than
+    /// the 30-day grace period. Renewing the plan lifts exactly the take-downs that carry it (AgencyPlanSuspensionHostedService).
+    /// </summary>
+    public const string AgencyPlanExpiredTakeDownReason =
+        "انتهت الخطة المدفوعة لمالك المكتب وانقضت مهلة التجديد؛ تعود الإعلانات للظهور فور تجديد الخطة.";
+
     public bool IsTakenDown => TakenDownAt is not null;
 
     /// <summary>
