@@ -58,4 +58,6 @@ public static class BackgroundJobLockKeys
     public const long AreaPriceStats = 20261101_1018;
 
     public const long UserActivityRollup = 20261101_1019;
+
+    public const long AgencyPlanSuspension = 20261107_1020;
 }

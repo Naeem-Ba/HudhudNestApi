@@ -65,6 +65,7 @@ public sealed class BackgroundJobLockExclusionTests
     [InlineData("Auth\\Services", "AuthDataRetentionHostedService.cs")]
     [InlineData("Investments", "InvestmentScheduledPublishHostedService.cs")]
     [InlineData("Plans", "PlanExpiryNoticeHostedService.cs")]
+    [InlineData("Plans", "AgencyPlanSuspensionHostedService.cs")]
     [InlineData("Listings", "PriceChangeFollowerNotificationHostedService.cs")]
     [InlineData("Demand", "SearchRequestMatchHostedService.cs")]
     [InlineData("Referrals", "ReferralQualificationHostedService.cs")]
